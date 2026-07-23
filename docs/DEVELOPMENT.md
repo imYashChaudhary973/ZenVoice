@@ -115,6 +115,9 @@ The checks cover:
   through one persistent transcriber instance. This check skips only when no
   local model is installed.
 - privacy-safe numeric share-card payload validation.
+- Instant Refine fillers, repeated words, punctuation-marked restarts, agent
+  prompt layout commands, persisted mode, disabled behavior, and destructive
+  edit rejection.
 
 GitHub Actions runs the same checks on macOS for each pull request and `main`
 push. Semgrep Community Edition runs independently on an Ubuntu runner. The
@@ -182,6 +185,15 @@ distributable artifact.
 25. Press the shortcut again to confirm hotkey stop-and-insert still works.
 26. Disable Accessibility permission and repeat.
 27. Confirm the transcript remains available on the clipboard.
+28. Open **Instant Refine**, choose **Clean**, dictate “Create a login page,
+    no wait, a sign-up page,” and confirm only the corrected sentence is pasted.
+29. Choose **Agent Prompt**, explicitly say “new paragraph,” and confirm the
+    pasted prompt contains the requested paragraph break.
+30. Choose **Off**, repeat a filler or word, and confirm Instant Refine makes no
+    additional change beyond Whisper's base cleanup.
+31. Start a model download and confirm percentage progress appears. Cancel,
+    immediately start another download, and confirm the cancelled task does not
+    clear the new progress state.
 
 Also test:
 

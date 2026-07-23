@@ -15,6 +15,7 @@ pass its verification gate before dependent work begins.
 | M7 | Usage-based voice profile and explicit corrections | Complete |
 | M8 | Privacy-safe shareable highlight cards | Complete |
 | M9 | Public-distribution legal and security review | Implemented; release gates pending |
+| M10 | Instant Refine foundation and reliable model downloads | Complete |
 
 ## Delivery rules
 
@@ -34,3 +35,4 @@ pass its verification gate before dependent work begins.
 2. **Verified Local Models:** M3, M4, and M5.
 3. **Local Insights:** M6 and M7.
 4. **Sharing and Release Readiness:** M8 and M9.
+5. **Instant Refine Foundation:** M10.

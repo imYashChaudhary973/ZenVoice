@@ -40,6 +40,7 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var microphoneStatus: PermissionStatus = .needsAccess
     @Published private(set) var accessibilityStatus: PermissionStatus = .needsAccess
     @Published private(set) var isLocalModelReady = false
+    @Published private(set) var instantRefineMode: InstantRefineMode
 
     private let applyShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
@@ -73,6 +74,7 @@ final class SettingsViewModel: ObservableObject {
         self.applyPasteLastShortcut = applyPasteLastShortcut
         self.applyPrivateModeShortcut = applyPrivateModeShortcut
         self.applyHoldToDictate = applyHoldToDictate
+        instantRefineMode = InstantRefinePreferences.load()
         refreshSystemStatus()
     }
 
@@ -154,6 +156,11 @@ final class SettingsViewModel: ObservableObject {
     func setHoldKey(_ choice: HoldKeyChoice) {
         holdKey = choice
         applyHoldToDictate(holdToDictateEnabled, choice)
+    }
+
+    func setInstantRefineMode(_ mode: InstantRefineMode) {
+        instantRefineMode = mode
+        InstantRefinePreferences.save(mode)
     }
 
     func requestMicrophoneAccess() {
