@@ -84,5 +84,6 @@ ZenBar.
   language-selection changes.
 - Automatic paste uses the system clipboard and a synthetic `Command + V`
   event, which requires Accessibility permission.
-- The project uses ad-hoc signing for local builds. Public distribution will
-  require Developer ID signing and notarization.
+- Local builds prefer a stable Apple Development signature so macOS privacy
+  approvals survive rebuilds. Public distribution will require Developer ID
+  signing and notarization.

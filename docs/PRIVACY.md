@@ -44,7 +44,8 @@ Local-first does not mean risk-free:
 - Other applications may be able to inspect clipboard contents.
 - A configured `ZENVOICE_WHISPER_PATH` is executed as a local process; only set
   it to software you trust.
-- Ad-hoc signing is appropriate for local development, not public distribution.
+- Apple Development signing gives local builds a stable macOS identity but is
+  not appropriate for public distribution.
 
 Before public release, the project should add hardened runtime configuration,
 Developer ID signing, notarization, dependency review, and a documented update

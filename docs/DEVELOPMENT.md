@@ -56,7 +56,39 @@ The script:
 1. produces a release Swift build;
 2. generates the macOS icon from the source Zen logo;
 3. assembles `build/ZenVoice.app`;
-4. applies an ad-hoc local signature.
+4. signs with the first available Apple Development identity.
+
+Set `ZENVOICE_SIGNING_IDENTITY` to a certificate hash or full identity name to
+choose a specific signing identity:
+
+```bash
+ZENVOICE_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \
+  ./Scripts/build-app.sh
+```
+
+If no Apple Development identity is available, the script falls back to ad-hoc
+signing and prints a warning.
+
+## Stable macOS permissions
+
+Microphone and Accessibility approvals are associated with the app's code
+signing requirement. Ad-hoc signing ties that requirement to one specific build
+hash, so a rebuilt executable looks like a new app to macOS.
+
+Apple Development signing gives local builds a stable requirement based on the
+Apple-issued signer, team, and `dev.yashchaudhary.ZenVoice` bundle identifier.
+After switching from an ad-hoc build:
+
+1. Remove the old ZenVoice entry from **System Settings → Privacy & Security →
+   Accessibility** if it remains listed.
+2. Launch the newly built `build/ZenVoice.app`.
+3. Start and finish one dictation.
+4. Approve Microphone and Accessibility when macOS asks.
+
+That approval should survive normal code changes and rebuilds as long as the
+bundle identifier and Apple Development team remain unchanged. A replaced or
+expired signing certificate, a different team, or a different bundle identifier
+can require approval again.
 
 ## Automated checks
 
