@@ -31,11 +31,12 @@ analytics, or cloud transcription services in the current application.
 - A native settings window with Overview, Shortcuts, and Privacy screens.
 - A configurable global dictation shortcut, defaulting to
   `Control + Option + Space`.
-- An optional encrypted local history with recovery for interrupted
-  transcriptions.
-- Copy, paste, retry, search, and delete controls for saved dictations.
+- Encrypted local history by default, including usable partial transcriptions.
+- Copy, retry, search, and delete controls for saved dictations.
 - A configurable `Control + Option + V` shortcut for pasting the latest
   dictation.
+- Configurable Private Dictation (`Control + Option + P`) and hold-to-dictate
+  controls.
 - Local English transcription through `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.
@@ -101,12 +102,15 @@ clipboard.
 
 1. Open the **Shortcuts** screen to keep the default shortcut or record your
    own.
-2. Open **History** and choose whether ZenVoice should save encrypted
-   transcripts on this Mac.
+2. Open **Privacy** if you want to pause local history or enable Private
+   Dictation.
 3. Place the cursor in any editable text field.
 4. Press your shortcut.
 5. Speak while ZenBar displays the live waveform.
 6. Press the shortcut again to stop, transcribe, and insert.
+
+Alternatively, enable **Hold to dictate** in Shortcuts. Hold the selected
+modifier key, speak, and release it to stop and transcribe.
 
 Closing the settings window keeps ZenVoice running in the menu bar. Select
 **Open ZenVoice…** from the menu-bar menu whenever you want it back.

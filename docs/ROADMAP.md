@@ -14,10 +14,12 @@ recorded in
 - [x] Native settings window
 - [x] Configurable and persistent dictation shortcut
 - [x] Live permission and local-model status
-- [x] Optional encrypted local transcript history
+- [x] Encrypted local transcript history with a pause control
 - [x] Interrupted-transcription recovery records
-- [x] Search, copy, re-paste, retry, and delete history actions
+- [x] Search, copy, retry, and delete history actions
 - [x] Configurable paste-last shortcut
+- [x] Configurable Private Dictation shortcut
+- [x] Hold-to-dictate with Fn or a right-side modifier
 - [x] Local English Whisper transcription
 - [x] Active-app paste with clipboard fallback
 - [x] ZenBar lifecycle feedback

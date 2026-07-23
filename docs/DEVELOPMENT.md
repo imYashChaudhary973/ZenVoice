@@ -113,21 +113,25 @@ The checks cover:
 - weighted words-per-minute calculation;
 - interruption recovery and 24-hour audio expiry;
 - cancellation cleanup and cryptographic Delete All;
-- explicit history-consent defaults.
+- default-on history with an explicit pause;
+- partial transcript persistence and ciphertext field binding;
+- recovery-path confinement and deletion with corrupt ciphertext;
+- Private Dictation and hold-key configuration.
 
 ## Manual QA
 
 1. Launch `build/ZenVoice.app`.
 2. Confirm the settings window opens and the Zen logo appears in the menu bar
    and ZenBar.
-3. Open **History** and verify the one-time local-history choice appears before
-   any history database is created.
-4. Enable local history and confirm the empty encrypted-history state appears.
+3. Open **History** and confirm the encrypted-history state is available by
+   default.
+4. Pause history in **Privacy**, dictate once, and confirm no record is added.
 5. Open **Shortcuts**, select the current shortcut, and record a temporary
    two-modifier combination.
-6. Repeat for **Paste last dictation**.
-7. Quit and relaunch ZenVoice. Confirm both custom shortcuts persisted, then use
-   **Reset Default**.
+6. Repeat for **Paste last dictation** and **Private Dictation**.
+7. Enable hold-to-dictate, hold Fn, speak, and release. Confirm release stops
+   recording and inserts the result.
+8. Quit and relaunch ZenVoice. Confirm all shortcut choices persisted.
 8. Open **Privacy** and confirm Microphone, Accessibility, local-history, and local-model
    status match System Settings and the local installation.
 9. Close the settings window and reopen it from **Open ZenVoice…** in the
@@ -138,7 +142,7 @@ The checks cover:
 13. Speak loudly and confirm ZenBar shows taller waveform bars.
 14. Select the checkmark and confirm the transcript is inserted into TextEdit
     and appears under **Today** in History.
-15. Copy and paste the saved record, then test the paste-last shortcut.
+15. Confirm History offers Copy but no Paste, then test the paste-last shortcut.
 16. Start again, select cancel, and confirm no history record remains.
 17. Toggle **Show Status Message** from the menu-bar app and confirm the
    dictation message follows the preference.

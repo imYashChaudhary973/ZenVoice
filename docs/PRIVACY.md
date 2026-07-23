@@ -17,7 +17,10 @@ network.
 - When local history and failed-audio recovery are enabled, audio from a failed
   or interrupted transcription may remain in private Application Support
   storage for up to 24 hours.
-- Private Dictation mode retains no transcript or recovery audio.
+- Only fully failed transcriptions retain recovery audio, and only for up to
+  24 hours when recovery is enabled.
+- Private Dictation mode retains no transcript or recovery audio, including
+  when it is enabled during an active dictation.
 - A crash or forced termination could leave a temporary file until macOS cleans
   its temporary directory when history is disabled.
 
@@ -26,9 +29,13 @@ network.
 - Stored in memory as the last transcript for immediate recovery.
 - Written to the macOS clipboard before insertion.
 - Remain on the clipboard until another application replaces them.
-- Persisted only after the user explicitly enables local history.
+- Successful and usable partial transcripts are saved locally by default.
 - Encrypted with AES-GCM before being written to the ZenVoice SQLite database.
+- New ciphertext is authenticated against its record identifier and field, so
+  encrypted values cannot be swapped between records or columns.
 - Protected by a 256-bit key stored in the user's macOS Keychain.
+- Kept until the user deletes an item or chooses Delete All; ZenVoice does not
+  automatically expire transcript history.
 - Never synced or uploaded by ZenVoice.
 
 ### Application context
