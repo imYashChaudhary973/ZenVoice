@@ -103,6 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let refinementCoordinator =
         LocalRefinementCoordinator()
     private let historyPreferences = HistoryPreferences()
+    private let learningPreferences = LocalLearningPreferences()
     private var dictationVault: DictationVault?
     private var activeHistoryID: UUID?
     private var transcribingHistoryID: UUID?
@@ -983,6 +984,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.phase = .transcribing
         updateStartStopMenuTitle()
         let correctionVault = dictationVault
+        let appliesCorrectionRules =
+            learningPreferences.appliesCorrectionRules
         let behavior = activeDictationBehavior
 
         if usesLivePreview {
@@ -1014,9 +1017,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             result: result,
                             refinement: refinement,
                             correctionApplication:
-                                try? correctionVault?.applyCorrections(
-                                    to: refinement.text
-                                )
+                                appliesCorrectionRules
+                                    ? try? correctionVault?
+                                        .applyCorrections(
+                                            to: refinement.text
+                                        )
+                                    : nil
                         )
                     } else {
                         processed = nil
@@ -1088,9 +1094,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     result: result,
                     refinement: refinement,
                     correctionApplication:
-                        try? correctionVault?.applyCorrections(
-                            to: refinement.text
-                        )
+                        appliesCorrectionRules
+                            ? try? correctionVault?.applyCorrections(
+                                to: refinement.text
+                            )
+                            : nil
                 )
                 DispatchQueue.main.async {
                     self?.complete(
@@ -1207,6 +1215,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sessionID = liveSessionID
         let behavior = activeDictationBehavior
         let correctionVault = dictationVault
+        let appliesCorrectionRules =
+            learningPreferences.appliesCorrectionRules
         transcriptionQueue.async { [weak self] in
             do {
                 let result = try transcriber.transcribe(
@@ -1232,9 +1242,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     result: result,
                     refinement: refinement,
                     correctionApplication:
-                        try? correctionVault?.applyCorrections(
-                            to: refinement.text
-                        )
+                        appliesCorrectionRules
+                            ? try? correctionVault?.applyCorrections(
+                                to: refinement.text
+                            )
+                            : nil
                 )
                 DispatchQueue.main.async {
                     self?.acceptStablePhrase(
@@ -1766,6 +1778,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             durationSeconds: record.durationSeconds
         )
         let correctionVault = dictationVault
+        let appliesCorrectionRules =
+            learningPreferences.appliesCorrectionRules
         let instantRefineMode = InstantRefinePreferences.load()
         transcriptionQueue.async { [weak self] in
             do {
@@ -1782,9 +1796,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     result: result,
                     refinement: refinement,
                     correctionApplication:
-                        try? correctionVault?.applyCorrections(
-                            to: refinement.text
-                        )
+                        appliesCorrectionRules
+                            ? try? correctionVault?.applyCorrections(
+                                to: refinement.text
+                            )
+                            : nil
                 )
                 DispatchQueue.main.async {
                     self?.completeHistoryRetry(

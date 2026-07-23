@@ -5,8 +5,16 @@ import ZenVoiceStorage
 
 @MainActor
 final class HistoryViewModel: ObservableObject {
+    enum Scope: String, CaseIterable, Identifiable {
+        case all = "All"
+        case recovery = "Recovery Inbox"
+
+        var id: String { rawValue }
+    }
+
     @Published private(set) var records: [DictationRecord] = []
     @Published var searchText = ""
+    @Published var scope: Scope = .all
     @Published private(set) var historyEnabled: Bool
     @Published private(set) var hasMadeHistoryChoice: Bool
     @Published private(set) var retainsFailedAudio: Bool
@@ -40,15 +48,28 @@ final class HistoryViewModel: ObservableObject {
         let query = searchText.trimmingCharacters(
             in: .whitespacesAndNewlines
         )
+        let scopedRecords = scope == .recovery
+            ? recoveryRecords
+            : records
         guard !query.isEmpty else {
-            return records
+            return scopedRecords
         }
-        return records.filter { record in
+        return scopedRecords.filter { record in
             record.finalTranscript?
                 .localizedCaseInsensitiveContains(query) == true
                 || record.targetAppName?
                     .localizedCaseInsensitiveContains(query) == true
         }
+    }
+
+    var recoveryRecords: [DictationRecord] {
+        records.filter {
+            $0.status == .failed || $0.isPartial
+        }
+    }
+
+    var recoveryCount: Int {
+        recoveryRecords.count
     }
 
     func refresh() {

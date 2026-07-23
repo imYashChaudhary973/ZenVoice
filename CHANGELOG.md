@@ -65,6 +65,11 @@ All notable ZenVoice changes are recorded here.
 - Added a bounded memory-only context box for the next dictation
 - Added deterministic layout and punctuation commands with English controls
   plus Hindi, Spanish, French, Mandarin, and Arabic aliases
+- Added a local Correction Review showing heard and saved encrypted transcript
+  text
+- Added controls to pause correction rules, pause history pattern analysis,
+  and delete all correction rules without deleting transcripts
+- Added a Recovery Inbox filter for failed and usable partial dictations
 
 ### Changed
 

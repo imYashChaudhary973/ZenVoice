@@ -59,7 +59,8 @@ The native application target owns macOS-specific behavior:
   privacy controls, and deletion.
 - `InsightsViewModel` reads privacy-safe aggregate metrics from the vault.
 - `VoiceProfileViewModel` manages the local language profile and explicit
-  personal correction rules.
+  personal correction rules. It also exposes before/after Correction Review
+  records and explicit switches for rule application and pattern analysis.
 - `ShareHighlightCardRenderer` renders a fixed 1200×630 image locally from a
   numeric-only `ShareCardSummary`.
 - `ZenVoiceSettingsView` provides Overview, Models, History, Insights,
@@ -120,6 +121,8 @@ new download, and updates the selected local model without sending speech data
 to a server.
 `RefinementModelManagerViewModel` applies the same verified-download and
 atomic-install contract to the separate text-model directory.
+`HistoryViewModel` derives its Recovery Inbox directly from encrypted History
+records marked failed or partial; it does not create a second transcript copy.
 `ModelRecommendationEngine` maps RAM and storage headroom to a default tier,
 while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 

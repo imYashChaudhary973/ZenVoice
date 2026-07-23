@@ -619,6 +619,13 @@ public final class DictationVault: @unchecked Sendable {
         }
     }
 
+    public func deleteAllCorrectionRules() throws {
+        try queue.sync {
+            try execute("DELETE FROM correction_rules;")
+            try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        }
+    }
+
     public func applyCorrections(
         to text: String
     ) throws -> CorrectionApplication {

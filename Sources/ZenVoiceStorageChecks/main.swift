@@ -789,10 +789,44 @@ private func checkEncryptedVoiceProfile() throws {
         )
     }
 
-    try fixture.vault.deleteAll()
+    try fixture.vault.deleteAllCorrectionRules()
     try require(
         try fixture.vault.correctionRules().isEmpty,
-        "delete all retained correction rules"
+        "dedicated correction deletion retained rules"
+    )
+    try require(
+        try fixture.vault.recent().count == 2,
+        "dedicated correction deletion removed transcripts"
+    )
+    try fixture.vault.deleteAll()
+}
+
+private func checkLocalLearningPreferences() throws {
+    let suite =
+        "ZenVoiceStorageChecks.Learning.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suite) else {
+        throw CheckError.failed(
+            "could not create learning preference fixture"
+        )
+    }
+    defer {
+        defaults.removePersistentDomain(forName: suite)
+    }
+    let preferences = LocalLearningPreferences(defaults: defaults)
+    try require(
+        preferences.appliesCorrectionRules,
+        "correction rules did not default on"
+    )
+    try require(
+        preferences.analyzesHistory,
+        "history analysis did not default on"
+    )
+    preferences.appliesCorrectionRules = false
+    preferences.analyzesHistory = false
+    try require(
+        !preferences.appliesCorrectionRules
+            && !preferences.analyzesHistory,
+        "learning preferences did not persist"
     )
 }
 
@@ -864,8 +898,9 @@ do {
     try checkCategoryCorrection()
     try checkCorrectionEngine()
     try checkEncryptedVoiceProfile()
+    try checkLocalLearningPreferences()
     try checkLivePartialRecovery()
-    print("ZenVoiceStorageChecks: 14 checks passed")
+    print("ZenVoiceStorageChecks: 15 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)
