@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import ZenVoiceCore
+import ZenVoiceRefinementRuntime
 import ZenVoiceRuntime
 
 private func makeSilentFixture() throws -> URL {
@@ -54,6 +55,54 @@ private func runPass(
 }
 
 do {
+    let missingRefiner = LocalTextRefiner(
+        modelURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "missing-refinement-\(UUID().uuidString).gguf"
+            )
+    )
+    do {
+        _ = try missingRefiner.refine("Keep this local.")
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 3,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "Missing refinement model unexpectedly loaded."
+            ]
+        )
+    } catch LocalTextRefiner.RefinementError.modelLoadFailed {
+        // The linked llama.cpp runtime rejected the missing model.
+    }
+
+    if let refinementPath =
+        ProcessInfo.processInfo.environment[
+            "ZENVOICE_REFINEMENT_MODEL_PATH"
+        ] {
+        let original =
+            "Um, create the the local app with Swift."
+        let localOutput = try LocalTextRefiner(
+            modelURL: URL(fileURLWithPath: refinementPath)
+        ).refine(
+            original,
+            timeLimit: 5
+        )
+        guard LocalRefinementGuard.validatedCandidate(
+            output: localOutput,
+            original: original
+        ) != nil else {
+            throw NSError(
+                domain: "ZenVoiceRuntimeChecks",
+                code: 4,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "The real refinement model failed the meaning guard: \(localOutput)"
+                ]
+            )
+        }
+        print("ZenVoice local refinement runtime passed.")
+    }
+
     let configuration = try ZenVoiceConfiguration.discover()
     let audioURL = try makeSilentFixture()
     defer {
