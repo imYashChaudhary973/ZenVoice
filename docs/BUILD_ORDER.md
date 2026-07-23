@@ -16,6 +16,13 @@ pass its verification gate before dependent work begins.
 | M8 | Privacy-safe shareable highlight cards | Complete |
 | M9 | Public-distribution legal and security review | Implemented; release gates pending |
 | M10 | Instant Refine foundation and reliable model downloads | Complete |
+| M11 | Explicit language profiles, Hinglish, translation, and 50+ languages | Implemented; real-microphone QA pending |
+| M12 | Microphone selection, disconnection recovery, and Audio Doctor | Planned |
+| M13 | Stable live transcript preview and commit-on-pause | Planned |
+| M14 | Curated downloadable local refinement models | Planned |
+| M15 | Application profiles, context box, and local voice commands | Planned |
+| M16 | Correction Review, local learning controls, and Recovery Inbox | Planned |
+| M17 | Onboarding, accessibility, privacy dashboard, and release polish | Planned |
 
 ## Delivery rules
 
@@ -36,3 +43,7 @@ pass its verification gate before dependent work begins.
 3. **Local Insights:** M6 and M7.
 4. **Sharing and Release Readiness:** M8 and M9.
 5. **Instant Refine Foundation:** M10.
+6. **Multilingual Foundation:** M11.
+7. **Daily Reliability:** M12 and M13.
+8. **Context-aware Local Intelligence:** M14, M15, and M16.
+9. **Release Experience:** M17.
