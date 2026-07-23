@@ -6,6 +6,10 @@ ZenVoice's current transcription pipeline is local. Application code does not
 send audio, transcripts, clipboard contents, or usage analytics over the
 network.
 
+The Privacy screen shows live local counts for encrypted transcripts, retained
+recovery audio, correction rules, and installed speech/refinement models.
+These counts are derived in-process and are not telemetry.
+
 ## Data lifecycle
 
 ### Microphone audio
@@ -30,6 +34,8 @@ network.
   exits unexpectedly.
 - A crash or forced termination could leave a temporary file until macOS cleans
   its temporary directory when history is disabled.
+- Users can delete all retained recovery audio independently from the Privacy
+  inventory after a destructive-action confirmation.
 
 ### Transcripts
 
