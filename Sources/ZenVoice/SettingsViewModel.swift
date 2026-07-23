@@ -70,6 +70,8 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var selectedMicrophoneUID: String?
     @Published private(set) var audioDoctorState: AudioDoctorState = .idle
     @Published private(set) var audioDoctorLevel = 0.0
+    @Published private(set) var livePreviewEnabled: Bool
+    @Published private(set) var commitOnPauseEnabled: Bool
 
     private let applyShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
@@ -116,6 +118,10 @@ final class SettingsViewModel: ObservableObject {
         self.canRunAudioDoctor = canRunAudioDoctor
         instantRefineMode = InstantRefinePreferences.load()
         languageProfile = LanguagePreferences.load()
+        livePreviewEnabled =
+            LiveDictationPreferences.isPreviewEnabled()
+        commitOnPauseEnabled =
+            LiveDictationPreferences.isCommitOnPauseEnabled()
         selectedMicrophoneUID =
             MicrophonePreferences.selectedDeviceUID()
         refreshMicrophones()
@@ -211,6 +217,22 @@ final class SettingsViewModel: ObservableObject {
     func setInstantRefineMode(_ mode: InstantRefineMode) {
         instantRefineMode = mode
         InstantRefinePreferences.save(mode)
+    }
+
+    func setLivePreviewEnabled(_ enabled: Bool) {
+        LiveDictationPreferences.setPreviewEnabled(enabled)
+        livePreviewEnabled =
+            LiveDictationPreferences.isPreviewEnabled()
+        commitOnPauseEnabled =
+            LiveDictationPreferences.isCommitOnPauseEnabled()
+    }
+
+    func setCommitOnPauseEnabled(_ enabled: Bool) {
+        LiveDictationPreferences.setCommitOnPauseEnabled(enabled)
+        livePreviewEnabled =
+            LiveDictationPreferences.isPreviewEnabled()
+        commitOnPauseEnabled =
+            LiveDictationPreferences.isCommitOnPauseEnabled()
     }
 
     func setInputLanguage(_ code: String) {

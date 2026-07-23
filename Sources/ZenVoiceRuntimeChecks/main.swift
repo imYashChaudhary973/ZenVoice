@@ -62,8 +62,15 @@ do {
     let transcriber = WhisperTranscriber(configuration: configuration)
     try runPass(1, transcriber: transcriber, audioURL: audioURL)
     try runPass(2, transcriber: transcriber, audioURL: audioURL)
+    do {
+        _ = try transcriber.transcribe(
+            samples: Array(repeating: 0, count: 16_000)
+        )
+    } catch WhisperTranscriber.TranscriptionError.noSpeech {
+        // Direct in-memory samples reached the no-speech decision.
+    }
     print(
-        "ZenVoice runtime checks passed (persistent model: "
+        "ZenVoice runtime checks passed (persistent model + live samples: "
             + "\(transcriber.modelID))."
     )
 } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {

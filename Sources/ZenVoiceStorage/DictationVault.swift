@@ -145,6 +145,43 @@ public final class DictationVault: @unchecked Sendable {
         )
     }
 
+    public func storePartialTranscript(
+        id: UUID,
+        rawTranscript: String,
+        finalTranscript: String,
+        correctionCount: Int = 0
+    ) throws {
+        let wordCount = DictationMetrics.wordCount(in: finalTranscript)
+        try queue.sync {
+            let encryptedRaw = try cipher.seal(
+                rawTranscript,
+                context: encryptionContext(id: id, field: "raw")
+            )
+            let encryptedFinal = try cipher.seal(
+                finalTranscript,
+                context: encryptionContext(id: id, field: "final")
+            )
+            let statement = try prepare(
+                """
+                UPDATE dictations
+                SET raw_transcript = ?, final_transcript = ?,
+                    word_count = ?, correction_count = ?,
+                    is_partial = 1
+                WHERE id = ?;
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+
+            bind(encryptedRaw, at: 1, in: statement)
+            bind(encryptedFinal, at: 2, in: statement)
+            sqlite3_bind_int64(statement, 3, Int64(wordCount))
+            sqlite3_bind_int64(statement, 4, Int64(correctionCount))
+            bind(id.uuidString, at: 5, in: statement)
+            try stepDone(statement)
+            try requireChangedRow()
+        }
+    }
+
     public func storeTranscript(
         id: UUID,
         rawTranscript: String,

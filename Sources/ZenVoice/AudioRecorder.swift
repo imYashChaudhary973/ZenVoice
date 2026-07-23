@@ -9,6 +9,11 @@ final class AudioRecorder {
         let durationSeconds: TimeInterval
     }
 
+    struct StableAudioSegment {
+        let samples: [Float]
+        let endSampleIndex: Int
+    }
+
     enum RecorderError: LocalizedError {
         case unableToCreateRecorder
         case unableToStart
@@ -36,6 +41,10 @@ final class AudioRecorder {
     private var levelChanged: ((Double) -> Void)?
     private var isTapInstalled = false
     private(set) var activeDeviceUID: String?
+    private let sampleLock = NSLock()
+    private var capturedSamples: [Float] = []
+    private var lastSpeechSampleIndex = 0
+    private var capturesLiveSamples = false
 
     var isRecording: Bool {
         engine.isRunning
@@ -45,6 +54,7 @@ final class AudioRecorder {
         recordingURL requestedURL: URL? = nil,
         selectedDeviceUID: String? =
             MicrophonePreferences.selectedDeviceUID(),
+        capturesLiveSamples: Bool = false,
         levelChanged: @escaping (Double) -> Void
     ) throws {
         let url = requestedURL
@@ -108,6 +118,11 @@ final class AudioRecorder {
         recordingURL = url
         recordingStartedAt = Date()
         audioLevelMeter = AudioLevelMeter()
+        self.capturesLiveSamples = capturesLiveSamples
+        sampleLock.withLock {
+            capturedSamples.removeAll(keepingCapacity: true)
+            lastSpeechSampleIndex = 0
+        }
 
         inputNode.installTap(
             onBus: 0,
@@ -131,7 +146,9 @@ final class AudioRecorder {
         }
     }
 
-    func stop() -> RecordedAudio? {
+    func stop(
+        preserveLiveSamples: Bool = false
+    ) -> RecordedAudio? {
         if isTapInstalled {
             engine.inputNode.removeTap(onBus: 0)
             isTapInstalled = false
@@ -144,6 +161,10 @@ final class AudioRecorder {
         targetFormat = nil
         levelChanged = nil
         activeDeviceUID = nil
+        capturesLiveSamples = false
+        if !preserveLiveSamples {
+            releaseCapturedSamples()
+        }
         defer {
             recordingURL = nil
             recordingStartedAt = nil
@@ -168,8 +189,48 @@ final class AudioRecorder {
         }
     }
 
+    func stableSegment(
+        after sampleIndex: Int,
+        minimumSpeechDuration: TimeInterval = 0.45,
+        requiredSilenceDuration: TimeInterval = 0.70
+    ) -> StableAudioSegment? {
+        sampleLock.withLock {
+            let start = max(0, min(sampleIndex, capturedSamples.count))
+            guard StablePauseDetector.isStable(
+                segmentStart: start,
+                totalSamples: capturedSamples.count,
+                lastSpeechSample: lastSpeechSampleIndex,
+                minimumSpeechDuration: minimumSpeechDuration,
+                requiredSilenceDuration: requiredSilenceDuration
+            ) else {
+                return nil
+            }
+            return StableAudioSegment(
+                samples: Array(capturedSamples[start...]),
+                endSampleIndex: capturedSamples.count
+            )
+        }
+    }
+
+    func samples(after sampleIndex: Int) -> [Float] {
+        sampleLock.withLock {
+            let start = max(0, min(sampleIndex, capturedSamples.count))
+            guard start < capturedSamples.count else {
+                return []
+            }
+            return Array(capturedSamples[start...])
+        }
+    }
+
+    func releaseCapturedSamples() {
+        sampleLock.withLock {
+            capturedSamples.removeAll(keepingCapacity: false)
+            lastSpeechSampleIndex = 0
+        }
+    }
+
     private func process(_ buffer: AVAudioPCMBuffer) {
-        reportLevel(from: buffer)
+        let speechDetected = reportLevel(from: buffer)
         guard let converter,
               let targetFormat,
               let audioFile else {
@@ -206,13 +267,31 @@ final class AudioRecorder {
             return
         }
         try? audioFile.write(from: converted)
+        guard let channel = converted.floatChannelData?.pointee else {
+            return
+        }
+        guard capturesLiveSamples else {
+            return
+        }
+        let samples = Array(
+            UnsafeBufferPointer(
+                start: channel,
+                count: Int(converted.frameLength)
+            )
+        )
+        sampleLock.withLock {
+            capturedSamples.append(contentsOf: samples)
+            if speechDetected {
+                lastSpeechSampleIndex = capturedSamples.count
+            }
+        }
     }
 
-    private func reportLevel(from buffer: AVAudioPCMBuffer) {
+    private func reportLevel(from buffer: AVAudioPCMBuffer) -> Bool {
         guard buffer.format.commonFormat == .pcmFormatFloat32,
               let channel = buffer.floatChannelData?.pointee,
               buffer.frameLength > 0 else {
-            return
+            return false
         }
         var sumSquares: Float = 0
         var peak: Float = 0
@@ -229,6 +308,7 @@ final class AudioRecorder {
             peakDecibels: peakDecibels
         )
         levelChanged?(level)
+        return averageDecibels > -38 || peakDecibels > -28
     }
 
     private func reset() {
@@ -238,6 +318,7 @@ final class AudioRecorder {
         targetFormat = nil
         levelChanged = nil
         activeDeviceUID = nil
+        capturesLiveSamples = false
         recordingURL = nil
         recordingStartedAt = nil
     }

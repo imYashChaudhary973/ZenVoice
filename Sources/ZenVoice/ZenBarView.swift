@@ -27,7 +27,7 @@ struct ZenBarView: View {
 
             controlBar
         }
-        .frame(width: 210, height: 78, alignment: .bottom)
+        .frame(width: 320, height: 96, alignment: .bottom)
         .animation(.easeOut(duration: 0.16), value: state.phase)
         .animation(.easeOut(duration: 0.16), value: state.showsStatusMessage)
     }
@@ -136,6 +136,9 @@ struct ZenBarView: View {
         case .idle:
             return nil
         case .listening:
+            if !state.liveTranscriptPreview.isEmpty {
+                return state.liveTranscriptPreview
+            }
             return state.showsStatusMessage ? "Dictating with ZenVoice" : nil
         case .transcribing:
             return state.showsStatusMessage ? "Transcribing locally" : nil
