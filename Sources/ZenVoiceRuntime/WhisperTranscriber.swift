@@ -52,8 +52,15 @@ public final class WhisperTranscriber: @unchecked Sendable {
     }
 
     public func transcribe(audioURL: URL) throws -> TranscriptionResult {
-        let processingStartedAt = Date()
         let samples = try loadSamples(from: audioURL)
+        return try transcribe(samples: samples)
+    }
+
+    public func transcribe(samples: [Float]) throws -> TranscriptionResult {
+        guard !samples.isEmpty else {
+            throw TranscriptionError.invalidAudio
+        }
+        let processingStartedAt = Date()
         let context = try loadedContext()
         var parameters = whisper_full_default_params(
             WHISPER_SAMPLING_GREEDY

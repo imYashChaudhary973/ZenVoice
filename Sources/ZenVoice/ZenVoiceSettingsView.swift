@@ -1149,21 +1149,39 @@ private struct InstantRefineScreen: View {
                 ZenCard {
                     VStack(alignment: .leading, spacing: 10) {
                         Label(
-                            "Current delivery",
-                            systemImage: "scope"
+                            "Live dictation",
+                            systemImage: "captions.bubble"
                         )
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(
                             ZenDesign.Semantic.textPrimary
                         )
-                        Text(
-                            "This release refines the completed transcript before paste. Streaming stable phrases and downloadable refinement models are the next guarded stages."
+                        PrivacyToggleRow(
+                            title: "Show stable phrase preview",
+                            detail:
+                                "Transcribe locally after a natural pause and show the stable phrase in ZenBar.",
+                            isOn: Binding(
+                                get: {
+                                    viewModel.livePreviewEnabled
+                                },
+                                set:
+                                    viewModel.setLivePreviewEnabled
+                            )
                         )
-                        .font(.system(size: 10))
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textSecondary
+
+                        PrivacyToggleRow(
+                            title: "Paste stable phrases on pause",
+                            detail:
+                                "Experimental. Paste only when the original target app is still active; final stop remains the recovery boundary.",
+                            isOn: Binding(
+                                get: {
+                                    viewModel.commitOnPauseEnabled
+                                },
+                                set:
+                                    viewModel.setCommitOnPauseEnabled
+                            )
                         )
-                        .fixedSize(horizontal: false, vertical: true)
+                        .disabled(!viewModel.livePreviewEnabled)
                     }
                 }
             }

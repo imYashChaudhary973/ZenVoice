@@ -39,6 +39,7 @@ final class AppState: ObservableObject {
     @Published var showsStatusMessage: Bool
     @Published var lastTranscript = ""
     @Published var languageProfile: LanguageProfile
+    @Published var liveTranscriptPreview = ""
 
     init(defaults: UserDefaults = .standard) {
         languageProfile = LanguagePreferences.load(defaults: defaults)

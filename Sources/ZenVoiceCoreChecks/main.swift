@@ -590,3 +590,81 @@ guard MicrophonePreferences.selectedDeviceUID(
 }
 
 print("ZenVoiceCoreChecks: microphone preferences passed")
+
+let liveSuite = "ZenVoiceLive.\(UUID().uuidString)"
+guard let liveDefaults = UserDefaults(suiteName: liveSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create live dictation fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    liveDefaults.removePersistentDomain(forName: liveSuite)
+}
+guard LiveDictationPreferences.isPreviewEnabled(
+    defaults: liveDefaults
+),
+!LiveDictationPreferences.isCommitOnPauseEnabled(
+    defaults: liveDefaults
+),
+StableTranscriptComposer.appending(
+    "  build the page ",
+    to: "Please"
+) == "Please build the page" else {
+    FileHandle.standardError.write(
+        Data("FAIL: live dictation defaults are invalid\n".utf8)
+    )
+    exit(1)
+}
+guard StablePauseDetector.isStable(
+    segmentStart: 0,
+    totalSamples: 32_000,
+    lastSpeechSample: 16_000
+),
+!StablePauseDetector.isStable(
+    segmentStart: 0,
+    totalSamples: 20_000,
+    lastSpeechSample: 16_000
+),
+!StablePauseDetector.isStable(
+    segmentStart: 0,
+    totalSamples: 13_000,
+    lastSpeechSample: 4_000
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: stable pause thresholds are incorrect\n".utf8)
+    )
+    exit(1)
+}
+LiveDictationPreferences.setCommitOnPauseEnabled(
+    true,
+    defaults: liveDefaults
+)
+guard LiveDictationPreferences.isPreviewEnabled(
+    defaults: liveDefaults
+),
+LiveDictationPreferences.isCommitOnPauseEnabled(
+    defaults: liveDefaults
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: commit-on-pause did not enable preview\n".utf8)
+    )
+    exit(1)
+}
+LiveDictationPreferences.setPreviewEnabled(
+    false,
+    defaults: liveDefaults
+)
+guard !LiveDictationPreferences.isPreviewEnabled(
+    defaults: liveDefaults
+),
+!LiveDictationPreferences.isCommitOnPauseEnabled(
+    defaults: liveDefaults
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: disabling preview did not disable streaming\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: live dictation preferences passed")

@@ -11,7 +11,7 @@ final class ZenBarPanelController {
         cancelRecording: @escaping () -> Void,
         finishRecording: @escaping () -> Void
     ) {
-        let frame = NSRect(x: 0, y: 0, width: 210, height: 78)
+        let frame = NSRect(x: 0, y: 0, width: 320, height: 96)
         panel = NSPanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],

@@ -11,6 +11,14 @@ private struct ProcessedTranscription {
 
     init(
         result: TranscriptionResult,
+        correctionUsages: [CorrectionUsage]
+    ) {
+        self.result = result
+        self.correctionUsages = correctionUsages
+    }
+
+    init(
+        result: TranscriptionResult,
         refinement: InstantRefineResult,
         correctionApplication: CorrectionApplication?
     ) {
@@ -80,6 +88,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var holdKeyPressed = false
     private var holdStartedRecording = false
     private var recoveryExpiryTimer: Timer?
+    private var livePreviewTimer: Timer?
+    private var liveSessionID = UUID()
+    private var liveCommittedSampleIndex = 0
+    private var livePreviewInFlight = false
+    private var liveStableRawTranscript = ""
+    private var liveStableFinalTranscript = ""
+    private var livePendingStableTranscript = ""
+    private var liveInsertedStableTranscript = ""
+    private var liveStableCorrectionCount = 0
+    private var liveStableProcessingDuration: TimeInterval = 0
+    private var liveCorrectionUsages: [CorrectionUsage] = []
+    private var liveStreamingInsertionBlocked = false
+    private var liveTargetProcessIdentifier: pid_t?
+    private var liveSamplesEnabledForRecording = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -114,6 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        livePreviewTimer?.invalidate()
         let historyID = activeHistoryID
         let processingHistoryID = transcribingHistoryID
         activeHistoryID = nil
@@ -759,6 +782,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         resetWorkItem?.cancel()
         state.resetAudioSamples()
         var historyDraft: DictationDraft?
+        let capturesLiveSamples =
+            LiveDictationPreferences.isPreviewEnabled()
 
         if historyPreferences.isHistoryEnabled,
            !historyPreferences.isPrivateModeEnabled {
@@ -790,19 +815,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             try recorder.start(
-                recordingURL: historyDraft?.recoveryAudioURL
+                recordingURL: historyDraft?.recoveryAudioURL,
+                capturesLiveSamples: capturesLiveSamples
             ) { [weak self] level in
                 DispatchQueue.main.async {
                     self?.state.appendAudioLevel(level)
                 }
             }
+            liveSamplesEnabledForRecording = capturesLiveSamples
             state.phase = .listening
+            beginLivePreviewSession()
             holdStartedRecording = startedByHold
             updateStartStopMenuTitle()
             if state.isZenBarVisible {
                 zenBarController.show()
             }
         } catch {
+            liveSamplesEnabledForRecording = false
             if let historyID = historyDraft?.id {
                 try? dictationVault?.discard(id: historyID)
                 activeHistoryID = nil
@@ -813,7 +842,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func finishRecording() {
         holdStartedRecording = false
-        guard let recordedAudio = recorder.stop(), let transcriber else {
+        let usesLivePreview = liveSamplesEnabledForRecording
+        liveSamplesEnabledForRecording = false
+        stopLivePreviewScheduling(invalidatePending: true)
+        let recordedAudio = recorder.stop(
+            preserveLiveSamples: usesLivePreview
+        )
+        let remainingSamples = usesLivePreview
+            ? recorder.samples(after: liveCommittedSampleIndex)
+            : []
+        recorder.releaseCapturedSamples()
+        guard let recordedAudio, let transcriber else {
+            resetLivePreviewSession()
             showError("No recording was captured.")
             return
         }
@@ -841,6 +881,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStartStopMenuTitle()
         let correctionVault = dictationVault
         let instantRefineMode = InstantRefinePreferences.load()
+
+        if usesLivePreview {
+            transcriptionQueue.async { [weak self] in
+                do {
+                    let processed: ProcessedTranscription?
+                    if remainingSamples.count >= 1_600 {
+                        let result = try transcriber.transcribe(
+                            samples: remainingSamples
+                        )
+                        let refinement = InstantRefineEngine().refine(
+                            result.finalTranscript,
+                            mode: instantRefineMode
+                        )
+                        processed = ProcessedTranscription(
+                            result: result,
+                            refinement: refinement,
+                            correctionApplication:
+                                try? correctionVault?.applyCorrections(
+                                    to: refinement.text
+                                )
+                        )
+                    } else {
+                        processed = nil
+                    }
+                    DispatchQueue.main.async {
+                        self?.completeLiveRecording(
+                            remaining: processed,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID,
+                            remainderWasExpected:
+                                remainingSamples.count >= 1_600
+                        )
+                    }
+                } catch WhisperTranscriber.TranscriptionError.noSpeech {
+                    DispatchQueue.main.async {
+                        self?.completeLiveRecording(
+                            remaining: nil,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID,
+                            remainderWasExpected: false
+                        )
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        guard let self else { return }
+                        if self.liveStableFinalTranscript.isEmpty {
+                            self.resetLivePreviewSession()
+                            self.handleTranscriptionFailure(
+                                error,
+                                recordedAudio: recordedAudio,
+                                historyID: historyID
+                            )
+                        } else {
+                            self.completeLiveRecording(
+                                remaining: nil,
+                                recordedAudio: recordedAudio,
+                                historyID: historyID,
+                                remainderWasExpected: true
+                            )
+                        }
+                    }
+                }
+            }
+            return
+        }
 
         transcriptionQueue.async { [weak self] in
             do {
@@ -888,6 +993,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         activeHistoryID = nil
         holdStartedRecording = false
         recorder.cancel()
+        liveSamplesEnabledForRecording = false
+        resetLivePreviewSession()
         if let historyID {
             try? dictationVault?.discard(id: historyID)
         }
@@ -912,6 +1019,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         resetWorkItem?.cancel()
         let recordedAudio = recorder.stop()
+        liveSamplesEnabledForRecording = false
+        resetLivePreviewSession()
         let historyID = activeHistoryID
         activeHistoryID = nil
         holdStartedRecording = false
@@ -932,10 +1041,262 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showError(message)
     }
 
+    private func beginLivePreviewSession() {
+        resetLivePreviewSession()
+        guard LiveDictationPreferences.isPreviewEnabled() else {
+            return
+        }
+        liveSessionID = UUID()
+        liveTargetProcessIdentifier =
+            NSWorkspace.shared.frontmostApplication?.processIdentifier
+        livePreviewTimer = Timer.scheduledTimer(
+            withTimeInterval: 0.35,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.processStablePause()
+            }
+        }
+    }
+
+    private func processStablePause() {
+        guard LiveDictationPreferences.isPreviewEnabled() else {
+            stopLivePreviewScheduling(invalidatePending: true)
+            return
+        }
+        guard recorder.isRecording,
+              !livePreviewInFlight,
+              let transcriber,
+              let segment = recorder.stableSegment(
+                after: liveCommittedSampleIndex
+              ) else {
+            return
+        }
+
+        livePreviewInFlight = true
+        let sessionID = liveSessionID
+        let mode = InstantRefinePreferences.load()
+        let correctionVault = dictationVault
+        transcriptionQueue.async { [weak self] in
+            do {
+                let result = try transcriber.transcribe(
+                    samples: segment.samples
+                )
+                let refinement = InstantRefineEngine().refine(
+                    result.finalTranscript,
+                    mode: mode
+                )
+                let processed = ProcessedTranscription(
+                    result: result,
+                    refinement: refinement,
+                    correctionApplication:
+                        try? correctionVault?.applyCorrections(
+                            to: refinement.text
+                        )
+                )
+                DispatchQueue.main.async {
+                    self?.acceptStablePhrase(
+                        processed,
+                        endSampleIndex: segment.endSampleIndex,
+                        sessionID: sessionID
+                    )
+                }
+            } catch WhisperTranscriber.TranscriptionError.noSpeech {
+                DispatchQueue.main.async {
+                    guard let self,
+                          self.liveSessionID == sessionID else {
+                        return
+                    }
+                    self.livePreviewInFlight = false
+                    // Keep this segment for final transcription. A short phrase
+                    // can be misclassified during preview and must not be lost.
+                    self.stopLivePreviewScheduling(
+                        invalidatePending: false
+                    )
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    guard let self,
+                          self.liveSessionID == sessionID else {
+                        return
+                    }
+                    self.livePreviewInFlight = false
+                    self.stopLivePreviewScheduling(
+                        invalidatePending: false
+                    )
+                }
+            }
+        }
+    }
+
+    private func acceptStablePhrase(
+        _ processed: ProcessedTranscription,
+        endSampleIndex: Int,
+        sessionID: UUID
+    ) {
+        guard liveSessionID == sessionID,
+              recorder.isRecording else {
+            return
+        }
+        livePreviewInFlight = false
+        liveCommittedSampleIndex = endSampleIndex
+        liveStableRawTranscript = StableTranscriptComposer.appending(
+            processed.result.rawTranscript,
+            to: liveStableRawTranscript
+        )
+        liveStableFinalTranscript = StableTranscriptComposer.appending(
+            processed.result.finalTranscript,
+            to: liveStableFinalTranscript
+        )
+        liveStableCorrectionCount +=
+            processed.result.correctionCount
+        liveStableProcessingDuration +=
+            processed.result.processingDurationSeconds
+        liveCorrectionUsages.append(
+            contentsOf: processed.correctionUsages
+        )
+        state.liveTranscriptPreview =
+            processed.result.finalTranscript
+
+        if let historyID = activeHistoryID,
+           !nonPersistentHistoryIDs.contains(historyID),
+           historyPreferences.isHistoryEnabled,
+           !historyPreferences.isPrivateModeEnabled {
+            try? dictationVault?.storePartialTranscript(
+                id: historyID,
+                rawTranscript: liveStableRawTranscript,
+                finalTranscript: liveStableFinalTranscript,
+                correctionCount: liveStableCorrectionCount
+            )
+        }
+
+        guard LiveDictationPreferences.isCommitOnPauseEnabled(),
+              !liveStreamingInsertionBlocked,
+              AXIsProcessTrusted(),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier
+                == liveTargetProcessIdentifier else {
+            livePendingStableTranscript =
+                StableTranscriptComposer.appending(
+                    processed.result.finalTranscript,
+                    to: livePendingStableTranscript
+                )
+            if LiveDictationPreferences.isCommitOnPauseEnabled() {
+                liveStreamingInsertionBlocked = true
+            }
+            return
+        }
+
+        switch inserter.insert(processed.result.finalTranscript + " ") {
+        case .pasted:
+            liveInsertedStableTranscript =
+                StableTranscriptComposer.appending(
+                    processed.result.finalTranscript,
+                    to: liveInsertedStableTranscript
+                )
+        case .copiedOnly:
+            livePendingStableTranscript =
+                StableTranscriptComposer.appending(
+                    processed.result.finalTranscript,
+                    to: livePendingStableTranscript
+                )
+            liveStreamingInsertionBlocked = true
+        }
+    }
+
+    private func stopLivePreviewScheduling(
+        invalidatePending: Bool
+    ) {
+        livePreviewTimer?.invalidate()
+        livePreviewTimer = nil
+        if invalidatePending {
+            liveSessionID = UUID()
+            livePreviewInFlight = false
+        }
+        state.liveTranscriptPreview = ""
+    }
+
+    private func completeLiveRecording(
+        remaining: ProcessedTranscription?,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        historyID: UUID?,
+        remainderWasExpected: Bool
+    ) {
+        let remainingResult = remaining?.result
+        let rawTranscript = StableTranscriptComposer.appending(
+            remainingResult?.rawTranscript ?? "",
+            to: liveStableRawTranscript
+        )
+        let finalTranscript = StableTranscriptComposer.appending(
+            remainingResult?.finalTranscript ?? "",
+            to: liveStableFinalTranscript
+        )
+        guard !finalTranscript.isEmpty, let transcriber else {
+            resetLivePreviewSession()
+            handleTranscriptionFailure(
+                WhisperTranscriber.TranscriptionError.noSpeech,
+                recordedAudio: recordedAudio,
+                historyID: historyID
+            )
+            return
+        }
+
+        let combinedResult = TranscriptionResult(
+            rawTranscript: rawTranscript,
+            finalTranscript: finalTranscript,
+            correctionCount:
+                liveStableCorrectionCount
+                + (remainingResult?.correctionCount ?? 0),
+            isPartial:
+                remainderWasExpected && remainingResult == nil,
+            modelID: transcriber.modelID,
+            processingDurationSeconds:
+                liveStableProcessingDuration
+                + (remainingResult?.processingDurationSeconds ?? 0)
+        )
+        let processed = ProcessedTranscription(
+            result: combinedResult,
+            correctionUsages:
+                liveCorrectionUsages
+                + (remaining?.correctionUsages ?? [])
+        )
+        let hasPriorInsertion =
+            !liveInsertedStableTranscript.isEmpty
+        let insertionText = hasPriorInsertion
+            ? StableTranscriptComposer.appending(
+                remainingResult?.finalTranscript ?? "",
+                to: livePendingStableTranscript
+            )
+            : finalTranscript
+        resetLivePreviewSession()
+        complete(
+            processed: processed,
+            recordedAudio: recordedAudio,
+            historyID: historyID,
+            insertionText: insertionText,
+            hasPriorInsertion: hasPriorInsertion
+        )
+    }
+
+    private func resetLivePreviewSession() {
+        stopLivePreviewScheduling(invalidatePending: true)
+        liveCommittedSampleIndex = 0
+        liveStableRawTranscript = ""
+        liveStableFinalTranscript = ""
+        livePendingStableTranscript = ""
+        liveInsertedStableTranscript = ""
+        liveStableCorrectionCount = 0
+        liveStableProcessingDuration = 0
+        liveCorrectionUsages = []
+        liveStreamingInsertionBlocked = false
+        liveTargetProcessIdentifier = nil
+    }
+
     private func complete(
         processed: ProcessedTranscription,
         recordedAudio: AudioRecorder.RecordedAudio,
-        historyID: UUID?
+        historyID: UUID?,
+        insertionText: String? = nil,
+        hasPriorInsertion: Bool = false
     ) {
         let result = processed.result
         transcribingHistoryID = nil
@@ -983,9 +1344,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.lastTranscript = result.finalTranscript
         state.phase = .inserting
 
+        let textToInsert = insertionText ?? result.finalTranscript
+        if textToInsert.isEmpty, hasPriorInsertion {
+            if let historyID, shouldPersist, historySaveError == nil {
+                try? resolvedVault().markInsertion(
+                    id: historyID,
+                    outcome: .inserted
+                )
+            }
+            state.phase = .success
+            historyViewModel?.refresh()
+            insightsViewModel?.refresh()
+            voiceProfileViewModel?.refresh()
+            scheduleIdleReset(after: 1.5)
+            return
+        }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             guard let self else { return }
-            switch self.inserter.insert(result.finalTranscript) {
+            switch self.inserter.insert(textToInsert) {
             case .pasted:
                 if let historyID, shouldPersist, historySaveError == nil {
                     try? self.resolvedVault().markInsertion(

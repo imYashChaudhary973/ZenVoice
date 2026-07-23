@@ -96,6 +96,17 @@ network.
   privacy promise and require a separate model, licence, security, latency,
   and data-lifecycle review before implementation.
 
+### Live dictation
+
+- Live phrase samples stay in memory and are processed by the same local
+  Whisper runtime after a detected pause.
+- Stable phrases are encrypted into the active History record for interruption
+  recovery; Private Dictation and paused History write no partial text.
+- Commit on pause is off by default. When enabled, it inserts only into the
+  application that was active when dictation began.
+- In-memory samples are released with the recording session and are never sent
+  to a network service.
+
 ### Highlight cards
 
 - Highlight cards are rendered locally as 1200×630 images.

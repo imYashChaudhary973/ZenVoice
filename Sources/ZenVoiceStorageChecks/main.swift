@@ -796,6 +796,60 @@ private func checkEncryptedVoiceProfile() throws {
     )
 }
 
+private func checkLivePartialRecovery() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let id = UUID()
+    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    try Data("audio".utf8).write(to: audioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: id,
+            startedAt: Date(timeIntervalSince1970: 12_000),
+            language: "en",
+            modelID: "whisper-base-en",
+            targetBundleID: "com.openai.codex",
+            targetAppName: "ChatGPT",
+            category: .aiPrompts,
+            recoveryAudioURL: audioURL
+        )
+    )
+    try fixture.vault.storePartialTranscript(
+        id: id,
+        rawTranscript: "build the local",
+        finalTranscript: "Build the local app",
+        correctionCount: 1
+    )
+
+    guard let partial = try fixture.vault.record(id: id) else {
+        throw CheckError.failed("live partial record is missing")
+    }
+    try require(partial.status == .recording, "live partial changed status")
+    try require(partial.isPartial, "live partial flag")
+    try require(
+        partial.finalTranscript == "Build the local app",
+        "live partial final text"
+    )
+    try require(partial.correctionCount == 1, "live partial corrections")
+
+    try require(
+        try fixture.vault.recoverInterrupted(
+            retainAudio: true,
+            now: Date(timeIntervalSince1970: 12_030)
+        ) == 1,
+        "live partial interruption was not recovered"
+    )
+    guard let recovered = try fixture.vault.record(id: id) else {
+        throw CheckError.failed("recovered live partial is missing")
+    }
+    try require(recovered.status == .failed, "live partial recovery status")
+    try require(
+        recovered.finalTranscript == "Build the local app",
+        "live partial was lost during recovery"
+    )
+}
+
 do {
     try checkEncryptedStorage()
     try checkRecoveryExpiry()
@@ -810,7 +864,8 @@ do {
     try checkCategoryCorrection()
     try checkCorrectionEngine()
     try checkEncryptedVoiceProfile()
-    print("ZenVoiceStorageChecks: 13 checks passed")
+    try checkLivePartialRecovery()
+    print("ZenVoiceStorageChecks: 14 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)
