@@ -2,6 +2,11 @@
 
 This roadmap communicates direction, not a release promise.
 
+The approved milestone sequence and delivery rules are tracked in
+[Build Order](BUILD_ORDER.md). Accepted privacy and model constraints are
+recorded in
+[ADR 0001](decisions/0001-local-data-and-model-governance.md).
+
 ## Current: dependable personal alpha
 
 - [x] Native macOS menu-bar application
