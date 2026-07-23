@@ -65,9 +65,9 @@ final class AudioRecorder {
         let inputNode = engine.inputNode
         let effectiveDeviceUID = selectedDeviceUID
             ?? AVCaptureDevice.default(for: .audio)?.uniqueID
-        if let effectiveDeviceUID {
+        if let pinnedDeviceUID = selectedDeviceUID {
             var deviceID = try MicrophoneCatalog.audioDeviceID(
-                uid: effectiveDeviceUID
+                uid: pinnedDeviceUID
             )
             guard let audioUnit = inputNode.audioUnit,
                   AudioUnitSetProperty(
