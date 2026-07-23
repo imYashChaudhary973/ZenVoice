@@ -86,15 +86,19 @@ network.
 
 - Instant Refine processes the completed transcript in memory after local
   Whisper transcription and before storage or paste.
-- Off, Clean, and Agent Prompt modes use deterministic application code; no
-  text-refinement model, API, analytics endpoint, or cloud service is contacted.
+- Off, Clean, and Agent Prompt modes use deterministic application code.
+- Local Model mode uses only the selected SHA-256-verified GGUF file through
+  the in-process `llama.cpp` runtime. No transcript is sent to an API,
+  analytics endpoint, or cloud service.
 - The meaning guard rejects a candidate that removes too much text or
   introduces a semantic word absent from the Whisper transcript.
 - Private Dictation can use the same in-memory refinement while saving no
   transcript or correction-usage event.
-- Downloadable generative refinement models are not part of the current
-  privacy promise and require a separate model, licence, security, latency,
-  and data-lifecycle review before implementation.
+- Local-model output must be valid grammar-constrained JSON, meet the
+  vocabulary and retention guards, and finish within the local deadline.
+  Otherwise ZenVoice discards it and uses deterministic Clean refinement.
+- Downloaded refinement weights live in private Application Support with
+  user-only permissions and can be removed from Instant Refine.
 
 ### Live dictation
 

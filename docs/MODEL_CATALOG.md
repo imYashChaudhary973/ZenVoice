@@ -35,6 +35,31 @@ The catalogue metadata was verified against the official Hugging Face API on
 2026-07-23. Any model revision or file replacement requires a new review and
 new checksum; existing entries must not silently follow a moving branch.
 
+## M14 refinement catalogue
+
+Text refinement has a separate allowlist in
+`VerifiedRefinementModelCatalog`. ZenVoice offers only Qwen-published,
+Apache-2.0 GGUF artifacts:
+
+| Tier | Model | File | Size | Minimum memory | SHA-256 |
+| --- | --- | --- | ---: | ---: | --- |
+| Fast | Qwen2.5 0.5B Instruct | `qwen2.5-0.5b-instruct-q4_k_m.gguf` | 491,400,032 B | 8 GB | `74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db` |
+| Balanced | Qwen2.5 1.5B Instruct | `qwen2.5-1.5b-instruct-q4_k_m.gguf` | 1,117,320,736 B | 16 GB | `6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e` |
+
+Pinned revisions:
+
+- Fast: `9217f5db79a29953eb74d5343926648285ec7e67`
+- Balanced: `91cad51170dc346986eccefdc2dd33a9da36ead9`
+
+Qwen documents the Qwen2.5 family as supporting more than 29 languages,
+including English, Chinese, French, Spanish, Portuguese, German, Italian,
+Russian, Japanese, Korean, Vietnamese, Thai, and Arabic. Language support is
+not a promise of equal quality; ZenVoice still needs per-language evaluation.
+
+The Qwen 3B repository was not admitted because its published licence marker
+differs from the Apache-2.0 entries above. A model is never included merely
+because it is technically compatible.
+
 ## Installation contract
 
 1. The user explicitly starts a download.
@@ -85,3 +110,18 @@ Swift Package Manager verifies that checksum before exposing the binary target.
 The packaged app embeds and signs `whisper.framework`. ZenVoice calls its C API
 in-process and retains one model context until the selected model changes or
 the application exits.
+
+The local refinement runtime uses the official `llama.cpp` b9637 XCFramework:
+
+- Source: [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp)
+- Release: `b9637`
+- Source commit: `aedb2a5e9ca3d4064148bbb919e0ddc0c1b70ab3`
+- Artifact: `llama-b9637-xcframework.zip`
+- SHA-256:
+  `46c7dad871f804d82399ddcfeb54d23b6469888801fc35124d7e33e543a9bef7`
+- Licence: MIT
+
+This version is newer than the fix boundary for the
+[2025 GGUF vocabulary buffer-overflow advisory](https://github.com/ggml-org/llama.cpp/security/advisories/GHSA-8wwf-w4qm-gpqr).
+ZenVoice still accepts only exact catalogue files with verified size and
+checksum. The packaged app embeds and signs `llama.framework`.
