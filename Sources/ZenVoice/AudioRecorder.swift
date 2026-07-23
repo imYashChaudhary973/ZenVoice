@@ -31,7 +31,7 @@ final class AudioRecorder {
         }
     }
 
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()
     private var audioFile: AVAudioFile?
     private var converter: AVAudioConverter?
     private var targetFormat: AVAudioFormat?
@@ -57,6 +57,11 @@ final class AudioRecorder {
         capturesLiveSamples: Bool = false,
         levelChanged: @escaping (Double) -> Void
     ) throws {
+        // A device selected through CurrentDevice remains attached to the
+        // underlying audio unit. Recreate the engine for every session so
+        // choosing System Default after a pinned microphone really returns
+        // routing control to macOS.
+        engine = AVAudioEngine()
         let url = requestedURL
             ?? FileManager.default.temporaryDirectory
                 .appendingPathComponent("zenvoice-\(UUID().uuidString)")
@@ -65,9 +70,9 @@ final class AudioRecorder {
         let inputNode = engine.inputNode
         let effectiveDeviceUID = selectedDeviceUID
             ?? AVCaptureDevice.default(for: .audio)?.uniqueID
-        if let effectiveDeviceUID {
+        if let pinnedDeviceUID = selectedDeviceUID {
             var deviceID = try MicrophoneCatalog.audioDeviceID(
-                uid: effectiveDeviceUID
+                uid: pinnedDeviceUID
             )
             guard let audioUnit = inputNode.audioUnit,
                   AudioUnitSetProperty(

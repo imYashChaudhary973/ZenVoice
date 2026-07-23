@@ -59,7 +59,7 @@ recorded in
 - [x] Add deterministic multilingual layout and punctuation voice commands
 - [x] Add transparent Correction Review and local learning controls
 - [x] Add a dedicated Recovery Inbox for failed and partial dictations
-- [ ] Add first-run onboarding and expanded permission recovery
+- [x] Add first-run onboarding and expanded permission recovery
 - [ ] Add Developer ID signing, notarization, and update delivery
 - [x] Complete the M9 engineering security review
 - [ ] Complete release-candidate accessibility and clean-device QA

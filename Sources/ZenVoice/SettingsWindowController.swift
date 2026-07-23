@@ -13,6 +13,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         RefinementModelManagerViewModel
     private let applicationProfileViewModel:
         ApplicationProfileViewModel
+    private let onboardingViewModel: OnboardingViewModel
     private var hasCenteredWindow = false
 
     init(
@@ -25,6 +26,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             RefinementModelManagerViewModel,
         applicationProfileViewModel:
             ApplicationProfileViewModel,
+        onboardingViewModel: OnboardingViewModel,
         appState: AppState
     ) {
         self.viewModel = viewModel
@@ -36,6 +38,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             refinementModelManagerViewModel
         self.applicationProfileViewModel =
             applicationProfileViewModel
+        self.onboardingViewModel = onboardingViewModel
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
             styleMask: [
@@ -74,6 +77,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                     refinementModelManagerViewModel,
                 applicationProfileViewModel:
                     applicationProfileViewModel,
+                onboardingViewModel: onboardingViewModel,
                 appState: appState
             )
         )

@@ -6,6 +6,10 @@ ZenVoice's current transcription pipeline is local. Application code does not
 send audio, transcripts, clipboard contents, or usage analytics over the
 network.
 
+The Privacy screen shows live local counts for encrypted transcripts, retained
+recovery audio, correction rules, and installed speech/refinement models.
+These counts are derived in-process and are not telemetry.
+
 ## Data lifecycle
 
 ### Microphone audio
@@ -30,6 +34,8 @@ network.
   exits unexpectedly.
 - A crash or forced termination could leave a temporary file until macOS cleans
   its temporary directory when history is disabled.
+- Users can delete all retained recovery audio independently from the Privacy
+  inventory after a destructive-action confirmation.
 
 ### Transcripts
 
@@ -114,12 +120,13 @@ network.
 - Local Model mode uses only the selected SHA-256-verified GGUF file through
   the in-process `llama.cpp` runtime. No transcript is sent to an API,
   analytics endpoint, or cloud service.
-- The meaning guard rejects a candidate that removes too much text or
-  introduces a semantic word absent from the Whisper transcript.
+- Deterministic Clean runs before the downloadable local model. Its meaning
+  guard then rejects any normalized-word deletion, duplication, or reordering,
+  including dropped negations.
 - Private Dictation can use the same in-memory refinement while saving no
   transcript or correction-usage event.
-- Local-model output must be valid grammar-constrained JSON, meet the
-  vocabulary and retention guards, and finish within the local deadline.
+- Local-model output must be valid grammar-constrained JSON, preserve the
+  exact normalized token order, and finish within the local deadline.
   Otherwise ZenVoice discards it and uses deterministic Clean refinement.
 - Downloaded refinement weights live in private Application Support with
   user-only permissions and can be removed from Instant Refine.

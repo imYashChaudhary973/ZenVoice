@@ -65,6 +65,9 @@ The native application target owns macOS-specific behavior:
   numeric-only `ShareCardSummary`.
 - `ZenVoiceSettingsView` provides Overview, Models, History, Insights,
   Voice Profile, Shortcuts, and Privacy screens.
+- `OnboardingViewModel` presents an upgrade-safe, reopenable setup sheet.
+  `OnboardingPreferences` distinguishes a fresh install from an existing
+  configured installation before default History state is materialized.
 - `ZenDesignTokens` keeps the dark Zen visual language consistent.
 - `AudioRecorder` captures 16 kHz mono PCM audio using AVFoundation.
 - `MicrophoneCatalog` discovers connected inputs and maps the selected
@@ -102,8 +105,9 @@ launching the application:
   publisher metadata, immutable revisions, exact GGUF files, licence links,
   size, SHA-256, and minimum-memory guidance.
 - `LocalRefinementPrompt` defines the no-translation, no-invention JSON
-  contract. `LocalRefinementGuard` rejects malformed, destructive, or
-  vocabulary-expanding results.
+  contract. Deterministic Clean runs first, then `LocalRefinementGuard`
+  rejects malformed results or any normalized-token deletion, duplication, or
+  reordering.
 - `LanguageCatalog` exposes the reviewed language codes and product support
   level. `LanguagePreferences` persists the explicit input/output profile.
 - `LocalTransliterator` converts supported native scripts to Latin characters
@@ -123,6 +127,9 @@ to a server.
 atomic-install contract to the separate text-model directory.
 `HistoryViewModel` derives its Recovery Inbox directly from encrypted History
 records marked failed or partial; it does not create a second transcript copy.
+The Privacy screen derives live inventory counts from the same view models and
+confirms destructive recovery-audio deletion instead of maintaining another
+analytics store.
 `ModelRecommendationEngine` maps RAM and storage headroom to a default tier,
 while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 

@@ -64,11 +64,12 @@ The built-in engine is deterministic:
 If the guard rejects a candidate, ZenVoice uses the original cleaned Whisper
 transcript.
 
-The downloadable local-model mode adds stricter boundaries:
+The downloadable local-model mode applies deterministic Clean first, then adds
+stricter boundaries:
 
 - generation is grammar-constrained to `{"text":"..."}`;
-- output cannot introduce a normalized word absent from the transcript;
-- a five-word-or-longer result must retain at least 60 percent of its tokens;
+- output must preserve every normalized word in the same order, so the model
+  cannot drop a negation, duplicate words, or reorder a sentence;
 - output length is bounded and generation has a five-second deadline;
 - the model keeps the spoken language and is forbidden from translating;
 - failure always falls back to deterministic Clean refinement.

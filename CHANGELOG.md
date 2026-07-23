@@ -70,6 +70,10 @@ All notable ZenVoice changes are recorded here.
 - Added controls to pause correction rules, pause history pattern analysis,
   and delete all correction rules without deleting transcripts
 - Added a Recovery Inbox filter for failed and usable partial dictations
+- Added first-run onboarding that existing ZenVoice installs can reopen from
+  Overview without being forced through setup again
+- Added a local privacy inventory with confirmed recovery-audio deletion
+- Added Reduce Motion support and explicit success announcements to ZenBar
 
 ### Changed
 

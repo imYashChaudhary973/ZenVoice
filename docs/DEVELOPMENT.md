@@ -124,6 +124,8 @@ The checks cover:
 - correction-rule pause and pattern-analysis preferences, independent rule
   deletion, before/after review selection, and failed/partial Recovery Inbox
   filtering.
+- fresh-install versus upgrade onboarding state, privacy-inventory counts,
+  confirmed recovery-audio deletion, and Reduce Motion-aware ZenBar state.
 
 GitHub Actions runs the same checks on macOS for each pull request and `main`
 push. Semgrep Community Edition runs independently on an Ubuntu runner. The

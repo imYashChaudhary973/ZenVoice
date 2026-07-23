@@ -72,6 +72,12 @@ analytics, or cloud transcription services in the current application.
   delete correction rules independently from History.
 - A Recovery Inbox for failed and usable partial dictations with Copy, Retry,
   and Delete actions.
+- Upgrade-safe first-run onboarding with plain-language privacy, permission,
+  shortcut, language, and model guidance.
+- A live privacy inventory for encrypted transcripts, recovery audio,
+  correction rules, and installed local models.
+- Reduce Motion-aware ZenBar animation and clearer assistive-technology status
+  labels.
 - Meaning-preserving cleanup for fillers, repeated words, spoken restarts, and
   explicit prompt layout commands.
 - Visible model-download percentage with reliable cancellation.
