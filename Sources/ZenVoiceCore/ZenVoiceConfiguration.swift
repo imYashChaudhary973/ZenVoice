@@ -31,9 +31,6 @@ public struct ZenVoiceConfiguration {
             environment["ZENVOICE_MODEL_PATH"],
             homeDirectory
                 .appendingPathComponent("Library/Application Support/ZenVoice/Models/ggml-base.en.bin")
-                .path(percentEncoded: false),
-            homeDirectory
-                .appendingPathComponent("Library/Application Support/Zero/models/ggml-base.en.bin")
                 .path(percentEncoded: false)
         ].compactMap { $0 }
 
