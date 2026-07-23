@@ -99,6 +99,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(microphoneDisconnected(_:)),
+            name: AVCaptureDevice.wasDisconnectedNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(microphoneConnected(_:)),
+            name: AVCaptureDevice.wasConnectedNotification,
+            object: nil
+        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -426,6 +438,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
                 return self.applyLanguageProfile(profile)
+            },
+            canRunAudioDoctor: { [weak self] in
+                guard let self else {
+                    return false
+                }
+                return !self.recorder.isRecording && !self.state.isBusy
             }
         )
         historyViewModel = HistoryViewModel(
@@ -876,6 +894,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.resetAudioSamples()
         state.phase = .idle
         updateStartStopMenuTitle()
+    }
+
+    @objc private func microphoneConnected(_ notification: Notification) {
+        settingsViewModel?.refreshMicrophones()
+    }
+
+    @objc private func microphoneDisconnected(
+        _ notification: Notification
+    ) {
+        settingsViewModel?.refreshMicrophones()
+        guard recorder.isRecording,
+              let disconnected = notification.object as? AVCaptureDevice,
+              recorder.activeDeviceUID == disconnected.uniqueID else {
+            return
+        }
+
+        resetWorkItem?.cancel()
+        let recordedAudio = recorder.stop()
+        let historyID = activeHistoryID
+        activeHistoryID = nil
+        holdStartedRecording = false
+        let message =
+            "The selected microphone disconnected. Reconnect it or choose another microphone in Audio."
+        if let historyID {
+            try? dictationVault?.markFailed(
+                id: historyID,
+                message: message,
+                retainAudio: historyPreferences.retainsFailedAudio
+            )
+        } else if let recordedAudio {
+            try? FileManager.default.removeItem(at: recordedAudio.url)
+        }
+        state.resetAudioSamples()
+        updateStartStopMenuTitle()
+        historyViewModel?.refresh()
+        showError(message)
     }
 
     private func complete(

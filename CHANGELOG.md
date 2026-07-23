@@ -47,6 +47,9 @@ All notable ZenVoice changes are recorded here.
 - Added an English-safe default, a Hinglish Latin-script preset, local English
   translation, and native-script output modes
 - Added language/model compatibility guards and menu-bar quick profiles
+- Added selectable microphone routing with a System Default option
+- Added a three-second local Audio Doctor with signal and file-format checks
+- Added safe active-device disconnection handling with existing recovery rules
 
 ### Changed
 

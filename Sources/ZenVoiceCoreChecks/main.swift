@@ -548,3 +548,45 @@ guard romanized == "namaste duniya, build the API",
 print(
     "ZenVoiceCoreChecks: \(supportedLanguages.count) language profiles passed"
 )
+
+let microphoneSuite = "ZenVoiceMicrophone.\(UUID().uuidString)"
+guard let microphoneDefaults = UserDefaults(suiteName: microphoneSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create microphone preference fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    microphoneDefaults.removePersistentDomain(forName: microphoneSuite)
+}
+guard MicrophonePreferences.selectedDeviceUID(
+    defaults: microphoneDefaults
+) == nil else {
+    FileHandle.standardError.write(
+        Data("FAIL: microphone preference did not default to macOS\n".utf8)
+    )
+    exit(1)
+}
+MicrophonePreferences.save(
+    deviceUID: "test-microphone",
+    defaults: microphoneDefaults
+)
+guard MicrophonePreferences.selectedDeviceUID(
+    defaults: microphoneDefaults
+) == "test-microphone" else {
+    FileHandle.standardError.write(
+        Data("FAIL: selected microphone did not persist\n".utf8)
+    )
+    exit(1)
+}
+MicrophonePreferences.save(deviceUID: nil, defaults: microphoneDefaults)
+guard MicrophonePreferences.selectedDeviceUID(
+    defaults: microphoneDefaults
+) == nil else {
+    FileHandle.standardError.write(
+        Data("FAIL: system-default microphone did not restore\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: microphone preferences passed")

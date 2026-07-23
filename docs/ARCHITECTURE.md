@@ -61,6 +61,12 @@ The native application target owns macOS-specific behavior:
   Voice Profile, Shortcuts, and Privacy screens.
 - `ZenDesignTokens` keeps the dark Zen visual language consistent.
 - `AudioRecorder` captures 16 kHz mono PCM audio using AVFoundation.
+- `MicrophoneCatalog` discovers connected inputs and maps the selected
+  AVFoundation identifier to its Core Audio device without changing the macOS
+  system default.
+- `AudioRecorder` uses `AVAudioEngine` to capture the selected input and
+  converts it to 16 kHz mono PCM for Whisper. `SettingsViewModel` runs the
+  explicit three-second Audio Doctor and deletes its temporary file.
 - `TextInserter` copies and pastes the final transcript.
 - `ZenBarPanelController` presents ZenBar across desktop spaces.
 - `ZenBarView` renders state and microphone-responsive waveform history.
@@ -181,6 +187,9 @@ ZenBar exposes the actual dictation lifecycle:
 
 Busy states reject a second recording request. Success and error messages return
 to idle after a short visible delay.
+
+If the active microphone disconnects, the recording stops and moves through
+the existing failed-recovery policy instead of silently changing devices.
 
 When history is enabled, a record moves through `recording`, `transcribing`,
 `ready`, and `inserted` or `copiedOnly`. An interrupted or failed operation
