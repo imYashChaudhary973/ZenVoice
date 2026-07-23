@@ -13,6 +13,7 @@ All notable ZenVoice changes are recorded here.
 - Positioned ZenBar on the display containing the active application
 - Signed local builds with a stable Apple Development identity so macOS privacy
   permissions survive normal rebuilds
+- Opened the correct macOS microphone settings page when permission is denied
 
 ### Planned
 

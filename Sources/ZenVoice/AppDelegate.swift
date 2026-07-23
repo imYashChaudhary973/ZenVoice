@@ -179,11 +179,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         self?.startRecorder()
                     } else {
                         self?.showError("Microphone permission is required.")
+                        self?.openMicrophoneSettings()
                     }
                 }
             }
-        case .denied, .restricted:
+        case .denied:
             showError("Enable microphone access in System Settings.")
+            openMicrophoneSettings()
+        case .restricted:
+            showError("Microphone access is restricted on this Mac.")
         @unknown default:
             showError("Microphone permission is unavailable.")
         }
@@ -301,6 +305,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func requestAccessibilityPermission() {
         inserter.requestAccessibilityPermission()
+    }
+
+    private func openMicrophoneSettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+        ) else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func toggleStatusMessage() {
