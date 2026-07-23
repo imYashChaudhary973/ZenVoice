@@ -33,6 +33,8 @@ recorded in
 - [x] Privacy-safe local highlight cards with preview and explicit export
 - [x] macOS CI and Semgrep Community Edition security scanning
 - [x] Third-party notices and fail-closed release-readiness checks
+- [x] Deterministic Instant Refine with Clean and Agent Prompt modes
+- [x] Visible model-download progress and cancellation isolation
 
 ## Next: quality and daily reliability
 
@@ -41,6 +43,7 @@ recorded in
 - [x] Add a local personal dictionary for names and technical terms
 - [x] Add cancel and recover-last-dictation actions
 - [ ] Improve automated and manual lifecycle coverage
+- [ ] Add stable partial-transcript preview and commit-on-pause insertion
 
 ## Later: multilingual and distribution readiness
 
@@ -48,6 +51,7 @@ recorded in
 - [ ] Add explicit language selection and optional local detection
 - [x] Add local snippets and conservative voice corrections
 - [ ] Evaluate optional local-only rewriting through Ollama
+- [ ] Curate downloadable local text-refinement models with meaning guards
 - [ ] Add first-run onboarding and expanded permission recovery
 - [ ] Add Developer ID signing, notarization, and update delivery
 - [x] Complete the M9 engineering security review

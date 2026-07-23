@@ -27,6 +27,9 @@ AudioRecorder ──────► local WAV ──────► ZenVoiceRunt
                                     TranscriptCleaner
                                            │
                                            ▼
+                                    InstantRefineEngine
+                                           │
+                                           ▼
                                      TextInserter
                                            │
                                            ├─► NSPasteboard
@@ -71,14 +74,20 @@ launching the application:
 - `AudioLevelMeter` maps microphone dB readings into smoothed waveform levels.
 - `HotKeyConfiguration` validates and serializes shortcut choices.
 - `TranscriptCleaner` performs conservative whitespace and filler cleanup.
+- `InstantRefineEngine` removes reviewed fillers, repetitions, spoken
+  restarts, and explicit layout commands before paste. Its meaning guard
+  rejects destructive or vocabulary-expanding candidates.
+- `InstantRefinePreferences` persists Off, Clean, or Agent Prompt mode locally.
 - `ZenVoiceConfiguration` discovers the selected verified model.
 - `VerifiedModelCatalog` is the signed allowlist for model publisher, source,
   revision, size, format, language capability, licence, and SHA-256.
 - `TranscriptionResult` carries raw and cleaned text without deciding its
   storage lifecycle.
 
-`ModelManagerViewModel` verifies approved downloads before atomic installation
-and updates the selected local model without sending speech data to a server.
+`ModelManagerViewModel` reports byte-based download progress, verifies approved
+downloads before atomic replacement, prevents cancelled tasks from clearing a
+new download, and updates the selected local model without sending speech data
+to a server.
 `ModelRecommendationEngine` maps RAM and storage headroom to a default tier,
 while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 
@@ -168,6 +177,11 @@ to idle after a short visible delay.
 When history is enabled, a record moves through `recording`, `transcribing`,
 `ready`, and `inserted` or `copiedOnly`. An interrupted or failed operation
 moves to `failed` and can retain its local audio for retry.
+
+The completed Whisper text passes through Instant Refine and then encrypted
+personal correction rules. The resulting text is what history and insertion
+receive; the raw Whisper transcript remains available in the encrypted record
+for local recovery and comparison.
 
 ## Concurrency
 

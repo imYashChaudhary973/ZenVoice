@@ -38,6 +38,11 @@ All notable ZenVoice changes are recorded here.
   `main`
 - Added third-party notices, an M9 security review, and a fail-closed public
   release checklist
+- Added local Instant Refine modes for conservative cleanup and explicit
+  agent-prompt layout commands
+- Added a meaning guard that rejects destructive or vocabulary-expanding
+  automatic refinement
+- Added visible model-download percentage and isolated cancellation state
 
 ### Changed
 
@@ -53,6 +58,8 @@ All notable ZenVoice changes are recorded here.
 - Added the required Hardened Runtime audio-input entitlement
 - Reused the loaded model between dictations instead of launching
   `whisper-cli` for every recording
+- Applied Instant Refine before encrypted personal correction rules, history,
+  and paste
 
 ### Planned
 

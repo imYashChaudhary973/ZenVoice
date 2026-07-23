@@ -48,6 +48,10 @@ analytics, or cloud transcription services in the current application.
   SHA-256 validation.
 - Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
   private local timing samples.
+- Local Instant Refine with Off, Clean, and Agent Prompt modes.
+- Meaning-preserving cleanup for fillers, repeated words, spoken restarts, and
+  explicit prompt layout commands.
+- Visible model-download percentage with reliable cancellation.
 - Local English transcription through `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.
@@ -161,6 +165,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Verified Model Catalogue](docs/MODEL_CATALOG.md)
 - [Voice Profile and Corrections](docs/VOICE_PROFILE.md)
 - [Private Highlight Cards](docs/SHARING.md)
+- [Instant Refine](docs/INSTANT_REFINE.md)
 - [Release Readiness](docs/RELEASE_READINESS.md)
 - [M9 Security Review](docs/SECURITY_REVIEW.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)

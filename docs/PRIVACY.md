@@ -78,6 +78,20 @@ network.
   event.
 - Delete All removes correction rules before rotating the vault key.
 
+### Instant Refine
+
+- Instant Refine processes the completed transcript in memory after local
+  Whisper transcription and before storage or paste.
+- Off, Clean, and Agent Prompt modes use deterministic application code; no
+  text-refinement model, API, analytics endpoint, or cloud service is contacted.
+- The meaning guard rejects a candidate that removes too much text or
+  introduces a semantic word absent from the Whisper transcript.
+- Private Dictation can use the same in-memory refinement while saving no
+  transcript or correction-usage event.
+- Downloadable generative refinement models are not part of the current
+  privacy promise and require a separate model, licence, security, latency,
+  and data-lifecycle review before implementation.
+
 ### Highlight cards
 
 - Highlight cards are rendered locally as 1200×630 images.
