@@ -75,6 +75,8 @@ launching the application:
 
 `ModelManagerViewModel` verifies approved downloads before atomic installation
 and updates the selected local model without sending speech data to a server.
+`ModelRecommendationEngine` maps RAM and storage headroom to a default tier,
+while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 
 ### `ZenVoiceStorage`
 

@@ -47,3 +47,24 @@ new checksum; existing entries must not silently follow a moving branch.
 
 Deleting a model removes only its catalogue-derived file path. Model downloads
 contain data weights only; ZenVoice never executes them.
+
+## Hardware recommendations
+
+Language capability and performance tier are separate choices. ZenVoice uses
+physical memory only to choose the default tier:
+
+| Memory | Default tier |
+| ---: | --- |
+| Less than 12 GB | Fast |
+| 12–19 GB | Balanced |
+| 20 GB or more | High Accuracy |
+
+Available storage must also leave installation headroom. A model that does not
+fit is not downloadable until the user frees space. Other compatible tiers
+remain available as a manual override.
+
+After a successful local transcription, ZenVoice stores only model ID, audio
+duration, processing duration, and timestamp as a local benchmark sample. It
+does not duplicate the transcript or audio. The Models screen reports weighted
+real-time factor from up to 50 recent samples so recommendations can be judged
+against evidence from the user's own Mac.

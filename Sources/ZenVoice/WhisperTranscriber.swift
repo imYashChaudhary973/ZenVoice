@@ -32,6 +32,7 @@ final class WhisperTranscriber: @unchecked Sendable {
     }
 
     func transcribe(audioURL: URL) throws -> TranscriptionResult {
+        let processingStartedAt = Date()
         let process = Process()
         process.executableURL = configuration.whisperExecutableURL
         process.arguments = [
@@ -65,7 +66,10 @@ final class WhisperTranscriber: @unchecked Sendable {
                 .trimmingCharacters(in: .whitespacesAndNewlines),
             finalTranscript: finalTranscript,
             correctionCount: 0,
-            isPartial: process.terminationStatus != 0
+            isPartial: process.terminationStatus != 0,
+            modelID: configuration.modelID,
+            processingDurationSeconds:
+                Date().timeIntervalSince(processingStartedAt)
         )
     }
 }

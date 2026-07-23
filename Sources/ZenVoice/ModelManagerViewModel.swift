@@ -101,11 +101,14 @@ struct VerifiedModelDownloader {
 @MainActor
 final class ModelManagerViewModel: ObservableObject {
     let models = VerifiedModelCatalog.models
+    let hardwareProfile: HardwareProfile
 
     @Published private(set) var installedModelIDs: Set<String> = []
     @Published private(set) var selectedModelID: String?
     @Published private(set) var downloadingModelID: String?
     @Published private(set) var isVerifying = false
+    @Published private(set) var benchmarkSummaries:
+        [String: ModelBenchmarkSummary] = [:]
     @Published var errorMessage: String?
 
     private let downloader: VerifiedModelDownloader
@@ -122,12 +125,15 @@ final class ModelManagerViewModel: ObservableObject {
         self.downloader = downloader
         self.fileManager = fileManager
         self.selectionChanged = selectionChanged
+        hardwareProfile = HardwareProfile.current(fileManager: fileManager)
         selectedModelID = ModelSelectionPreferences.load()?.id
+        refreshBenchmarks()
         refresh()
     }
 
     func refresh() {
         verificationTask?.cancel()
+        refreshBenchmarks()
         isVerifying = true
         let models = models
         let fileManager = fileManager
@@ -241,6 +247,29 @@ final class ModelManagerViewModel: ObservableObject {
 
     func isSelected(_ model: VerifiedModel) -> Bool {
         selectedModelID == model.id
+    }
+
+    func recommendation(for model: VerifiedModel) -> ModelRecommendation {
+        ModelRecommendationEngine.recommendation(
+            for: model,
+            profile: hardwareProfile
+        )
+    }
+
+    func benchmarkSummary(
+        for model: VerifiedModel
+    ) -> ModelBenchmarkSummary? {
+        benchmarkSummaries[model.id]
+    }
+
+    func refreshBenchmarks() {
+        benchmarkSummaries = Dictionary(
+            uniqueKeysWithValues: models.compactMap { model in
+                ModelBenchmarkStore.summary(for: model.id).map {
+                    (model.id, $0)
+                }
+            }
+        )
     }
 
     deinit {

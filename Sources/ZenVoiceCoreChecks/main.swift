@@ -241,3 +241,89 @@ guard ModelSelectionPreferences.load(defaults: selectionDefaults)
 }
 
 print("ZenVoiceCoreChecks: verified model catalogue passed")
+
+let eightGigabyteProfile = HardwareProfile(
+    physicalMemoryBytes: 8 * 1_073_741_824,
+    logicalCoreCount: 8,
+    architecture: "Apple Silicon",
+    availableModelStorageBytes: 10_000_000_000
+)
+let sixteenGigabyteProfile = HardwareProfile(
+    physicalMemoryBytes: 16 * 1_073_741_824,
+    logicalCoreCount: 10,
+    architecture: "Apple Silicon",
+    availableModelStorageBytes: 10_000_000_000
+)
+let twentyFourGigabyteProfile = HardwareProfile(
+    physicalMemoryBytes: 24 * 1_073_741_824,
+    logicalCoreCount: 12,
+    architecture: "Apple Silicon",
+    availableModelStorageBytes: 10_000_000_000
+)
+guard ModelRecommendationEngine.recommendedTier(
+    for: eightGigabyteProfile
+) == .fast,
+ModelRecommendationEngine.recommendedTier(
+    for: sixteenGigabyteProfile
+) == .balanced,
+ModelRecommendationEngine.recommendedTier(
+    for: twentyFourGigabyteProfile
+) == .highAccuracy else {
+    FileHandle.standardError.write(
+        Data("FAIL: hardware model tiers are incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+let noStorageProfile = HardwareProfile(
+    physicalMemoryBytes: 24 * 1_073_741_824,
+    logicalCoreCount: 12,
+    architecture: "Apple Silicon",
+    availableModelStorageBytes: 1
+)
+guard ModelRecommendationEngine.recommendation(
+    for: verifiedModels[4],
+    profile: noStorageProfile
+).level == .insufficientStorage else {
+    FileHandle.standardError.write(
+        Data("FAIL: model recommendation ignored storage headroom\n".utf8)
+    )
+    exit(1)
+}
+
+let benchmarkSuite = "ZenVoiceBenchmarks.\(UUID().uuidString)"
+guard let benchmarkDefaults = UserDefaults(suiteName: benchmarkSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create benchmark preference fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    benchmarkDefaults.removePersistentDomain(forName: benchmarkSuite)
+}
+ModelBenchmarkStore.record(
+    modelID: verifiedModels[0].id,
+    audioDurationSeconds: 10,
+    processingDurationSeconds: 2,
+    defaults: benchmarkDefaults
+)
+ModelBenchmarkStore.record(
+    modelID: verifiedModels[0].id,
+    audioDurationSeconds: 20,
+    processingDurationSeconds: 6,
+    defaults: benchmarkDefaults
+)
+guard let benchmark = ModelBenchmarkStore.summary(
+    for: verifiedModels[0].id,
+    defaults: benchmarkDefaults
+),
+benchmark.sampleCount == 2,
+abs(benchmark.averageRealtimeFactor - (8.0 / 30.0)) < 0.0001,
+benchmark.averageProcessingDurationSeconds == 4 else {
+    FileHandle.standardError.write(
+        Data("FAIL: local model benchmark summary is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: hardware recommendations and benchmarks passed")

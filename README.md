@@ -39,6 +39,8 @@ analytics, or cloud transcription services in the current application.
   controls.
 - Verified English and multilingual model downloads with pinned revisions and
   SHA-256 validation.
+- Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
+  private local timing samples.
 - Local English transcription through `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.

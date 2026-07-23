@@ -213,6 +213,41 @@ private struct ModelsScreen: View {
                 )
 
                 ZenCard {
+                    HStack(spacing: 14) {
+                        Image(systemName: "laptopcomputer.and.arrow.down")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(ZenDesign.Semantic.accent)
+                            .frame(width: 46, height: 46)
+                            .background {
+                                RoundedRectangle(
+                                    cornerRadius: ZenDesign.Radius.small,
+                                    style: .continuous
+                                )
+                                .fill(ZenDesign.Semantic.accentMuted)
+                            }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Recommendation for this Mac")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textPrimary
+                                )
+                            Text(viewModel.hardwareProfile.summary)
+                                .font(.system(size: 9))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            Text(
+                                "\(ModelRecommendationEngine.recommendedTier(for: viewModel.hardwareProfile).displayName) is the default recommendation. Language remains your choice."
+                            )
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textTertiary
+                            )
+                        }
+                    }
+                }
+
+                ZenCard {
                     VStack(alignment: .leading, spacing: 11) {
                         PrivacyFact(
                             icon: "checkmark.shield.fill",
@@ -264,6 +299,10 @@ private struct ModelsScreen: View {
                                 isSelected: viewModel.isSelected(model),
                                 isDownloading:
                                     viewModel.downloadingModelID == model.id,
+                                recommendation:
+                                    viewModel.recommendation(for: model),
+                                benchmark:
+                                    viewModel.benchmarkSummary(for: model),
                                 download: { viewModel.download(model) },
                                 cancel: viewModel.cancelDownload,
                                 select: { viewModel.select(model) },
@@ -306,6 +345,8 @@ private struct ModelRow: View {
     let isInstalled: Bool
     let isSelected: Bool
     let isDownloading: Bool
+    let recommendation: ModelRecommendation
+    let benchmark: ModelBenchmarkSummary?
     let download: () -> Void
     let cancel: () -> Void
     let select: () -> Void
@@ -359,12 +400,30 @@ private struct ModelRow: View {
                     Text("Pinned \(model.sourceRevision.prefix(8)) • SHA-256 verified")
                         .font(.system(size: 8))
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    Text(recommendation.rationale)
+                        .font(.system(size: 8))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let benchmark {
+                        Text(
+                            "\(benchmark.sampleCount) local sample\(benchmark.sampleCount == 1 ? "" : "s") • \(benchmark.averageRealtimeFactor.formatted(.number.precision(.fractionLength(2))))× realtime"
+                        )
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(ZenDesign.Semantic.accent)
+                    }
                 }
 
                 Spacer()
 
                 if isSelected {
                     StatusPill(title: "In use", isPositive: true)
+                } else {
+                    StatusPill(
+                        title: recommendation.title,
+                        isPositive:
+                            recommendation.level == .recommended
+                                || recommendation.level == .supported
+                    )
                 }
 
                 if isDownloading {
@@ -382,6 +441,9 @@ private struct ModelRow: View {
                 } else {
                     Button("Download", action: download)
                         .buttonStyle(ZenPrimaryButtonStyle())
+                        .disabled(
+                            recommendation.level == .insufficientStorage
+                        )
                 }
             }
         }

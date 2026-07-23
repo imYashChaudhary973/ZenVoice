@@ -26,6 +26,7 @@ recorded in
 - [x] Microphone-responsive waveform
 - [x] Zen branding and packaged app icon
 - [x] Verified local model catalogue, downloader, selection, and removal
+- [x] Hardware-aware model recommendations and local speed benchmarks
 
 ## Next: quality and daily reliability
 

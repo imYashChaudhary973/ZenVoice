@@ -702,6 +702,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyID: UUID?
     ) {
         transcribingHistoryID = nil
+        ModelBenchmarkStore.record(
+            modelID: result.modelID,
+            audioDurationSeconds: recordedAudio.durationSeconds,
+            processingDurationSeconds: result.processingDurationSeconds
+        )
+        modelManagerViewModel?.refreshBenchmarks()
         let shouldPersist = historyID.map {
             nonPersistentHistoryIDs.remove($0) == nil
                 && historyPreferences.isHistoryEnabled
@@ -1018,6 +1024,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyID: UUID
     ) {
         transcribingHistoryID = nil
+        ModelBenchmarkStore.record(
+            modelID: result.modelID,
+            audioDurationSeconds: recordedAudio.durationSeconds,
+            processingDurationSeconds: result.processingDurationSeconds
+        )
+        modelManagerViewModel?.refreshBenchmarks()
         guard nonPersistentHistoryIDs.remove(historyID) == nil,
               historyPreferences.isHistoryEnabled,
               !historyPreferences.isPrivateModeEnabled else {

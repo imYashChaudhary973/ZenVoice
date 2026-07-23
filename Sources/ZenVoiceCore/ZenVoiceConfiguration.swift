@@ -16,7 +16,8 @@ public struct ZenVoiceConfiguration {
     }
 
     public var modelID: String {
-        modelURL.deletingPathExtension().lastPathComponent
+        VerifiedModelCatalog.model(filename: modelURL.lastPathComponent)?.id
+            ?? modelURL.deletingPathExtension().lastPathComponent
     }
 
     public static func discover(
