@@ -30,6 +30,7 @@ recorded in
 - [x] Bundled persistent `whisper.cpp` runtime
 - [x] Private local insights, streaks, app usage, and editable categories
 - [x] Local voice profile and encrypted explicit correction rules
+- [x] Privacy-safe local highlight cards with preview and explicit export
 
 ## Next: quality and daily reliability
 

@@ -37,6 +37,8 @@ analytics, or cloud transcription services in the current application.
   categories.
 - A local language-usage profile with recurring phrases and encrypted explicit
   correction rules.
+- Previewed, locally rendered highlight cards with explicit Save and macOS
+  Share actions.
 - Copy, retry, search, and delete controls for saved dictations.
 - A configurable `Control + Option + V` shortcut for pasting the latest
   dictation.
@@ -157,6 +159,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Privacy](docs/PRIVACY.md)
 - [Verified Model Catalogue](docs/MODEL_CATALOG.md)
 - [Voice Profile and Corrections](docs/VOICE_PROFILE.md)
+- [Private Highlight Cards](docs/SHARING.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)

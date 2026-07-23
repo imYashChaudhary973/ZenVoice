@@ -52,6 +52,8 @@ The native application target owns macOS-specific behavior:
 - `InsightsViewModel` reads privacy-safe aggregate metrics from the vault.
 - `VoiceProfileViewModel` manages the local language profile and explicit
   personal correction rules.
+- `ShareHighlightCardRenderer` renders a fixed 1200×630 image locally from a
+  numeric-only `ShareCardSummary`.
 - `ZenVoiceSettingsView` provides Overview, Models, History, Insights,
   Voice Profile, Shortcuts, and Privacy screens.
 - `ZenDesignTokens` keeps the dark Zen visual language consistent.
@@ -133,6 +135,10 @@ partial transcript flags, and history preferences.
 `ZenVoiceRuntimeChecks` creates a local silent WAV and performs two sequential
 passes through one transcriber. It validates the embedded C API and persistent
 model lifecycle without microphone or UI interaction.
+
+`ShareCardSummary` lives in the core target and can contain only total words,
+weighted WPM, current streak, and distinct application count. It has no field
+for transcript text, application identity, profile terms, or correction rules.
 
 ## State model
 

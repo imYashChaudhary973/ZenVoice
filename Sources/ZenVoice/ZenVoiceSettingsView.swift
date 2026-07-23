@@ -856,16 +856,27 @@ private struct HistoryScreen: View {
 
 private struct InsightsScreen: View {
     @ObservedObject var viewModel: InsightsViewModel
+    @State private var showsShareCard = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
-                PageHeader(
-                    eyebrow: "PRIVATE ANALYTICS",
-                    title: "Insights",
-                    subtitle:
-                        "Understand your dictation habits from encrypted history on this Mac."
-                )
+                HStack(alignment: .bottom) {
+                    PageHeader(
+                        eyebrow: "PRIVATE ANALYTICS",
+                        title: "Insights",
+                        subtitle:
+                            "Understand your dictation habits from encrypted history on this Mac."
+                    )
+                    Spacer()
+                    Button {
+                        showsShareCard = true
+                    } label: {
+                        Label("Share Highlights", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(ZenPrimaryButtonStyle())
+                    .disabled(viewModel.snapshot.dictationCount == 0)
+                }
 
                 if let error = viewModel.errorMessage {
                     ErrorBanner(message: error)
@@ -889,6 +900,9 @@ private struct InsightsScreen: View {
         }
         .background(ZenDesign.Semantic.canvas)
         .onAppear(perform: viewModel.refresh)
+        .sheet(isPresented: $showsShareCard) {
+            ShareHighlightSheet(summary: shareSummary)
+        }
     }
 
     private var metrics: some View {
@@ -1096,6 +1110,17 @@ private struct InsightsScreen: View {
 
     private var maxCategoryWords: Int {
         max(1, viewModel.snapshot.categories.map(\.wordCount).max() ?? 1)
+    }
+
+    private var shareSummary: ShareCardSummary {
+        ShareCardSummary(
+            totalWordCount: viewModel.snapshot.totalWordCount,
+            weightedWordsPerMinute:
+                Int(viewModel.snapshot.weightedWordsPerMinute.rounded()),
+            currentStreakDays: viewModel.snapshot.currentStreakDays,
+            distinctApplicationCount:
+                viewModel.snapshot.distinctApplicationCount
+        )
     }
 
     private func activityHeight(for wordCount: Int) -> CGFloat {
@@ -2378,7 +2403,7 @@ private struct PrivacyFact: View {
     }
 }
 
-private struct ZenSecondaryButtonStyle: ButtonStyle {
+struct ZenSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 10, weight: .semibold))
@@ -2409,7 +2434,7 @@ private struct ZenSecondaryButtonStyle: ButtonStyle {
     }
 }
 
-private struct ZenPrimaryButtonStyle: ButtonStyle {
+struct ZenPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 10, weight: .bold))

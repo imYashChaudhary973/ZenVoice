@@ -78,6 +78,17 @@ network.
   event.
 - Delete All removes correction rules before rotating the vault key.
 
+### Highlight cards
+
+- Highlight cards are rendered locally as 1200×630 images.
+- The card payload contains only total words, weighted words-per-minute,
+  current streak days, and distinct application count.
+- Transcript text, application names, bundle identifiers, profile terms, and
+  correction rules cannot enter the card payload.
+- ZenVoice shows the exact preview before any action.
+- Saving opens the macOS save panel. Sharing opens the macOS Share menu.
+- ZenVoice never selects a destination, uploads, or publishes automatically.
+
 ### Models and configuration
 
 - Whisper models remain in the user's local Application Support directory.

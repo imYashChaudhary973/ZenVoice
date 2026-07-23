@@ -30,6 +30,8 @@ All notable ZenVoice changes are recorded here.
   and the most active hour
 - Added encrypted explicit correction rules with whole-phrase matching and
   history-bound usage counts
+- Added locally rendered 1200×630 highlight cards with an exact preview,
+  numeric-only payload, Save PNG, and explicit macOS sharing
 
 ### Changed
 
