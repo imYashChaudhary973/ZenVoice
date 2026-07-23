@@ -1,5 +1,53 @@
 import Foundation
 
+public final class LocalLearningPreferences {
+    private enum Key {
+        static let appliesCorrectionRules =
+            "ZenVoice.learning.appliesCorrectionRules"
+        static let analyzesHistory =
+            "ZenVoice.learning.analyzesHistory"
+    }
+
+    private let defaults: UserDefaults
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    public var appliesCorrectionRules: Bool {
+        get {
+            guard defaults.object(
+                forKey: Key.appliesCorrectionRules
+            ) != nil else {
+                return true
+            }
+            return defaults.bool(
+                forKey: Key.appliesCorrectionRules
+            )
+        }
+        set {
+            defaults.set(
+                newValue,
+                forKey: Key.appliesCorrectionRules
+            )
+        }
+    }
+
+    public var analyzesHistory: Bool {
+        get {
+            guard defaults.object(
+                forKey: Key.analyzesHistory
+            ) != nil else {
+                return true
+            }
+            return defaults.bool(forKey: Key.analyzesHistory)
+        }
+        set {
+            defaults.set(newValue, forKey: Key.analyzesHistory)
+        }
+    }
+}
+
 public struct CorrectionRule: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let source: String
@@ -109,6 +157,20 @@ public struct VoiceProfileSnapshot: Sendable {
         correctionRules: [],
         mostActiveHour: nil
     )
+
+    public init(
+        analyzedDictationCount: Int,
+        topWords: [ProfileTextCount],
+        catchPhrases: [ProfileTextCount],
+        correctionRules: [CorrectionRule],
+        mostActiveHour: Int?
+    ) {
+        self.analyzedDictationCount = analyzedDictationCount
+        self.topWords = topWords
+        self.catchPhrases = catchPhrases
+        self.correctionRules = correctionRules
+        self.mostActiveHour = mostActiveHour
+    }
 
     public static func calculate(
         records: [DictationRecord],

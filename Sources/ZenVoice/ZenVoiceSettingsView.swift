@@ -2078,6 +2078,16 @@ private struct HistoryScreen: View {
 
     private var historyControls: some View {
         HStack(spacing: 12) {
+            Picker("History view", selection: $viewModel.scope) {
+                Text("All").tag(HistoryViewModel.Scope.all)
+                Text("Recovery \(viewModel.recoveryCount)")
+                    .tag(HistoryViewModel.Scope.recovery)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 170)
+            .accessibilityLabel("History view")
+
             HStack(spacing: 9) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
@@ -2123,16 +2133,20 @@ private struct HistoryScreen: View {
                     .font(.system(size: 25))
                     .foregroundStyle(ZenDesign.Semantic.accent)
                 Text(
-                    viewModel.historyEnabled
-                        ? "Your next dictation will appear here."
-                        : "History saving is paused."
+                    viewModel.scope == .recovery
+                        ? "Recovery Inbox is clear."
+                        : viewModel.historyEnabled
+                            ? "Your next dictation will appear here."
+                            : "History saving is paused."
                 )
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 Text(
-                    viewModel.historyEnabled
-                        ? "Nothing has been saved yet."
-                        : "Existing records remain local until you delete them."
+                    viewModel.scope == .recovery
+                        ? "Failed and usable partial dictations appear here with Copy, Retry, and Delete actions."
+                        : viewModel.historyEnabled
+                            ? "Nothing has been saved yet."
+                            : "Existing records remain local until you delete them."
                 )
                 .font(.system(size: 10))
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -2454,6 +2468,7 @@ private struct VoiceProfileScreen: View {
     @ObservedObject var viewModel: VoiceProfileViewModel
     @State private var heardPhrase = ""
     @State private var replacementPhrase = ""
+    @State private var confirmsDeleteAllRules = false
 
     var body: some View {
         ScrollView {
@@ -2471,7 +2486,9 @@ private struct VoiceProfileScreen: View {
                     ErrorBanner(message: error)
                 }
 
+                learningControls
                 corrections
+                correctionReview
 
                 HStack(alignment: .top, spacing: ZenDesign.Spacing.md) {
                     topWords
@@ -2494,6 +2511,19 @@ private struct VoiceProfileScreen: View {
         }
         .background(ZenDesign.Semantic.canvas)
         .onAppear(perform: viewModel.refresh)
+        .alert(
+            "Delete all correction rules?",
+            isPresented: $confirmsDeleteAllRules
+        ) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete Rules", role: .destructive) {
+                viewModel.deleteAllRules()
+            }
+        } message: {
+            Text(
+                "This permanently removes every encrypted personal replacement rule. Transcript history is not deleted."
+            )
+        }
     }
 
     private var profileSummary: some View {
@@ -2630,6 +2660,194 @@ private struct VoiceProfileScreen: View {
         }
     }
 
+    private var learningControls: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Local learning controls")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textPrimary
+                        )
+                    Text(
+                        "ZenVoice never learns silently. These controls affect only saved history and rules you explicitly created."
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textSecondary
+                    )
+                }
+
+                PrivacyToggleRow(
+                    title: "Apply personal correction rules",
+                    detail:
+                        "Pause every encrypted replacement rule without deleting it.",
+                    isOn: Binding(
+                        get: {
+                            viewModel.appliesCorrectionRules
+                        },
+                        set:
+                            viewModel.setAppliesCorrectionRules
+                    )
+                )
+
+                PrivacyToggleRow(
+                    title: "Analyze saved history for patterns",
+                    detail:
+                        "Show frequent words, recurring phrases, and your most active hour. No new copy is stored.",
+                    isOn: Binding(
+                        get: { viewModel.analyzesHistory },
+                        set: viewModel.setAnalyzesHistory
+                    )
+                )
+
+                HStack {
+                    Label(
+                        "No background microphone listening or biometric voiceprint",
+                        systemImage: "hand.raised.fill"
+                    )
+                    .font(.system(size: 8))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textTertiary
+                    )
+                    Spacer()
+                    Button("Delete All Rules") {
+                        confirmsDeleteAllRules = true
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle())
+                    .disabled(
+                        viewModel.snapshot.correctionRules.isEmpty
+                    )
+                }
+            }
+        }
+    }
+
+    private var correctionReview: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 13) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Correction Review")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textPrimary
+                        )
+                    Text(
+                        "Compare what Whisper heard with the final saved text. This view reads encrypted History locally and creates no training data."
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textSecondary
+                    )
+                }
+
+                if viewModel.correctionReviewRecords.isEmpty {
+                    Text(
+                        "No corrected dictations are available to review."
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textTertiary
+                    )
+                } else {
+                    ForEach(
+                        viewModel.correctionReviewRecords
+                    ) { record in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(
+                                    record.startedAt.formatted(
+                                        date: .abbreviated,
+                                        time: .shortened
+                                    )
+                                )
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                                if let appName =
+                                    record.targetAppName {
+                                    Text(appName)
+                                        .font(.system(size: 8))
+                                        .foregroundStyle(
+                                            ZenDesign.Semantic
+                                                .textTertiary
+                                        )
+                                }
+                                Spacer()
+                                StatusPill(
+                                    title:
+                                        "\(record.correctionCount) change"
+                                        + (record.correctionCount == 1
+                                            ? ""
+                                            : "s"),
+                                    isPositive: true
+                                )
+                            }
+
+                            correctionReviewLine(
+                                label: "HEARD",
+                                text: record.rawTranscript,
+                                copy: {
+                                    viewModel.copy(
+                                        record.rawTranscript
+                                    )
+                                }
+                            )
+                            correctionReviewLine(
+                                label: "SAVED",
+                                text: record.finalTranscript,
+                                copy: {
+                                    viewModel.copy(
+                                        record.finalTranscript
+                                    )
+                                }
+                            )
+                        }
+                        .padding(10)
+                        .background {
+                            RoundedRectangle(
+                                cornerRadius:
+                                    ZenDesign.Radius.small,
+                                style: .continuous
+                            )
+                            .fill(
+                                ZenDesign.Semantic.surfaceRaised
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func correctionReviewLine(
+        label: String,
+        text: String?,
+        copy: @escaping () -> Void
+    ) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label)
+                .font(.system(size: 7, weight: .bold))
+                .tracking(0.6)
+                .foregroundStyle(
+                    ZenDesign.Semantic.textTertiary
+                )
+                .frame(width: 40, alignment: .leading)
+            Text(text ?? "Unavailable")
+                .font(.system(size: 9))
+                .foregroundStyle(
+                    ZenDesign.Semantic.textSecondary
+                )
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button("Copy", action: copy)
+                .buttonStyle(ZenSecondaryButtonStyle())
+                .disabled(text == nil)
+        }
+    }
+
     private var topWords: some View {
         ZenCard {
             VStack(alignment: .leading, spacing: 13) {
@@ -2711,7 +2929,11 @@ private struct VoiceProfileScreen: View {
     }
 
     private var emptyProfileText: some View {
-        Text("More saved dictations are needed.")
+        Text(
+            viewModel.analyzesHistory
+                ? "More saved dictations are needed."
+                : "Pattern analysis is paused."
+        )
             .font(.system(size: 9))
             .foregroundStyle(ZenDesign.Semantic.textTertiary)
     }
