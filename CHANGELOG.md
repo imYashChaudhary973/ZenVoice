@@ -11,6 +11,15 @@ All notable ZenVoice changes are recorded here.
 - Persisted the chosen shortcut locally and applied it without an app restart
 - Added live Microphone, Accessibility, and local-model status
 - Added an **Open ZenVoice…** command to the menu-bar menu
+- Added explicit opt-in encrypted transcript history backed by native SQLite,
+  AES-GCM, and a Keychain-protected key
+- Added crash and failed-transcription recovery with optional 24-hour audio
+  retention
+- Added History search, copy, paste, retry, per-record deletion, and
+  cryptographic Delete All
+- Added Private Dictation mode and local-history privacy controls
+- Added a configurable paste-last shortcut, defaulting to
+  `Control + Option + V`
 
 ### Changed
 

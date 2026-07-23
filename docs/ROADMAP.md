@@ -14,6 +14,10 @@ recorded in
 - [x] Native settings window
 - [x] Configurable and persistent dictation shortcut
 - [x] Live permission and local-model status
+- [x] Optional encrypted local transcript history
+- [x] Interrupted-transcription recovery records
+- [x] Search, copy, re-paste, retry, and delete history actions
+- [x] Configurable paste-last shortcut
 - [x] Local English Whisper transcription
 - [x] Active-app paste with clipboard fallback
 - [x] ZenBar lifecycle feedback
@@ -25,7 +29,7 @@ recorded in
 - [ ] Keep the Whisper model loaded to reduce transcription latency
 - [ ] Add microphone selection and disconnection handling
 - [ ] Add a local personal dictionary for names and technical terms
-- [ ] Add cancel and recover-last-recording actions
+- [x] Add cancel and recover-last-dictation actions
 - [ ] Improve automated and manual lifecycle coverage
 
 ## Later: multilingual and distribution readiness

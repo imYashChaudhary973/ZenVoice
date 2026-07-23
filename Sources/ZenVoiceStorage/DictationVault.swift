@@ -24,7 +24,7 @@ public final class DictationVault: @unchecked Sendable {
     private let databaseURL: URL
     private let recoveryDirectoryURL: URL
     private let keyProvider: VaultKeyProviding
-    private let cipher: TranscriptCipher
+    private var cipher: TranscriptCipher
     private let queue = DispatchQueue(label: "dev.yashchaudhary.ZenVoice.vault")
     private var database: OpaquePointer?
 
@@ -146,11 +146,11 @@ public final class DictationVault: @unchecked Sendable {
         completedAt: Date = Date(),
         correctionCount: Int = 0
     ) throws {
-        let encryptedRaw = try cipher.seal(rawTranscript)
-        let encryptedFinal = try cipher.seal(finalTranscript)
         let wordCount = DictationMetrics.wordCount(in: finalTranscript)
 
         try queue.sync {
+            let encryptedRaw = try cipher.seal(rawTranscript)
+            let encryptedFinal = try cipher.seal(finalTranscript)
             let duration = try durationSeconds(for: id)
             let wordsPerMinute = DictationMetrics.wordsPerMinute(
                 wordCount: wordCount,
@@ -269,6 +269,49 @@ public final class DictationVault: @unchecked Sendable {
             bind(id.uuidString, at: 1, in: statement)
             try stepDone(statement)
         }
+    }
+
+    public func deleteRecord(id: UUID) throws {
+        try discard(id: id)
+    }
+
+    public func deleteAll() throws {
+        let existingRecords = try recent(limit: Int.max)
+        for record in existingRecords {
+            if let audioURL = record.recoveryAudioURL,
+               FileManager.default.fileExists(atPath: audioURL.path) {
+                try FileManager.default.removeItem(at: audioURL)
+            }
+        }
+
+        try queue.sync {
+            try execute("DELETE FROM dictations;")
+            try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            try execute("VACUUM;")
+            try keyProvider.deleteKey()
+            cipher = try TranscriptCipher(keyProvider: keyProvider)
+        }
+    }
+
+    @discardableResult
+    public func purgeRecords(startedBefore cutoff: Date) throws -> Int {
+        let expired = try queue.sync {
+            try records(
+                whereClause: "started_at < ?",
+                orderAndLimit: "ORDER BY started_at ASC",
+                bindWhere: { statement in
+                    sqlite3_bind_double(
+                        statement,
+                        1,
+                        cutoff.timeIntervalSince1970
+                    )
+                }
+            )
+        }
+        for record in expired {
+            try discard(id: record.id)
+        }
+        return expired.count
     }
 
     @discardableResult

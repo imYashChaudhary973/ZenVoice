@@ -34,6 +34,12 @@ public struct HotKeyConfiguration: Codable, Equatable, Sendable {
         keyLabel: "Space"
     )
 
+    public static let pasteLastDefault = HotKeyConfiguration(
+        keyCode: 9,
+        modifiers: [.control, .option],
+        keyLabel: "V"
+    )
+
     public var displayName: String {
         var symbols: [String] = []
         if modifiers.contains(.control) {

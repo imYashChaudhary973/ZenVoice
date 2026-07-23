@@ -17,6 +17,9 @@ SettingsView ─► SettingsViewModel ─► HotKeyPreferences
                                            ▼
 AppDelegate ───────────────────────────► AppState ─► ZenBarView
     │                                      ▲
+    ├─► DictationVault ─► SQLite + AES-GCM + Keychain
+    │         ▲
+    │         └──────── HistoryViewModel ─► HistoryView
     ▼                                      │ microphone levels
 AudioRecorder ──────► local WAV ──────► WhisperTranscriber
                                            │
@@ -42,7 +45,10 @@ The native application target owns macOS-specific behavior:
 - `SettingsWindowController` owns the reusable native settings window.
 - `SettingsViewModel` captures shortcut combinations and reports live
   Microphone, Accessibility, and model status.
-- `ZenVoiceSettingsView` provides Overview, Shortcuts, and Privacy screens.
+- `HistoryViewModel` manages local-history consent, search, recovery actions,
+  privacy controls, and deletion.
+- `ZenVoiceSettingsView` provides Overview, History, Shortcuts, and Privacy
+  screens.
 - `ZenDesignTokens` keeps the dark Zen visual language consistent.
 - `AudioRecorder` captures 16 kHz mono PCM audio using AVFoundation.
 - `WhisperTranscriber` runs the local `whisper-cli` process.
@@ -60,12 +66,30 @@ launching the application:
 - `HotKeyConfiguration` validates and serializes shortcut choices.
 - `TranscriptCleaner` performs conservative whitespace and filler cleanup.
 - `ZenVoiceConfiguration` discovers the local runtime and model.
+- `TranscriptionResult` carries raw and cleaned text without deciding its
+  storage lifecycle.
+
+### `ZenVoiceStorage`
+
+The storage target owns the sensitive local-data boundary:
+
+- `DictationVault` stores lifecycle records in native SQLite.
+- Transcript fields use AES-GCM encryption.
+- `KeychainVaultKeyProvider` protects the 256-bit encryption key in the macOS
+  Keychain.
+- `HistoryPreferences` records explicit history consent, failed-audio recovery,
+  retention, and Private Dictation mode.
+- Recovery audio lives in private Application Support storage and expires after
+  24 hours when a transcription fails.
 
 ### `ZenVoiceCoreChecks`
 
-This executable provides fast deterministic checks for transcript cleanup,
-quiet-versus-loud waveform behavior, and hotkey serialization. It avoids
-microphone and Accessibility dependencies.
+`ZenVoiceCoreChecks` provides deterministic checks for transcript cleanup,
+quiet-versus-loud waveform behavior, and hotkey serialization.
+
+`ZenVoiceStorageChecks` verifies encrypted-at-rest transcript storage, weighted
+WPM, interruption recovery, recovery-audio expiry, cancellation cleanup,
+cryptographic Delete All, and explicit history preferences.
 
 ## State model
 
@@ -79,6 +103,10 @@ ZenBar exposes the actual dictation lifecycle:
 
 Busy states reject a second recording request. Success and error messages return
 to idle after a short visible delay.
+
+When history is enabled, a record moves through `recording`, `transcribing`,
+`ready`, and `inserted` or `copiedOnly`. An interrupted or failed operation
+moves to `failed` and can retain its local audio for retry.
 
 ## Concurrency
 

@@ -1,8 +1,10 @@
 import SwiftUI
+import ZenVoiceStorage
 
 struct ZenVoiceSettingsView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case overview = "Overview"
+        case history = "History"
         case shortcuts = "Shortcuts"
         case privacy = "Privacy"
 
@@ -12,6 +14,8 @@ struct ZenVoiceSettingsView: View {
             switch self {
             case .overview:
                 return "rectangle.grid.2x2"
+            case .history:
+                return "clock.arrow.circlepath"
             case .shortcuts:
                 return "command"
             case .privacy:
@@ -21,6 +25,7 @@ struct ZenVoiceSettingsView: View {
     }
 
     @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var appState: AppState
     @State private var selection: Section = .overview
 
@@ -142,10 +147,15 @@ struct ZenVoiceSettingsView: View {
                 appState: appState,
                 openShortcuts: { selection = .shortcuts }
             )
+        case .history:
+            HistoryScreen(viewModel: historyViewModel)
         case .shortcuts:
             ShortcutsScreen(viewModel: viewModel)
         case .privacy:
-            PrivacyScreen(viewModel: viewModel)
+            PrivacyScreen(
+                viewModel: viewModel,
+                historyViewModel: historyViewModel
+            )
         }
     }
 
@@ -309,6 +319,265 @@ private struct OverviewScreen: View {
     }
 }
 
+private struct HistoryScreen: View {
+    @ObservedObject var viewModel: HistoryViewModel
+    @State private var confirmsDeleteAll = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                PageHeader(
+                    eyebrow: "LOCAL VAULT",
+                    title: "History",
+                    subtitle: "Recover, copy, or reuse dictations saved only on this Mac."
+                )
+
+                if !viewModel.hasMadeHistoryChoice {
+                    consentCard
+                } else {
+                    historyControls
+
+                    if let error = viewModel.errorMessage {
+                        ErrorBanner(message: error)
+                    }
+
+                    if viewModel.filteredRecords.isEmpty {
+                        emptyState
+                    } else {
+                        ForEach(groupedRecords, id: \.title) { group in
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(group.title.uppercased())
+                                    .font(.system(size: 9, weight: .bold))
+                                    .tracking(1.1)
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textTertiary
+                                    )
+
+                                VStack(spacing: 0) {
+                                    ForEach(
+                                        Array(group.records.enumerated()),
+                                        id: \.element.id
+                                    ) { index, record in
+                                        HistoryRecordRow(
+                                            record: record,
+                                            copy: { viewModel.copy(record) },
+                                            paste: { viewModel.paste(record) },
+                                            retry: { viewModel.retry(record) },
+                                            delete: { viewModel.delete(record) }
+                                        )
+
+                                        if index < group.records.count - 1 {
+                                            Divider()
+                                                .overlay(
+                                                    ZenDesign.Semantic.border
+                                                )
+                                                .padding(.leading, 54)
+                                        }
+                                    }
+                                }
+                                .background {
+                                    RoundedRectangle(
+                                        cornerRadius: ZenDesign.Radius.medium,
+                                        style: .continuous
+                                    )
+                                    .fill(ZenDesign.Component.cardBackground)
+                                    .overlay {
+                                        RoundedRectangle(
+                                            cornerRadius:
+                                                ZenDesign.Radius.medium,
+                                            style: .continuous
+                                        )
+                                        .strokeBorder(
+                                            ZenDesign.Component.cardBorder,
+                                            lineWidth: 1
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 34)
+            .padding(.top, 34)
+            .padding(.bottom, 36)
+        }
+        .background(ZenDesign.Semantic.canvas)
+        .alert(
+            "Delete all history?",
+            isPresented: $confirmsDeleteAll
+        ) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete All", role: .destructive) {
+                viewModel.deleteAll()
+            }
+        } message: {
+            Text(
+                "This removes every saved transcript and recovery recording from this Mac."
+            )
+        }
+    }
+
+    private var consentCard: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 15) {
+                    ZStack {
+                        RoundedRectangle(
+                            cornerRadius: 14,
+                            style: .continuous
+                        )
+                        .fill(ZenDesign.Semantic.accentMuted)
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundStyle(ZenDesign.Semantic.accent)
+                    }
+                    .frame(width: 50, height: 50)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Keep a private local history?")
+                            .font(
+                                .system(
+                                    size: 16,
+                                    weight: .bold,
+                                    design: .rounded
+                                )
+                            )
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text("ZenVoice can save encrypted transcripts so an interrupted paste never loses your words.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textSecondary
+                            )
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    ConsentFact(
+                        icon: "key.fill",
+                        text: "Transcript text is encrypted with a Keychain-protected key."
+                    )
+                    ConsentFact(
+                        icon: "internaldrive",
+                        text: "History stays on this Mac and is never synced."
+                    )
+                    ConsentFact(
+                        icon: "waveform.slash",
+                        text: "Successful audio is deleted after transcription."
+                    )
+                }
+
+                HStack {
+                    Button("Not Now") {
+                        viewModel.declineHistory()
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle())
+
+                    Spacer()
+
+                    Button("Enable Local History") {
+                        viewModel.enableHistory()
+                    }
+                    .buttonStyle(ZenPrimaryButtonStyle())
+                }
+            }
+        }
+    }
+
+    private var historyControls: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 9) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                TextField("Search transcripts or apps", text: $viewModel.searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(ZenDesign.Semantic.surface)
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .strokeBorder(ZenDesign.Semantic.border, lineWidth: 1)
+                }
+            }
+
+            StatusPill(
+                title: viewModel.historyEnabled ? "Saving" : "Paused",
+                isPositive: viewModel.historyEnabled
+            )
+
+            Button("Delete All") {
+                confirmsDeleteAll = true
+            }
+            .buttonStyle(ZenSecondaryButtonStyle())
+            .disabled(viewModel.records.isEmpty)
+        }
+    }
+
+    private var emptyState: some View {
+        ZenCard {
+            VStack(spacing: 10) {
+                Image(systemName: "text.badge.checkmark")
+                    .font(.system(size: 25))
+                    .foregroundStyle(ZenDesign.Semantic.accent)
+                Text(
+                    viewModel.historyEnabled
+                        ? "Your next dictation will appear here."
+                        : "History saving is paused."
+                )
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Text(
+                    viewModel.historyEnabled
+                        ? "Nothing has been saved yet."
+                        : "Existing records remain local until you delete them."
+                )
+                .font(.system(size: 10))
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 22)
+        }
+    }
+
+    private var groupedRecords:
+        [(title: String, records: [ZenVoiceStorage.DictationRecord])] {
+        let calendar = Calendar.current
+        let groups = Dictionary(grouping: viewModel.filteredRecords) { record in
+            calendar.startOfDay(for: record.startedAt)
+        }
+        return groups.keys.sorted(by: >).map { date in
+            let title: String
+            if calendar.isDateInToday(date) {
+                title = "Today"
+            } else if calendar.isDateInYesterday(date) {
+                title = "Yesterday"
+            } else {
+                title = date.formatted(
+                    .dateTime.weekday(.wide).month(.abbreviated).day()
+                )
+            }
+            return (
+                title: title,
+                records: groups[date, default: []].sorted {
+                    $0.startedAt > $1.startedAt
+                }
+            )
+        }
+    }
+}
+
 private struct ShortcutsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
@@ -415,6 +684,55 @@ private struct ShortcutsScreen: View {
                         Divider()
                             .overlay(ZenDesign.Semantic.border)
 
+                        HStack(alignment: .center, spacing: 15) {
+                            ZStack {
+                                RoundedRectangle(
+                                    cornerRadius: 12,
+                                    style: .continuous
+                                )
+                                .fill(ZenDesign.Semantic.accentMuted)
+                                Image(systemName: "arrow.uturn.backward.circle")
+                                    .font(.system(size: 19, weight: .semibold))
+                                    .foregroundStyle(ZenDesign.Semantic.accent)
+                            }
+                            .frame(width: 46, height: 46)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Paste last dictation")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text("Recovers your latest text without recording again.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                            }
+
+                            Spacer()
+
+                            ShortcutCaptureButton(
+                                displayName:
+                                    viewModel.pasteLastShortcut.displayName,
+                                isCapturing:
+                                    viewModel.isCapturingPasteLastShortcut,
+                                action: {
+                                    if viewModel
+                                        .isCapturingPasteLastShortcut {
+                                        viewModel.cancelShortcutCapture()
+                                    } else {
+                                        viewModel.beginShortcutCapture(
+                                            for: .pasteLast
+                                        )
+                                    }
+                                }
+                            )
+                        }
+
+                        Divider()
+                            .overlay(ZenDesign.Semantic.border)
+
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("How to record")
@@ -430,8 +748,13 @@ private struct ShortcutsScreen: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 18)
-                            Button("Reset Default") {
+                            Button("Reset Dictation") {
                                 viewModel.resetShortcut()
+                            }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+
+                            Button("Reset Paste") {
+                                viewModel.resetPasteLastShortcut()
                             }
                             .buttonStyle(ZenSecondaryButtonStyle())
                         }
@@ -484,8 +807,69 @@ private struct ShortcutsScreen: View {
     }
 }
 
+private struct ShortcutCaptureButton: View {
+    let displayName: String
+    let isCapturing: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isCapturing {
+                    Circle()
+                        .fill(ZenDesign.Semantic.accent)
+                        .frame(width: 7, height: 7)
+                    Text("Press shortcut…")
+                } else {
+                    Image(systemName: "keyboard")
+                    Text(displayName)
+                }
+            }
+            .font(
+                .system(
+                    size: 12,
+                    weight: .bold,
+                    design: .rounded
+                )
+            )
+            .foregroundStyle(
+                isCapturing
+                    ? Color.black.opacity(0.82)
+                    : ZenDesign.Semantic.textPrimary
+            )
+            .padding(.horizontal, 15)
+            .frame(minWidth: 128, minHeight: 38)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(
+                    isCapturing
+                        ? ZenDesign.Semantic.accent
+                        : ZenDesign.Component.shortcutBackground
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .strokeBorder(
+                        isCapturing
+                            ? ZenDesign.Component.focusRing
+                            : ZenDesign.Semantic.borderStrong,
+                        lineWidth: 1
+                    )
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct PrivacyScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var historyViewModel: HistoryViewModel
 
     var body: some View {
         ScrollView {
@@ -521,6 +905,63 @@ private struct PrivacyScreen: View {
                 }
 
                 ZenCard {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "externaldrive.badge.checkmark")
+                                .foregroundStyle(ZenDesign.Semantic.accent)
+                            Text("Local history")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textPrimary
+                                )
+                            Spacer()
+                            StatusPill(
+                                title: historyViewModel.historyEnabled
+                                    ? "Saving"
+                                    : "Paused",
+                                isPositive: historyViewModel.historyEnabled
+                            )
+                        }
+
+                        PrivacyToggleRow(
+                            title: "Save encrypted transcripts",
+                            detail: "Keep recoverable dictations in your local ZenVoice vault.",
+                            isOn: Binding(
+                                get: { historyViewModel.historyEnabled },
+                                set: historyViewModel.setHistoryEnabled
+                            )
+                        )
+
+                        PrivacyToggleRow(
+                            title: "Keep failed audio for 24 hours",
+                            detail: "Allows a failed local transcription to be retried.",
+                            isOn: Binding(
+                                get: {
+                                    historyViewModel.retainsFailedAudio
+                                },
+                                set:
+                                    historyViewModel.setRetainsFailedAudio
+                            )
+                        )
+                        .disabled(!historyViewModel.historyEnabled)
+
+                        PrivacyToggleRow(
+                            title: "Private Dictation mode",
+                            detail: "New dictations are not added to history and failed audio is not retained.",
+                            isOn: Binding(
+                                get: {
+                                    historyViewModel.privateModeEnabled
+                                },
+                                set:
+                                    historyViewModel
+                                        .setPrivateModeEnabled
+                            )
+                        )
+                        .disabled(!historyViewModel.historyEnabled)
+                    }
+                }
+
+                ZenCard {
                     VStack(alignment: .leading, spacing: 15) {
                         HStack {
                             Image(systemName: "cpu")
@@ -545,11 +986,13 @@ private struct PrivacyScreen: View {
                         )
                         PrivacyFact(
                             icon: "waveform.path",
-                            text: "Temporary audio is deleted after transcription"
+                            text: "Successful audio is deleted after transcription"
                         )
                         PrivacyFact(
                             icon: "clock.arrow.circlepath",
-                            text: "No transcript history database"
+                            text: historyViewModel.historyEnabled
+                                ? "Transcript history is encrypted on this Mac"
+                                : "Transcript history stays off until you enable it"
                         )
                     }
                 }
@@ -559,6 +1002,182 @@ private struct PrivacyScreen: View {
             .padding(.bottom, 36)
         }
         .background(ZenDesign.Semantic.canvas)
+    }
+}
+
+private struct HistoryRecordRow: View {
+    let record: ZenVoiceStorage.DictationRecord
+    let copy: () -> Void
+    let paste: () -> Void
+    let retry: () -> Void
+    let delete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 13) {
+            ZStack {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(iconTint.opacity(0.12))
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(iconTint)
+            }
+            .frame(width: 40, height: 40)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(record.startedAt.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    if let appName = record.targetAppName {
+                        Text(appName)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textSecondary
+                            )
+                    }
+                }
+
+                Text(transcript)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(
+                        record.status == .failed
+                            ? ZenDesign.Semantic.textSecondary
+                            : ZenDesign.Semantic.textPrimary
+                    )
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if record.finalTranscript != nil {
+                    Text(
+                        "\(record.wordCount) words · "
+                            + "\(Int(record.wordsPerMinute.rounded())) WPM"
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+            }
+
+            Spacer(minLength: 10)
+
+            HStack(spacing: 7) {
+                if record.status == .failed,
+                   record.recoveryAudioURL != nil {
+                    Button("Retry", action: retry)
+                        .buttonStyle(ZenSecondaryButtonStyle())
+                }
+
+                if record.finalTranscript != nil {
+                    Button("Copy", action: copy)
+                        .buttonStyle(ZenSecondaryButtonStyle())
+                    Button("Paste", action: paste)
+                        .buttonStyle(ZenPrimaryButtonStyle())
+                }
+
+                Menu {
+                    Button("Delete", role: .destructive, action: delete)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 26, height: 26)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+            }
+        }
+        .padding(ZenDesign.Spacing.md)
+    }
+
+    private var transcript: String {
+        if let transcript = record.finalTranscript {
+            return transcript
+        }
+        return record.errorMessage ?? "This dictation did not finish."
+    }
+
+    private var icon: String {
+        switch record.status {
+        case .failed:
+            return "exclamationmark.arrow.triangle.2.circlepath"
+        case .inserted:
+            return "checkmark"
+        case .copiedOnly:
+            return "doc.on.doc"
+        default:
+            return "waveform"
+        }
+    }
+
+    private var iconTint: Color {
+        record.status == .failed
+            ? ZenDesign.Semantic.danger
+            : ZenDesign.Semantic.accent
+    }
+}
+
+private struct ConsentFact: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ZenDesign.Semantic.success)
+                .frame(width: 18)
+            Text(text)
+                .font(.system(size: 10))
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+        }
+    }
+}
+
+private struct PrivacyToggleRow: View {
+    let title: String
+    let detail: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Text(detail)
+                    .font(.system(size: 9))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+            }
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(ZenDesign.Semantic.accent)
+        }
+    }
+}
+
+private struct ErrorBanner: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text(message)
+        }
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(ZenDesign.Semantic.danger)
+        .padding(.horizontal, 14)
+        .frame(minHeight: 38)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+            .fill(ZenDesign.Semantic.danger.opacity(0.10))
+        }
     }
 }
 
@@ -791,6 +1410,27 @@ private struct ZenSecondaryButtonStyle: ButtonStyle {
                         lineWidth: 1
                     )
                 }
+            }
+    }
+}
+
+private struct ZenPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Color.black.opacity(0.84))
+            .padding(.horizontal, 13)
+            .frame(height: 30)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(
+                    configuration.isPressed
+                        ? ZenDesign.Primitive.gold500
+                        : ZenDesign.Semantic.accent
+                )
             }
     }
 }

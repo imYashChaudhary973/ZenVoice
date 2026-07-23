@@ -12,16 +12,31 @@ network.
 
 - Recorded as a temporary 16 kHz mono WAV file.
 - Read by the local `whisper-cli` process.
-- Deleted immediately after success or failure on a best-effort basis.
+- Deleted after successful transcription.
+- Deleted immediately when a recording is cancelled.
+- When local history and failed-audio recovery are enabled, audio from a failed
+  or interrupted transcription may remain in private Application Support
+  storage for up to 24 hours.
+- Private Dictation mode retains no transcript or recovery audio.
 - A crash or forced termination could leave a temporary file until macOS cleans
-  its temporary directory.
+  its temporary directory when history is disabled.
 
 ### Transcripts
 
-- Stored in memory as the last transcript for recovery.
+- Stored in memory as the last transcript for immediate recovery.
 - Written to the macOS clipboard before insertion.
 - Remain on the clipboard until another application replaces them.
-- Not persisted to a ZenVoice history database.
+- Persisted only after the user explicitly enables local history.
+- Encrypted with AES-GCM before being written to the ZenVoice SQLite database.
+- Protected by a 256-bit key stored in the user's macOS Keychain.
+- Never synced or uploaded by ZenVoice.
+
+### Application context
+
+- When history is enabled, ZenVoice stores the target application's bundle
+  identifier and display name.
+- ZenVoice does not store window titles, browser URLs, surrounding text,
+  recipients, document contents, or geographic location.
 
 ### Models and configuration
 
@@ -46,6 +61,10 @@ is copied to the clipboard.
 Local-first does not mean risk-free:
 
 - Other applications may be able to inspect clipboard contents.
+- Anyone able to use the unlocked macOS account may be able to open ZenVoice
+  and view decrypted history.
+- Secure deletion on SSD storage has platform limitations; Delete All removes
+  records, recovery audio, and rotates the encryption key.
 - A configured `ZENVOICE_WHISPER_PATH` is executed as a local process; only set
   it to software you trust.
 - Apple Development signing gives local builds a stable macOS identity but is

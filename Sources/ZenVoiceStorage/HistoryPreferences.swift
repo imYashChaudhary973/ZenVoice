@@ -4,8 +4,10 @@ public final class HistoryPreferences {
     private enum Key {
         static let madeHistoryChoice = "ZenVoice.history.madeChoice"
         static let historyEnabled = "ZenVoice.history.enabled"
+        static let hasEverEnabled = "ZenVoice.history.hasEverEnabled"
         static let retainsFailedAudio = "ZenVoice.history.retainsFailedAudio"
         static let retentionDays = "ZenVoice.history.retentionDays"
+        static let privateMode = "ZenVoice.history.privateMode"
     }
 
     private let defaults: UserDefaults
@@ -23,8 +25,15 @@ public final class HistoryPreferences {
         get { defaults.bool(forKey: Key.historyEnabled) }
         set {
             defaults.set(newValue, forKey: Key.historyEnabled)
+            if newValue {
+                defaults.set(true, forKey: Key.hasEverEnabled)
+            }
             hasMadeHistoryChoice = true
         }
+    }
+
+    public var hasEverEnabledHistory: Bool {
+        defaults.bool(forKey: Key.hasEverEnabled)
     }
 
     public var retainsFailedAudio: Bool {
@@ -44,5 +53,9 @@ public final class HistoryPreferences {
         }
         set { defaults.set(max(1, newValue), forKey: Key.retentionDays) }
     }
-}
 
+    public var isPrivateModeEnabled: Bool {
+        get { defaults.bool(forKey: Key.privateMode) }
+        set { defaults.set(newValue, forKey: Key.privateMode) }
+    }
+}

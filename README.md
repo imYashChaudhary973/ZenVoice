@@ -31,6 +31,11 @@ analytics, or cloud transcription services in the current application.
 - A native settings window with Overview, Shortcuts, and Privacy screens.
 - A configurable global dictation shortcut, defaulting to
   `Control + Option + Space`.
+- An optional encrypted local history with recovery for interrupted
+  transcriptions.
+- Copy, paste, retry, search, and delete controls for saved dictations.
+- A configurable `Control + Option + V` shortcut for pasting the latest
+  dictation.
 - Local English transcription through `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.
@@ -96,10 +101,12 @@ clipboard.
 
 1. Open the **Shortcuts** screen to keep the default shortcut or record your
    own.
-2. Place the cursor in any editable text field.
-3. Press your shortcut.
-4. Speak while ZenBar displays the live waveform.
-5. Press the shortcut again to stop, transcribe, and insert.
+2. Open **History** and choose whether ZenVoice should save encrypted
+   transcripts on this Mac.
+3. Place the cursor in any editable text field.
+4. Press your shortcut.
+5. Speak while ZenBar displays the live waveform.
+6. Press the shortcut again to stop, transcribe, and insert.
 
 Closing the settings window keeps ZenVoice running in the menu bar. Select
 **Open ZenVoice…** from the menu-bar menu whenever you want it back.
@@ -124,6 +131,8 @@ The complete development and manual QA procedure is in
 ├── Sources/
 │   ├── ZenVoice/        macOS application and ZenBar
 │   ├── ZenVoiceCore/    reusable local processing logic
+│   ├── ZenVoiceStorage/ encrypted history and recovery storage
+│   ├── ZenVoiceStorageChecks/
 │   └── ZenVoiceCoreChecks/
 ├── docs/                architecture, privacy, development, and roadmap
 └── Package.swift        Swift Package Manager definition

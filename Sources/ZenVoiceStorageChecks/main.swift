@@ -2,31 +2,40 @@ import Foundation
 import ZenVoiceStorage
 
 private final class StaticKeyProvider: VaultKeyProviding {
-    private var keyData = Data(repeating: 0x5A, count: 32)
+    private var keyData: Data? = Data(repeating: 0x5A, count: 32)
+    private var generation: UInt8 = 0x5A
 
     func loadOrCreateKeyData() throws -> Data {
-        keyData
+        if let keyData {
+            return keyData
+        }
+        generation &+= 1
+        let replacement = Data(repeating: generation, count: 32)
+        keyData = replacement
+        return replacement
     }
 
     func deleteKey() throws {
-        keyData = Data(repeating: 0, count: 32)
+        keyData = nil
     }
 }
 
 private struct VaultFixture {
     let directoryURL: URL
     let databaseURL: URL
+    let keyProvider: StaticKeyProvider
     let vault: DictationVault
 
     init() throws {
         directoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         databaseURL = directoryURL.appendingPathComponent("test.sqlite")
+        keyProvider = StaticKeyProvider()
         vault = try DictationVault(
             databaseURL: databaseURL,
             recoveryDirectoryURL: directoryURL
                 .appendingPathComponent("Recovery", isDirectory: true),
-            keyProvider: StaticKeyProvider()
+            keyProvider: keyProvider
         )
     }
 
@@ -192,11 +201,82 @@ private func checkDiscard() throws {
     )
 }
 
+private func checkDeleteAllRotatesVault() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let firstID = UUID()
+    let firstAudioURL = fixture.vault.recoveryAudioURL(for: firstID)
+    try Data("audio".utf8).write(to: firstAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: firstID,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: nil,
+            recoveryAudioURL: firstAudioURL
+        )
+    )
+    try fixture.vault.markTranscribing(
+        id: firstID,
+        durationSeconds: 10
+    )
+    try fixture.vault.storeTranscript(
+        id: firstID,
+        rawTranscript: "private history",
+        finalTranscript: "Private history."
+    )
+
+    let originalKey = try fixture.keyProvider.loadOrCreateKeyData()
+    try fixture.vault.deleteAll()
+    let replacementKey = try fixture.keyProvider.loadOrCreateKeyData()
+
+    try require(
+        try fixture.vault.recent().isEmpty,
+        "delete all left history records"
+    )
+    try require(
+        !FileManager.default.fileExists(atPath: firstAudioURL.path),
+        "delete all left recovery audio"
+    )
+    try require(
+        originalKey != replacementKey,
+        "delete all did not rotate the encryption key"
+    )
+}
+
+private func checkHistoryPreferencesRequireChoice() throws {
+    let suiteName = "ZenVoiceStorageChecks.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        throw CheckError.failed("could not create isolated user defaults")
+    }
+    defer {
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    let preferences = HistoryPreferences(defaults: defaults)
+    try require(!preferences.hasMadeHistoryChoice, "unexpected history choice")
+    try require(!preferences.isHistoryEnabled, "history enabled by default")
+    try require(preferences.retainsFailedAudio, "failed audio default")
+
+    preferences.isHistoryEnabled = true
+    preferences.isPrivateModeEnabled = true
+    try require(preferences.hasMadeHistoryChoice, "history choice not saved")
+    try require(
+        preferences.hasEverEnabledHistory,
+        "history activation not recorded"
+    )
+    try require(preferences.isPrivateModeEnabled, "private mode not saved")
+}
+
 do {
     try checkEncryptedStorage()
     try checkRecoveryExpiry()
     try checkDiscard()
-    print("ZenVoiceStorageChecks: 3 checks passed")
+    try checkDeleteAllRotatesVault()
+    try checkHistoryPreferencesRequireChoice()
+    print("ZenVoiceStorageChecks: 5 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

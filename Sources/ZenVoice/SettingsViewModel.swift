@@ -7,6 +7,11 @@ import ZenVoiceCore
 
 @MainActor
 final class SettingsViewModel: ObservableObject {
+    enum ShortcutTarget {
+        case dictation
+        case pasteLast
+    }
+
     enum PermissionStatus: Equatable {
         case allowed
         case needsAccess
@@ -25,7 +30,8 @@ final class SettingsViewModel: ObservableObject {
     }
 
     @Published private(set) var currentShortcut: HotKeyConfiguration
-    @Published private(set) var isCapturingShortcut = false
+    @Published private(set) var pasteLastShortcut: HotKeyConfiguration
+    @Published private(set) var shortcutTarget: ShortcutTarget?
     @Published var shortcutError: String?
     @Published private(set) var microphoneStatus: PermissionStatus = .needsAccess
     @Published private(set) var accessibilityStatus: PermissionStatus = .needsAccess
@@ -33,16 +39,31 @@ final class SettingsViewModel: ObservableObject {
 
     private let applyShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
+    private let applyPasteLastShortcut:
+        (HotKeyConfiguration) -> Result<Void, Error>
     private var eventMonitor: Any?
 
     init(
         currentShortcut: HotKeyConfiguration,
+        pasteLastShortcut: HotKeyConfiguration,
         applyShortcut: @escaping
+            (HotKeyConfiguration) -> Result<Void, Error>,
+        applyPasteLastShortcut: @escaping
             (HotKeyConfiguration) -> Result<Void, Error>
     ) {
         self.currentShortcut = currentShortcut
+        self.pasteLastShortcut = pasteLastShortcut
         self.applyShortcut = applyShortcut
+        self.applyPasteLastShortcut = applyPasteLastShortcut
         refreshSystemStatus()
+    }
+
+    var isCapturingShortcut: Bool {
+        shortcutTarget == .dictation
+    }
+
+    var isCapturingPasteLastShortcut: Bool {
+        shortcutTarget == .pasteLast
     }
 
     deinit {
@@ -69,13 +90,15 @@ final class SettingsViewModel: ObservableObject {
         isLocalModelReady = (try? ZenVoiceConfiguration.discover()) != nil
     }
 
-    func beginShortcutCapture() {
-        guard !isCapturingShortcut else {
+    func beginShortcutCapture(
+        for target: ShortcutTarget = .dictation
+    ) {
+        guard shortcutTarget == nil else {
             return
         }
 
         shortcutError = nil
-        isCapturingShortcut = true
+        shortcutTarget = target
         eventMonitor = NSEvent.addLocalMonitorForEvents(
             matching: .keyDown
         ) { [weak self] event in
@@ -85,12 +108,16 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func cancelShortcutCapture() {
-        isCapturingShortcut = false
+        shortcutTarget = nil
         removeEventMonitor()
     }
 
     func resetShortcut() {
-        apply(.dictationDefault)
+        apply(.dictationDefault, to: .dictation)
+    }
+
+    func resetPasteLastShortcut() {
+        apply(.pasteLastDefault, to: .pasteLast)
     }
 
     func requestMicrophoneAccess() {
@@ -143,14 +170,33 @@ final class SettingsViewModel: ObservableObject {
             modifiers: modifiers,
             keyLabel: keyLabel
         )
-        apply(configuration)
+        guard let shortcutTarget else {
+            return
+        }
+        apply(configuration, to: shortcutTarget)
     }
 
-    private func apply(_ configuration: HotKeyConfiguration) {
+    private func apply(
+        _ configuration: HotKeyConfiguration,
+        to target: ShortcutTarget
+    ) {
         cancelShortcutCapture()
-        switch applyShortcut(configuration) {
+        let result: Result<Void, Error>
+        switch target {
+        case .dictation:
+            result = applyShortcut(configuration)
+        case .pasteLast:
+            result = applyPasteLastShortcut(configuration)
+        }
+
+        switch result {
         case .success:
-            currentShortcut = configuration
+            switch target {
+            case .dictation:
+                currentShortcut = configuration
+            case .pasteLast:
+                pasteLastShortcut = configuration
+            }
             shortcutError = nil
         case .failure(let error):
             shortcutError = error.localizedDescription

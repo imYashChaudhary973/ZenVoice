@@ -98,6 +98,7 @@ can require approval again.
 
 ```bash
 swift run ZenVoiceCoreChecks
+swift run ZenVoiceStorageChecks
 ```
 
 The checks cover:
@@ -108,31 +109,42 @@ The checks cover:
 - microphone dB clamping;
 - louder input producing taller waveform levels;
 - valid default-hotkey display and serialization.
+- encrypted transcript storage without plaintext leakage;
+- weighted words-per-minute calculation;
+- interruption recovery and 24-hour audio expiry;
+- cancellation cleanup and cryptographic Delete All;
+- explicit history-consent defaults.
 
 ## Manual QA
 
 1. Launch `build/ZenVoice.app`.
 2. Confirm the settings window opens and the Zen logo appears in the menu bar
    and ZenBar.
-3. Open **Shortcuts**, select the current shortcut, and record a temporary
+3. Open **History** and verify the one-time local-history choice appears before
+   any history database is created.
+4. Enable local history and confirm the empty encrypted-history state appears.
+5. Open **Shortcuts**, select the current shortcut, and record a temporary
    two-modifier combination.
-4. Quit and relaunch ZenVoice. Confirm the custom shortcut persisted, then use
+6. Repeat for **Paste last dictation**.
+7. Quit and relaunch ZenVoice. Confirm both custom shortcuts persisted, then use
    **Reset Default**.
-5. Open **Privacy** and confirm Microphone, Accessibility, and local-model
+8. Open **Privacy** and confirm Microphone, Accessibility, local-history, and local-model
    status match System Settings and the local installation.
-6. Close the settings window and reopen it from **Open ZenVoice…** in the
+9. Close the settings window and reopen it from **Open ZenVoice…** in the
    menu-bar menu.
-7. Open TextEdit and place the cursor in a document.
-8. Press the configured shortcut.
-9. Speak quietly and confirm ZenBar shows shorter waveform bars.
-10. Speak loudly and confirm ZenBar shows taller waveform bars.
-11. Select the checkmark and confirm the transcript is inserted into TextEdit.
-12. Start again, select cancel, and confirm no transcript is inserted.
-13. Toggle **Show Status Message** from the menu-bar app and confirm the
+10. Open TextEdit and place the cursor in a document.
+11. Press the configured shortcut.
+12. Speak quietly and confirm ZenBar shows shorter waveform bars.
+13. Speak loudly and confirm ZenBar shows taller waveform bars.
+14. Select the checkmark and confirm the transcript is inserted into TextEdit
+    and appears under **Today** in History.
+15. Copy and paste the saved record, then test the paste-last shortcut.
+16. Start again, select cancel, and confirm no history record remains.
+17. Toggle **Show Status Message** from the menu-bar app and confirm the
    dictation message follows the preference.
-14. Press the shortcut again to confirm hotkey stop-and-insert still works.
-15. Disable Accessibility permission and repeat.
-16. Confirm the transcript remains available on the clipboard.
+18. Press the shortcut again to confirm hotkey stop-and-insert still works.
+19. Disable Accessibility permission and repeat.
+20. Confirm the transcript remains available on the clipboard.
 
 Also test:
 

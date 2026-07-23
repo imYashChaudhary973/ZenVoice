@@ -86,3 +86,15 @@ guard decodedHotKey == defaultHotKey else {
 }
 
 print("ZenVoiceCoreChecks: hotkey configuration passed")
+
+let pasteLastHotKey = HotKeyConfiguration.pasteLastDefault
+guard pasteLastHotKey.isValid,
+      pasteLastHotKey.displayName == "⌃ ⌥ V",
+      pasteLastHotKey != defaultHotKey else {
+    FileHandle.standardError.write(
+        Data("FAIL: paste-last hotkey configuration is invalid\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: recovery hotkey configuration passed")
