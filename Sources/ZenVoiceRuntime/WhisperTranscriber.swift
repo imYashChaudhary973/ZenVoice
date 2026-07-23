@@ -36,6 +36,10 @@ public final class WhisperTranscriber: @unchecked Sendable {
         configuration.language
     }
 
+    public var languageProfile: LanguageProfile {
+        configuration.languageProfile
+    }
+
     public init(configuration: ZenVoiceConfiguration) {
         self.configuration = configuration
         whisper_log_set({ _, _, _ in }, nil)
@@ -62,6 +66,7 @@ public final class WhisperTranscriber: @unchecked Sendable {
         parameters.print_progress = false
         parameters.print_realtime = false
         parameters.print_timestamps = false
+        parameters.translate = configuration.shouldTranslateToEnglish
 
         let status = configuration.language.withCString { language in
             parameters.language = language
@@ -86,7 +91,10 @@ public final class WhisperTranscriber: @unchecked Sendable {
             }
             rawTranscript += String(cString: text)
         }
-        let finalTranscript = cleaner.clean(rawTranscript)
+        let cleanedTranscript = cleaner.clean(rawTranscript)
+        let finalTranscript = configuration.shouldTransliterateToLatin
+            ? LocalTransliterator.latinScript(cleanedTranscript)
+            : cleanedTranscript
 
         guard !finalTranscript.isEmpty else {
             throw TranscriptionError.noSpeech

@@ -2,14 +2,26 @@ import Foundation
 
 public struct ZenVoiceConfiguration {
     public let modelURL: URL
-    public let language: String
+    public let languageProfile: LanguageProfile
 
     public init(
         modelURL: URL,
-        language: String = "en"
+        languageProfile: LanguageProfile = .english
     ) {
         self.modelURL = modelURL
-        self.language = language
+        self.languageProfile = languageProfile
+    }
+
+    public var language: String {
+        languageProfile.whisperLanguageArgument
+    }
+
+    public var shouldTranslateToEnglish: Bool {
+        languageProfile.shouldTranslateToEnglish
+    }
+
+    public var shouldTransliterateToLatin: Bool {
+        languageProfile.shouldTransliterateToLatin
     }
 
     public var modelID: String {
@@ -18,6 +30,7 @@ public struct ZenVoiceConfiguration {
     }
 
     public static func discover(
+        languageProfile: LanguageProfile? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) throws -> ZenVoiceConfiguration {
@@ -56,22 +69,31 @@ public struct ZenVoiceConfiguration {
                 ? selected
                 : nil
         }
-        let language = selectedCatalogueModel?
-            .languageCapability.whisperLanguageArgument
-            ?? (model.contains(".en.") ? "en" : "auto")
+        let capability = selectedCatalogueModel?.languageCapability
+            ?? (model.contains(".en.") ? .english : .multilingual)
+        let resolvedLanguageProfile =
+            languageProfile ?? LanguagePreferences.load()
+        guard resolvedLanguageProfile.isCompatible(with: capability) else {
+            throw ConfigurationError.multilingualModelRequired(
+                resolvedLanguageProfile.displayName
+            )
+        }
         return ZenVoiceConfiguration(
             modelURL: URL(fileURLWithPath: model),
-            language: language
+            languageProfile: resolvedLanguageProfile
         )
     }
 
     public enum ConfigurationError: LocalizedError {
         case modelMissing
+        case multilingualModelRequired(String)
 
         public var errorDescription: String? {
             switch self {
             case .modelMissing:
                 return "No local Whisper model was found. Download one in Models or set ZENVOICE_MODEL_PATH."
+            case .multilingualModelRequired(let profile):
+                return "\(profile) requires a multilingual Whisper model. Download and select one in Models."
             }
         }
     }

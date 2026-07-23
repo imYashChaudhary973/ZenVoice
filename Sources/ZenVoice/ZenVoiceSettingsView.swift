@@ -6,6 +6,7 @@ struct ZenVoiceSettingsView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case overview = "Overview"
         case models = "Models"
+        case languages = "Languages"
         case refine = "Instant Refine"
         case history = "History"
         case insights = "Insights"
@@ -21,6 +22,8 @@ struct ZenVoiceSettingsView: View {
                 return "rectangle.grid.2x2"
             case .models:
                 return "cpu"
+            case .languages:
+                return "globe"
             case .refine:
                 return "wand.and.stars"
             case .history:
@@ -165,6 +168,8 @@ struct ZenVoiceSettingsView: View {
             )
         case .models:
             ModelsScreen(viewModel: modelManagerViewModel)
+        case .languages:
+            LanguagesScreen(viewModel: viewModel)
         case .refine:
             InstantRefineScreen(viewModel: viewModel)
         case .history:
@@ -212,6 +217,312 @@ struct ZenVoiceSettingsView: View {
                 .foregroundStyle(ZenDesign.Semantic.accent)
                 .frame(width: size, height: size)
         }
+    }
+}
+
+private struct LanguagesScreen: View {
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var searchText = ""
+
+    private var visibleLanguages: [SupportedLanguage] {
+        let query = searchText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !query.isEmpty else {
+            return LanguageCatalog.languages
+        }
+        return LanguageCatalog.languages.filter {
+            $0.displayName.lowercased().contains(query)
+                || $0.nativeName.lowercased().contains(query)
+                || $0.code.lowercased().contains(query)
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                PageHeader(
+                    eyebrow: "LOCAL LANGUAGE PROFILES",
+                    title: "Languages",
+                    subtitle:
+                        "Choose what you speak and how ZenVoice writes it. English stays explicit unless you select automatic detection."
+                )
+
+                if let error = viewModel.languageError {
+                    ErrorBanner(message: error)
+                }
+
+                ZenCard {
+                    VStack(alignment: .leading, spacing: 13) {
+                        Text("QUICK PROFILES")
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(1)
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textTertiary
+                            )
+                        HStack(spacing: 10) {
+                            profileButton(
+                                title: "English",
+                                detail: "English speech → English",
+                                selected:
+                                    viewModel.languageProfile == .english,
+                                action: viewModel.useEnglishProfile
+                            )
+                            profileButton(
+                                title: "Hinglish",
+                                detail: "Hindi + English → Latin script",
+                                selected:
+                                    viewModel.languageProfile == .hinglish,
+                                action: viewModel.useHinglishProfile
+                            )
+                            profileButton(
+                                title: "Auto",
+                                detail: "Detect one language per dictation",
+                                selected:
+                                    viewModel.languageProfile
+                                        .inputLanguageCode
+                                        == LanguageProfile.automaticCode,
+                                action: viewModel.useAutomaticProfile
+                            )
+                        }
+                    }
+                }
+
+                ZenCard {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Output")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text(
+                                    viewModel.languageProfile.outputMode.detail
+                                )
+                                .font(.system(size: 9))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            }
+                            Spacer()
+                            StatusPill(
+                                title:
+                                    viewModel.languageProfile.displayName,
+                                isPositive: true
+                            )
+                        }
+
+                        Picker(
+                            "Output mode",
+                            selection: Binding(
+                                get: {
+                                    viewModel.languageProfile.outputMode
+                                },
+                                set: viewModel.setOutputMode
+                            )
+                        ) {
+                            ForEach(TranscriptionOutputMode.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("Transcription output mode")
+
+                        if viewModel.languageProfile.requiresMultilingualModel {
+                            Label(
+                                "This profile requires a Multilingual model.",
+                                systemImage: "cpu"
+                            )
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.accent
+                            )
+                        } else {
+                            Label(
+                                "English-only and Multilingual models are compatible.",
+                                systemImage: "checkmark.shield"
+                            )
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.success
+                            )
+                        }
+                    }
+                }
+
+                ZenCard {
+                    VStack(alignment: .leading, spacing: 13) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Spoken language")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text(
+                                    "\(LanguageCatalog.languages.count) explicit local languages"
+                                )
+                                .font(.system(size: 9))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            }
+                            Spacer()
+                            TextField("Search languages", text: $searchText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 190)
+                        }
+
+                        Button {
+                            viewModel.useAutomaticProfile()
+                        } label: {
+                            languageRow(
+                                name: "Automatic detection",
+                                nativeName:
+                                    "Useful for unknown input; less reliable for short phrases",
+                                badge: "AUTO",
+                                selected:
+                                    viewModel.languageProfile
+                                        .inputLanguageCode
+                                        == LanguageProfile.automaticCode
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider()
+                            .overlay(ZenDesign.Semantic.border)
+
+                        LazyVStack(spacing: 4) {
+                            ForEach(visibleLanguages) { language in
+                                Button {
+                                    viewModel.setInputLanguage(language.code)
+                                } label: {
+                                    languageRow(
+                                        name: language.displayName,
+                                        nativeName: language.nativeName,
+                                        badge:
+                                            language.supportLevel.displayName,
+                                        selected:
+                                            viewModel.languageProfile
+                                                .inputLanguageCode
+                                                == language.code
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    "Language quality varies by model and language. Preview languages are available now but need broader real-microphone validation before a public release."
+                )
+                .font(.system(size: 9))
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            }
+            .padding(34)
+        }
+    }
+
+    private func profileButton(
+        title: String,
+        detail: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(title)
+                        .font(.system(size: 11, weight: .bold))
+                    Spacer()
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(ZenDesign.Semantic.success)
+                    }
+                }
+                Text(detail)
+                    .font(.system(size: 8))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .lineLimit(2)
+            }
+            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(
+                    selected
+                        ? ZenDesign.Semantic.accentMuted
+                        : ZenDesign.Semantic.surfaceRaised
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .strokeBorder(
+                        selected
+                            ? ZenDesign.Semantic.accent.opacity(0.45)
+                            : ZenDesign.Semantic.border,
+                        lineWidth: 1
+                    )
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func languageRow(
+        name: String,
+        nativeName: String,
+        badge: String,
+        selected: Bool
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(
+                systemName:
+                    selected ? "checkmark.circle.fill" : "circle"
+            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(
+                selected
+                    ? ZenDesign.Semantic.success
+                    : ZenDesign.Semantic.textTertiary
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Text(nativeName)
+                    .font(.system(size: 9))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text(badge.uppercased())
+                .font(.system(size: 7, weight: .bold))
+                .tracking(0.5)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 42)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+            .fill(
+                selected
+                    ? ZenDesign.Semantic.accentMuted
+                    : Color.clear
+            )
+        }
+        .contentShape(Rectangle())
     }
 }
 
@@ -314,6 +625,8 @@ private struct ModelsScreen: View {
                                 model: model,
                                 isInstalled: viewModel.isInstalled(model),
                                 isSelected: viewModel.isSelected(model),
+                                isLanguageCompatible:
+                                    viewModel.isLanguageCompatible(model),
                                 isDownloading:
                                     viewModel.downloadingModelID == model.id,
                                 downloadProgress:
@@ -365,6 +678,7 @@ private struct ModelRow: View {
     let model: VerifiedModel
     let isInstalled: Bool
     let isSelected: Bool
+    let isLanguageCompatible: Bool
     let isDownloading: Bool
     let downloadProgress: Double?
     let isVerifyingDownload: Bool
@@ -440,6 +754,11 @@ private struct ModelRow: View {
 
                 if isSelected {
                     StatusPill(title: "In use", isPositive: true)
+                } else if !isLanguageCompatible {
+                    StatusPill(
+                        title: "English only",
+                        isPositive: false
+                    )
                 } else {
                     StatusPill(
                         title: recommendation.title,
@@ -470,6 +789,7 @@ private struct ModelRow: View {
                     if !isSelected {
                         Button("Use", action: select)
                             .buttonStyle(ZenPrimaryButtonStyle())
+                            .disabled(!isLanguageCompatible)
                     }
                     Button("Remove", action: remove)
                         .buttonStyle(ZenSecondaryButtonStyle())

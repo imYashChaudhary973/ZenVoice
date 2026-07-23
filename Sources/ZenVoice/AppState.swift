@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import ZenVoiceCore
 
 @MainActor
 final class AppState: ObservableObject {
@@ -37,8 +38,10 @@ final class AppState: ObservableObject {
     @Published var isZenBarVisible = true
     @Published var showsStatusMessage: Bool
     @Published var lastTranscript = ""
+    @Published var languageProfile: LanguageProfile
 
     init(defaults: UserDefaults = .standard) {
+        languageProfile = LanguagePreferences.load(defaults: defaults)
         if defaults.object(forKey: Self.statusMessagePreferenceKey) == nil {
             showsStatusMessage = true
         } else {

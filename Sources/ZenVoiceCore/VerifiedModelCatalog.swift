@@ -26,12 +26,6 @@ public enum ModelLanguageCapability: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    public var whisperLanguageArgument: String {
-        switch self {
-        case .english: "en"
-        case .multilingual: "auto"
-        }
-    }
 }
 
 public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {

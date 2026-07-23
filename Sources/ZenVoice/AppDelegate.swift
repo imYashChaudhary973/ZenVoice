@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var startStopMenuItem: NSMenuItem!
     private var zenBarMenuItem: NSMenuItem!
     private var statusMessageMenuItem: NSMenuItem!
+    private var languageMenuItem: NSMenuItem!
     private var zenBarController: ZenBarPanelController!
     private var globalHotKey: GlobalHotKey?
     private var pasteLastGlobalHotKey: GlobalHotKey?
@@ -238,6 +239,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMessageMenuItem.state = state.showsStatusMessage ? .on : .off
         menu.addItem(statusMessageMenuItem)
 
+        languageMenuItem = NSMenuItem(
+            title: languageMenuTitle,
+            action: nil,
+            keyEquivalent: ""
+        )
+        let languageMenu = NSMenu(title: "Dictation Language")
+        for (index, profile) in quickLanguageProfiles.enumerated() {
+            let item = NSMenuItem(
+                title: profile.displayName,
+                action: #selector(selectQuickLanguage(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.tag = index
+            item.state =
+                profile == state.languageProfile ? .on : .off
+            languageMenu.addItem(item)
+        }
+        languageMenuItem.submenu = languageMenu
+        menu.addItem(languageMenuItem)
+
         let permissionItem = NSMenuItem(
             title: "Enable Auto-Paste Permission…",
             action: #selector(requestAccessibilityPermission),
@@ -396,6 +418,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             applyHoldToDictate: { [weak self] enabled, key in
                 self?.applyHoldToDictate(enabled: enabled, key: key)
+            },
+            applyLanguageProfile: { [weak self] profile in
+                guard let self else {
+                    return .failure(
+                        ZenVoiceConfiguration.ConfigurationError.modelMissing
+                    )
+                }
+                return self.applyLanguageProfile(profile)
             }
         )
         historyViewModel = HistoryViewModel(
@@ -579,6 +609,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? "Stop and Insert"
             : "Start Dictation"
         return "\(action)  \(currentHotKeyConfiguration.displayName)"
+    }
+
+    private var quickLanguageProfiles: [LanguageProfile] {
+        [
+            .english,
+            .hinglish,
+            LanguageProfile(
+                inputLanguageCode: "es",
+                outputMode: .spokenLanguage
+            ),
+            LanguageProfile(
+                inputLanguageCode: "fr",
+                outputMode: .spokenLanguage
+            ),
+            LanguageProfile(
+                inputLanguageCode: "zh",
+                outputMode: .spokenLanguage
+            ),
+            LanguageProfile(
+                inputLanguageCode: "ar",
+                outputMode: .spokenLanguage
+            ),
+            LanguageProfile(
+                inputLanguageCode: LanguageProfile.automaticCode,
+                outputMode: .spokenLanguage
+            )
+        ]
+    }
+
+    private var languageMenuTitle: String {
+        "Language: \(state.languageProfile.displayName)"
+    }
+
+    private func applyLanguageProfile(
+        _ profile: LanguageProfile
+    ) -> Result<Void, Error> {
+        do {
+            let configuration = try ZenVoiceConfiguration.discover(
+                languageProfile: profile
+            )
+            LanguagePreferences.save(profile)
+            state.languageProfile = profile
+            transcriber = WhisperTranscriber(configuration: configuration)
+            updateLanguageMenu()
+            return .success(())
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func updateLanguageMenu() {
+        languageMenuItem?.title = languageMenuTitle
+        for (index, item) in
+            (languageMenuItem?.submenu?.items ?? []).enumerated() {
+            guard quickLanguageProfiles.indices.contains(index) else {
+                continue
+            }
+            item.state =
+                quickLanguageProfiles[index] == state.languageProfile
+                    ? .on
+                    : .off
+        }
+    }
+
+    @objc private func selectQuickLanguage(_ sender: NSMenuItem) {
+        guard quickLanguageProfiles.indices.contains(sender.tag) else {
+            return
+        }
+        switch applyLanguageProfile(quickLanguageProfiles[sender.tag]) {
+        case .success:
+            settingsViewModel?.refreshSystemStatus()
+        case .failure(let error):
+            showError(error.localizedDescription)
+        }
     }
 
     private func updateStartStopMenuTitle() {
