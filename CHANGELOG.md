@@ -4,6 +4,14 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Reduced ZenBar to a compact bottom-edge control strip
+- Added cancel and finish controls during dictation
+- Added an optional “Dictating with ZenVoice” message
+- Refined the microphone-responsive waveform
+- Positioned ZenBar on the display containing the active application
+
 ### Planned
 
 - Lower-latency persistent local transcription

@@ -80,10 +80,13 @@ The checks cover:
 4. Press `Control + Option + Space`.
 5. Speak quietly and confirm ZenBar shows shorter waveform bars.
 6. Speak loudly and confirm ZenBar shows taller waveform bars.
-7. Press the shortcut again.
-8. Confirm the transcript is inserted into TextEdit.
-9. Disable Accessibility permission and repeat.
-10. Confirm the transcript remains available on the clipboard.
+7. Select the checkmark and confirm the transcript is inserted into TextEdit.
+8. Start again, select cancel, and confirm no transcript is inserted.
+9. Toggle **Show Status Message** from the menu-bar app and confirm the
+   dictation message follows the preference.
+10. Press the shortcut again to confirm hotkey stop-and-insert still works.
+11. Disable Accessibility permission and repeat.
+12. Confirm the transcript remains available on the clipboard.
 
 Also test:
 

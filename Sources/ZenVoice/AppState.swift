@@ -3,6 +3,9 @@ import Foundation
 
 @MainActor
 final class AppState: ObservableObject {
+    private static let statusMessagePreferenceKey =
+        "ZenVoice.showsStatusMessage"
+
     enum Phase: Equatable {
         case idle
         case listening
@@ -30,9 +33,20 @@ final class AppState: ObservableObject {
     }
 
     @Published var phase: Phase = .idle
-    @Published var audioSamples = Array(repeating: 0.0, count: 11)
+    @Published var audioSamples = Array(repeating: 0.0, count: 13)
     @Published var isZenBarVisible = true
+    @Published var showsStatusMessage: Bool
     @Published var lastTranscript = ""
+
+    init(defaults: UserDefaults = .standard) {
+        if defaults.object(forKey: Self.statusMessagePreferenceKey) == nil {
+            showsStatusMessage = true
+        } else {
+            showsStatusMessage = defaults.bool(
+                forKey: Self.statusMessagePreferenceKey
+            )
+        }
+    }
 
     var isBusy: Bool {
         switch phase {
@@ -52,5 +66,13 @@ final class AppState: ObservableObject {
         samples.removeFirst()
         samples.append(max(0, min(1, level)))
         audioSamples = samples
+    }
+
+    func toggleStatusMessage(defaults: UserDefaults = .standard) {
+        showsStatusMessage.toggle()
+        defaults.set(
+            showsStatusMessage,
+            forKey: Self.statusMessagePreferenceKey
+        )
     }
 }

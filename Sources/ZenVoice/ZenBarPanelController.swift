@@ -5,8 +5,13 @@ import SwiftUI
 final class ZenBarPanelController {
     private let panel: NSPanel
 
-    init(state: AppState, toggleRecording: @escaping () -> Void) {
-        let frame = NSRect(x: 0, y: 0, width: 250, height: 54)
+    init(
+        state: AppState,
+        toggleRecording: @escaping () -> Void,
+        cancelRecording: @escaping () -> Void,
+        finishRecording: @escaping () -> Void
+    ) {
+        let frame = NSRect(x: 0, y: 0, width: 210, height: 78)
         panel = NSPanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -28,7 +33,9 @@ final class ZenBarPanelController {
         panel.contentView = NSHostingView(
             rootView: ZenBarView(
                 state: state,
-                toggleRecording: toggleRecording
+                toggleRecording: toggleRecording,
+                cancelRecording: cancelRecording,
+                finishRecording: finishRecording
             )
         )
     }
@@ -43,13 +50,67 @@ final class ZenBarPanelController {
     }
 
     func positionAtBottomCenter() {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else {
+        guard let screen = screenForFrontmostApplication()
+            ?? screenContainingMouse()
+            ?? NSScreen.main
+            ?? NSScreen.screens.first else {
             return
         }
 
         let visibleFrame = screen.visibleFrame
         let x = visibleFrame.midX - panel.frame.width / 2
-        let y = visibleFrame.minY + 28
+        let y = visibleFrame.minY + 6
         panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    private func screenForFrontmostApplication() -> NSScreen? {
+        guard let processIdentifier =
+            NSWorkspace.shared.frontmostApplication?.processIdentifier,
+            let windowInfo = CGWindowListCopyWindowInfo(
+                [.optionOnScreenOnly, .excludeDesktopElements],
+                kCGNullWindowID
+            ) as? [[String: Any]] else {
+            return nil
+        }
+
+        let applicationWindows = windowInfo.filter { window in
+            let owner = window[kCGWindowOwnerPID as String] as? NSNumber
+            let layer = window[kCGWindowLayer as String] as? NSNumber
+            return owner?.int32Value == processIdentifier &&
+                layer?.intValue == 0
+        }
+
+        for window in applicationWindows {
+            guard let values =
+                window[kCGWindowBounds as String] as? [String: NSNumber],
+                let x = values["X"],
+                let y = values["Y"],
+                let width = values["Width"],
+                let height = values["Height"] else {
+                continue
+            }
+
+            let bounds = CGRect(
+                x: x.doubleValue,
+                y: y.doubleValue,
+                width: width.doubleValue,
+                height: height.doubleValue
+            )
+            let center = CGPoint(x: bounds.midX, y: bounds.midY)
+            if let screen = NSScreen.screens.first(where: {
+                $0.frame.contains(center)
+            }) {
+                return screen
+            }
+        }
+
+        return nil
+    }
+
+    private func screenContainingMouse() -> NSScreen? {
+        let mouseLocation = NSEvent.mouseLocation
+        return NSScreen.screens.first {
+            $0.frame.contains(mouseLocation)
+        }
     }
 }

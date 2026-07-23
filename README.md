@@ -29,8 +29,11 @@ transcription services in the current application.
 
 - Global `Control + Option + Space` dictation shortcut.
 - Local English transcription through `whisper.cpp`.
-- ZenBar feedback for ready, listening, processing, success, and error states.
+- Compact ZenBar feedback for ready, listening, processing, success, and error
+  states.
 - A live waveform driven by real microphone loudness.
+- Listening controls to cancel or finish dictation without the hotkey.
+- An optional “Dictating with ZenVoice” status message.
 - Automatic paste into the active app with clipboard fallback.
 - Temporary audio cleanup after each transcription attempt.
 - Native Zen branding in ZenBar, the menu bar, and the application icon.

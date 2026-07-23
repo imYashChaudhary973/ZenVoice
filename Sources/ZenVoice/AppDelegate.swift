@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var startStopMenuItem: NSMenuItem!
     private var zenBarMenuItem: NSMenuItem!
+    private var statusMessageMenuItem: NSMenuItem!
     private var zenBarController: ZenBarPanelController!
     private var globalHotKey: GlobalHotKey?
     private var transcriber: WhisperTranscriber?
@@ -93,6 +94,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         zenBarMenuItem.target = self
         menu.addItem(zenBarMenuItem)
 
+        statusMessageMenuItem = NSMenuItem(
+            title: "Show Status Message",
+            action: #selector(toggleStatusMessage),
+            keyEquivalent: ""
+        )
+        statusMessageMenuItem.target = self
+        statusMessageMenuItem.state = state.showsStatusMessage ? .on : .off
+        menu.addItem(statusMessageMenuItem)
+
         let permissionItem = NSMenuItem(
             title: "Enable Auto-Paste Permission…",
             action: #selector(requestAccessibilityPermission),
@@ -119,6 +129,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             state: state,
             toggleRecording: { [weak self] in
                 self?.toggleRecording()
+            },
+            cancelRecording: { [weak self] in
+                self?.cancelRecording()
+            },
+            finishRecording: { [weak self] in
+                self?.finishRecording()
             }
         )
     }
@@ -215,6 +231,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func cancelRecording() {
+        guard recorder.isRecording else {
+            return
+        }
+
+        resetWorkItem?.cancel()
+        recorder.cancel()
+        state.resetAudioSamples()
+        state.phase = .idle
+        startStopMenuItem.title = "Start Dictation"
+    }
+
     private func complete(transcript: String) {
         state.lastTranscript = transcript
         state.phase = .inserting
@@ -273,6 +301,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func requestAccessibilityPermission() {
         inserter.requestAccessibilityPermission()
+    }
+
+    @objc private func toggleStatusMessage() {
+        state.toggleStatusMessage()
+        statusMessageMenuItem.state = state.showsStatusMessage ? .on : .off
     }
 
     @objc private func screenConfigurationChanged() {
