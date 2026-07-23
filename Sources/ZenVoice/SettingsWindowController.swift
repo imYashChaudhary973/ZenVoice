@@ -9,6 +9,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let insightsViewModel: InsightsViewModel
     private let voiceProfileViewModel: VoiceProfileViewModel
     private let modelManagerViewModel: ModelManagerViewModel
+    private let refinementModelManagerViewModel:
+        RefinementModelManagerViewModel
     private var hasCenteredWindow = false
 
     init(
@@ -17,6 +19,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         insightsViewModel: InsightsViewModel,
         voiceProfileViewModel: VoiceProfileViewModel,
         modelManagerViewModel: ModelManagerViewModel,
+        refinementModelManagerViewModel:
+            RefinementModelManagerViewModel,
         appState: AppState
     ) {
         self.viewModel = viewModel
@@ -24,6 +28,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.insightsViewModel = insightsViewModel
         self.voiceProfileViewModel = voiceProfileViewModel
         self.modelManagerViewModel = modelManagerViewModel
+        self.refinementModelManagerViewModel =
+            refinementModelManagerViewModel
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
             styleMask: [
@@ -58,6 +64,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 insightsViewModel: insightsViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
+                refinementModelManagerViewModel:
+                    refinementModelManagerViewModel,
                 appState: appState
             )
         )
@@ -69,6 +77,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         insightsViewModel.refresh()
         voiceProfileViewModel.refresh()
         modelManagerViewModel.refresh()
+        refinementModelManagerViewModel.refresh()
         if !hasCenteredWindow {
             window.center()
             hasCenteredWindow = true

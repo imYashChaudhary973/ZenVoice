@@ -53,6 +53,13 @@ All notable ZenVoice changes are recorded here.
 - Added stable phrase detection and local in-memory Whisper previews
 - Added opt-in commit-on-pause insertion locked to the original target app
 - Added encrypted partial transcript checkpoints during active dictation
+- Added Fast and Balanced Qwen2.5 refinement models from immutable official
+  revisions with exact size and SHA-256 verification
+- Added the patched, checksum-pinned `llama.cpp` b9637 XCFramework runtime
+- Added grammar-constrained local JSON refinement with timeout, vocabulary,
+  retention, and deterministic fallback guards
+- Added in-app hardware guidance, download progress, selection, removal, and
+  publisher-licence links for local refinement models
 
 ### Changed
 
@@ -70,11 +77,8 @@ All notable ZenVoice changes are recorded here.
   `whisper-cli` for every recording
 - Applied Instant Refine before encrypted personal correction rules, history,
   and paste
-
-### Planned
-
-- Microphone selection
-- Personal dictionary and conservative local corrections
+- Extended Instant Refine with an optional multilingual Local Model mode while
+  keeping Clean as the safe fallback
 
 ## [0.1.0] - 2026-07-23
 

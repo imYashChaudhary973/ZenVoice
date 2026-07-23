@@ -66,19 +66,63 @@ struct VerifiedModelDownloader {
         progress:
             AsyncStream<VerifiedModelDownloadPhase>.Continuation
     ) async throws -> URL {
-        guard model.downloadURL.scheme == "https",
-              model.downloadURL.host == "huggingface.co",
-              model.downloadURL.path.contains(model.sourceRevision),
-              model.downloadURL.lastPathComponent == model.filename else {
+        let directory = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        return try await download(
+            sourceURL: model.downloadURL,
+            sourceRevision: model.sourceRevision,
+            filename: model.filename,
+            expectedSize: model.fileSizeBytes,
+            expectedSHA256: model.sha256,
+            destinationDirectory: directory,
+            progress: progress
+        )
+    }
+
+    func download(
+        _ model: VerifiedRefinementModel,
+        progress:
+            AsyncStream<VerifiedModelDownloadPhase>.Continuation
+    ) async throws -> URL {
+        let directory =
+            try VerifiedRefinementModelCatalog.modelsDirectory(
+                fileManager: fileManager
+            )
+        return try await download(
+            sourceURL: model.downloadURL,
+            sourceRevision: model.sourceRevision,
+            filename: model.filename,
+            expectedSize: model.fileSizeBytes,
+            expectedSHA256: model.sha256,
+            destinationDirectory: directory,
+            progress: progress
+        )
+    }
+
+    private func download(
+        sourceURL: URL,
+        sourceRevision: String,
+        filename: String,
+        expectedSize: Int64,
+        expectedSHA256: String,
+        destinationDirectory: URL,
+        progress:
+            AsyncStream<VerifiedModelDownloadPhase>.Continuation
+    ) async throws -> URL {
+        guard sourceURL.scheme == "https",
+              sourceURL.host == "huggingface.co",
+              sourceURL.path.contains(sourceRevision),
+              sourceURL.lastPathComponent == filename else {
             throw VerifiedModelDownloadError.invalidSource
         }
 
-        var request = URLRequest(url: model.downloadURL)
+        var request = URLRequest(url: sourceURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 60 * 60
         let (temporaryURL, response) = try await download(
             request,
-            expectedSize: model.fileSizeBytes,
+            expectedSize: expectedSize,
             progress: progress
         )
         defer {
@@ -97,30 +141,28 @@ struct VerifiedModelDownloader {
             .fileSizeKey
         ])
         guard values.isRegularFile == true,
-              Int64(values.fileSize ?? -1) == model.fileSizeBytes else {
+              Int64(values.fileSize ?? -1) == expectedSize else {
             throw VerifiedModelDownloadError.unexpectedSize
         }
         guard try VerifiedModelCatalog.sha256Hex(of: temporaryURL)
-                == model.sha256 else {
+                == expectedSHA256 else {
             throw VerifiedModelDownloadError.checksumMismatch
         }
 
-        let directory = try VerifiedModelCatalog.modelsDirectory(
-            fileManager: fileManager
-        )
         try fileManager.createDirectory(
-            at: directory,
+            at: destinationDirectory,
             withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700]
         )
         try fileManager.setAttributes(
             [.posixPermissions: 0o700],
-            ofItemAtPath: directory.path
+            ofItemAtPath: destinationDirectory.path
         )
 
-        let stagingURL = directory
-            .appendingPathComponent(".\(model.filename).\(UUID().uuidString)")
-        let destinationURL = directory.appendingPathComponent(model.filename)
+        let stagingURL = destinationDirectory
+            .appendingPathComponent(".\(filename).\(UUID().uuidString)")
+        let destinationURL =
+            destinationDirectory.appendingPathComponent(filename)
         defer {
             try? fileManager.removeItem(at: stagingURL)
         }

@@ -52,8 +52,8 @@ recorded in
 - [x] Add local model selection for English and multilingual Whisper models
 - [x] Add explicit language selection and optional local detection
 - [x] Add local snippets and conservative voice corrections
-- [ ] Evaluate optional local-only rewriting through Ollama
-- [ ] Curate downloadable local text-refinement models with meaning guards
+- [x] Add in-process local-only refinement through the pinned llama.cpp runtime
+- [x] Curate downloadable local text-refinement models with meaning guards
 - [ ] Add first-run onboarding and expanded permission recovery
 - [ ] Add Developer ID signing, notarization, and update delivery
 - [x] Complete the M9 engineering security review

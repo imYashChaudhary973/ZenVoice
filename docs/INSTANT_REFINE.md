@@ -20,6 +20,10 @@ Local audio
   page.”
 - **Agent Prompt:** includes Clean behavior and honors the explicit spoken
   commands “new line” and “new paragraph.”
+- **Local Model:** runs the selected verified Qwen model through the bundled
+  local `llama.cpp` runtime, then accepts its JSON result only if the meaning
+  guard passes. Any unavailable, malformed, unsafe, or timed-out result falls
+  back to Clean.
 
 Clean is the default. The selected mode is stored in local user defaults.
 Instant Refine runs after recording stops and before text is saved or pasted.
@@ -40,25 +44,33 @@ The built-in engine is deterministic:
 If the guard rejects a candidate, ZenVoice uses the original cleaned Whisper
 transcript.
 
+The downloadable local-model mode adds stricter boundaries:
+
+- generation is grammar-constrained to `{"text":"..."}`;
+- output cannot introduce a normalized word absent from the transcript;
+- a five-word-or-longer result must retain at least 60 percent of its tokens;
+- output length is bounded and generation has a five-second deadline;
+- the model keeps the spoken language and is forbidden from translating;
+- failure always falls back to deterministic Clean refinement.
+
 ## Model responsibilities
 
 Whisper models convert audio into text. They are not general-purpose rewriting
 models. The current Instant Refine foundation therefore does not pretend that
 a speech model can perform semantic editing.
 
-Downloadable text-refinement models are a separate future catalogue. Before
-one appears in ZenVoice, its publisher, source, revision, licence,
-redistribution rights, size, checksum, runtime format, hardware requirements,
-latency, and meaning-preservation behavior must be approved independently.
+The M14 refinement catalogue is independent from speech-model selection. Its
+publisher, source, immutable revision, licence, size, checksum, runtime format,
+hardware requirements, and language claims are recorded in
+[Verified Model Catalogue](MODEL_CATALOG.md).
 
 ## Next guarded stages
 
-1. Measure partial-transcription stability and end-to-end latency.
-2. Keep unstable words in ZenBar instead of the target application.
-3. Commit a corrected phrase only after it is stable or the user pauses.
-4. Add a legally reviewed local text-model catalogue.
-5. Require structured output, a timeout, an edit-distance limit, and automatic
-   fallback to deterministic refinement for every generative model.
+1. Measure real-language correction quality and end-to-end latency.
+2. Tune Fast versus Balanced recommendations from local benchmark evidence.
+3. Add new model entries only after the complete legal and integrity review.
+4. Keep live commit-on-pause opt-in until duplicate-free insertion is proven
+   across supported target applications.
 
 ZenVoice will not continuously replace text inside another application until
 focus changes, cursor movement, undo behavior, and application compatibility

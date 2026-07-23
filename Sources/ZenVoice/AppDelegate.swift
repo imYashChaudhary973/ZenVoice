@@ -79,7 +79,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
+    private var refinementModelManagerViewModel:
+        RefinementModelManagerViewModel!
     private var settingsWindowController: SettingsWindowController!
+    private let refinementCoordinator =
+        LocalRefinementCoordinator()
     private let historyPreferences = HistoryPreferences()
     private var dictationVault: DictationVault?
     private var activeHistoryID: UUID?
@@ -106,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         configureTranscriber()
+        configureRefiner()
         configureMenuBar()
         configureZenBar()
         configureHistoryStorage()
@@ -182,6 +187,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         } catch {
             state.phase = .error(error.localizedDescription)
+        }
+    }
+
+    private func configureRefiner() {
+        refinementCoordinator.update(modelURL: nil)
+        guard let model =
+            RefinementModelSelectionPreferences.load(),
+              let url =
+                try? VerifiedRefinementModelCatalog.installedURL(
+                    for: model
+                ) else {
+            return
+        }
+        let coordinator = refinementCoordinator
+        DispatchQueue.global(qos: .utility).async {
+            let isVerified =
+                (try? VerifiedRefinementModelCatalog.verify(
+                    url,
+                    for: model
+                )) == true
+            guard isVerified,
+                  RefinementModelSelectionPreferences.load()?.id
+                    == model.id else {
+                return
+            }
+            coordinator.update(modelURL: url)
         }
     }
 
@@ -414,6 +445,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.configureTranscriber()
             self?.settingsViewModel?.refreshSystemStatus()
         }
+        refinementModelManagerViewModel =
+            RefinementModelManagerViewModel { [weak self] in
+                self?.configureRefiner()
+            }
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
             pasteLastShortcut: pasteLastHotKeyConfiguration,
@@ -519,6 +554,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             insightsViewModel: insightsViewModel,
             voiceProfileViewModel: voiceProfileViewModel,
             modelManagerViewModel: modelManagerViewModel,
+            refinementModelManagerViewModel:
+                refinementModelManagerViewModel,
             appState: state
         )
     }
@@ -890,10 +927,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         let result = try transcriber.transcribe(
                             samples: remainingSamples
                         )
-                        let refinement = InstantRefineEngine().refine(
-                            result.finalTranscript,
-                            mode: instantRefineMode
-                        )
+                        let refinement =
+                            self?.refinementCoordinator.refine(
+                                result.finalTranscript,
+                                mode: instantRefineMode
+                            ) ?? InstantRefineEngine().refine(
+                                result.finalTranscript,
+                                mode: .clean
+                            )
                         processed = ProcessedTranscription(
                             result: result,
                             refinement: refinement,
@@ -952,10 +993,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let result = try transcriber.transcribe(
                     audioURL: recordedAudio.url
                 )
-                let refinement = InstantRefineEngine().refine(
-                    result.finalTranscript,
-                    mode: instantRefineMode
-                )
+                let refinement =
+                    self?.refinementCoordinator.refine(
+                        result.finalTranscript,
+                        mode: instantRefineMode
+                    ) ?? InstantRefineEngine().refine(
+                        result.finalTranscript,
+                        mode: .clean
+                    )
                 let processed = ProcessedTranscription(
                     result: result,
                     refinement: refinement,
@@ -1082,10 +1127,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let result = try transcriber.transcribe(
                     samples: segment.samples
                 )
-                let refinement = InstantRefineEngine().refine(
-                    result.finalTranscript,
-                    mode: mode
-                )
+                let refinement =
+                    self?.refinementCoordinator.refine(
+                        result.finalTranscript,
+                        mode: mode
+                    ) ?? InstantRefineEngine().refine(
+                        result.finalTranscript,
+                        mode: .clean
+                    )
                 let processed = ProcessedTranscription(
                     result: result,
                     refinement: refinement,
@@ -1621,10 +1670,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         transcriptionQueue.async { [weak self] in
             do {
                 let result = try transcriber.transcribe(audioURL: audioURL)
-                let refinement = InstantRefineEngine().refine(
-                    result.finalTranscript,
-                    mode: instantRefineMode
-                )
+                let refinement =
+                    self?.refinementCoordinator.refine(
+                        result.finalTranscript,
+                        mode: instantRefineMode
+                    ) ?? InstantRefineEngine().refine(
+                        result.finalTranscript,
+                        mode: .clean
+                    )
                 let processed = ProcessedTranscription(
                     result: result,
                     refinement: refinement,

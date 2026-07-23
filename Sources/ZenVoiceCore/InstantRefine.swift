@@ -4,6 +4,7 @@ public enum InstantRefineMode: String, Codable, CaseIterable, Sendable {
     case off
     case clean
     case agentPrompt
+    case localModel
 
     public var displayName: String {
         switch self {
@@ -13,6 +14,8 @@ public enum InstantRefineMode: String, Codable, CaseIterable, Sendable {
             "Clean"
         case .agentPrompt:
             "Agent Prompt"
+        case .localModel:
+            "Local Model"
         }
     }
 
@@ -24,6 +27,8 @@ public enum InstantRefineMode: String, Codable, CaseIterable, Sendable {
             "Remove fillers, repeated words, and clear spoken restarts."
         case .agentPrompt:
             "Clean the transcript and honor explicit layout commands."
+        case .localModel:
+            "Use the selected verified local model with automatic safe fallback."
         }
     }
 }

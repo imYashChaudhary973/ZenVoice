@@ -48,6 +48,8 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
+    @ObservedObject var refinementModelManagerViewModel:
+        RefinementModelManagerViewModel
     @ObservedObject var appState: AppState
     @State private var selection: Section = .overview
 
@@ -176,7 +178,10 @@ struct ZenVoiceSettingsView: View {
         case .languages:
             LanguagesScreen(viewModel: viewModel)
         case .refine:
-            InstantRefineScreen(viewModel: viewModel)
+            InstantRefineScreen(
+                viewModel: viewModel,
+                modelViewModel: refinementModelManagerViewModel
+            )
         case .history:
             HistoryScreen(viewModel: historyViewModel)
         case .insights:
@@ -1059,6 +1064,10 @@ private struct ModelRow: View {
 
 private struct InstantRefineScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var modelViewModel:
+        RefinementModelManagerViewModel
+    @State private var modelPendingRemoval:
+        VerifiedRefinementModel?
 
     var body: some View {
         ScrollView {
@@ -1141,6 +1150,79 @@ private struct InstantRefineScreen: View {
                     }
                 }
 
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("VERIFIED LOCAL MODELS")
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(1.1)
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textTertiary
+                            )
+                        Spacer()
+                        Text(modelViewModel.hardwareProfile.summary)
+                            .font(.system(size: 8))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textTertiary
+                            )
+                    }
+
+                    if modelViewModel.isVerifying {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Verifying refinement models…")
+                                .font(.system(size: 9))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                        }
+                    }
+
+                    if let error = modelViewModel.errorMessage {
+                        ErrorBanner(message: error)
+                    }
+
+                    if viewModel.instantRefineMode == .localModel,
+                       !modelViewModel.hasSelectedInstalledModel {
+                        ErrorBanner(
+                            message:
+                                "No verified refinement model is selected. ZenVoice will safely fall back to Clean."
+                        )
+                    }
+
+                    ForEach(modelViewModel.models) { model in
+                        RefinementModelRow(
+                            model: model,
+                            isInstalled:
+                                modelViewModel.isInstalled(model),
+                            isSelected:
+                                modelViewModel.isSelected(model),
+                            isDownloading:
+                                modelViewModel.downloadingModelID
+                                    == model.id,
+                            downloadProgress:
+                                modelViewModel.downloadProgress,
+                            isVerifyingDownload:
+                                modelViewModel.isVerifyingDownload,
+                            recommendation:
+                                modelViewModel.recommendation(
+                                    for: model
+                                ),
+                            download: {
+                                modelViewModel.download(model)
+                            },
+                            cancel:
+                                modelViewModel.cancelDownload,
+                            select: {
+                                modelViewModel.select(model)
+                            },
+                            remove: {
+                                modelPendingRemoval = model
+                            }
+                        )
+                    }
+                }
+
                 HStack(alignment: .top, spacing: ZenDesign.Spacing.md) {
                     exampleCard
                     safetyCard
@@ -1190,6 +1272,24 @@ private struct InstantRefineScreen: View {
             .padding(.bottom, 36)
         }
         .background(ZenDesign.Semantic.canvas)
+        .alert(
+            "Remove refinement model?",
+            isPresented: Binding(
+                get: { modelPendingRemoval != nil },
+                set: { if !$0 { modelPendingRemoval = nil } }
+            ),
+            presenting: modelPendingRemoval
+        ) { model in
+            Button("Cancel", role: .cancel) {}
+            Button("Remove", role: .destructive) {
+                modelViewModel.remove(model)
+                modelPendingRemoval = nil
+            }
+        } message: { model in
+            Text(
+                "\(model.displayName) will be removed from this Mac. Clean refinement remains available."
+            )
+        }
     }
 
     private var exampleCard: some View {
@@ -1201,12 +1301,12 @@ private struct InstantRefineScreen: View {
                     .foregroundStyle(
                         ZenDesign.Semantic.textTertiary
                     )
-                Text("“Create a login page, no wait, a sign-up page.”")
+                Text("“Um, create the the local app with Swift.”")
                     .font(.system(size: 10))
                     .foregroundStyle(
                         ZenDesign.Semantic.textSecondary
                     )
-                Text("Create a sign-up page.")
+                Text("Create the local app with Swift.")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(
                         ZenDesign.Semantic.textPrimary
@@ -1232,8 +1332,127 @@ private struct InstantRefineScreen: View {
                 PrivacyFact(
                     icon: "text.badge.checkmark",
                     text:
-                        "The built-in engine cannot invent new semantic words."
+                        "Every accepted result is blocked from inventing new semantic words."
                 )
+            }
+        }
+    }
+}
+
+private struct RefinementModelRow: View {
+    let model: VerifiedRefinementModel
+    let isInstalled: Bool
+    let isSelected: Bool
+    let isDownloading: Bool
+    let downloadProgress: Double?
+    let isVerifyingDownload: Bool
+    let recommendation: ModelRecommendation
+    let download: () -> Void
+    let cancel: () -> Void
+    let select: () -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        ZenCard {
+            HStack(spacing: 13) {
+                Image(systemName: "text.badge.sparkles")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.accent)
+                    .frame(width: 42, height: 42)
+                    .background {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.small,
+                            style: .continuous
+                        )
+                        .fill(ZenDesign.Semantic.accentMuted)
+                    }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 7) {
+                        Text(model.displayName)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textPrimary
+                            )
+                        Text(model.tier.displayName.uppercased())
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textTertiary
+                            )
+                    }
+                    Text(
+                        "\(model.formattedFileSize) • \(model.format) • \(model.license)"
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textSecondary
+                    )
+                    Link(
+                        "Publisher license",
+                        destination: model.licenseDocumentURL
+                    )
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.accent)
+                    Text(
+                        "\(model.languageSummary) Pinned \(model.sourceRevision.prefix(8)) • SHA-256 verified."
+                    )
+                    .font(.system(size: 8))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textTertiary
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    Text(recommendation.rationale)
+                        .font(.system(size: 8))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textTertiary
+                        )
+                }
+
+                Spacer()
+
+                StatusPill(
+                    title:
+                        isSelected
+                            ? "In use"
+                            : recommendation.title,
+                    isPositive:
+                        isSelected
+                            || recommendation.level == .recommended
+                            || recommendation.level == .supported
+                )
+
+                if isDownloading {
+                    VStack(alignment: .trailing, spacing: 5) {
+                        ProgressView(value: downloadProgress ?? 0)
+                            .progressViewStyle(.linear)
+                            .frame(width: 82)
+                        Text(
+                            isVerifyingDownload
+                                ? "Verifying…"
+                                : "\(Int(((downloadProgress ?? 0) * 100).rounded()))%"
+                        )
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textTertiary
+                        )
+                    }
+                    Button("Cancel", action: cancel)
+                        .buttonStyle(ZenSecondaryButtonStyle())
+                } else if isInstalled {
+                    if !isSelected {
+                        Button("Use", action: select)
+                            .buttonStyle(ZenPrimaryButtonStyle())
+                    }
+                    Button("Remove", action: remove)
+                        .buttonStyle(ZenSecondaryButtonStyle())
+                } else {
+                    Button("Download", action: download)
+                        .buttonStyle(ZenPrimaryButtonStyle())
+                        .disabled(
+                            recommendation.level
+                                == .insufficientStorage
+                        )
+                }
             }
         }
     }

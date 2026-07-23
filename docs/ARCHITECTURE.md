@@ -30,6 +30,9 @@ AudioRecorder ──────► local WAV ──────► ZenVoiceRunt
                                            │
                                            ▼
                                     InstantRefineEngine
+                                           │ optional
+                                           ▼
+                              ZenVoiceRefinementRuntime
                                            │
                                            ▼
                                      TextInserter
@@ -89,6 +92,12 @@ launching the application:
   restarts, and explicit layout commands before paste. Its meaning guard
   rejects destructive or vocabulary-expanding candidates.
 - `InstantRefinePreferences` persists Off, Clean, or Agent Prompt mode locally.
+- `VerifiedRefinementModelCatalog` is the independent allowlist for Qwen
+  publisher metadata, immutable revisions, exact GGUF files, licence links,
+  size, SHA-256, and minimum-memory guidance.
+- `LocalRefinementPrompt` defines the no-translation, no-invention JSON
+  contract. `LocalRefinementGuard` rejects malformed, destructive, or
+  vocabulary-expanding results.
 - `LanguageCatalog` exposes the reviewed language codes and product support
   level. `LanguagePreferences` persists the explicit input/output profile.
 - `LocalTransliterator` converts supported native scripts to Latin characters
@@ -104,6 +113,8 @@ launching the application:
 downloads before atomic replacement, prevents cancelled tasks from clearing a
 new download, and updates the selected local model without sending speech data
 to a server.
+`RefinementModelManagerViewModel` applies the same verified-download and
+atomic-install contract to the separate text-model directory.
 `ModelRecommendationEngine` maps RAM and storage headroom to a default tier,
 while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 
@@ -121,6 +132,17 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 - The runtime accepts only 16 kHz mono audio produced by `AudioRecorder`.
 - File and in-memory sample transcription use the same retained context and
   dedicated serial queue, preventing concurrent access to `whisper.cpp`.
+
+### `ZenVoiceRefinementRuntime`
+
+- `LocalTextRefiner` loads an exact verified GGUF through the pinned
+  `llama.cpp` XCFramework in process.
+- The model stays loaded across dictations; each generation uses a fresh local
+  context and one serialized call through `LocalRefinementCoordinator`.
+- A GBNF grammar restricts output to one JSON object. Generation is greedy,
+  bounded to 192 output tokens, and checked against a five-second deadline.
+- A runtime failure or rejected meaning guard never blocks dictation; ZenVoice
+  falls back to deterministic Clean refinement.
 
 ### `ZenVoiceStorage`
 
@@ -163,8 +185,10 @@ cryptographic Delete All, ciphertext field binding, recovery-path confinement,
 partial transcript flags, and history preferences.
 
 `ZenVoiceRuntimeChecks` creates a local silent WAV and performs two sequential
-passes through one transcriber. It validates the embedded C API and persistent
-model lifecycle without microphone or UI interaction.
+passes through one transcriber. It validates both embedded C APIs and the
+persistent Whisper lifecycle without microphone or UI interaction. Setting
+`ZENVOICE_REFINEMENT_MODEL_PATH` adds a real GGUF structured-output and meaning
+guard pass.
 
 `ShareCardSummary` lives in the core target and can contain only total words,
 weighted WPM, current streak, and distinct application count. It has no field
@@ -209,15 +233,19 @@ When history is enabled, a record moves through `recording`, `transcribing`,
 moves to `failed` and can retain its local audio for retry.
 
 The completed Whisper text passes through Instant Refine and then encrypted
-personal correction rules. The resulting text is what history and insertion
-receive; the raw Whisper transcript remains available in the encrypted record
-for local recovery and comparison.
+personal correction rules. Local Model mode can use the selected verified
+Qwen model, but only a grammar-valid, meaning-guarded result is accepted. The
+resulting text is what history and insertion receive; the raw Whisper
+transcript remains available in the encrypted record for local recovery and
+comparison.
 
 ## Concurrency
 
-UI and application state remain on the main actor. Whisper transcription runs
-on a dedicated user-initiated serial queue so model processing does not block
-ZenBar.
+UI and application state remain on the main actor. Whisper transcription and
+optional text refinement run on a dedicated user-initiated serial queue so
+model processing does not block ZenBar. Selected refinement runtimes are
+replaced through a lock-protected coordinator after background checksum
+verification.
 
 ## Current trade-offs
 

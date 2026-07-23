@@ -140,6 +140,89 @@ guard InstantRefinePreferences.load(defaults: refineDefaults)
     )
     exit(1)
 }
+InstantRefinePreferences.save(.localModel, defaults: refineDefaults)
+guard InstantRefinePreferences.load(defaults: refineDefaults)
+        == .localModel else {
+    FileHandle.standardError.write(
+        Data("FAIL: local model mode did not persist\n".utf8)
+    )
+    exit(1)
+}
+
+let refinementModels = VerifiedRefinementModelCatalog.models
+guard refinementModels.count == 2,
+      Set(refinementModels.map(\.tier)) == [.fast, .balanced],
+      refinementModels.allSatisfy({
+          $0.publisher == "Qwen"
+              && $0.license == "Apache-2.0"
+              && $0.downloadURL.scheme == "https"
+              && $0.downloadURL.host == "huggingface.co"
+              && $0.sourceRevision.count == 40
+              && $0.sha256.count == 64
+              && $0.fileSizeBytes > 0
+      }),
+      !refinementModels.contains(where: {
+          $0.id.contains("3b")
+      }) else {
+    FileHandle.standardError.write(
+        Data("FAIL: refinement allowlist is not legally pinned\n".utf8)
+    )
+    exit(1)
+}
+
+let safeLocalCandidate =
+    LocalRefinementGuard.validatedCandidate(
+        output: #"{"text":"Create the local app."}"#,
+        original: "create the local app"
+    )
+guard safeLocalCandidate == "Create the local app.",
+      LocalRefinementGuard.validatedCandidate(
+        output: #"{"text":"Create the cloud app."}"#,
+        original: "Create the local app."
+      ) == nil,
+      LocalRefinementGuard.validatedCandidate(
+        output: #"{"text":"Keep"}"#,
+        original: "Please keep every important word here"
+      ) == nil,
+      LocalRefinementGuard.validatedCandidate(
+        output: "```json\n{\"text\":\"Keep this\"}\n```",
+        original: "Keep this"
+      ) == nil,
+      LocalRefinementPrompt.make(transcript: "Hola mundo")
+        .contains("Hola mundo") else {
+    FileHandle.standardError.write(
+        Data("FAIL: local refinement meaning guard is unsafe\n".utf8)
+    )
+    exit(1)
+}
+
+let refinementSuite =
+    "ZenVoiceCoreChecks.RefinementModel.\(UUID().uuidString)"
+guard let refinementDefaults =
+    UserDefaults(suiteName: refinementSuite),
+      let fastRefinementModel = refinementModels.first else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create refinement model fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    refinementDefaults.removePersistentDomain(
+        forName: refinementSuite
+    )
+}
+RefinementModelSelectionPreferences.save(
+    fastRefinementModel,
+    defaults: refinementDefaults
+)
+guard RefinementModelSelectionPreferences.load(
+    defaults: refinementDefaults
+) == fastRefinementModel else {
+    FileHandle.standardError.write(
+        Data("FAIL: refinement model selection did not persist\n".utf8)
+    )
+    exit(1)
+}
 
 print("ZenVoiceCoreChecks: Instant Refine passed")
 

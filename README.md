@@ -55,7 +55,12 @@ analytics, or cloud transcription services in the current application.
   insertion.
 - Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
   private local timing samples.
-- Local Instant Refine with Off, Clean, and Agent Prompt modes.
+- Local Instant Refine with Off, Clean, Agent Prompt, and verified Local Model
+  modes.
+- Fast and Balanced Qwen refinement downloads with immutable revisions,
+  Apache-2.0 licence links, exact size, and SHA-256 verification.
+- Grammar-constrained local JSON generation with a five-second deadline,
+  no-invention meaning guard, and deterministic Clean fallback.
 - Meaning-preserving cleanup for fillers, repeated words, spoken restarts, and
   explicit prompt layout commands.
 - Visible model-download percentage with reliable cancellation.
@@ -76,6 +81,7 @@ Hotkey
   → local microphone recording
   → local Whisper transcription
   → conservative transcript cleanup
+  → optional verified local text refinement
   → macOS clipboard and active-app paste
 ```
 
@@ -88,7 +94,8 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 - macOS 14 or newer
 - Apple Silicon Mac
 - Swift 5.10 or newer
-- Internet access on the first build for the pinned `whisper.cpp` framework
+- Internet access on the first build for the pinned `whisper.cpp` and
+  `llama.cpp` frameworks
 - A verified model downloaded from ZenVoice's Models screen
 
 ## Quick start
@@ -120,7 +127,8 @@ or run a local signal and format test.
 
 Open **Instant Refine** to control stable live preview. Experimental
 commit-on-pause insertion is opt-in and stays locked to the app where dictation
-started.
+started. The same screen offers Fast and Balanced verified local refinement
+models; weights download only after you select Download.
 
 ## Use ZenVoice
 
