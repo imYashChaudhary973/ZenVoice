@@ -6,6 +6,7 @@ app_dir="$project_dir/build/ZenVoice.app"
 contents_dir="$app_dir/Contents"
 brand_dir="$project_dir/Resources/Brand"
 icon_path="$project_dir/build/ZenVoice.icns"
+entitlements_path="$project_dir/Resources/ZenVoice.entitlements"
 signing_identity=${ZENVOICE_SIGNING_IDENTITY:-}
 
 cd "$project_dir"
@@ -33,11 +34,17 @@ if [[ -n "$signing_identity" ]]; then
         --force \
         --options runtime \
         --timestamp=none \
+        --entitlements "$entitlements_path" \
         --sign "$signing_identity" \
         "$app_dir"
     echo "Signed with Apple Development identity: $signing_identity"
 else
-    codesign --force --sign - "$app_dir"
+    codesign \
+        --force \
+        --options runtime \
+        --entitlements "$entitlements_path" \
+        --sign - \
+        "$app_dir"
     echo "Warning: no Apple Development identity found; used ad-hoc signing." >&2
     echo "macOS permissions may need approval after every rebuild." >&2
 fi

@@ -14,6 +14,7 @@ All notable ZenVoice changes are recorded here.
 - Signed local builds with a stable Apple Development identity so macOS privacy
   permissions survive normal rebuilds
 - Opened the correct macOS microphone settings page when permission is denied
+- Added the required Hardened Runtime audio-input entitlement
 
 ### Planned
 

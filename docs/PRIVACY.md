@@ -34,6 +34,10 @@ network.
 - **Microphone** is required to record speech.
 - **Accessibility** is required only to simulate `Command + V`.
 
+The signed app includes the Hardened Runtime audio-input entitlement. This
+permits ZenVoice to ask macOS for microphone access; it does not bypass the
+user's explicit Microphone approval.
+
 If Accessibility permission is denied, transcription still works and the result
 is copied to the clipboard.
 

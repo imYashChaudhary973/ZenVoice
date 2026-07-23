@@ -85,5 +85,6 @@ ZenBar.
 - Automatic paste uses the system clipboard and a synthetic `Command + V`
   event, which requires Accessibility permission.
 - Local builds prefer a stable Apple Development signature so macOS privacy
-  approvals survive rebuilds. Public distribution will require Developer ID
-  signing and notarization.
+  approvals survive rebuilds. The Hardened Runtime signature includes only the
+  audio-input resource entitlement required for recording. Public distribution
+  will require Developer ID signing and notarization.

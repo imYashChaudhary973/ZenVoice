@@ -56,7 +56,8 @@ The script:
 1. produces a release Swift build;
 2. generates the macOS icon from the source Zen logo;
 3. assembles `build/ZenVoice.app`;
-4. signs with the first available Apple Development identity.
+4. embeds the required Hardened Runtime audio-input entitlement;
+5. signs with the first available Apple Development identity.
 
 Set `ZENVOICE_SIGNING_IDENTITY` to a certificate hash or full identity name to
 choose a specific signing identity:
@@ -77,6 +78,9 @@ hash, so a rebuilt executable looks like a new app to macOS.
 
 Apple Development signing gives local builds a stable requirement based on the
 Apple-issued signer, team, and `dev.yashchaudhary.ZenVoice` bundle identifier.
+Because the build enables Hardened Runtime, the signature also embeds
+`com.apple.security.device.audio-input` so AVFoundation may request microphone
+access.
 After switching from an ad-hoc build:
 
 1. Remove the old ZenVoice entry from **System Settings → Privacy & Security →
