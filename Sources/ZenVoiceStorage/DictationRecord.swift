@@ -9,7 +9,9 @@ public enum DictationStatus: String, Codable, Sendable {
     case failed
 }
 
-public enum DictationCategory: String, Codable, CaseIterable, Sendable {
+public enum DictationCategory:
+    String, Codable, CaseIterable, Identifiable, Sendable
+{
     case documents
     case email
     case workMessages
@@ -18,6 +20,21 @@ public enum DictationCategory: String, Codable, CaseIterable, Sendable {
     case notes
     case development
     case other
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .documents: "Documents"
+        case .email: "Email"
+        case .workMessages: "Work messages"
+        case .personalMessages: "Personal messages"
+        case .aiPrompts: "AI prompts"
+        case .notes: "Notes"
+        case .development: "Development"
+        case .other: "Other"
+        }
+    }
 }
 
 public struct DictationDraft: Sendable {

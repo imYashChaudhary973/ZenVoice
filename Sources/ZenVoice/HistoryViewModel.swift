@@ -145,6 +145,22 @@ final class HistoryViewModel: ObservableObject {
         }
     }
 
+    func setCategory(
+        _ category: DictationCategory,
+        for record: DictationRecord
+    ) {
+        do {
+            try vaultProvider().updateCategory(
+                id: record.id,
+                category: category
+            )
+            refresh()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func deleteAll() {
         do {
             try vaultProvider().deleteAll()

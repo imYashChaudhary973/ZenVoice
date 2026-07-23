@@ -438,6 +438,70 @@ public final class DictationVault: @unchecked Sendable {
         }
     }
 
+    public func updateCategory(
+        id: UUID,
+        category: DictationCategory
+    ) throws {
+        try update(
+            "UPDATE dictations SET category = ? WHERE id = ?;",
+            bindings: { statement in
+                bind(category.rawValue, at: 1, in: statement)
+                bind(id.uuidString, at: 2, in: statement)
+            }
+        )
+    }
+
+    public func insights(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) throws -> LocalInsightsSnapshot {
+        let events: [DictationInsightEvent] = try queue.sync {
+            let statement = try prepare(
+                """
+                SELECT started_at, duration_seconds, word_count,
+                    correction_count, target_bundle_id, target_app_name,
+                    category
+                FROM dictations
+                WHERE final_transcript IS NOT NULL
+                    AND persistence_suppressed = 0;
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+            var values: [DictationInsightEvent] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                guard let categoryValue = text(at: 6, in: statement),
+                      let category = DictationCategory(
+                        rawValue: categoryValue
+                      ) else {
+                    throw DictationVaultError.invalidRecord
+                }
+                values.append(
+                    DictationInsightEvent(
+                        startedAt: Date(
+                            timeIntervalSince1970:
+                                sqlite3_column_double(statement, 0)
+                        ),
+                        durationSeconds:
+                            sqlite3_column_double(statement, 1),
+                        wordCount:
+                            Int(sqlite3_column_int64(statement, 2)),
+                        correctionCount:
+                            Int(sqlite3_column_int64(statement, 3)),
+                        targetBundleID: text(at: 4, in: statement),
+                        targetAppName: text(at: 5, in: statement),
+                        category: category
+                    )
+                )
+            }
+            return values
+        }
+        return LocalInsightsSnapshot.calculate(
+            events: events,
+            now: now,
+            calendar: calendar
+        )
+    }
+
     private func openDatabase() throws {
         let status = sqlite3_open_v2(
             databaseURL.path,

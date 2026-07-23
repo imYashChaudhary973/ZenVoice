@@ -97,6 +97,8 @@ The checks cover:
 - valid default-hotkey display and serialization.
 - encrypted transcript storage without plaintext leakage;
 - weighted words-per-minute calculation;
+- local insight totals, streaks, seven-day activity, distinct applications,
+  conservative category classification, and category correction;
 - interruption recovery and capture-bounded 24-hour audio expiry;
 - cancellation cleanup and cryptographic Delete All;
 - default-on history with an explicit pause;
@@ -124,23 +126,26 @@ The checks cover:
 8. Quit and relaunch ZenVoice. Confirm all shortcut choices persisted.
 9. Open **Privacy** and confirm Microphone, Accessibility, local-history, and local-model
    status match System Settings and the local installation.
-10. Open **Models**, select an installed model, dictate twice, and confirm the
+10. Open **Insights** and confirm totals match History. Change one record's
+    category from its History menu, return to Insights, and confirm the
+    category breakdown updates.
+11. Open **Models**, select an installed model, dictate twice, and confirm the
     second transcription does not reload the model.
-11. Close the settings window and reopen it from **Open ZenVoice…** in the
+12. Close the settings window and reopen it from **Open ZenVoice…** in the
    menu-bar menu.
-12. Open TextEdit and place the cursor in a document.
-13. Press the configured shortcut.
-14. Speak quietly and confirm ZenBar shows shorter waveform bars.
-15. Speak loudly and confirm ZenBar shows taller waveform bars.
-16. Select the checkmark and confirm the transcript is inserted into TextEdit
+13. Open TextEdit and place the cursor in a document.
+14. Press the configured shortcut.
+15. Speak quietly and confirm ZenBar shows shorter waveform bars.
+16. Speak loudly and confirm ZenBar shows taller waveform bars.
+17. Select the checkmark and confirm the transcript is inserted into TextEdit
     and appears under **Today** in History.
-17. Confirm History offers Copy but no Paste, then test the paste-last shortcut.
-18. Start again, select cancel, and confirm no history record remains.
-19. Toggle **Show Status Message** from the menu-bar app and confirm the
+18. Confirm History offers Copy but no Paste, then test the paste-last shortcut.
+19. Start again, select cancel, and confirm no history record remains.
+20. Toggle **Show Status Message** from the menu-bar app and confirm the
    dictation message follows the preference.
-20. Press the shortcut again to confirm hotkey stop-and-insert still works.
-21. Disable Accessibility permission and repeat.
-22. Confirm the transcript remains available on the clipboard.
+21. Press the shortcut again to confirm hotkey stop-and-insert still works.
+22. Disable Accessibility permission and repeat.
+23. Confirm the transcript remains available on the clipboard.
 
 Also test:
 

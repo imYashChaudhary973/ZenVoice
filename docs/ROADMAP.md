@@ -28,6 +28,7 @@ recorded in
 - [x] Verified local model catalogue, downloader, selection, and removal
 - [x] Hardware-aware model recommendations and local speed benchmarks
 - [x] Bundled persistent `whisper.cpp` runtime
+- [x] Private local insights, streaks, app usage, and editable categories
 
 ## Next: quality and daily reliability
 

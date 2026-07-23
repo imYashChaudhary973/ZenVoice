@@ -23,6 +23,9 @@ All notable ZenVoice changes are recorded here.
 - Added a verified English and multilingual model catalogue with checksum
   validation, hardware recommendations, and local speed benchmarks
 - Added a checksum-pinned `whisper.cpp` v1.9.1 runtime inside the app
+- Added on-device insights for total words, weighted WPM, streaks, recent
+  activity, distinct apps, and work categories
+- Added conservative app-category detection and user correction from History
 
 ### Changed
 

@@ -11,7 +11,7 @@ pass its verification gate before dependent work begins.
 | M3 | Verified model catalogue and downloader | Complete |
 | M4 | Hardware recommendations and model benchmarks | Complete |
 | M5 | Bundled persistent `whisper.cpp` runtime | Complete |
-| M6 | Local insights and application categories | Planned |
+| M6 | Local insights and application categories | Complete |
 | M7 | Usage-based voice profile and explicit corrections | Planned |
 | M8 | Privacy-safe shareable highlight cards | Planned |
 | M9 | Public-distribution legal and security review | Planned |

@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyPreferences.loadPrivateMode()
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
+    private var insightsViewModel: InsightsViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
     private var settingsWindowController: SettingsWindowController!
     private let historyPreferences = HistoryPreferences()
@@ -386,9 +387,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.handlePrivacyChanged()
             }
         )
+        insightsViewModel = InsightsViewModel(
+            vaultProvider: { [weak self] in
+                guard let self else {
+                    throw DictationVaultError.database(
+                        "ZenVoice is no longer running."
+                    )
+                }
+                return try self.resolvedVault()
+            }
+        )
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
+            insightsViewModel: insightsViewModel,
             modelManagerViewModel: modelManagerViewModel,
             appState: state
         )
@@ -586,12 +598,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let vault = try resolvedVault()
                 let id = UUID()
                 let targetApplication = NSWorkspace.shared.frontmostApplication
+                let category = ApplicationCategoryClassifier.category(
+                    bundleIdentifier: targetApplication?.bundleIdentifier,
+                    appName: targetApplication?.localizedName
+                )
                 let draft = DictationDraft(
                     id: id,
                     language: transcriber?.language ?? "en",
                     modelID: transcriber?.modelID ?? "unknown",
                     targetBundleID: targetApplication?.bundleIdentifier,
                     targetAppName: targetApplication?.localizedName,
+                    category: category,
                     recoveryAudioURL: vault.recoveryAudioURL(for: id)
                 )
                 try vault.begin(draft)
@@ -756,6 +773,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 self.state.phase = .success
                 self.historyViewModel?.refresh()
+                self.insightsViewModel?.refresh()
                 self.scheduleIdleReset(after: 1.5)
             case .copiedOnly:
                 if let historyID, shouldPersist, historySaveError == nil {
@@ -774,6 +792,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             }
             self.historyViewModel?.refresh()
+            self.insightsViewModel?.refresh()
         }
     }
 
@@ -1052,6 +1071,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             state.lastTranscript = result.finalTranscript
             state.phase = .success
             historyViewModel.refresh()
+            insightsViewModel.refresh()
             scheduleIdleReset(after: 1.5)
         } catch {
             handleTranscriptionFailure(
