@@ -37,6 +37,8 @@ analytics, or cloud transcription services in the current application.
   categories.
 - A local language-usage profile with recurring phrases and encrypted explicit
   correction rules.
+- Previewed, locally rendered highlight cards with explicit Save and macOS
+  Share actions.
 - Copy, retry, search, and delete controls for saved dictations.
 - A configurable `Control + Option + V` shortcut for pasting the latest
   dictation.
@@ -124,6 +126,7 @@ swift run ZenVoiceStorageChecks
 swift run ZenVoiceRuntimeChecks
 swift build
 ./Scripts/build-app.sh
+codesign --verify --deep --strict build/ZenVoice.app
 ```
 
 The complete development and manual QA procedure is in
@@ -157,6 +160,10 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Privacy](docs/PRIVACY.md)
 - [Verified Model Catalogue](docs/MODEL_CATALOG.md)
 - [Voice Profile and Corrections](docs/VOICE_PROFILE.md)
+- [Private Highlight Cards](docs/SHARING.md)
+- [Release Readiness](docs/RELEASE_READINESS.md)
+- [M9 Security Review](docs/SECURITY_REVIEW.md)
+- [Third-Party Notices](THIRD_PARTY_NOTICES.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)
@@ -169,4 +176,6 @@ models, local vocabulary, lower transcription latency, expanded settings, and
 distribution readiness come after the English macOS workflow is stable.
 
 ZenVoice intentionally has no license while its future distribution model is
-undecided. All rights are reserved by the repository owner.
+undecided. All rights are reserved by the repository owner. Passing CI does
+not make a build publicly releasable; the manual release gates must also be
+completed.

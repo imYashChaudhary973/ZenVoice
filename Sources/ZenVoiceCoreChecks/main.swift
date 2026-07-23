@@ -327,3 +327,32 @@ benchmark.averageProcessingDurationSeconds == 4 else {
 }
 
 print("ZenVoiceCoreChecks: hardware recommendations and benchmarks passed")
+
+let shareSummary = ShareCardSummary(
+    totalWordCount: 12_345,
+    weightedWordsPerMinute: 154,
+    currentStreakDays: 7,
+    distinctApplicationCount: 9
+)
+guard shareSummary.totalWordCount == 12_345,
+      shareSummary.weightedWordsPerMinute == 154,
+      shareSummary.currentStreakDays == 7,
+      shareSummary.distinctApplicationCount == 9,
+      ShareCardSummary(
+        totalWordCount: -1,
+        weightedWordsPerMinute: -1,
+        currentStreakDays: -1,
+        distinctApplicationCount: -1
+      ) == ShareCardSummary(
+        totalWordCount: 0,
+        weightedWordsPerMinute: 0,
+        currentStreakDays: 0,
+        distinctApplicationCount: 0
+      ) else {
+    FileHandle.standardError.write(
+        Data("FAIL: privacy-safe share summary is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: privacy-safe share summary passed")

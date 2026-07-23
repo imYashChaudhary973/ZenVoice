@@ -85,6 +85,9 @@ can require approval again.
 swift run ZenVoiceCoreChecks
 swift run ZenVoiceStorageChecks
 swift run ZenVoiceRuntimeChecks
+swift build
+./Scripts/build-app.sh
+codesign --verify --deep --strict build/ZenVoice.app
 ```
 
 The checks cover:
@@ -111,6 +114,27 @@ The checks cover:
 - in-process runtime model loading and two sequential transcription passes
   through one persistent transcriber instance. This check skips only when no
   local model is installed.
+- privacy-safe numeric share-card payload validation.
+
+GitHub Actions runs the same checks on macOS for each pull request and `main`
+push. Semgrep Community Edition runs independently on an Ubuntu runner. The
+Semgrep job uses the public rule registry, does not require an account token,
+and has read-only repository permission.
+
+## Release readiness
+
+Development packaging is intentionally different from public distribution.
+After building, inspect the current gate:
+
+```bash
+./Scripts/check-release-readiness.sh
+```
+
+The command is expected to report blockers for private development builds. See
+[Release Readiness](RELEASE_READINESS.md),
+[M9 Security Review](SECURITY_REVIEW.md), and the root
+[Third-Party Notices](../THIRD_PARTY_NOTICES.md) before preparing any
+distributable artifact.
 
 ## Manual QA
 
@@ -138,21 +162,26 @@ The checks cover:
     can still apply but its saved usage count does not change.
 13. Open **Models**, select an installed model, dictate twice, and confirm the
     second transcription does not reload the model.
-14. Close the settings window and reopen it from **Open ZenVoice…** in the
+14. Open **Insights**, select **Share Highlights**, and verify the preview
+    contains only words, WPM, streak, and app count. Confirm no transcript or
+    application name appears.
+15. Select **Save PNG**, cancel the save panel, then select **Share…** and
+    cancel the macOS Share menu. Confirm neither action happens automatically.
+16. Close the settings window and reopen it from **Open ZenVoice…** in the
    menu-bar menu.
-15. Open TextEdit and place the cursor in a document.
-16. Press the configured shortcut.
-17. Speak quietly and confirm ZenBar shows shorter waveform bars.
-18. Speak loudly and confirm ZenBar shows taller waveform bars.
-19. Select the checkmark and confirm the transcript is inserted into TextEdit
+17. Open TextEdit and place the cursor in a document.
+18. Press the configured shortcut.
+19. Speak quietly and confirm ZenBar shows shorter waveform bars.
+20. Speak loudly and confirm ZenBar shows taller waveform bars.
+21. Select the checkmark and confirm the transcript is inserted into TextEdit
     and appears under **Today** in History.
-20. Confirm History offers Copy but no Paste, then test the paste-last shortcut.
-21. Start again, select cancel, and confirm no history record remains.
-22. Toggle **Show Status Message** from the menu-bar app and confirm the
+22. Confirm History offers Copy but no Paste, then test the paste-last shortcut.
+23. Start again, select cancel, and confirm no history record remains.
+24. Toggle **Show Status Message** from the menu-bar app and confirm the
    dictation message follows the preference.
-23. Press the shortcut again to confirm hotkey stop-and-insert still works.
-24. Disable Accessibility permission and repeat.
-25. Confirm the transcript remains available on the clipboard.
+25. Press the shortcut again to confirm hotkey stop-and-insert still works.
+26. Disable Accessibility permission and repeat.
+27. Confirm the transcript remains available on the clipboard.
 
 Also test:
 

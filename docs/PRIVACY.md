@@ -78,6 +78,17 @@ network.
   event.
 - Delete All removes correction rules before rotating the vault key.
 
+### Highlight cards
+
+- Highlight cards are rendered locally as 1200×630 images.
+- The card payload contains only total words, weighted words-per-minute,
+  current streak days, and distinct application count.
+- Transcript text, application names, bundle identifiers, profile terms, and
+  correction rules cannot enter the card payload.
+- ZenVoice shows the exact preview before any action.
+- Saving opens the macOS save panel. Sharing opens the macOS Share menu.
+- ZenVoice never selects a destination, uploads, or publishes automatically.
+
 ### Models and configuration
 
 - Whisper models remain in the user's local Application Support directory.
@@ -112,6 +123,8 @@ Local-first does not mean risk-free:
 - Apple Development signing gives local builds a stable macOS identity but is
   not appropriate for public distribution.
 
-Before public release, the project should add hardened runtime configuration,
-Developer ID signing, notarization, dependency review, and a documented update
-mechanism.
+The project now records its release security review, third-party notices, and
+automated readiness checks. Public release remains blocked until the owner
+chooses a project licence and distribution policy, signs the exact artifact
+with Developer ID, completes Apple notarization, and finishes the manual
+privacy and clean-device QA checklist.

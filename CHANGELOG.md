@@ -30,6 +30,14 @@ All notable ZenVoice changes are recorded here.
   and the most active hour
 - Added encrypted explicit correction rules with whole-phrase matching and
   history-bound usage counts
+- Added locally rendered 1200×630 highlight cards with an exact preview,
+  numeric-only payload, Save PNG, and explicit macOS sharing
+- Added macOS CI for core, storage, runtime, package, and nested-signature
+  verification
+- Added token-free Semgrep Community Edition scanning for pull requests and
+  `main`
+- Added third-party notices, an M9 security review, and a fail-closed public
+  release checklist
 
 ### Changed
 

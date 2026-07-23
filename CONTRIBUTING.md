@@ -16,8 +16,11 @@ repository ready for trusted collaborators and possible future public work.
 
 ```bash
 swift run ZenVoiceCoreChecks
+swift run ZenVoiceStorageChecks
+swift run ZenVoiceRuntimeChecks
 swift build
 ./Scripts/build-app.sh
+codesign --verify --deep --strict build/ZenVoice.app
 ```
 
 UI, microphone, hotkey, and auto-paste changes also require the manual QA
@@ -47,3 +50,7 @@ Never commit:
 
 Do not add cloud services, telemetry, analytics, or paid dependencies without an
 explicit product decision and privacy review.
+
+Public-release changes must also update the third-party notices when relevant,
+pass Semgrep, and follow [Release Readiness](docs/RELEASE_READINESS.md). Never
+commit Developer ID private keys or notarization credentials.
