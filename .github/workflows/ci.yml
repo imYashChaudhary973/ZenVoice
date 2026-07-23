@@ -1,0 +1,43 @@
+name: macOS CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build and verify
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Run deterministic core checks
+        run: swift run ZenVoiceCoreChecks
+
+      - name: Run encrypted storage checks
+        run: swift run ZenVoiceStorageChecks
+
+      - name: Run runtime checks
+        run: swift run ZenVoiceRuntimeChecks
+
+      - name: Build debug target
+        run: swift build
+
+      - name: Package local app
+        run: ./Scripts/build-app.sh
+
+      - name: Verify nested code signature
+        run: codesign --verify --deep --strict --verbose=2 build/ZenVoice.app
