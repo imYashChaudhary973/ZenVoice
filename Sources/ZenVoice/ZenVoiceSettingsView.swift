@@ -5,6 +5,7 @@ import ZenVoiceStorage
 struct ZenVoiceSettingsView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case overview = "Overview"
+        case models = "Models"
         case history = "History"
         case shortcuts = "Shortcuts"
         case privacy = "Privacy"
@@ -15,6 +16,8 @@ struct ZenVoiceSettingsView: View {
             switch self {
             case .overview:
                 return "rectangle.grid.2x2"
+            case .models:
+                return "cpu"
             case .history:
                 return "clock.arrow.circlepath"
             case .shortcuts:
@@ -27,6 +30,7 @@ struct ZenVoiceSettingsView: View {
 
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
+    @ObservedObject var modelManagerViewModel: ModelManagerViewModel
     @ObservedObject var appState: AppState
     @State private var selection: Section = .overview
 
@@ -148,6 +152,8 @@ struct ZenVoiceSettingsView: View {
                 appState: appState,
                 openShortcuts: { selection = .shortcuts }
             )
+        case .models:
+            ModelsScreen(viewModel: modelManagerViewModel)
         case .history:
             HistoryScreen(viewModel: historyViewModel)
         case .shortcuts:
@@ -188,6 +194,258 @@ struct ZenVoiceSettingsView: View {
                 .resizable()
                 .foregroundStyle(ZenDesign.Semantic.accent)
                 .frame(width: size, height: size)
+        }
+    }
+}
+
+private struct ModelsScreen: View {
+    @ObservedObject var viewModel: ModelManagerViewModel
+    @State private var modelPendingRemoval: VerifiedModel?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                PageHeader(
+                    eyebrow: "VERIFIED LOCAL MODELS",
+                    title: "Models",
+                    subtitle:
+                        "Choose an approved Whisper model. Downloads are pinned and SHA-256 verified."
+                )
+
+                ZenCard {
+                    HStack(spacing: 14) {
+                        Image(systemName: "laptopcomputer.and.arrow.down")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(ZenDesign.Semantic.accent)
+                            .frame(width: 46, height: 46)
+                            .background {
+                                RoundedRectangle(
+                                    cornerRadius: ZenDesign.Radius.small,
+                                    style: .continuous
+                                )
+                                .fill(ZenDesign.Semantic.accentMuted)
+                            }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Recommendation for this Mac")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textPrimary
+                                )
+                            Text(viewModel.hardwareProfile.summary)
+                                .font(.system(size: 9))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            Text(
+                                "\(ModelRecommendationEngine.recommendedTier(for: viewModel.hardwareProfile).displayName) is the default recommendation. Language remains your choice."
+                            )
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textTertiary
+                            )
+                        }
+                    }
+                }
+
+                ZenCard {
+                    VStack(alignment: .leading, spacing: 11) {
+                        PrivacyFact(
+                            icon: "checkmark.shield.fill",
+                            text:
+                                "Only official whisper.cpp conversions from the pinned catalogue are offered."
+                        )
+                        PrivacyFact(
+                            icon: "network.slash",
+                            text:
+                                "After download, transcription runs locally with no account or API key."
+                        )
+                        PrivacyFact(
+                            icon: "doc.text.magnifyingglass",
+                            text:
+                                "Publisher, revision, license, size, and checksum are recorded for every model."
+                        )
+                    }
+                }
+
+                if viewModel.isVerifying {
+                    HStack(spacing: 9) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Verifying installed models…")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    }
+                }
+
+                if let error = viewModel.errorMessage {
+                    ErrorBanner(message: error)
+                }
+
+                ForEach(ModelPerformanceTier.allCases, id: \.self) { tier in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(tier.displayName.uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(1.1)
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textTertiary
+                            )
+
+                        ForEach(
+                            viewModel.models.filter { $0.tier == tier }
+                        ) { model in
+                            ModelRow(
+                                model: model,
+                                isInstalled: viewModel.isInstalled(model),
+                                isSelected: viewModel.isSelected(model),
+                                isDownloading:
+                                    viewModel.downloadingModelID == model.id,
+                                recommendation:
+                                    viewModel.recommendation(for: model),
+                                benchmark:
+                                    viewModel.benchmarkSummary(for: model),
+                                download: { viewModel.download(model) },
+                                cancel: viewModel.cancelDownload,
+                                select: { viewModel.select(model) },
+                                remove: {
+                                    modelPendingRemoval = model
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 34)
+            .padding(.top, 34)
+            .padding(.bottom, 36)
+        }
+        .background(ZenDesign.Semantic.canvas)
+        .alert(
+            "Remove downloaded model?",
+            isPresented: Binding(
+                get: { modelPendingRemoval != nil },
+                set: { if !$0 { modelPendingRemoval = nil } }
+            ),
+            presenting: modelPendingRemoval
+        ) { model in
+            Button("Cancel", role: .cancel) {}
+            Button("Remove", role: .destructive) {
+                viewModel.remove(model)
+                modelPendingRemoval = nil
+            }
+        } message: { model in
+            Text(
+                "\(model.displayName) (\(model.languageCapability.displayName)) will be removed from this Mac."
+            )
+        }
+    }
+}
+
+private struct ModelRow: View {
+    let model: VerifiedModel
+    let isInstalled: Bool
+    let isSelected: Bool
+    let isDownloading: Bool
+    let recommendation: ModelRecommendation
+    let benchmark: ModelBenchmarkSummary?
+    let download: () -> Void
+    let cancel: () -> Void
+    let select: () -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        ZenCard {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .fill(ZenDesign.Semantic.accentMuted)
+                    Image(
+                        systemName:
+                            model.languageCapability == .multilingual
+                                ? "globe"
+                                : "character.book.closed"
+                    )
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.accent)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 7) {
+                        Text(model.displayName)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textPrimary
+                            )
+                        Text(model.languageCapability.displayName)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textTertiary
+                            )
+                            .padding(.horizontal, 7)
+                            .frame(height: 19)
+                            .background(
+                                Capsule().fill(
+                                    ZenDesign.Semantic.surfaceRaised
+                                )
+                            )
+                    }
+                    Text(
+                        "\(model.formattedFileSize) • \(model.format) • \(model.license)"
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    Text("Pinned \(model.sourceRevision.prefix(8)) • SHA-256 verified")
+                        .font(.system(size: 8))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    Text(recommendation.rationale)
+                        .font(.system(size: 8))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let benchmark {
+                        Text(
+                            "\(benchmark.sampleCount) local sample\(benchmark.sampleCount == 1 ? "" : "s") • \(benchmark.averageRealtimeFactor.formatted(.number.precision(.fractionLength(2))))× realtime"
+                        )
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(ZenDesign.Semantic.accent)
+                    }
+                }
+
+                Spacer()
+
+                if isSelected {
+                    StatusPill(title: "In use", isPositive: true)
+                } else {
+                    StatusPill(
+                        title: recommendation.title,
+                        isPositive:
+                            recommendation.level == .recommended
+                                || recommendation.level == .supported
+                    )
+                }
+
+                if isDownloading {
+                    ProgressView()
+                        .controlSize(.small)
+                    Button("Cancel", action: cancel)
+                        .buttonStyle(ZenSecondaryButtonStyle())
+                } else if isInstalled {
+                    if !isSelected {
+                        Button("Use", action: select)
+                            .buttonStyle(ZenPrimaryButtonStyle())
+                    }
+                    Button("Remove", action: remove)
+                        .buttonStyle(ZenSecondaryButtonStyle())
+                } else {
+                    Button("Download", action: download)
+                        .buttonStyle(ZenPrimaryButtonStyle())
+                        .disabled(
+                            recommendation.level == .insufficientStorage
+                        )
+                }
+            }
         }
     }
 }

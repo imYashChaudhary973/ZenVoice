@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Foundation
 import ZenVoiceCore
+import ZenVoiceRuntime
 import ZenVoiceStorage
 
 @MainActor
@@ -32,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyPreferences.loadPrivateMode()
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
+    private var modelManagerViewModel: ModelManagerViewModel!
     private var settingsWindowController: SettingsWindowController!
     private let historyPreferences = HistoryPreferences()
     private var dictationVault: DictationVault?
@@ -315,6 +317,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureSettingsWindow() {
+        modelManagerViewModel = ModelManagerViewModel { [weak self] in
+            self?.configureTranscriber()
+            self?.settingsViewModel?.refreshSystemStatus()
+        }
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
             pasteLastShortcut: pasteLastHotKeyConfiguration,
@@ -383,6 +389,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
+            modelManagerViewModel: modelManagerViewModel,
             appState: state
         )
     }
@@ -696,6 +703,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyID: UUID?
     ) {
         transcribingHistoryID = nil
+        ModelBenchmarkStore.record(
+            modelID: result.modelID,
+            audioDurationSeconds: recordedAudio.durationSeconds,
+            processingDurationSeconds: result.processingDurationSeconds
+        )
+        modelManagerViewModel?.refreshBenchmarks()
         let shouldPersist = historyID.map {
             nonPersistentHistoryIDs.remove($0) == nil
                 && historyPreferences.isHistoryEnabled
@@ -1012,6 +1025,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyID: UUID
     ) {
         transcribingHistoryID = nil
+        ModelBenchmarkStore.record(
+            modelID: result.modelID,
+            audioDurationSeconds: recordedAudio.durationSeconds,
+            processingDurationSeconds: result.processingDurationSeconds
+        )
+        modelManagerViewModel?.refreshBenchmarks()
         guard nonPersistentHistoryIDs.remove(historyID) == nil,
               historyPreferences.isHistoryEnabled,
               !historyPreferences.isPrivateModeEnabled else {

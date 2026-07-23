@@ -11,7 +11,7 @@ network.
 ### Microphone audio
 
 - Recorded as a temporary 16 kHz mono WAV file.
-- Read by the local `whisper-cli` process.
+- Read in-process by the bundled local `whisper.cpp` runtime.
 - Deleted after successful transcription.
 - Deleted immediately when a recording is cancelled.
 - When local history and failed-audio recovery are enabled, audio from a failed
@@ -51,7 +51,9 @@ network.
 ### Models and configuration
 
 - Whisper models remain in the user's local Application Support directory.
-- Runtime paths can be overridden with local environment variables.
+- A developer can override the selected model with a local environment
+  variable; ZenVoice does not execute a model-supplied program.
+- The runtime is a checksum-pinned binary dependency bundled inside the app.
 - No API key or online account is required.
 
 ## macOS permissions
@@ -75,8 +77,8 @@ Local-first does not mean risk-free:
   and view decrypted history.
 - Secure deletion on SSD storage has platform limitations; Delete All removes
   records, recovery audio, and rotates the encryption key.
-- A configured `ZENVOICE_WHISPER_PATH` is executed as a local process; only set
-  it to software you trust.
+- A developer-provided `ZENVOICE_MODEL_PATH` bypasses catalogue verification;
+  only use it with a model file you trust.
 - Apple Development signing gives local builds a stable macOS identity but is
   not appropriate for public distribution.
 

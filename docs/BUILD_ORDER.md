@@ -8,9 +8,9 @@ pass its verification gate before dependent work begins.
 | M0 | Approve privacy, licensing, and metric definitions | Complete |
 | M1 | Encrypted local vault and crash recovery | Complete |
 | M2 | History UI, partial recovery, privacy shortcut, and hold-to-dictate | Complete |
-| M3 | Verified model catalogue and downloader | Planned |
-| M4 | Hardware recommendations and model benchmarks | Planned |
-| M5 | Bundled persistent `whisper.cpp` runtime | Planned |
+| M3 | Verified model catalogue and downloader | Complete |
+| M4 | Hardware recommendations and model benchmarks | Complete |
+| M5 | Bundled persistent `whisper.cpp` runtime | Complete |
 | M6 | Local insights and application categories | Planned |
 | M7 | Usage-based voice profile and explicit corrections | Planned |
 | M8 | Privacy-safe shareable highlight cards | Planned |

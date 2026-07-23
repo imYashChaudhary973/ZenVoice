@@ -37,6 +37,10 @@ analytics, or cloud transcription services in the current application.
   dictation.
 - Configurable Private Dictation (`Control + Option + P`) and hold-to-dictate
   controls.
+- Verified English and multilingual model downloads with pinned revisions and
+  SHA-256 validation.
+- Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
+  private local timing samples.
 - Local English transcription through `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.
@@ -71,19 +75,7 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 
 ## Quick start
 
-Install the local transcription runtime:
-
-```bash
-brew install whisper-cpp
-```
-
-Place the English model at:
-
-```text
-~/Library/Application Support/ZenVoice/Models/ggml-base.en.bin
-```
-
-Then build and launch:
+Build and launch:
 
 ```bash
 ./Scripts/build-app.sh
@@ -97,6 +89,10 @@ On first use, macOS requests:
 
 Without Accessibility permission, ZenVoice still copies the transcript to the
 clipboard.
+
+Open **Models** to download a checksum-verified English or multilingual model.
+The pinned `whisper.cpp` runtime is bundled in the app; Homebrew is not
+required.
 
 ## Use ZenVoice
 
@@ -119,12 +115,17 @@ Closing the settings window keeps ZenVoice running in the menu bar. Select
 
 ```bash
 swift run ZenVoiceCoreChecks
+swift run ZenVoiceStorageChecks
+swift run ZenVoiceRuntimeChecks
 swift build
 ./Scripts/build-app.sh
 ```
 
 The complete development and manual QA procedure is in
 [Development](docs/DEVELOPMENT.md).
+
+Model provenance, licences, revisions, and checksums are documented in
+[Verified Model Catalogue](docs/MODEL_CATALOG.md).
 
 ## Repository guide
 
@@ -135,7 +136,9 @@ The complete development and manual QA procedure is in
 ├── Sources/
 │   ├── ZenVoice/        macOS application and ZenBar
 │   ├── ZenVoiceCore/    reusable local processing logic
+│   ├── ZenVoiceRuntime/ persistent in-process whisper.cpp integration
 │   ├── ZenVoiceStorage/ encrypted history and recovery storage
+│   ├── ZenVoiceRuntimeChecks/
 │   ├── ZenVoiceStorageChecks/
 │   └── ZenVoiceCoreChecks/
 ├── docs/                architecture, privacy, development, and roadmap
@@ -147,6 +150,7 @@ The complete development and manual QA procedure is in
 - [Architecture](docs/ARCHITECTURE.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Privacy](docs/PRIVACY.md)
+- [Verified Model Catalogue](docs/MODEL_CATALOG.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)

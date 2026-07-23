@@ -20,6 +20,9 @@ All notable ZenVoice changes are recorded here.
 - Added Private Dictation mode and local-history privacy controls
 - Added a configurable paste-last shortcut, defaulting to
   `Control + Option + V`
+- Added a verified English and multilingual model catalogue with checksum
+  validation, hardware recommendations, and local speed benchmarks
+- Added a checksum-pinned `whisper.cpp` v1.9.1 runtime inside the app
 
 ### Changed
 
@@ -33,12 +36,13 @@ All notable ZenVoice changes are recorded here.
   permissions survive normal rebuilds
 - Opened the correct macOS microphone settings page when permission is denied
 - Added the required Hardened Runtime audio-input entitlement
+- Reused the loaded model between dictations instead of launching
+  `whisper-cli` for every recording
 
 ### Planned
 
-- Lower-latency persistent local transcription
 - Microphone selection
-- Personal dictionary and multilingual models
+- Personal dictionary and conservative local corrections
 
 ## [0.1.0] - 2026-07-23
 

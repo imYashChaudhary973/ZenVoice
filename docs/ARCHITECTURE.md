@@ -21,7 +21,7 @@ AppDelegate ──────────────────────�
     │         ▲
     │         └──────── HistoryViewModel ─► HistoryView
     ▼                                      │ microphone levels
-AudioRecorder ──────► local WAV ──────► WhisperTranscriber
+AudioRecorder ──────► local WAV ──────► ZenVoiceRuntime
                                            │
                                            ▼
                                     TranscriptCleaner
@@ -53,7 +53,6 @@ The native application target owns macOS-specific behavior:
   screens.
 - `ZenDesignTokens` keeps the dark Zen visual language consistent.
 - `AudioRecorder` captures 16 kHz mono PCM audio using AVFoundation.
-- `WhisperTranscriber` runs the local `whisper-cli` process.
 - `TextInserter` copies and pastes the final transcript.
 - `ZenBarPanelController` presents ZenBar across desktop spaces.
 - `ZenBarView` renders state and microphone-responsive waveform history.
@@ -67,9 +66,26 @@ launching the application:
 - `AudioLevelMeter` maps microphone dB readings into smoothed waveform levels.
 - `HotKeyConfiguration` validates and serializes shortcut choices.
 - `TranscriptCleaner` performs conservative whitespace and filler cleanup.
-- `ZenVoiceConfiguration` discovers the local runtime and model.
+- `ZenVoiceConfiguration` discovers the selected verified model.
+- `VerifiedModelCatalog` is the signed allowlist for model publisher, source,
+  revision, size, format, language capability, licence, and SHA-256.
 - `TranscriptionResult` carries raw and cleaned text without deciding its
   storage lifecycle.
+
+`ModelManagerViewModel` verifies approved downloads before atomic installation
+and updates the selected local model without sending speech data to a server.
+`ModelRecommendationEngine` maps RAM and storage headroom to a default tier,
+while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
+
+### `ZenVoiceRuntime`
+
+- `WhisperTranscriber` calls the official pinned `whisper.cpp` XCFramework
+  directly instead of launching a child process.
+- The model context is loaded lazily on the transcription queue and retained
+  by the transcriber for subsequent dictations.
+- Model replacement creates a new transcriber; an active transcription keeps
+  its original transcriber until that operation completes.
+- The runtime accepts only 16 kHz mono audio produced by `AudioRecorder`.
 
 ### `ZenVoiceStorage`
 
@@ -97,6 +113,10 @@ Private Dictation suppression, recovery-disable cleanup, cancellation cleanup,
 cryptographic Delete All, ciphertext field binding, recovery-path confinement,
 partial transcript flags, and history preferences.
 
+`ZenVoiceRuntimeChecks` creates a local silent WAV and performs two sequential
+passes through one transcriber. It validates the embedded C API and persistent
+model lifecycle without microphone or UI interaction.
+
 ## State model
 
 ZenBar exposes the actual dictation lifecycle:
@@ -122,10 +142,9 @@ ZenBar.
 
 ## Current trade-offs
 
-- `whisper-cli` starts a new process for every dictation. This keeps the first
-  version simple but reloads the model and adds latency.
-- English uses `ggml-base.en.bin`. Multilingual support requires model and
-  language-selection changes.
+- The first transcription after launch or model selection pays the model-load
+  cost; later dictations reuse that in-memory context.
+- Multilingual models currently use local automatic language detection.
 - Users can configure toggle dictation, paste-last, and Private Dictation
   shortcuts. Hold-to-dictate supports Fn and right-side modifier keys.
 - Automatic paste uses the system clipboard and a synthetic `Command + V`
