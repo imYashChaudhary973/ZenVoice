@@ -50,6 +50,8 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
     @ObservedObject var refinementModelManagerViewModel:
         RefinementModelManagerViewModel
+    @ObservedObject var applicationProfileViewModel:
+        ApplicationProfileViewModel
     @ObservedObject var appState: AppState
     @State private var selection: Section = .overview
 
@@ -180,7 +182,9 @@ struct ZenVoiceSettingsView: View {
         case .refine:
             InstantRefineScreen(
                 viewModel: viewModel,
-                modelViewModel: refinementModelManagerViewModel
+                modelViewModel: refinementModelManagerViewModel,
+                applicationProfileViewModel:
+                    applicationProfileViewModel
             )
         case .history:
             HistoryScreen(viewModel: historyViewModel)
@@ -1066,6 +1070,8 @@ private struct InstantRefineScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var modelViewModel:
         RefinementModelManagerViewModel
+    @ObservedObject var applicationProfileViewModel:
+        ApplicationProfileViewModel
     @State private var modelPendingRemoval:
         VerifiedRefinementModel?
 
@@ -1149,6 +1155,9 @@ private struct InstantRefineScreen: View {
                             )
                     }
                 }
+
+                nextDictationContextCard
+                applicationProfilesCard
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -1288,6 +1297,316 @@ private struct InstantRefineScreen: View {
         } message: { model in
             Text(
                 "\(model.displayName) will be removed from this Mac. Clean refinement remains available."
+            )
+        }
+    }
+
+    private var nextDictationContextCard: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 11) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Next dictation context")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textPrimary
+                            )
+                        Text(
+                            "Add names, product terms, or the topic for one recording. It stays in memory and clears when recording starts."
+                        )
+                        .font(.system(size: 9))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textSecondary
+                        )
+                    }
+                    Spacer()
+                    Text(
+                        "\(viewModel.sanitizedNextDictationContext.count)/\(NextDictationContext.maximumCharacterCount)"
+                    )
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textTertiary
+                    )
+                }
+
+                TextEditor(text: $viewModel.nextDictationContext)
+                    .font(.system(size: 10))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textPrimary
+                    )
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .frame(minHeight: 64, maxHeight: 82)
+                    .background {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.small,
+                            style: .continuous
+                        )
+                        .fill(ZenDesign.Component.shortcutBackground)
+                        .overlay {
+                            RoundedRectangle(
+                                cornerRadius: ZenDesign.Radius.small,
+                                style: .continuous
+                            )
+                            .strokeBorder(
+                                ZenDesign.Semantic.borderStrong,
+                                lineWidth: 1
+                            )
+                        }
+                    }
+                    .onChange(
+                        of: viewModel.nextDictationContext
+                    ) { _, value in
+                        let sanitized =
+                            NextDictationContext.sanitized(value)
+                        if sanitized.count
+                            >= NextDictationContext
+                                .maximumCharacterCount {
+                            viewModel.nextDictationContext = sanitized
+                        }
+                    }
+                    .accessibilityLabel(
+                        "Context for the next dictation"
+                    )
+
+                HStack {
+                    Label(
+                        "Never written to history or settings",
+                        systemImage: "memorychip"
+                    )
+                    .font(.system(size: 8))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textTertiary
+                    )
+                    Spacer()
+                    Button(
+                        "Clear",
+                        action: viewModel.clearNextDictationContext
+                    )
+                    .buttonStyle(ZenSecondaryButtonStyle())
+                    .disabled(
+                        viewModel.nextDictationContext.isEmpty
+                    )
+                }
+            }
+        }
+    }
+
+    private var applicationProfilesCard: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Application profiles")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textPrimary
+                            )
+                        Text(
+                            "Automatically choose language, refinement, and local voice commands for a target app."
+                        )
+                        .font(.system(size: 9))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textSecondary
+                        )
+                    }
+                    Spacer()
+                    Button {
+                        applicationProfileViewModel.refresh()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle())
+                    .accessibilityLabel("Refresh running applications")
+                }
+
+                if let error =
+                    applicationProfileViewModel.errorMessage {
+                    ErrorBanner(message: error)
+                }
+
+                PrivacyToggleRow(
+                    title: "Enable local voice commands by default",
+                    detail:
+                        "Interpret spoken layout and punctuation commands locally. Each application profile can override this.",
+                    isOn: Binding(
+                        get: {
+                            viewModel.voiceCommandsEnabled
+                        },
+                        set:
+                            viewModel.setVoiceCommandsEnabled
+                    )
+                )
+
+                HStack(spacing: 9) {
+                    Picker(
+                        "Running app",
+                        selection:
+                            $applicationProfileViewModel
+                                .selectedApplicationID
+                    ) {
+                        if applicationProfileViewModel
+                            .runningApplications.isEmpty {
+                            Text("No running apps")
+                                .tag(String?.none)
+                        }
+                        ForEach(
+                            applicationProfileViewModel
+                                .runningApplications
+                        ) { application in
+                            Text(application.name)
+                                .tag(Optional(application.id))
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
+
+                    Button("Add profile") {
+                        applicationProfileViewModel
+                            .addSelectedApplication(
+                                languageProfile:
+                                    viewModel.languageProfile,
+                                refinementMode:
+                                    viewModel.instantRefineMode
+                            )
+                    }
+                    .buttonStyle(ZenPrimaryButtonStyle())
+                    .disabled(
+                        applicationProfileViewModel
+                            .selectedApplicationID == nil
+                    )
+                }
+
+                if applicationProfileViewModel.profiles.isEmpty {
+                    Text(
+                        "No profiles yet. Open a target app, refresh this list, then add it."
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textTertiary
+                    )
+                } else {
+                    ForEach(
+                        applicationProfileViewModel.profiles
+                    ) { profile in
+                        Divider()
+                            .overlay(ZenDesign.Semantic.border)
+                        applicationProfileRow(profile)
+                    }
+                }
+
+                Text(
+                    "Voice commands: new line, new paragraph, comma, full stop, question mark, and exclamation mark. English commands work with every profile; Hindi, Spanish, French, Mandarin, and Arabic aliases are included."
+                )
+                .font(.system(size: 8))
+                .foregroundStyle(
+                    ZenDesign.Semantic.textTertiary
+                )
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func applicationProfileRow(
+        _ profile: ApplicationProfile
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profile.applicationName)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textPrimary
+                        )
+                    Text(profile.bundleIdentifier)
+                        .font(.system(size: 8))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textTertiary
+                        )
+                }
+                Spacer()
+                Button("Remove") {
+                    applicationProfileViewModel.remove(profile)
+                }
+                .buttonStyle(ZenSecondaryButtonStyle())
+            }
+
+            HStack(spacing: 10) {
+                Picker(
+                    "Language",
+                    selection: Binding(
+                        get: { profile.languageProfile },
+                        set: {
+                            applicationProfileViewModel
+                                .setLanguage($0, for: profile)
+                        }
+                    )
+                ) {
+                    ForEach(
+                        applicationProfileLanguageOptions,
+                        id: \.id
+                    ) { languageProfile in
+                        Text(languageProfile.displayName)
+                            .tag(languageProfile)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                Picker(
+                    "Refinement",
+                    selection: Binding(
+                        get: { profile.refinementMode },
+                        set: {
+                            applicationProfileViewModel
+                                .setRefinementMode(
+                                    $0,
+                                    for: profile
+                                )
+                        }
+                    )
+                ) {
+                    ForEach(
+                        InstantRefineMode.allCases,
+                        id: \.self
+                    ) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                Toggle(
+                    "Voice commands",
+                    isOn: Binding(
+                        get: {
+                            profile.voiceCommandsEnabled
+                        },
+                        set: {
+                            applicationProfileViewModel
+                                .setVoiceCommandsEnabled(
+                                    $0,
+                                    for: profile
+                                )
+                        }
+                    )
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private var applicationProfileLanguageOptions:
+        [LanguageProfile] {
+        [
+            .hinglish,
+            LanguageProfile(
+                inputLanguageCode: LanguageProfile.automaticCode,
+                outputMode: .spokenLanguage
+            )
+        ] + LanguageCatalog.languages.map {
+            LanguageProfile(
+                inputLanguageCode: $0.code,
+                outputMode: .spokenLanguage
             )
         }
     }

@@ -54,6 +54,7 @@ public final class LocalTextRefiner: @unchecked Sendable {
 
     public func refine(
         _ transcript: String,
+        context: String = "",
         timeLimit: TimeInterval = 5,
         maximumOutputTokens: Int32 = 192
     ) throws -> String {
@@ -62,7 +63,8 @@ public final class LocalTextRefiner: @unchecked Sendable {
             let (model, vocab) = try loadedModel()
             return try generate(
                 prompt: LocalRefinementPrompt.make(
-                    transcript: transcript
+                    transcript: transcript,
+                    context: context
                 ),
                 model: model,
                 vocab: vocab,

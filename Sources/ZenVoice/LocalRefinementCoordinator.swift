@@ -14,39 +14,81 @@ final class LocalRefinementCoordinator: @unchecked Sendable {
 
     func refine(
         _ transcript: String,
-        mode: InstantRefineMode
+        mode: InstantRefineMode,
+        languageCode: String = "en",
+        context: String = "",
+        voiceCommandsEnabled: Bool = false
     ) -> InstantRefineResult {
+        let commandResult = LocalVoiceCommandEngine().apply(
+            to: transcript,
+            languageCode: languageCode,
+            isEnabled: voiceCommandsEnabled
+        )
+        let commandText = commandResult.text
         guard mode == .localModel else {
-            return InstantRefineEngine().refine(
-                transcript,
+            let refined = InstantRefineEngine().refine(
+                commandText,
                 mode: mode
+            )
+            return InstantRefineResult(
+                text: refined.text,
+                correctionCount:
+                    commandResult.correctionCount
+                    + refined.correctionCount,
+                wasRejected: refined.wasRejected
             )
         }
         guard let refiner = lock.withLock({ refiner }) else {
-            return fallback(transcript)
+            return fallback(
+                commandText,
+                commandCorrectionCount:
+                    commandResult.correctionCount
+            )
         }
         do {
-            let output = try refiner.refine(transcript)
+            let output = try refiner.refine(
+                commandText,
+                context: context
+            )
             guard let candidate =
                 LocalRefinementGuard.validatedCandidate(
                     output: output,
-                    original: transcript
+                    original: commandText
                 ) else {
-                return fallback(transcript)
+                return fallback(
+                    commandText,
+                    commandCorrectionCount:
+                        commandResult.correctionCount
+                )
             }
             return InstantRefineResult(
                 text: candidate,
-                correctionCount: candidate == transcript ? 0 : 1
+                correctionCount:
+                    commandResult.correctionCount
+                    + (candidate == commandText ? 0 : 1)
             )
         } catch {
-            return fallback(transcript)
+            return fallback(
+                commandText,
+                commandCorrectionCount:
+                    commandResult.correctionCount
+            )
         }
     }
 
-    private func fallback(_ transcript: String) -> InstantRefineResult {
-        InstantRefineEngine().refine(
+    private func fallback(
+        _ transcript: String,
+        commandCorrectionCount: Int
+    ) -> InstantRefineResult {
+        let refined = InstantRefineEngine().refine(
             transcript,
             mode: .clean
+        )
+        return InstantRefineResult(
+            text: refined.text,
+            correctionCount:
+                commandCorrectionCount + refined.correctionCount,
+            wasRejected: refined.wasRejected
         )
     }
 }

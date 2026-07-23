@@ -47,6 +47,22 @@ private struct ProcessedTranscription {
     }
 }
 
+private struct ActiveDictationBehavior: Sendable {
+    let languageProfile: LanguageProfile
+    let refinementMode: InstantRefineMode
+    let voiceCommandsEnabled: Bool
+    let context: String
+
+    static var global: ActiveDictationBehavior {
+        ActiveDictationBehavior(
+            languageProfile: LanguagePreferences.load(),
+            refinementMode: InstantRefinePreferences.load(),
+            voiceCommandsEnabled: false,
+            context: ""
+        )
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let state = AppState()
@@ -81,6 +97,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var modelManagerViewModel: ModelManagerViewModel!
     private var refinementModelManagerViewModel:
         RefinementModelManagerViewModel!
+    private var applicationProfileViewModel:
+        ApplicationProfileViewModel!
     private var settingsWindowController: SettingsWindowController!
     private let refinementCoordinator =
         LocalRefinementCoordinator()
@@ -106,6 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var liveStreamingInsertionBlocked = false
     private var liveTargetProcessIdentifier: pid_t?
     private var liveSamplesEnabledForRecording = false
+    private var activeDictationBehavior =
+        ActiveDictationBehavior.global
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -449,6 +469,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             RefinementModelManagerViewModel { [weak self] in
                 self?.configureRefiner()
             }
+        applicationProfileViewModel = ApplicationProfileViewModel()
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
             pasteLastShortcut: pasteLastHotKeyConfiguration,
@@ -556,6 +577,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             modelManagerViewModel: modelManagerViewModel,
             refinementModelManagerViewModel:
                 refinementModelManagerViewModel,
+            applicationProfileViewModel:
+                applicationProfileViewModel,
             appState: state
         )
     }
@@ -821,20 +844,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var historyDraft: DictationDraft?
         let capturesLiveSamples =
             LiveDictationPreferences.isPreviewEnabled()
+        let targetApplication =
+            NSWorkspace.shared.frontmostApplication
+        guard let dictationBehavior = resolvedDictationBehavior(
+            targetBundleIdentifier:
+                targetApplication?.bundleIdentifier
+        ) else {
+            return
+        }
+        activeDictationBehavior = dictationBehavior
+        state.languageProfile = dictationBehavior.languageProfile
 
         if historyPreferences.isHistoryEnabled,
            !historyPreferences.isPrivateModeEnabled {
             do {
                 let vault = try resolvedVault()
                 let id = UUID()
-                let targetApplication = NSWorkspace.shared.frontmostApplication
                 let category = ApplicationCategoryClassifier.category(
                     bundleIdentifier: targetApplication?.bundleIdentifier,
                     appName: targetApplication?.localizedName
                 )
                 let draft = DictationDraft(
                     id: id,
-                    language: transcriber?.language ?? "en",
+                    language:
+                        dictationBehavior.languageProfile
+                            .inputLanguageCode,
                     modelID: transcriber?.modelID ?? "unknown",
                     targetBundleID: targetApplication?.bundleIdentifier,
                     targetAppName: targetApplication?.localizedName,
@@ -860,6 +894,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             liveSamplesEnabledForRecording = capturesLiveSamples
+            settingsViewModel.clearNextDictationContext()
             state.phase = .listening
             beginLivePreviewSession()
             holdStartedRecording = startedByHold
@@ -875,6 +910,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             showError(error.localizedDescription)
         }
+    }
+
+    private func resolvedDictationBehavior(
+        targetBundleIdentifier: String?
+    ) -> ActiveDictationBehavior? {
+        let profile = ApplicationProfilePreferences.profile(
+            for: targetBundleIdentifier
+        )
+        let languageProfile =
+            profile?.languageProfile ?? LanguagePreferences.load()
+        let capability =
+            ModelSelectionPreferences.load()?.languageCapability
+            ?? transcriber?.languageCapability
+            ?? .english
+        guard languageProfile.isCompatible(with: capability) else {
+            showError(
+                "\(languageProfile.displayName) requires a multilingual Whisper model. Select one in Models."
+            )
+            return nil
+        }
+        return ActiveDictationBehavior(
+            languageProfile: languageProfile,
+            refinementMode:
+                profile?.refinementMode
+                ?? InstantRefinePreferences.load(),
+            voiceCommandsEnabled:
+                profile?.voiceCommandsEnabled
+                ?? LocalVoiceCommandPreferences.isEnabled(),
+            context:
+                settingsViewModel.sanitizedNextDictationContext
+        )
     }
 
     private func finishRecording() {
@@ -917,7 +983,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.phase = .transcribing
         updateStartStopMenuTitle()
         let correctionVault = dictationVault
-        let instantRefineMode = InstantRefinePreferences.load()
+        let behavior = activeDictationBehavior
 
         if usesLivePreview {
             transcriptionQueue.async { [weak self] in
@@ -925,12 +991,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let processed: ProcessedTranscription?
                     if remainingSamples.count >= 1_600 {
                         let result = try transcriber.transcribe(
-                            samples: remainingSamples
+                            samples: remainingSamples,
+                            languageProfile:
+                                behavior.languageProfile,
+                            initialPrompt: behavior.context
                         )
                         let refinement =
                             self?.refinementCoordinator.refine(
                                 result.finalTranscript,
-                                mode: instantRefineMode
+                                mode: behavior.refinementMode,
+                                languageCode:
+                                    behavior.languageProfile
+                                        .inputLanguageCode,
+                                context: behavior.context,
+                                voiceCommandsEnabled:
+                                    behavior.voiceCommandsEnabled
                             ) ?? InstantRefineEngine().refine(
                                 result.finalTranscript,
                                 mode: .clean
@@ -991,12 +1066,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         transcriptionQueue.async { [weak self] in
             do {
                 let result = try transcriber.transcribe(
-                    audioURL: recordedAudio.url
+                    audioURL: recordedAudio.url,
+                    languageProfile: behavior.languageProfile,
+                    initialPrompt: behavior.context
                 )
                 let refinement =
                     self?.refinementCoordinator.refine(
                         result.finalTranscript,
-                        mode: instantRefineMode
+                        mode: behavior.refinementMode,
+                        languageCode:
+                            behavior.languageProfile
+                                .inputLanguageCode,
+                        context: behavior.context,
+                        voiceCommandsEnabled:
+                            behavior.voiceCommandsEnabled
                     ) ?? InstantRefineEngine().refine(
                         result.finalTranscript,
                         mode: .clean
@@ -1045,6 +1128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         state.resetAudioSamples()
         state.phase = .idle
+        resetActiveDictationBehavior()
         updateStartStopMenuTitle()
     }
 
@@ -1081,6 +1165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
         state.resetAudioSamples()
+        resetActiveDictationBehavior()
         updateStartStopMenuTitle()
         historyViewModel?.refresh()
         showError(message)
@@ -1120,17 +1205,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         livePreviewInFlight = true
         let sessionID = liveSessionID
-        let mode = InstantRefinePreferences.load()
+        let behavior = activeDictationBehavior
         let correctionVault = dictationVault
         transcriptionQueue.async { [weak self] in
             do {
                 let result = try transcriber.transcribe(
-                    samples: segment.samples
+                    samples: segment.samples,
+                    languageProfile: behavior.languageProfile,
+                    initialPrompt: behavior.context
                 )
                 let refinement =
                     self?.refinementCoordinator.refine(
                         result.finalTranscript,
-                        mode: mode
+                        mode: behavior.refinementMode,
+                        languageCode:
+                            behavior.languageProfile
+                                .inputLanguageCode,
+                        context: behavior.context,
+                        voiceCommandsEnabled:
+                            behavior.voiceCommandsEnabled
                     ) ?? InstantRefineEngine().refine(
                         result.finalTranscript,
                         mode: .clean
@@ -1349,6 +1442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ) {
         let result = processed.result
         transcribingHistoryID = nil
+        resetActiveDictationBehavior()
         ModelBenchmarkStore.record(
             modelID: result.modelID,
             audioDurationSeconds: recordedAudio.durationSeconds,
@@ -1452,6 +1546,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyID: UUID?
     ) {
         transcribingHistoryID = nil
+        resetActiveDictationBehavior()
         let shouldPersist = historyID.map {
             nonPersistentHistoryIDs.remove($0) == nil
                 && historyPreferences.isHistoryEnabled
@@ -1485,6 +1580,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let vault = try DictationVault.live()
         dictationVault = vault
         return vault
+    }
+
+    private func resetActiveDictationBehavior() {
+        activeDictationBehavior = .global
+        state.languageProfile = LanguagePreferences.load()
     }
 
     private func showError(_ message: String) {

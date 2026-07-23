@@ -40,6 +40,10 @@ public final class WhisperTranscriber: @unchecked Sendable {
         configuration.languageProfile
     }
 
+    public var languageCapability: ModelLanguageCapability {
+        configuration.modelLanguageCapability
+    }
+
     public init(configuration: ZenVoiceConfiguration) {
         self.configuration = configuration
         whisper_log_set({ _, _, _ in }, nil)
@@ -51,15 +55,32 @@ public final class WhisperTranscriber: @unchecked Sendable {
         }
     }
 
-    public func transcribe(audioURL: URL) throws -> TranscriptionResult {
+    public func transcribe(
+        audioURL: URL,
+        languageProfile: LanguageProfile? = nil,
+        initialPrompt: String? = nil
+    ) throws -> TranscriptionResult {
         let samples = try loadSamples(from: audioURL)
-        return try transcribe(samples: samples)
+        return try transcribe(
+            samples: samples,
+            languageProfile: languageProfile,
+            initialPrompt: initialPrompt
+        )
     }
 
-    public func transcribe(samples: [Float]) throws -> TranscriptionResult {
+    public func transcribe(
+        samples: [Float],
+        languageProfile: LanguageProfile? = nil,
+        initialPrompt: String? = nil
+    ) throws -> TranscriptionResult {
         guard !samples.isEmpty else {
             throw TranscriptionError.invalidAudio
         }
+        let activeProfile =
+            languageProfile ?? configuration.languageProfile
+        let contextPrompt = NextDictationContext.sanitized(
+            initialPrompt ?? ""
+        )
         let processingStartedAt = Date()
         let context = try loadedContext()
         var parameters = whisper_full_default_params(
@@ -73,17 +94,23 @@ public final class WhisperTranscriber: @unchecked Sendable {
         parameters.print_progress = false
         parameters.print_realtime = false
         parameters.print_timestamps = false
-        parameters.translate = configuration.shouldTranslateToEnglish
+        parameters.translate = activeProfile.shouldTranslateToEnglish
 
-        let status = configuration.language.withCString { language in
+        let status = activeProfile.whisperLanguageArgument.withCString {
+            language in
             parameters.language = language
-            return samples.withUnsafeBufferPointer { buffer in
-                whisper_full(
-                    context,
-                    parameters,
-                    buffer.baseAddress,
-                    Int32(buffer.count)
-                )
+            return contextPrompt.withCString { prompt in
+                if !contextPrompt.isEmpty {
+                    parameters.initial_prompt = prompt
+                }
+                return samples.withUnsafeBufferPointer { buffer in
+                    whisper_full(
+                        context,
+                        parameters,
+                        buffer.baseAddress,
+                        Int32(buffer.count)
+                    )
+                }
             }
         }
         guard status == 0 else {
@@ -99,7 +126,7 @@ public final class WhisperTranscriber: @unchecked Sendable {
             rawTranscript += String(cString: text)
         }
         let cleanedTranscript = cleaner.clean(rawTranscript)
-        let finalTranscript = configuration.shouldTransliterateToLatin
+        let finalTranscript = activeProfile.shouldTransliterateToLatin
             ? LocalTransliterator.latinScript(cleanedTranscript)
             : cleanedTranscript
 

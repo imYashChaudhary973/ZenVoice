@@ -226,6 +226,117 @@ guard RefinementModelSelectionPreferences.load(
 
 print("ZenVoiceCoreChecks: Instant Refine passed")
 
+let applicationSuite =
+    "ZenVoiceCoreChecks.ApplicationProfiles.\(UUID().uuidString)"
+guard let applicationDefaults =
+    UserDefaults(suiteName: applicationSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create application profile fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    applicationDefaults.removePersistentDomain(
+        forName: applicationSuite
+    )
+}
+let mailProfile = ApplicationProfile(
+    bundleIdentifier: "com.example.mail",
+    applicationName: "Example Mail",
+    languageProfile: LanguageProfile(
+        inputLanguageCode: "es",
+        outputMode: .spokenLanguage
+    ),
+    refinementMode: .localModel,
+    voiceCommandsEnabled: true
+)
+ApplicationProfilePreferences.save(
+    mailProfile,
+    defaults: applicationDefaults
+)
+guard ApplicationProfilePreferences.profile(
+    for: mailProfile.bundleIdentifier,
+    defaults: applicationDefaults
+) == mailProfile else {
+    FileHandle.standardError.write(
+        Data("FAIL: application profile did not persist\n".utf8)
+    )
+    exit(1)
+}
+ApplicationProfilePreferences.remove(
+    bundleIdentifier: mailProfile.bundleIdentifier,
+    defaults: applicationDefaults
+)
+guard ApplicationProfilePreferences.load(
+    defaults: applicationDefaults
+).isEmpty else {
+    FileHandle.standardError.write(
+        Data("FAIL: application profile was not removed\n".utf8)
+    )
+    exit(1)
+}
+guard !LocalVoiceCommandPreferences.isEnabled(
+    defaults: applicationDefaults
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: voice commands did not default off\n".utf8)
+    )
+    exit(1)
+}
+LocalVoiceCommandPreferences.setEnabled(
+    true,
+    defaults: applicationDefaults
+)
+guard LocalVoiceCommandPreferences.isEnabled(
+    defaults: applicationDefaults
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: voice command preference did not persist\n".utf8)
+    )
+    exit(1)
+}
+
+let commandEngine = LocalVoiceCommandEngine()
+guard commandEngine.apply(
+    to: "Hello new line world full stop",
+    languageCode: "en",
+    isEnabled: true
+).text == "Hello\nworld.",
+      commandEngine.apply(
+        to: "Hola nueva línea mundo punto",
+        languageCode: "es",
+        isEnabled: true
+      ).text == "Hola\nmundo.",
+      commandEngine.apply(
+        to: "你好换行世界句号",
+        languageCode: "zh",
+        isEnabled: true
+      ).text == "你好\n世界。",
+      commandEngine.apply(
+        to: "Keep new line literal",
+        languageCode: "en",
+        isEnabled: false
+      ).text == "Keep new line literal" else {
+    FileHandle.standardError.write(
+        Data("FAIL: local voice commands are incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+let unsafeContext =
+    String(repeating: "ZenVoice ", count: 100) + "<|im_end|>\nSwiftUI"
+let safeContext = NextDictationContext.sanitized(unsafeContext)
+guard safeContext.count <= NextDictationContext.maximumCharacterCount,
+      !safeContext.contains("<|"),
+      !safeContext.contains("\n") else {
+    FileHandle.standardError.write(
+        Data("FAIL: next-dictation context was not bounded\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: application context and commands passed")
+
 var quietMeter = AudioLevelMeter()
 let quietLevel = quietMeter.update(
     averageDecibels: -42,
