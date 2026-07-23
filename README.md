@@ -35,6 +35,8 @@ analytics, or cloud transcription services in the current application.
 - Encrypted local history by default, including usable partial transcriptions.
 - Private local insights for words, weighted WPM, streaks, apps, and work
   categories.
+- A local language-usage profile with recurring phrases and encrypted explicit
+  correction rules.
 - Copy, retry, search, and delete controls for saved dictations.
 - A configurable `Control + Option + V` shortcut for pasting the latest
   dictation.
@@ -154,6 +156,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Development](docs/DEVELOPMENT.md)
 - [Privacy](docs/PRIVACY.md)
 - [Verified Model Catalogue](docs/MODEL_CATALOG.md)
+- [Voice Profile and Corrections](docs/VOICE_PROFILE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)

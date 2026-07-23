@@ -26,6 +26,10 @@ All notable ZenVoice changes are recorded here.
 - Added on-device insights for total words, weighted WPM, streaks, recent
   activity, distinct apps, and work categories
 - Added conservative app-category detection and user correction from History
+- Added a local language-usage profile with frequent words, recurring phrases,
+  and the most active hour
+- Added encrypted explicit correction rules with whole-phrase matching and
+  history-bound usage counts
 
 ### Changed
 

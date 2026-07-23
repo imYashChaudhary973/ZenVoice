@@ -665,6 +665,137 @@ private func checkCategoryCorrection() throws {
     )
 }
 
+private func checkCorrectionEngine() throws {
+    let firstID = UUID()
+    let secondID = UUID()
+    let application = TranscriptCorrectionEngine.apply(
+        "Use zen pens with git hub, not a zen pencil.",
+        rules: [
+            CorrectionRule(
+                id: firstID,
+                source: "zen pens",
+                replacement: "ZenPense"
+            ),
+            CorrectionRule(
+                id: secondID,
+                source: "git hub",
+                replacement: "GitHub"
+            )
+        ]
+    )
+    try require(
+        application.text
+            == "Use ZenPense with GitHub, not a zen pencil.",
+        "whole-phrase corrections"
+    )
+    try require(application.correctionCount == 2, "correction count")
+    try require(
+        Set(application.usages.map(\.ruleID)) == [firstID, secondID],
+        "correction rule usage"
+    )
+}
+
+private func checkEncryptedVoiceProfile() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let ruleID = UUID()
+    try fixture.vault.addCorrectionRule(
+        source: "zen pens",
+        replacement: "ZenPense",
+        id: ruleID,
+        createdAt: Date(timeIntervalSince1970: 1_000)
+    )
+
+    let application = try fixture.vault.applyCorrections(
+        to: "zen pens and zen pens"
+    )
+    try require(
+        application.text == "ZenPense and ZenPense",
+        "vault correction application"
+    )
+    try fixture.vault.recordCorrectionUsage(application.usages)
+    try require(
+        try fixture.vault.correctionRules().first?.usageCount == 2,
+        "correction usage was not recorded"
+    )
+
+    for (offset, transcript) in [
+        "Zen voice makes local voice useful",
+        "Zen voice keeps local voice private"
+    ].enumerated() {
+        let id = UUID()
+        let audioURL = fixture.vault.recoveryAudioURL(for: id)
+        try Data("audio".utf8).write(to: audioURL)
+        try fixture.vault.begin(
+            DictationDraft(
+                id: id,
+                startedAt: Date(
+                    timeIntervalSince1970:
+                        2_000 + TimeInterval(offset * 60)
+                ),
+                language: "en",
+                modelID: "whisper-base-en",
+                targetBundleID: "com.openai.codex",
+                targetAppName: "ChatGPT",
+                category: .aiPrompts,
+                recoveryAudioURL: audioURL
+            )
+        )
+        try fixture.vault.markTranscribing(
+            id: id,
+            durationSeconds: 30
+        )
+        try fixture.vault.storeTranscript(
+            id: id,
+            rawTranscript: transcript.lowercased(),
+            finalTranscript: transcript
+        )
+    }
+
+    let profile = try fixture.vault.voiceProfile()
+    try require(
+        profile.analyzedDictationCount == 2,
+        "voice profile dictation count"
+    )
+    try require(
+        profile.topWords.first?.text == "voice"
+            && profile.topWords.first?.count == 4,
+        "voice profile top words"
+    )
+    try require(
+        profile.catchPhrases.contains {
+            $0.text == "zen voice" && $0.count == 2
+        },
+        "voice profile recurring phrases"
+    )
+    try require(
+        profile.correctionRules.first?.usageCount == 2,
+        "voice profile correction ranking"
+    )
+
+    for suffix in ["", "-wal", "-shm"] {
+        let fileURL = URL(fileURLWithPath: fixture.databaseURL.path + suffix)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            continue
+        }
+        let text = String(
+            decoding: try Data(contentsOf: fileURL),
+            as: UTF8.self
+        )
+        try require(
+            !text.contains("zen pens") && !text.contains("ZenPense"),
+            "correction rule leaked into plaintext database\(suffix)"
+        )
+    }
+
+    try fixture.vault.deleteAll()
+    try require(
+        try fixture.vault.correctionRules().isEmpty,
+        "delete all retained correction rules"
+    )
+}
+
 do {
     try checkEncryptedStorage()
     try checkRecoveryExpiry()
@@ -677,7 +808,9 @@ do {
     try checkPrivacySuppressionAndRecoveryCleanup()
     try checkLocalInsights()
     try checkCategoryCorrection()
-    print("ZenVoiceStorageChecks: 11 checks passed")
+    try checkCorrectionEngine()
+    try checkEncryptedVoiceProfile()
+    print("ZenVoiceStorageChecks: 13 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

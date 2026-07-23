@@ -29,12 +29,13 @@ recorded in
 - [x] Hardware-aware model recommendations and local speed benchmarks
 - [x] Bundled persistent `whisper.cpp` runtime
 - [x] Private local insights, streaks, app usage, and editable categories
+- [x] Local voice profile and encrypted explicit correction rules
 
 ## Next: quality and daily reliability
 
 - [x] Keep the Whisper model loaded to reduce transcription latency
 - [ ] Add microphone selection and disconnection handling
-- [ ] Add a local personal dictionary for names and technical terms
+- [x] Add a local personal dictionary for names and technical terms
 - [x] Add cancel and recover-last-dictation actions
 - [ ] Improve automated and manual lifecycle coverage
 
@@ -42,7 +43,7 @@ recorded in
 
 - [x] Add local model selection for English and multilingual Whisper models
 - [ ] Add explicit language selection and optional local detection
-- [ ] Add local snippets and conservative voice corrections
+- [x] Add local snippets and conservative voice corrections
 - [ ] Evaluate optional local-only rewriting through Ollama
 - [ ] Add first-run onboarding and expanded permission recovery
 - [ ] Add Developer ID signing, notarization, and update delivery

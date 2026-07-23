@@ -5,6 +5,34 @@ import ZenVoiceCore
 import ZenVoiceRuntime
 import ZenVoiceStorage
 
+private struct ProcessedTranscription {
+    let result: TranscriptionResult
+    let correctionUsages: [CorrectionUsage]
+
+    init(
+        result: TranscriptionResult,
+        correctionApplication: CorrectionApplication?
+    ) {
+        guard let correctionApplication,
+              correctionApplication.correctionCount > 0 else {
+            self.result = result
+            correctionUsages = []
+            return
+        }
+        self.result = TranscriptionResult(
+            rawTranscript: result.rawTranscript,
+            finalTranscript: correctionApplication.text,
+            correctionCount:
+                result.correctionCount
+                + correctionApplication.correctionCount,
+            isPartial: result.isPartial,
+            modelID: result.modelID,
+            processingDurationSeconds: result.processingDurationSeconds
+        )
+        correctionUsages = correctionApplication.usages
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let state = AppState()
@@ -34,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
     private var insightsViewModel: InsightsViewModel!
+    private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
     private var settingsWindowController: SettingsWindowController!
     private let historyPreferences = HistoryPreferences()
@@ -397,10 +426,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return try self.resolvedVault()
             }
         )
+        voiceProfileViewModel = VoiceProfileViewModel(
+            vaultProvider: { [weak self] in
+                guard let self else {
+                    throw DictationVaultError.database(
+                        "ZenVoice is no longer running."
+                    )
+                }
+                return try self.resolvedVault()
+            }
+        )
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
             insightsViewModel: insightsViewModel,
+            voiceProfileViewModel: voiceProfileViewModel,
             modelManagerViewModel: modelManagerViewModel,
             appState: state
         )
@@ -671,15 +711,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         state.phase = .transcribing
         updateStartStopMenuTitle()
+        let correctionVault = dictationVault
 
         transcriptionQueue.async { [weak self] in
             do {
                 let result = try transcriber.transcribe(
                     audioURL: recordedAudio.url
                 )
+                let processed = ProcessedTranscription(
+                    result: result,
+                    correctionApplication:
+                        try? correctionVault?.applyCorrections(
+                            to: result.finalTranscript
+                        )
+                )
                 DispatchQueue.main.async {
                     self?.complete(
-                        result: result,
+                        processed: processed,
                         recordedAudio: recordedAudio,
                         historyID: historyID
                     )
@@ -715,10 +763,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func complete(
-        result: TranscriptionResult,
+        processed: ProcessedTranscription,
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?
     ) {
+        let result = processed.result
         transcribingHistoryID = nil
         ModelBenchmarkStore.record(
             modelID: result.modelID,
@@ -743,6 +792,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     isPartial: result.isPartial
                 )
                 try vault.deleteRecoveryAudio(id: historyID)
+                try? vault.recordCorrectionUsage(
+                    processed.correctionUsages
+                )
             } catch {
                 historySaveError = error
                 try? resolvedVault().markFailed(
@@ -774,6 +826,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.state.phase = .success
                 self.historyViewModel?.refresh()
                 self.insightsViewModel?.refresh()
+                self.voiceProfileViewModel?.refresh()
                 self.scheduleIdleReset(after: 1.5)
             case .copiedOnly:
                 if let historyID, shouldPersist, historySaveError == nil {
@@ -793,6 +846,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.historyViewModel?.refresh()
             self.insightsViewModel?.refresh()
+            self.voiceProfileViewModel?.refresh()
         }
     }
 
@@ -1015,12 +1069,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             url: audioURL,
             durationSeconds: record.durationSeconds
         )
+        let correctionVault = dictationVault
         transcriptionQueue.async { [weak self] in
             do {
                 let result = try transcriber.transcribe(audioURL: audioURL)
+                let processed = ProcessedTranscription(
+                    result: result,
+                    correctionApplication:
+                        try? correctionVault?.applyCorrections(
+                            to: result.finalTranscript
+                        )
+                )
                 DispatchQueue.main.async {
                     self?.completeHistoryRetry(
-                        result: result,
+                        processed: processed,
                         recordedAudio: recordedAudio,
                         historyID: record.id
                     )
@@ -1039,10 +1101,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func completeHistoryRetry(
-        result: TranscriptionResult,
+        processed: ProcessedTranscription,
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID
     ) {
+        let result = processed.result
         transcribingHistoryID = nil
         ModelBenchmarkStore.record(
             modelID: result.modelID,
@@ -1068,10 +1131,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 isPartial: result.isPartial
             )
             try vault.deleteRecoveryAudio(id: historyID)
+            try? vault.recordCorrectionUsage(processed.correctionUsages)
             state.lastTranscript = result.finalTranscript
             state.phase = .success
             historyViewModel.refresh()
             insightsViewModel.refresh()
+            voiceProfileViewModel.refresh()
             scheduleIdleReset(after: 1.5)
         } catch {
             handleTranscriptionFailure(

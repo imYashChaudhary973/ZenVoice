@@ -12,7 +12,7 @@ pass its verification gate before dependent work begins.
 | M4 | Hardware recommendations and model benchmarks | Complete |
 | M5 | Bundled persistent `whisper.cpp` runtime | Complete |
 | M6 | Local insights and application categories | Complete |
-| M7 | Usage-based voice profile and explicit corrections | Planned |
+| M7 | Usage-based voice profile and explicit corrections | Complete |
 | M8 | Privacy-safe shareable highlight cards | Planned |
 | M9 | Public-distribution legal and security review | Planned |
 

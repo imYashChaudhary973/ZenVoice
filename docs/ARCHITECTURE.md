@@ -50,8 +50,10 @@ The native application target owns macOS-specific behavior:
 - `HistoryViewModel` manages local-history controls, search, recovery actions,
   privacy controls, and deletion.
 - `InsightsViewModel` reads privacy-safe aggregate metrics from the vault.
+- `VoiceProfileViewModel` manages the local language profile and explicit
+  personal correction rules.
 - `ZenVoiceSettingsView` provides Overview, Models, History, Insights,
-  Shortcuts, and Privacy screens.
+  Voice Profile, Shortcuts, and Privacy screens.
 - `ZenDesignTokens` keeps the dark Zen visual language consistent.
 - `AudioRecorder` captures 16 kHz mono PCM audio using AVFoundation.
 - `TextInserter` copies and pastes the final transcript.
@@ -104,6 +106,12 @@ The storage target owns the sensitive local-data boundary:
 - `ApplicationCategoryClassifier` assigns a conservative initial category from
   the frontmost app. Unknown apps remain Other, and users can correct any
   category from History.
+- `VoiceProfileSnapshot` analyzes up to 500 recent decrypted-in-process
+  transcripts for frequent words, recurring two- and three-word phrases, and
+  the most active local hour.
+- Correction source and replacement phrases are encrypted with field-bound
+  AES-GCM. `TranscriptCorrectionEngine` applies explicit case-insensitive,
+  whole-phrase rules without monitoring edits in other applications.
 - Recovery audio lives in private Application Support storage and expires no
   later than 24 hours after capture began; disabling recovery removes retained
   recovery recordings immediately.
@@ -116,6 +124,7 @@ shortcut defaults, and hold-key serialization.
 
 `ZenVoiceStorageChecks` verifies encrypted-at-rest transcript storage, weighted
 WPM and insights, editable categories, application classification,
+encrypted correction rules and usage, recurring phrases,
 interruption recovery, capture-bounded recovery expiry, durable
 Private Dictation suppression, recovery-disable cleanup, cancellation cleanup,
 cryptographic Delete All, ciphertext field binding, recovery-path confinement,
