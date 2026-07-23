@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import ZenVoiceCore
 
 final class AudioRecorder {
     enum RecorderError: LocalizedError {
@@ -19,6 +20,7 @@ final class AudioRecorder {
     private var recorder: AVAudioRecorder?
     private var meterTimer: Timer?
     private var recordingURL: URL?
+    private var audioLevelMeter = AudioLevelMeter()
 
     var isRecording: Bool {
         recorder?.isRecording == true
@@ -49,13 +51,18 @@ final class AudioRecorder {
 
         self.recorder = recorder
         recordingURL = url
+        audioLevelMeter = AudioLevelMeter()
         meterTimer?.invalidate()
-        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) { [weak recorder] _ in
-            guard let recorder else { return }
+        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) {
+            [weak self, weak recorder] _ in
+            guard let self, let recorder else { return }
             recorder.updateMeters()
-            let power = recorder.averagePower(forChannel: 0)
-            let normalized = max(0, min(1, (Double(power) + 55) / 55))
-            levelChanged(normalized)
+
+            let level = audioLevelMeter.update(
+                averageDecibels: recorder.averagePower(forChannel: 0),
+                peakDecibels: recorder.peakPower(forChannel: 0)
+            )
+            levelChanged(level)
         }
     }
 
@@ -76,4 +83,5 @@ final class AudioRecorder {
         recorder = nil
         recordingURL = nil
     }
+
 }

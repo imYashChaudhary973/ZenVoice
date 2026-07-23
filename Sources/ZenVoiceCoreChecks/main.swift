@@ -34,3 +34,32 @@ for check in checks {
 }
 
 print("ZenVoiceCoreChecks: \(checks.count) checks passed")
+
+var quietMeter = AudioLevelMeter()
+let quietLevel = quietMeter.update(
+    averageDecibels: -42,
+    peakDecibels: -34
+)
+
+var loudMeter = AudioLevelMeter()
+let loudLevel = loudMeter.update(
+    averageDecibels: -14,
+    peakDecibels: -7
+)
+
+guard quietLevel > 0, loudLevel > quietLevel else {
+    FileHandle.standardError.write(
+        Data("FAIL: loud speech must produce taller waveform levels\n".utf8)
+    )
+    exit(1)
+}
+
+guard AudioLevelMeter.normalize(decibels: -70) == 0,
+      AudioLevelMeter.normalize(decibels: -3) == 1 else {
+    FileHandle.standardError.write(
+        Data("FAIL: audio meter must clamp silence and loud input\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: audio level response passed")

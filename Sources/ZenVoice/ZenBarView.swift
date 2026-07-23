@@ -24,8 +24,8 @@ struct ZenBarView: View {
             Spacer(minLength: 0)
 
             if case .listening = state.phase {
-                WaveformView(level: state.audioLevel)
-                    .frame(width: 54, height: 24)
+                WaveformView(samples: state.audioSamples)
+                    .frame(width: 63, height: 26)
             } else if state.phase == .transcribing || state.phase == .inserting {
                 ProgressView()
                     .controlSize(.small)
@@ -61,26 +61,28 @@ struct ZenBarView: View {
         ZStack {
             Circle()
                 .fill(indicatorColor.opacity(0.16))
+                .overlay {
+                    Circle()
+                        .strokeBorder(indicatorColor.opacity(0.30), lineWidth: 1)
+                }
 
-            switch state.phase {
-            case .success:
-                Image(systemName: "checkmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(indicatorColor)
-            case .error:
-                Image(systemName: "exclamationmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(indicatorColor)
-            case .transcribing, .inserting:
-                Image(systemName: "waveform")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(indicatorColor)
-            default:
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 14, weight: .semibold))
+            if let logo = BrandAssets.zenLogo {
+                Image(nsImage: logo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 28, height: 28)
+                    .clipShape(Circle())
+            } else {
+                Text("Z")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(indicatorColor)
             }
         }
+        .scaleEffect(state.phase == .listening ? 1.04 : 1)
+        .animation(
+            .easeInOut(duration: 0.65).repeatForever(autoreverses: true),
+            value: state.phase == .listening
+        )
     }
 
     private var helperText: String {
@@ -121,26 +123,21 @@ struct ZenBarView: View {
 }
 
 private struct WaveformView: View {
-    let level: Double
+    let samples: [Double]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.06)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 3) {
-                ForEach(0..<7, id: \.self) { index in
-                    let oscillation = (sin(time * 8 + Double(index) * 0.85) + 1) / 2
-                    let responsiveLevel = max(0.12, level)
-                    Capsule()
-                        .fill(Color.white.opacity(0.92))
-                        .frame(
-                            width: 3,
-                            height: 5 + (18 * responsiveLevel * oscillation)
-                        )
-                }
+        HStack(spacing: 2.5) {
+            ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
+                Capsule()
+                    .fill(Color.white.opacity(sample > 0.04 ? 0.94 : 0.28))
+                    .frame(
+                        width: 3,
+                        height: max(3, 3 + (23 * sample))
+                    )
             }
-            .frame(maxHeight: .infinity)
-            .animation(.easeOut(duration: 0.08), value: level)
         }
+        .frame(maxHeight: .infinity)
+        .animation(.linear(duration: 0.06), value: samples)
         .accessibilityHidden(true)
     }
 }

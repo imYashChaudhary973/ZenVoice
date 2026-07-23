@@ -30,7 +30,7 @@ final class AppState: ObservableObject {
     }
 
     @Published var phase: Phase = .idle
-    @Published var audioLevel: Double = 0
+    @Published var audioSamples = Array(repeating: 0.0, count: 11)
     @Published var isZenBarVisible = true
     @Published var lastTranscript = ""
 
@@ -41,5 +41,16 @@ final class AppState: ObservableObject {
         default:
             return false
         }
+    }
+
+    func resetAudioSamples() {
+        audioSamples = Array(repeating: 0, count: audioSamples.count)
+    }
+
+    func appendAudioLevel(_ level: Double) {
+        var samples = audioSamples
+        samples.removeFirst()
+        samples.append(max(0, min(1, level)))
+        audioSamples = samples
     }
 }

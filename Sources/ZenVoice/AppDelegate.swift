@@ -55,10 +55,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(
             withLength: NSStatusItem.squareLength
         )
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "waveform.circle.fill",
-            accessibilityDescription: "ZenVoice"
-        )
+        if let logo = BrandAssets.zenLogo?.copy() as? NSImage {
+            logo.size = NSSize(width: 18, height: 18)
+            logo.isTemplate = false
+            statusItem.button?.image = logo
+        } else {
+            statusItem.button?.image = NSImage(
+                systemSymbolName: "z.circle.fill",
+                accessibilityDescription: "ZenVoice"
+            )
+        }
 
         let menu = NSMenu()
         startStopMenuItem = NSMenuItem(
@@ -169,10 +175,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startRecorder() {
         resetWorkItem?.cancel()
+        state.resetAudioSamples()
         do {
             try recorder.start { [weak self] level in
                 DispatchQueue.main.async {
-                    self?.state.audioLevel = level
+                    self?.state.appendAudioLevel(level)
                 }
             }
             state.phase = .listening
@@ -191,7 +198,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        state.audioLevel = 0
         state.phase = .transcribing
         startStopMenuItem.title = "Start Dictation"
 

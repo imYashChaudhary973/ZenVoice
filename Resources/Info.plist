@@ -8,6 +8,8 @@
     <string>ZenVoice</string>
     <key>CFBundleExecutable</key>
     <string>ZenVoice</string>
+    <key>CFBundleIconFile</key>
+    <string>ZenVoice</string>
     <key>CFBundleIdentifier</key>
     <string>dev.yashchaudhary.ZenVoice</string>
     <key>CFBundleInfoDictionaryVersion</key>
