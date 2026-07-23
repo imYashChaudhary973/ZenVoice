@@ -81,8 +81,9 @@ The storage target owns the sensitive local-data boundary:
   Keychain.
 - `HistoryPreferences` records history saving, failed-audio recovery, and
   Private Dictation mode.
-- Recovery audio lives in private Application Support storage and expires after
-  24 hours when a transcription fails.
+- Recovery audio lives in private Application Support storage and expires no
+  later than 24 hours after capture began; disabling recovery removes retained
+  recovery recordings immediately.
 
 ### `ZenVoiceCoreChecks`
 
@@ -91,7 +92,8 @@ quiet-versus-loud waveform behavior, strict hotkey validation, private-mode
 shortcut defaults, and hold-key serialization.
 
 `ZenVoiceStorageChecks` verifies encrypted-at-rest transcript storage, weighted
-WPM, interruption recovery, recovery-audio expiry, cancellation cleanup,
+WPM, interruption recovery, capture-bounded recovery expiry, durable
+Private Dictation suppression, recovery-disable cleanup, cancellation cleanup,
 cryptographic Delete All, ciphertext field binding, recovery-path confinement,
 partial transcript flags, and history preferences.
 

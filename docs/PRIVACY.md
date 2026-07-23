@@ -16,11 +16,14 @@ network.
 - Deleted immediately when a recording is cancelled.
 - When local history and failed-audio recovery are enabled, audio from a failed
   or interrupted transcription may remain in private Application Support
-  storage for up to 24 hours.
+  storage for up to 24 hours from the start of its capture.
 - Only fully failed transcriptions retain recovery audio, and only for up to
   24 hours when recovery is enabled.
+- Turning failed-audio recovery off deletes any recovery recordings that are
+  already retained.
 - Private Dictation mode retains no transcript or recovery audio, including
-  when it is enabled during an active dictation.
+  when it is enabled during an active or transcribing dictation and ZenVoice
+  exits unexpectedly.
 - A crash or forced termination could leave a temporary file until macOS cleans
   its temporary directory when history is disabled.
 
