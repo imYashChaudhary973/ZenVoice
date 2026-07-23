@@ -51,6 +51,8 @@ analytics, or cloud transcription services in the current application.
   modes for multilingual dictation.
 - Selectable microphones, safe disconnection handling, and a three-second
   on-device Audio Doctor.
+- Stable local phrase preview in ZenBar and optional guarded commit-on-pause
+  insertion.
 - Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
   private local timing samples.
 - Local Instant Refine with Off, Clean, and Agent Prompt modes.
@@ -116,6 +118,10 @@ spoken language. Any non-English profile requires a Multilingual model.
 Open **Audio** to follow the macOS default input, pin a connected microphone,
 or run a local signal and format test.
 
+Open **Instant Refine** to control stable live preview. Experimental
+commit-on-pause insertion is opt-in and stays locked to the app where dictation
+started.
+
 ## Use ZenVoice
 
 1. Open the **Shortcuts** screen to keep the default shortcut or record your
@@ -179,6 +185,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Instant Refine](docs/INSTANT_REFINE.md)
 - [Language Profiles](docs/LANGUAGES.md)
 - [Microphones and Audio Doctor](docs/AUDIO.md)
+- [Live Dictation](docs/LIVE_DICTATION.md)
 - [Release Readiness](docs/RELEASE_READINESS.md)
 - [M9 Security Review](docs/SECURITY_REVIEW.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)
@@ -189,9 +196,10 @@ Model provenance, licences, revisions, and checksums are documented in
 
 ## Project direction
 
-The immediate goal is a dependable personal dictation tool. Multilingual
-models, local vocabulary, lower transcription latency, expanded settings, and
-distribution readiness come after the English macOS workflow is stable.
+The immediate goal is a dependable personal dictation tool. ZenVoice already
+offers explicit multilingual profiles; current work focuses on measured
+language quality, local context, lower transcription latency, expanded
+settings, and distribution readiness.
 
 ZenVoice intentionally has no license while its future distribution model is
 undecided. All rights are reserved by the repository owner. Passing CI does

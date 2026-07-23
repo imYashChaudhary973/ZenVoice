@@ -50,6 +50,9 @@ All notable ZenVoice changes are recorded here.
 - Added selectable microphone routing with a System Default option
 - Added a three-second local Audio Doctor with signal and file-format checks
 - Added safe active-device disconnection handling with existing recovery rules
+- Added stable phrase detection and local in-memory Whisper previews
+- Added opt-in commit-on-pause insertion locked to the original target app
+- Added encrypted partial transcript checkpoints during active dictation
 
 ### Changed
 

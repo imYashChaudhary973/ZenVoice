@@ -22,6 +22,8 @@ AppDelegate ──────────────────────�
     │         └──────── HistoryViewModel ─► HistoryView
     ▼                                      │ microphone levels
 AudioRecorder ──────► local WAV ──────► ZenVoiceRuntime
+    │                      ▲
+    └─► stable pause ──────┘
                                            │
                                            ▼
                                     TranscriptCleaner
@@ -67,6 +69,9 @@ The native application target owns macOS-specific behavior:
 - `AudioRecorder` uses `AVAudioEngine` to capture the selected input and
   converts it to 16 kHz mono PCM for Whisper. `SettingsViewModel` runs the
   explicit three-second Audio Doctor and deletes its temporary file.
+- When live preview is enabled, `AudioRecorder` also keeps bounded-to-session
+  in-memory samples. `StablePauseDetector` exposes a phrase only after reviewed
+  speech and silence thresholds.
 - `TextInserter` copies and pastes the final transcript.
 - `ZenBarPanelController` presents ZenBar across desktop spaces.
 - `ZenBarView` renders state and microphone-responsive waveform history.
@@ -114,6 +119,8 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 - Model replacement creates a new transcriber; an active transcription keeps
   its original transcriber until that operation completes.
 - The runtime accepts only 16 kHz mono audio produced by `AudioRecorder`.
+- File and in-memory sample transcription use the same retained context and
+  dedicated serial queue, preventing concurrent access to `whisper.cpp`.
 
 ### `ZenVoiceStorage`
 
@@ -190,6 +197,12 @@ to idle after a short visible delay.
 
 If the active microphone disconnects, the recording stops and moves through
 the existing failed-recovery policy instead of silently changing devices.
+
+Stable live phrases are encrypted into the active record without changing its
+recording status. Final stop combines accepted phrases with the uncommitted
+remainder. Optional commit-on-pause insertion locks to the original foreground
+application and is disabled for the rest of a session after any safety guard
+fails.
 
 When history is enabled, a record moves through `recording`, `transcribing`,
 `ready`, and `inserted` or `copiedOnly`. An interrupted or failed operation

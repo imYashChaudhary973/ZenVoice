@@ -18,7 +18,7 @@ pass its verification gate before dependent work begins.
 | M10 | Instant Refine foundation and reliable model downloads | Complete |
 | M11 | Explicit language profiles, Hinglish, translation, and 50+ languages | Implemented; real-microphone QA pending |
 | M12 | Microphone selection, disconnection recovery, and Audio Doctor | Implemented; hardware-disconnect QA pending |
-| M13 | Stable live transcript preview and commit-on-pause | Planned |
+| M13 | Stable live transcript preview and commit-on-pause | Implemented; spoken-flow QA pending |
 | M14 | Curated downloadable local refinement models | Planned |
 | M15 | Application profiles, context box, and local voice commands | Planned |
 | M16 | Correction Review, local learning controls, and Recovery Inbox | Planned |

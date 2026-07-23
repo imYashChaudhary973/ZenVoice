@@ -45,7 +45,7 @@ recorded in
 - [x] Add a local personal dictionary for names and technical terms
 - [x] Add cancel and recover-last-dictation actions
 - [ ] Improve automated and manual lifecycle coverage
-- [ ] Add stable partial-transcript preview and commit-on-pause insertion
+- [x] Add stable partial-transcript preview and guarded commit-on-pause insertion
 
 ## Later: multilingual and distribution readiness
 
