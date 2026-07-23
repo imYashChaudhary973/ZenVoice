@@ -229,25 +229,12 @@ public enum LocalRefinementGuard {
             return nil
         }
 
-        let originalTokens = tokens(in: original)
-        let candidateTokens = tokens(in: candidate)
-        guard !candidateTokens.isEmpty,
-              candidateTokens.count
-                <= max(originalTokens.count + 2, 4) else {
-            return nil
-        }
-
-        if originalTokens.count >= 5 {
-            guard candidateTokens.count * 5
-                    >= originalTokens.count * 3 else {
-                return nil
-            }
-        }
-
-        let originalVocabulary = Set(originalTokens)
-        guard candidateTokens.allSatisfy(
-            originalVocabulary.contains
-        ) else {
+        // Deterministic Clean runs before the local model. The model may then
+        // improve punctuation and capitalization, but it must preserve every
+        // normalized token in the same order. A vocabulary-only comparison
+        // would allow meaning-changing edits such as dropping "not" or
+        // reordering "the app deletes the file."
+        guard tokens(in: candidate) == tokens(in: original) else {
             return nil
         }
         return candidate

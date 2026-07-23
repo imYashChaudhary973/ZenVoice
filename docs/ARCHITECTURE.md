@@ -105,8 +105,9 @@ launching the application:
   publisher metadata, immutable revisions, exact GGUF files, licence links,
   size, SHA-256, and minimum-memory guidance.
 - `LocalRefinementPrompt` defines the no-translation, no-invention JSON
-  contract. `LocalRefinementGuard` rejects malformed, destructive, or
-  vocabulary-expanding results.
+  contract. Deterministic Clean runs first, then `LocalRefinementGuard`
+  rejects malformed results or any normalized-token deletion, duplication, or
+  reordering.
 - `LanguageCatalog` exposes the reviewed language codes and product support
   level. `LanguagePreferences` persists the explicit input/output profile.
 - `LocalTransliterator` converts supported native scripts to Latin characters

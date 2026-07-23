@@ -38,57 +38,53 @@ final class LocalRefinementCoordinator: @unchecked Sendable {
                 wasRejected: refined.wasRejected
             )
         }
+        let cleanResult = InstantRefineEngine().refine(
+            commandText,
+            mode: .clean
+        )
+        let safeBaseline = cleanResult.text
         guard let refiner = lock.withLock({ refiner }) else {
-            return fallback(
-                commandText,
-                commandCorrectionCount:
+            return InstantRefineResult(
+                text: safeBaseline,
+                correctionCount:
                     commandResult.correctionCount
+                    + cleanResult.correctionCount,
+                wasRejected: cleanResult.wasRejected
             )
         }
         do {
             let output = try refiner.refine(
-                commandText,
+                safeBaseline,
                 context: context
             )
             guard let candidate =
                 LocalRefinementGuard.validatedCandidate(
                     output: output,
-                    original: commandText
+                    original: safeBaseline
                 ) else {
-                return fallback(
-                    commandText,
-                    commandCorrectionCount:
+                return InstantRefineResult(
+                    text: safeBaseline,
+                    correctionCount:
                         commandResult.correctionCount
+                        + cleanResult.correctionCount,
+                    wasRejected: true
                 )
             }
             return InstantRefineResult(
                 text: candidate,
                 correctionCount:
                     commandResult.correctionCount
-                    + (candidate == commandText ? 0 : 1)
+                    + cleanResult.correctionCount
+                    + (candidate == safeBaseline ? 0 : 1)
             )
         } catch {
-            return fallback(
-                commandText,
-                commandCorrectionCount:
+            return InstantRefineResult(
+                text: safeBaseline,
+                correctionCount:
                     commandResult.correctionCount
+                    + cleanResult.correctionCount,
+                wasRejected: cleanResult.wasRejected
             )
         }
-    }
-
-    private func fallback(
-        _ transcript: String,
-        commandCorrectionCount: Int
-    ) -> InstantRefineResult {
-        let refined = InstantRefineEngine().refine(
-            transcript,
-            mode: .clean
-        )
-        return InstantRefineResult(
-            text: refined.text,
-            correctionCount:
-                commandCorrectionCount + refined.correctionCount,
-            wasRejected: refined.wasRejected
-        )
     }
 }

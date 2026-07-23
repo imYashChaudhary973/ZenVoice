@@ -81,15 +81,19 @@ do {
         ] {
         let original =
             "Um, create the the local app with Swift."
+        let safeBaseline = InstantRefineEngine().refine(
+            original,
+            mode: .clean
+        ).text
         let localOutput = try LocalTextRefiner(
             modelURL: URL(fileURLWithPath: refinementPath)
         ).refine(
-            original,
+            safeBaseline,
             timeLimit: 5
         )
         guard LocalRefinementGuard.validatedCandidate(
             output: localOutput,
-            original: original
+            original: safeBaseline
         ) != nil else {
             throw NSError(
                 domain: "ZenVoiceRuntimeChecks",

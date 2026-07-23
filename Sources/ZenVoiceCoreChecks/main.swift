@@ -185,6 +185,18 @@ guard safeLocalCandidate == "Create the local app.",
         original: "Please keep every important word here"
       ) == nil,
       LocalRefinementGuard.validatedCandidate(
+        output: #"{"text":"Do share this file."}"#,
+        original: "Do not share this file."
+      ) == nil,
+      LocalRefinementGuard.validatedCandidate(
+        output: #"{"text":"The file deletes the app."}"#,
+        original: "The app deletes the file."
+      ) == nil,
+      LocalRefinementGuard.validatedCandidate(
+        output: #"{"text":"Keep keep this local."}"#,
+        original: "Keep this local."
+      ) == nil,
+      LocalRefinementGuard.validatedCandidate(
         output: "```json\n{\"text\":\"Keep this\"}\n```",
         original: "Keep this"
       ) == nil,
