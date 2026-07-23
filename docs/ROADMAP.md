@@ -25,6 +25,7 @@ recorded in
 - [x] ZenBar lifecycle feedback
 - [x] Microphone-responsive waveform
 - [x] Zen branding and packaged app icon
+- [x] Verified local model catalogue, downloader, selection, and removal
 
 ## Next: quality and daily reliability
 
@@ -36,7 +37,7 @@ recorded in
 
 ## Later: multilingual and distribution readiness
 
-- [ ] Add local model selection for English and multilingual Whisper models
+- [x] Add local model selection for English and multilingual Whisper models
 - [ ] Add explicit language selection and optional local detection
 - [ ] Add local snippets and conservative voice corrections
 - [ ] Evaluate optional local-only rewriting through Ollama

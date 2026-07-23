@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyPreferences.loadPrivateMode()
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
+    private var modelManagerViewModel: ModelManagerViewModel!
     private var settingsWindowController: SettingsWindowController!
     private let historyPreferences = HistoryPreferences()
     private var dictationVault: DictationVault?
@@ -315,6 +316,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureSettingsWindow() {
+        modelManagerViewModel = ModelManagerViewModel { [weak self] in
+            self?.configureTranscriber()
+            self?.settingsViewModel?.refreshSystemStatus()
+        }
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
             pasteLastShortcut: pasteLastHotKeyConfiguration,
@@ -383,6 +388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
+            modelManagerViewModel: modelManagerViewModel,
             appState: state
         )
     }

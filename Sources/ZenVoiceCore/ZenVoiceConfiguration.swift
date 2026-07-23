@@ -37,23 +37,46 @@ public struct ZenVoiceConfiguration {
             throw ConfigurationError.whisperExecutableMissing
         }
 
-        let modelCandidates = [
-            environment["ZENVOICE_MODEL_PATH"],
-            homeDirectory
-                .appendingPathComponent("Library/Application Support/ZenVoice/Models/ggml-base.en.bin")
-                .path(percentEncoded: false)
-        ].compactMap { $0 }
-
-        guard let model = modelCandidates.first(where: {
-            fileManager.fileExists(atPath: $0)
-        }) else {
+        let selectedModel = ModelSelectionPreferences.load()
+        let selectedModelPath = selectedModel.flatMap {
+            try? VerifiedModelCatalog.installedURL(for: $0).path
+        }
+        let legacyModelPath = homeDirectory
+            .appendingPathComponent(
+                "Library/Application Support/ZenVoice/Models/ggml-base.en.bin"
+            )
+            .path(percentEncoded: false)
+        let model: String
+        if let override = environment["ZENVOICE_MODEL_PATH"],
+           fileManager.fileExists(atPath: override) {
+            model = override
+        } else if let selectedModel,
+                  let selectedModelPath,
+                  (try? VerifiedModelCatalog.verify(
+                    URL(fileURLWithPath: selectedModelPath),
+                    for: selectedModel,
+                    fileManager: fileManager
+                  )) == true {
+            model = selectedModelPath
+        } else if legacyModelPath != selectedModelPath,
+                  fileManager.fileExists(atPath: legacyModelPath) {
+            model = legacyModelPath
+        } else {
             throw ConfigurationError.modelMissing
         }
 
+        let selectedCatalogueModel = selectedModel.flatMap { selected in
+            selected.filename == URL(fileURLWithPath: model).lastPathComponent
+                ? selected
+                : nil
+        }
+        let language = selectedCatalogueModel?
+            .languageCapability.whisperLanguageArgument
+            ?? (model.contains(".en.") ? "en" : "auto")
         return ZenVoiceConfiguration(
             whisperExecutableURL: URL(fileURLWithPath: executable),
             modelURL: URL(fileURLWithPath: model),
-            language: "en"
+            language: language
         )
     }
 

@@ -37,6 +37,8 @@ analytics, or cloud transcription services in the current application.
   dictation.
 - Configurable Private Dictation (`Control + Option + P`) and hold-to-dictate
   controls.
+- Verified English and multilingual model downloads with pinned revisions and
+  SHA-256 validation.
 - Local English transcription through `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.
@@ -126,6 +128,9 @@ swift build
 The complete development and manual QA procedure is in
 [Development](docs/DEVELOPMENT.md).
 
+Model provenance, licences, revisions, and checksums are documented in
+[Verified Model Catalogue](docs/MODEL_CATALOG.md).
+
 ## Repository guide
 
 ```text
@@ -147,6 +152,7 @@ The complete development and manual QA procedure is in
 - [Architecture](docs/ARCHITECTURE.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Privacy](docs/PRIVACY.md)
+- [Verified Model Catalogue](docs/MODEL_CATALOG.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)

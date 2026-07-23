@@ -68,8 +68,13 @@ launching the application:
 - `HotKeyConfiguration` validates and serializes shortcut choices.
 - `TranscriptCleaner` performs conservative whitespace and filler cleanup.
 - `ZenVoiceConfiguration` discovers the local runtime and model.
+- `VerifiedModelCatalog` is the signed allowlist for model publisher, source,
+  revision, size, format, language capability, licence, and SHA-256.
 - `TranscriptionResult` carries raw and cleaned text without deciding its
   storage lifecycle.
+
+`ModelManagerViewModel` verifies approved downloads before atomic installation
+and updates the selected local model without sending speech data to a server.
 
 ### `ZenVoiceStorage`
 
