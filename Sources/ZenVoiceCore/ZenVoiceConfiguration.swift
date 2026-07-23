@@ -1,16 +1,13 @@
 import Foundation
 
 public struct ZenVoiceConfiguration {
-    public let whisperExecutableURL: URL
     public let modelURL: URL
     public let language: String
 
     public init(
-        whisperExecutableURL: URL,
         modelURL: URL,
         language: String = "en"
     ) {
-        self.whisperExecutableURL = whisperExecutableURL
         self.modelURL = modelURL
         self.language = language
     }
@@ -25,18 +22,6 @@ public struct ZenVoiceConfiguration {
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) throws -> ZenVoiceConfiguration {
         let fileManager = FileManager.default
-
-        let executableCandidates = [
-            environment["ZENVOICE_WHISPER_PATH"],
-            "/opt/homebrew/bin/whisper-cli",
-            "/usr/local/bin/whisper-cli"
-        ].compactMap { $0 }
-
-        guard let executable = executableCandidates.first(where: {
-            fileManager.isExecutableFile(atPath: $0)
-        }) else {
-            throw ConfigurationError.whisperExecutableMissing
-        }
 
         let selectedModel = ModelSelectionPreferences.load()
         let selectedModelPath = selectedModel.flatMap {
@@ -75,22 +60,18 @@ public struct ZenVoiceConfiguration {
             .languageCapability.whisperLanguageArgument
             ?? (model.contains(".en.") ? "en" : "auto")
         return ZenVoiceConfiguration(
-            whisperExecutableURL: URL(fileURLWithPath: executable),
             modelURL: URL(fileURLWithPath: model),
             language: language
         )
     }
 
     public enum ConfigurationError: LocalizedError {
-        case whisperExecutableMissing
         case modelMissing
 
         public var errorDescription: String? {
             switch self {
-            case .whisperExecutableMissing:
-                return "whisper-cli is missing. Install it with: brew install whisper-cpp"
             case .modelMissing:
-                return "No local Whisper model was found. Set ZENVOICE_MODEL_PATH to a ggml model."
+                return "No local Whisper model was found. Download one in Models or set ZENVOICE_MODEL_PATH."
             }
         }
     }

@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Foundation
 import ZenVoiceCore
+import ZenVoiceRuntime
 import ZenVoiceStorage
 
 @MainActor

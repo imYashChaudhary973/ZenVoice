@@ -68,3 +68,20 @@ duration, processing duration, and timestamp as a local benchmark sample. It
 does not duplicate the transcript or audio. The Models screen reports weighted
 real-time factor from up to 50 recent samples so recommendations can be judged
 against evidence from the user's own Mac.
+
+## Bundled runtime
+
+ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
+
+- Source: [`ggml-org/whisper.cpp`](https://github.com/ggml-org/whisper.cpp)
+- Release: `v1.9.1`
+- Source commit: `f049fff95a089aa9969deb009cdd4892b3e74916`
+- Artifact: `whisper-v1.9.1-xcframework.zip`
+- SHA-256:
+  `8c3ecbe73f48b0cb9318fc3058264f951ab336fd530e82c4ccdd2298d1311a4c`
+- Licence: MIT
+
+Swift Package Manager verifies that checksum before exposing the binary target.
+The packaged app embeds and signs `whisper.framework`. ZenVoice calls its C API
+in-process and retains one model context until the selected model changes or
+the application exits.

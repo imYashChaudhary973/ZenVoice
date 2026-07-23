@@ -75,19 +75,7 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 
 ## Quick start
 
-Install the local transcription runtime:
-
-```bash
-brew install whisper-cpp
-```
-
-Place the English model at:
-
-```text
-~/Library/Application Support/ZenVoice/Models/ggml-base.en.bin
-```
-
-Then build and launch:
+Build and launch:
 
 ```bash
 ./Scripts/build-app.sh
@@ -101,6 +89,10 @@ On first use, macOS requests:
 
 Without Accessibility permission, ZenVoice still copies the transcript to the
 clipboard.
+
+Open **Models** to download a checksum-verified English or multilingual model.
+The pinned `whisper.cpp` runtime is bundled in the app; Homebrew is not
+required.
 
 ## Use ZenVoice
 
@@ -123,6 +115,8 @@ Closing the settings window keeps ZenVoice running in the menu bar. Select
 
 ```bash
 swift run ZenVoiceCoreChecks
+swift run ZenVoiceStorageChecks
+swift run ZenVoiceRuntimeChecks
 swift build
 ./Scripts/build-app.sh
 ```
@@ -142,7 +136,9 @@ Model provenance, licences, revisions, and checksums are documented in
 ├── Sources/
 │   ├── ZenVoice/        macOS application and ZenBar
 │   ├── ZenVoiceCore/    reusable local processing logic
+│   ├── ZenVoiceRuntime/ persistent in-process whisper.cpp integration
 │   ├── ZenVoiceStorage/ encrypted history and recovery storage
+│   ├── ZenVoiceRuntimeChecks/
 │   ├── ZenVoiceStorageChecks/
 │   └── ZenVoiceCoreChecks/
 ├── docs/                architecture, privacy, development, and roadmap
