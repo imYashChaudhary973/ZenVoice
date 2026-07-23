@@ -19,21 +19,25 @@ final class WhisperTranscriber: @unchecked Sendable {
     private let configuration: ZenVoiceConfiguration
     private let cleaner = TranscriptCleaner()
 
+    var modelID: String {
+        configuration.modelID
+    }
+
+    var language: String {
+        configuration.language
+    }
+
     init(configuration: ZenVoiceConfiguration) {
         self.configuration = configuration
     }
 
-    func transcribe(audioURL: URL) throws -> String {
-        defer {
-            try? FileManager.default.removeItem(at: audioURL)
-        }
-
+    func transcribe(audioURL: URL) throws -> TranscriptionResult {
         let process = Process()
         process.executableURL = configuration.whisperExecutableURL
         process.arguments = [
             "--model", configuration.modelURL.path,
             "--file", audioURL.path,
-            "--language", "en",
+            "--language", configuration.language,
             "--no-timestamps",
             "--no-prints",
             "--threads", "8"
@@ -52,12 +56,17 @@ final class WhisperTranscriber: @unchecked Sendable {
 
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let rawTranscript = String(data: data, encoding: .utf8) ?? ""
-        let transcript = cleaner.clean(rawTranscript)
+        let finalTranscript = cleaner.clean(rawTranscript)
 
-        guard !transcript.isEmpty else {
+        guard !finalTranscript.isEmpty else {
             throw TranscriptionError.noSpeech
         }
 
-        return transcript
+        return TranscriptionResult(
+            rawTranscript: rawTranscript
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+            finalTranscript: finalTranscript,
+            correctionCount: 0
+        )
     }
 }

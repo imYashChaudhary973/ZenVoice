@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Foundation
 import ZenVoiceCore
+import ZenVoiceStorage
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -24,12 +25,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var currentHotKeyConfiguration = HotKeyPreferences.load()
     private var settingsViewModel: SettingsViewModel!
     private var settingsWindowController: SettingsWindowController!
+    private let historyPreferences = HistoryPreferences()
+    private var dictationVault: DictationVault?
+    private var activeHistoryID: UUID?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         configureTranscriber()
         configureMenuBar()
         configureZenBar()
+        configureHistoryStorage()
         configureHotKey()
         configureSettingsWindow()
         zenBarController.show()
@@ -44,7 +49,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        let historyID = activeHistoryID
+        activeHistoryID = nil
         recorder.cancel()
+        if let historyID {
+            try? dictationVault?.discard(id: historyID)
+        }
     }
 
     func applicationShouldHandleReopen(
@@ -64,6 +74,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         } catch {
             state.phase = .error(error.localizedDescription)
+        }
+    }
+
+    private func configureHistoryStorage() {
+        guard historyPreferences.isHistoryEnabled else {
+            return
+        }
+
+        do {
+            let vault = try DictationVault.live()
+            dictationVault = vault
+            try vault.recoverInterrupted(
+                retainAudio: historyPreferences.retainsFailedAudio
+            )
+            try vault.purgeExpiredRecoveryAudio()
+        } catch {
+            showError(error.localizedDescription)
         }
     }
 
@@ -303,8 +330,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startRecorder() {
         resetWorkItem?.cancel()
         state.resetAudioSamples()
+        var historyDraft: DictationDraft?
+
+        if historyPreferences.isHistoryEnabled {
+            do {
+                let vault = try resolvedVault()
+                let id = UUID()
+                let targetApplication = NSWorkspace.shared.frontmostApplication
+                let draft = DictationDraft(
+                    id: id,
+                    language: transcriber?.language ?? "en",
+                    modelID: transcriber?.modelID ?? "unknown",
+                    targetBundleID: targetApplication?.bundleIdentifier,
+                    targetAppName: targetApplication?.localizedName,
+                    recoveryAudioURL: vault.recoveryAudioURL(for: id)
+                )
+                try vault.begin(draft)
+                historyDraft = draft
+                activeHistoryID = id
+            } catch {
+                showError(error.localizedDescription)
+                return
+            }
+        }
+
         do {
-            try recorder.start { [weak self] level in
+            try recorder.start(
+                recordingURL: historyDraft?.recoveryAudioURL
+            ) { [weak self] level in
                 DispatchQueue.main.async {
                     self?.state.appendAudioLevel(level)
                 }
@@ -315,14 +368,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 zenBarController.show()
             }
         } catch {
+            if let historyID = historyDraft?.id {
+                try? dictationVault?.discard(id: historyID)
+                activeHistoryID = nil
+            }
             showError(error.localizedDescription)
         }
     }
 
     private func finishRecording() {
-        guard let audioURL = recorder.stop(), let transcriber else {
+        guard let recordedAudio = recorder.stop(), let transcriber else {
             showError("No recording was captured.")
             return
+        }
+        let historyID = activeHistoryID
+        activeHistoryID = nil
+
+        if let historyID {
+            do {
+                try dictationVault?.markTranscribing(
+                    id: historyID,
+                    durationSeconds: recordedAudio.durationSeconds
+                )
+            } catch {
+                handleTranscriptionFailure(
+                    error,
+                    recordedAudio: recordedAudio,
+                    historyID: historyID
+                )
+                return
+            }
         }
 
         state.phase = .transcribing
@@ -330,13 +405,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         transcriptionQueue.async { [weak self] in
             do {
-                let transcript = try transcriber.transcribe(audioURL: audioURL)
+                let result = try transcriber.transcribe(
+                    audioURL: recordedAudio.url
+                )
                 DispatchQueue.main.async {
-                    self?.complete(transcript: transcript)
+                    self?.complete(
+                        result: result,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID
+                    )
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self?.showError(error.localizedDescription)
+                    self?.handleTranscriptionFailure(
+                        error,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID
+                    )
                 }
             }
         }
@@ -348,26 +433,106 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         resetWorkItem?.cancel()
+        let historyID = activeHistoryID
+        activeHistoryID = nil
         recorder.cancel()
+        if let historyID {
+            try? dictationVault?.discard(id: historyID)
+        }
         state.resetAudioSamples()
         state.phase = .idle
         updateStartStopMenuTitle()
     }
 
-    private func complete(transcript: String) {
-        state.lastTranscript = transcript
+    private func complete(
+        result: TranscriptionResult,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        historyID: UUID?
+    ) {
+        var historySaveError: Error?
+        if let historyID {
+            do {
+                try dictationVault?.storeTranscript(
+                    id: historyID,
+                    rawTranscript: result.rawTranscript,
+                    finalTranscript: result.finalTranscript,
+                    correctionCount: result.correctionCount
+                )
+                try dictationVault?.deleteRecoveryAudio(id: historyID)
+            } catch {
+                historySaveError = error
+                try? dictationVault?.markFailed(
+                    id: historyID,
+                    message: error.localizedDescription,
+                    retainAudio: historyPreferences.retainsFailedAudio
+                )
+            }
+        } else {
+            try? FileManager.default.removeItem(at: recordedAudio.url)
+        }
+
+        state.lastTranscript = result.finalTranscript
         state.phase = .inserting
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             guard let self else { return }
-            switch self.inserter.insert(transcript) {
+            switch self.inserter.insert(result.finalTranscript) {
             case .pasted:
+                if let historyID, historySaveError == nil {
+                    try? self.dictationVault?.markInsertion(
+                        id: historyID,
+                        outcome: .inserted
+                    )
+                }
                 self.state.phase = .success
                 self.scheduleIdleReset(after: 1.5)
             case .copiedOnly:
+                if let historyID, historySaveError == nil {
+                    try? self.dictationVault?.markInsertion(
+                        id: historyID,
+                        outcome: .copiedOnly
+                    )
+                }
                 self.showError("Copied—enable Accessibility to auto-paste.")
             }
+
+            if let historySaveError {
+                self.showError(
+                    "Inserted, but history was not saved: "
+                        + historySaveError.localizedDescription
+                )
+            }
         }
+    }
+
+    private func handleTranscriptionFailure(
+        _ error: Error,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        historyID: UUID?
+    ) {
+        if let historyID {
+            do {
+                try dictationVault?.markFailed(
+                    id: historyID,
+                    message: error.localizedDescription,
+                    retainAudio: historyPreferences.retainsFailedAudio
+                )
+            } catch {
+                try? FileManager.default.removeItem(at: recordedAudio.url)
+            }
+        } else {
+            try? FileManager.default.removeItem(at: recordedAudio.url)
+        }
+        showError(error.localizedDescription)
+    }
+
+    private func resolvedVault() throws -> DictationVault {
+        if let dictationVault {
+            return dictationVault
+        }
+        let vault = try DictationVault.live()
+        dictationVault = vault
+        return vault
     }
 
     private func showError(_ message: String) {

@@ -1,0 +1,133 @@
+import Foundation
+
+public enum DictationStatus: String, Codable, Sendable {
+    case recording
+    case transcribing
+    case ready
+    case inserted
+    case copiedOnly
+    case failed
+}
+
+public enum DictationCategory: String, Codable, CaseIterable, Sendable {
+    case documents
+    case email
+    case workMessages
+    case personalMessages
+    case aiPrompts
+    case notes
+    case development
+    case other
+}
+
+public struct DictationDraft: Sendable {
+    public let id: UUID
+    public let startedAt: Date
+    public let language: String
+    public let modelID: String
+    public let targetBundleID: String?
+    public let targetAppName: String?
+    public let category: DictationCategory
+    public let recoveryAudioURL: URL
+
+    public init(
+        id: UUID = UUID(),
+        startedAt: Date = Date(),
+        language: String,
+        modelID: String,
+        targetBundleID: String?,
+        targetAppName: String?,
+        category: DictationCategory = .other,
+        recoveryAudioURL: URL
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.language = language
+        self.modelID = modelID
+        self.targetBundleID = targetBundleID
+        self.targetAppName = targetAppName
+        self.category = category
+        self.recoveryAudioURL = recoveryAudioURL
+    }
+}
+
+public struct DictationRecord: Identifiable, Sendable {
+    public let id: UUID
+    public let startedAt: Date
+    public let completedAt: Date?
+    public let durationSeconds: TimeInterval
+    public let rawTranscript: String?
+    public let finalTranscript: String?
+    public let wordCount: Int
+    public let wordsPerMinute: Double
+    public let language: String
+    public let modelID: String
+    public let targetBundleID: String?
+    public let targetAppName: String?
+    public let category: DictationCategory
+    public let insertionOutcome: DictationStatus?
+    public let correctionCount: Int
+    public let status: DictationStatus
+    public let recoveryAudioURL: URL?
+    public let recoveryAudioExpiresAt: Date?
+    public let errorMessage: String?
+
+    public init(
+        id: UUID,
+        startedAt: Date,
+        completedAt: Date?,
+        durationSeconds: TimeInterval,
+        rawTranscript: String?,
+        finalTranscript: String?,
+        wordCount: Int,
+        wordsPerMinute: Double,
+        language: String,
+        modelID: String,
+        targetBundleID: String?,
+        targetAppName: String?,
+        category: DictationCategory,
+        insertionOutcome: DictationStatus?,
+        correctionCount: Int,
+        status: DictationStatus,
+        recoveryAudioURL: URL?,
+        recoveryAudioExpiresAt: Date?,
+        errorMessage: String?
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.durationSeconds = durationSeconds
+        self.rawTranscript = rawTranscript
+        self.finalTranscript = finalTranscript
+        self.wordCount = wordCount
+        self.wordsPerMinute = wordsPerMinute
+        self.language = language
+        self.modelID = modelID
+        self.targetBundleID = targetBundleID
+        self.targetAppName = targetAppName
+        self.category = category
+        self.insertionOutcome = insertionOutcome
+        self.correctionCount = correctionCount
+        self.status = status
+        self.recoveryAudioURL = recoveryAudioURL
+        self.recoveryAudioExpiresAt = recoveryAudioExpiresAt
+        self.errorMessage = errorMessage
+    }
+}
+
+public enum DictationMetrics {
+    public static func wordCount(in text: String) -> Int {
+        text.split(whereSeparator: \.isWhitespace).count
+    }
+
+    public static func wordsPerMinute(
+        wordCount: Int,
+        durationSeconds: TimeInterval
+    ) -> Double {
+        guard durationSeconds > 0 else {
+            return 0
+        }
+        return Double(wordCount) / (durationSeconds / 60)
+    }
+}
+
