@@ -49,6 +49,8 @@ analytics, or cloud transcription services in the current application.
 - Explicit English-safe language profiles with 64 selectable languages.
 - Hinglish Latin-script output plus native-script and local English-translation
   modes for multilingual dictation.
+- Selectable microphones, safe disconnection handling, and a three-second
+  on-device Audio Doctor.
 - Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
   private local timing samples.
 - Local Instant Refine with Off, Clean, and Agent Prompt modes.
@@ -110,6 +112,9 @@ required.
 
 Open **Languages** to choose English, Hinglish, automatic detection, or another
 spoken language. Any non-English profile requires a Multilingual model.
+
+Open **Audio** to follow the macOS default input, pin a connected microphone,
+or run a local signal and format test.
 
 ## Use ZenVoice
 
@@ -173,6 +178,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Private Highlight Cards](docs/SHARING.md)
 - [Instant Refine](docs/INSTANT_REFINE.md)
 - [Language Profiles](docs/LANGUAGES.md)
+- [Microphones and Audio Doctor](docs/AUDIO.md)
 - [Release Readiness](docs/RELEASE_READINESS.md)
 - [M9 Security Review](docs/SECURITY_REVIEW.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)

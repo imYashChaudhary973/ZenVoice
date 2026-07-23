@@ -11,6 +11,10 @@ network.
 ### Microphone audio
 
 - Recorded as a temporary 16 kHz mono WAV file.
+- The chosen microphone identifier is stored locally. System Default stores no
+  device identifier and follows the current macOS input.
+- Audio Doctor records an explicit three-second local fixture, validates its
+  signal and format, deletes it immediately, and creates no History record.
 - Read in-process by the bundled local `whisper.cpp` runtime.
 - Deleted after successful transcription.
 - Deleted immediately when a recording is cancelled.

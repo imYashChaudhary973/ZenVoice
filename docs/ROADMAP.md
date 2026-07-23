@@ -41,7 +41,7 @@ recorded in
 ## Next: quality and daily reliability
 
 - [x] Keep the Whisper model loaded to reduce transcription latency
-- [ ] Add microphone selection and disconnection handling
+- [x] Add microphone selection, Audio Doctor, and safe disconnection handling
 - [x] Add a local personal dictionary for names and technical terms
 - [x] Add cancel and recover-last-dictation actions
 - [ ] Improve automated and manual lifecycle coverage
