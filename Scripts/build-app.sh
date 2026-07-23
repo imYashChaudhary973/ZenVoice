@@ -20,6 +20,9 @@ rm -rf "$app_dir"
 mkdir -p "$contents_dir/MacOS" "$contents_dir/Resources" "$frameworks_dir"
 cp "$project_dir/.build/release/ZenVoice" "$contents_dir/MacOS/ZenVoice"
 cp -R "$project_dir/.build/release/whisper.framework" "$frameworks_dir/"
+install_name_tool \
+    -add_rpath "@executable_path/../Frameworks" \
+    "$contents_dir/MacOS/ZenVoice"
 cp "$project_dir/Resources/Info.plist" "$contents_dir/Info.plist"
 cp "$brand_dir/ZenLogo.png" "$contents_dir/Resources/ZenLogo.png"
 cp "$icon_path" "$contents_dir/Resources/ZenVoice.icns"
