@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ZenBarView: View {
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
     @ObservedObject var state: AppState
     let toggleRecording: () -> Void
     let cancelRecording: () -> Void
@@ -28,8 +30,14 @@ struct ZenBarView: View {
             controlBar
         }
         .frame(width: 320, height: 96, alignment: .bottom)
-        .animation(.easeOut(duration: 0.16), value: state.phase)
-        .animation(.easeOut(duration: 0.16), value: state.showsStatusMessage)
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: 0.16),
+            value: state.phase
+        )
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: 0.16),
+            value: state.showsStatusMessage
+        )
     }
 
     @ViewBuilder
@@ -84,6 +92,8 @@ struct ZenBarView: View {
             .padding(.horizontal, 6)
             .frame(height: 30)
             .background(barBackground)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Dictation inserted")
 
         case .transcribing, .inserting:
             HStack(spacing: 7) {
@@ -188,6 +198,8 @@ struct ZenBarView: View {
 }
 
 private struct WaveformView: View {
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
     let samples: [Double]
     private let visualProfile = [
         0.52, 0.72, 0.88, 0.66, 1.00, 0.78, 0.94,
@@ -209,7 +221,10 @@ private struct WaveformView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        .animation(.linear(duration: 0.055), value: samples)
+        .animation(
+            reduceMotion ? nil : .linear(duration: 0.055),
+            value: samples
+        )
         .accessibilityHidden(true)
     }
 }

@@ -337,6 +337,64 @@ guard safeContext.count <= NextDictationContext.maximumCharacterCount,
 
 print("ZenVoiceCoreChecks: application context and commands passed")
 
+let onboardingSuite =
+    "ZenVoiceCoreChecks.Onboarding.\(UUID().uuidString)"
+guard let onboardingDefaults =
+    UserDefaults(suiteName: onboardingSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create onboarding fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    onboardingDefaults.removePersistentDomain(
+        forName: onboardingSuite
+    )
+}
+guard OnboardingPreferences.shouldPresent(
+    defaults: onboardingDefaults
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: fresh install skipped onboarding\n".utf8)
+    )
+    exit(1)
+}
+OnboardingPreferences.complete(defaults: onboardingDefaults)
+guard !OnboardingPreferences.shouldPresent(
+    defaults: onboardingDefaults
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: completed onboarding returned\n".utf8)
+    )
+    exit(1)
+}
+OnboardingPreferences.reset(defaults: onboardingDefaults)
+guard OnboardingPreferences.shouldPresent(
+    defaults: onboardingDefaults
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: onboarding reset was ignored\n".utf8)
+    )
+    exit(1)
+}
+onboardingDefaults.removePersistentDomain(
+    forName: onboardingSuite
+)
+LanguagePreferences.save(.english, defaults: onboardingDefaults)
+guard !OnboardingPreferences.shouldPresent(
+    defaults: onboardingDefaults
+),
+      onboardingDefaults.bool(
+        forKey: OnboardingPreferences.completionKey
+      ) else {
+    FileHandle.standardError.write(
+        Data("FAIL: existing install was forced into onboarding\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: onboarding lifecycle passed")
+
 var quietMeter = AudioLevelMeter()
 let quietLevel = quietMeter.update(
     averageDecibels: -42,

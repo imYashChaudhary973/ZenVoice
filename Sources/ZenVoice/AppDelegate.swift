@@ -99,6 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RefinementModelManagerViewModel!
     private var applicationProfileViewModel:
         ApplicationProfileViewModel!
+    private let onboardingViewModel = OnboardingViewModel(
+        showAtLaunch: OnboardingPreferences.shouldPresent()
+    )
     private var settingsWindowController: SettingsWindowController!
     private let refinementCoordinator =
         LocalRefinementCoordinator()
@@ -580,6 +583,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 refinementModelManagerViewModel,
             applicationProfileViewModel:
                 applicationProfileViewModel,
+            onboardingViewModel: onboardingViewModel,
             appState: state
         )
     }

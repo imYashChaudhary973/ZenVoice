@@ -72,6 +72,14 @@ final class HistoryViewModel: ObservableObject {
         recoveryRecords.count
     }
 
+    var savedTranscriptCount: Int {
+        records.lazy.filter { $0.finalTranscript != nil }.count
+    }
+
+    var recoveryAudioCount: Int {
+        records.lazy.filter { $0.recoveryAudioURL != nil }.count
+    }
+
     func refresh() {
         guard historyEnabled || preferences.hasEverEnabledHistory else {
             records = []
@@ -186,6 +194,16 @@ final class HistoryViewModel: ObservableObject {
         do {
             try vaultProvider().deleteAll()
             records = []
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deleteAllRecoveryAudio() {
+        do {
+            _ = try vaultProvider().deleteAllRecoveryAudio()
+            refresh()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
