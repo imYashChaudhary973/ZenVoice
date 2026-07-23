@@ -89,6 +89,22 @@ network.
   history. Private Dictation and unsaved dictations leave no correction-usage
   event.
 - Delete All removes correction rules before rotating the vault key.
+- Correction Review decrypts before/after text only while rendering the local
+  Voice Profile screen. It creates no training dataset or review table.
+- Personal rule application and saved-history pattern analysis can be paused
+  independently. Pausing leaves existing encrypted data untouched.
+- Delete All Rules removes correction rules without deleting transcript
+  History. Full Delete All still removes both and rotates the vault key.
+
+### Recovery Inbox
+
+- Recovery Inbox is a local filter over existing encrypted History records;
+  it creates no duplicate database or transcript.
+- Failed dictations appear with Retry only while valid recovery audio exists.
+- Usable partial transcripts remain copyable even when their audio has been
+  deleted.
+- The existing 24-hour failed-audio expiry and Private Dictation rules still
+  apply.
 
 ### Instant Refine
 

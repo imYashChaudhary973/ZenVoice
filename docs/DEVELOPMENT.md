@@ -121,6 +121,9 @@ The checks cover:
 - application-profile persistence and removal, bounded context sanitization,
   default-off voice commands, English and multilingual command aliases, and
   per-call Whisper language/context arguments.
+- correction-rule pause and pattern-analysis preferences, independent rule
+  deletion, before/after review selection, and failed/partial Recovery Inbox
+  filtering.
 
 GitHub Actions runs the same checks on macOS for each pull request and `main`
 push. Semgrep Community Edition runs independently on an Ubuntu runner. The
