@@ -19,21 +19,25 @@ final class WhisperTranscriber: @unchecked Sendable {
     private let configuration: ZenVoiceConfiguration
     private let cleaner = TranscriptCleaner()
 
+    var modelID: String {
+        configuration.modelID
+    }
+
+    var language: String {
+        configuration.language
+    }
+
     init(configuration: ZenVoiceConfiguration) {
         self.configuration = configuration
     }
 
-    func transcribe(audioURL: URL) throws -> String {
-        defer {
-            try? FileManager.default.removeItem(at: audioURL)
-        }
-
+    func transcribe(audioURL: URL) throws -> TranscriptionResult {
         let process = Process()
         process.executableURL = configuration.whisperExecutableURL
         process.arguments = [
             "--model", configuration.modelURL.path,
             "--file", audioURL.path,
-            "--language", "en",
+            "--language", configuration.language,
             "--no-timestamps",
             "--no-prints",
             "--threads", "8"
@@ -44,20 +48,24 @@ final class WhisperTranscriber: @unchecked Sendable {
         process.standardError = FileHandle.nullDevice
 
         try process.run()
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        let rawTranscript = String(data: data, encoding: .utf8) ?? ""
+        let finalTranscript = cleaner.clean(rawTranscript)
 
-        guard process.terminationStatus == 0 else {
+        if process.terminationStatus != 0, finalTranscript.isEmpty {
             throw TranscriptionError.commandFailed
         }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let rawTranscript = String(data: data, encoding: .utf8) ?? ""
-        let transcript = cleaner.clean(rawTranscript)
-
-        guard !transcript.isEmpty else {
+        guard !finalTranscript.isEmpty else {
             throw TranscriptionError.noSpeech
         }
 
-        return transcript
+        return TranscriptionResult(
+            rawTranscript: rawTranscript
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+            finalTranscript: finalTranscript,
+            correctionCount: 0,
+            isPartial: process.terminationStatus != 0
+        )
     }
 }

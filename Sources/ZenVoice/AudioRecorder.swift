@@ -3,6 +3,11 @@ import Foundation
 import ZenVoiceCore
 
 final class AudioRecorder {
+    struct RecordedAudio {
+        let url: URL
+        let durationSeconds: TimeInterval
+    }
+
     enum RecorderError: LocalizedError {
         case unableToCreateRecorder
         case unableToStart
@@ -20,16 +25,21 @@ final class AudioRecorder {
     private var recorder: AVAudioRecorder?
     private var meterTimer: Timer?
     private var recordingURL: URL?
+    private var recordingStartedAt: Date?
     private var audioLevelMeter = AudioLevelMeter()
 
     var isRecording: Bool {
         recorder?.isRecording == true
     }
 
-    func start(levelChanged: @escaping (Double) -> Void) throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenvoice-\(UUID().uuidString)")
-            .appendingPathExtension("wav")
+    func start(
+        recordingURL requestedURL: URL? = nil,
+        levelChanged: @escaping (Double) -> Void
+    ) throws {
+        let url = requestedURL
+            ?? FileManager.default.temporaryDirectory
+                .appendingPathComponent("zenvoice-\(UUID().uuidString)")
+                .appendingPathExtension("wav")
 
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
@@ -51,6 +61,7 @@ final class AudioRecorder {
 
         self.recorder = recorder
         recordingURL = url
+        recordingStartedAt = Date()
         audioLevelMeter = AudioLevelMeter()
         meterTimer?.invalidate()
         meterTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) {
@@ -66,13 +77,25 @@ final class AudioRecorder {
         }
     }
 
-    func stop() -> URL? {
+    func stop() -> RecordedAudio? {
         meterTimer?.invalidate()
         meterTimer = nil
         recorder?.stop()
         recorder = nil
-        defer { recordingURL = nil }
-        return recordingURL
+        defer {
+            recordingURL = nil
+            recordingStartedAt = nil
+        }
+        guard let recordingURL else {
+            return nil
+        }
+        let duration = recordingStartedAt.map {
+            max(0, Date().timeIntervalSince($0))
+        } ?? 0
+        return RecordedAudio(
+            url: recordingURL,
+            durationSeconds: duration
+        )
     }
 
     func cancel() {
@@ -82,6 +105,7 @@ final class AudioRecorder {
         recorder?.deleteRecording()
         recorder = nil
         recordingURL = nil
+        recordingStartedAt = nil
     }
 
 }

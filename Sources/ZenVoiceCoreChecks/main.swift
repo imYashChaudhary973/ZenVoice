@@ -86,3 +86,65 @@ guard decodedHotKey == defaultHotKey else {
 }
 
 print("ZenVoiceCoreChecks: hotkey configuration passed")
+
+let pasteLastHotKey = HotKeyConfiguration.pasteLastDefault
+guard pasteLastHotKey.isValid,
+      pasteLastHotKey.displayName == "⌃ ⌥ V",
+      pasteLastHotKey != defaultHotKey else {
+    FileHandle.standardError.write(
+        Data("FAIL: paste-last hotkey configuration is invalid\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: recovery hotkey configuration passed")
+
+let privateHotKey = HotKeyConfiguration.privateModeDefault
+guard privateHotKey.isValid,
+      privateHotKey.displayName == "⌃ ⌥ P",
+      privateHotKey != defaultHotKey,
+      privateHotKey != pasteLastHotKey else {
+    FileHandle.standardError.write(
+        Data("FAIL: private-mode hotkey configuration is invalid\n".utf8)
+    )
+    exit(1)
+}
+
+let unknownModifier = HotKeyConfiguration(
+    keyCode: 49,
+    modifiers: HotKeyModifiers(rawValue: 1 << 10),
+    keyLabel: "Space"
+)
+guard !unknownModifier.isValid else {
+    FileHandle.standardError.write(
+        Data("FAIL: unknown persisted modifier was accepted\n".utf8)
+    )
+    exit(1)
+}
+
+let mismatchedLabel = HotKeyConfiguration(
+    keyCode: 49,
+    modifiers: [.control],
+    keyLabel: "P"
+)
+guard !mismatchedLabel.isValid,
+      HotKeyConfiguration.canonicalLabel(forKeyCode: 35) == "P",
+      HotKeyConfiguration.canonicalLabel(forKeyCode: 127) == nil else {
+    FileHandle.standardError.write(
+        Data("FAIL: hotkey labels are not bound to key codes\n".utf8)
+    )
+    exit(1)
+}
+
+for choice in HoldKeyChoice.allCases {
+    let encoded = try JSONEncoder().encode(choice)
+    guard try JSONDecoder().decode(HoldKeyChoice.self, from: encoded) == choice,
+          !choice.displayName.isEmpty else {
+        FileHandle.standardError.write(
+            Data("FAIL: hold-to-dictate choice is invalid\n".utf8)
+        )
+        exit(1)
+    }
+}
+
+print("ZenVoiceCoreChecks: private and hold controls passed")

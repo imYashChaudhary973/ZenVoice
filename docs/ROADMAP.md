@@ -2,6 +2,11 @@
 
 This roadmap communicates direction, not a release promise.
 
+The approved milestone sequence and delivery rules are tracked in
+[Build Order](BUILD_ORDER.md). Accepted privacy and model constraints are
+recorded in
+[ADR 0001](decisions/0001-local-data-and-model-governance.md).
+
 ## Current: dependable personal alpha
 
 - [x] Native macOS menu-bar application
@@ -9,6 +14,12 @@ This roadmap communicates direction, not a release promise.
 - [x] Native settings window
 - [x] Configurable and persistent dictation shortcut
 - [x] Live permission and local-model status
+- [x] Encrypted local transcript history with a pause control
+- [x] Interrupted-transcription recovery records
+- [x] Search, copy, retry, and delete history actions
+- [x] Configurable paste-last shortcut
+- [x] Configurable Private Dictation shortcut
+- [x] Hold-to-dictate with Fn or a right-side modifier
 - [x] Local English Whisper transcription
 - [x] Active-app paste with clipboard fallback
 - [x] ZenBar lifecycle feedback
@@ -20,7 +31,7 @@ This roadmap communicates direction, not a release promise.
 - [ ] Keep the Whisper model loaded to reduce transcription latency
 - [ ] Add microphone selection and disconnection handling
 - [ ] Add a local personal dictionary for names and technical terms
-- [ ] Add cancel and recover-last-recording actions
+- [x] Add cancel and recover-last-dictation actions
 - [ ] Improve automated and manual lifecycle coverage
 
 ## Later: multilingual and distribution readiness

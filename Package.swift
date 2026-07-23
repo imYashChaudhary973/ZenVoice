@@ -9,19 +9,34 @@ let package = Package(
     ],
     products: [
         .executable(name: "ZenVoice", targets: ["ZenVoice"]),
-        .executable(name: "ZenVoiceCoreChecks", targets: ["ZenVoiceCoreChecks"])
+        .executable(name: "ZenVoiceCoreChecks", targets: ["ZenVoiceCoreChecks"]),
+        .executable(
+            name: "ZenVoiceStorageChecks",
+            targets: ["ZenVoiceStorageChecks"]
+        )
     ],
     targets: [
         .target(
             name: "ZenVoiceCore"
         ),
+        .target(
+            name: "ZenVoiceStorage",
+            dependencies: ["ZenVoiceCore"],
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
+        ),
         .executableTarget(
             name: "ZenVoice",
-            dependencies: ["ZenVoiceCore"]
+            dependencies: ["ZenVoiceCore", "ZenVoiceStorage"]
         ),
         .executableTarget(
             name: "ZenVoiceCoreChecks",
             dependencies: ["ZenVoiceCore"]
+        ),
+        .executableTarget(
+            name: "ZenVoiceStorageChecks",
+            dependencies: ["ZenVoiceStorage"]
         )
     ]
 )

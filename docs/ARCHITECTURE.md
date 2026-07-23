@@ -17,6 +17,9 @@ SettingsView ─► SettingsViewModel ─► HotKeyPreferences
                                            ▼
 AppDelegate ───────────────────────────► AppState ─► ZenBarView
     │                                      ▲
+    ├─► DictationVault ─► SQLite + AES-GCM + Keychain
+    │         ▲
+    │         └──────── HistoryViewModel ─► HistoryView
     ▼                                      │ microphone levels
 AudioRecorder ──────► local WAV ──────► WhisperTranscriber
                                            │
@@ -37,12 +40,17 @@ AudioRecorder ──────► local WAV ──────► WhisperTrans
 The native application target owns macOS-specific behavior:
 
 - `AppDelegate` coordinates the dictation lifecycle.
-- `GlobalHotKey` registers the chosen global shortcut with Carbon.
+- `GlobalHotKey` registers action-specific global shortcuts with Carbon and
+  validates the delivered hotkey identifier before dispatch.
+- `HoldToDictateController` listens for supported modifier press/release events.
 - `HotKeyPreferences` persists that shortcut in local user defaults.
 - `SettingsWindowController` owns the reusable native settings window.
 - `SettingsViewModel` captures shortcut combinations and reports live
   Microphone, Accessibility, and model status.
-- `ZenVoiceSettingsView` provides Overview, Shortcuts, and Privacy screens.
+- `HistoryViewModel` manages local-history controls, search, recovery actions,
+  privacy controls, and deletion.
+- `ZenVoiceSettingsView` provides Overview, History, Shortcuts, and Privacy
+  screens.
 - `ZenDesignTokens` keeps the dark Zen visual language consistent.
 - `AudioRecorder` captures 16 kHz mono PCM audio using AVFoundation.
 - `WhisperTranscriber` runs the local `whisper-cli` process.
@@ -60,12 +68,34 @@ launching the application:
 - `HotKeyConfiguration` validates and serializes shortcut choices.
 - `TranscriptCleaner` performs conservative whitespace and filler cleanup.
 - `ZenVoiceConfiguration` discovers the local runtime and model.
+- `TranscriptionResult` carries raw and cleaned text without deciding its
+  storage lifecycle.
+
+### `ZenVoiceStorage`
+
+The storage target owns the sensitive local-data boundary:
+
+- `DictationVault` stores lifecycle records in native SQLite.
+- Transcript fields use AES-GCM encryption.
+- `KeychainVaultKeyProvider` protects the 256-bit encryption key in the macOS
+  Keychain.
+- `HistoryPreferences` records history saving, failed-audio recovery, and
+  Private Dictation mode.
+- Recovery audio lives in private Application Support storage and expires no
+  later than 24 hours after capture began; disabling recovery removes retained
+  recovery recordings immediately.
 
 ### `ZenVoiceCoreChecks`
 
-This executable provides fast deterministic checks for transcript cleanup,
-quiet-versus-loud waveform behavior, and hotkey serialization. It avoids
-microphone and Accessibility dependencies.
+`ZenVoiceCoreChecks` provides deterministic checks for transcript cleanup,
+quiet-versus-loud waveform behavior, strict hotkey validation, private-mode
+shortcut defaults, and hold-key serialization.
+
+`ZenVoiceStorageChecks` verifies encrypted-at-rest transcript storage, weighted
+WPM, interruption recovery, capture-bounded recovery expiry, durable
+Private Dictation suppression, recovery-disable cleanup, cancellation cleanup,
+cryptographic Delete All, ciphertext field binding, recovery-path confinement,
+partial transcript flags, and history preferences.
 
 ## State model
 
@@ -80,6 +110,10 @@ ZenBar exposes the actual dictation lifecycle:
 Busy states reject a second recording request. Success and error messages return
 to idle after a short visible delay.
 
+When history is enabled, a record moves through `recording`, `transcribing`,
+`ready`, and `inserted` or `copiedOnly`. An interrupted or failed operation
+moves to `failed` and can retain its local audio for retry.
+
 ## Concurrency
 
 UI and application state remain on the main actor. Whisper transcription runs
@@ -92,8 +126,8 @@ ZenBar.
   version simple but reloads the model and adds latency.
 - English uses `ggml-base.en.bin`. Multilingual support requires model and
   language-selection changes.
-- One user-defined shortcut starts and stops dictation. Additional actions and
-  shortcuts are intentionally deferred.
+- Users can configure toggle dictation, paste-last, and Private Dictation
+  shortcuts. Hold-to-dictate supports Fn and right-side modifier keys.
 - Automatic paste uses the system clipboard and a synthetic `Command + V`
   event, which requires Accessibility permission.
 - Local builds prefer a stable Apple Development signature so macOS privacy

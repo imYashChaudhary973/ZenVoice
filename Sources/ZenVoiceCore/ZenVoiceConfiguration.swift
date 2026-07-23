@@ -3,10 +3,20 @@ import Foundation
 public struct ZenVoiceConfiguration {
     public let whisperExecutableURL: URL
     public let modelURL: URL
+    public let language: String
 
-    public init(whisperExecutableURL: URL, modelURL: URL) {
+    public init(
+        whisperExecutableURL: URL,
+        modelURL: URL,
+        language: String = "en"
+    ) {
         self.whisperExecutableURL = whisperExecutableURL
         self.modelURL = modelURL
+        self.language = language
+    }
+
+    public var modelID: String {
+        modelURL.deletingPathExtension().lastPathComponent
     }
 
     public static func discover(
@@ -42,7 +52,8 @@ public struct ZenVoiceConfiguration {
 
         return ZenVoiceConfiguration(
             whisperExecutableURL: URL(fileURLWithPath: executable),
-            modelURL: URL(fileURLWithPath: model)
+            modelURL: URL(fileURLWithPath: model),
+            language: "en"
         )
     }
 

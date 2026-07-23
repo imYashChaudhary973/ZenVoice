@@ -7,6 +7,12 @@ import ZenVoiceCore
 
 @MainActor
 final class SettingsViewModel: ObservableObject {
+    enum ShortcutTarget {
+        case dictation
+        case pasteLast
+        case privateMode
+    }
+
     enum PermissionStatus: Equatable {
         case allowed
         case needsAccess
@@ -25,7 +31,11 @@ final class SettingsViewModel: ObservableObject {
     }
 
     @Published private(set) var currentShortcut: HotKeyConfiguration
-    @Published private(set) var isCapturingShortcut = false
+    @Published private(set) var pasteLastShortcut: HotKeyConfiguration
+    @Published private(set) var privateModeShortcut: HotKeyConfiguration
+    @Published private(set) var holdToDictateEnabled: Bool
+    @Published private(set) var holdKey: HoldKeyChoice
+    @Published private(set) var shortcutTarget: ShortcutTarget?
     @Published var shortcutError: String?
     @Published private(set) var microphoneStatus: PermissionStatus = .needsAccess
     @Published private(set) var accessibilityStatus: PermissionStatus = .needsAccess
@@ -33,16 +43,49 @@ final class SettingsViewModel: ObservableObject {
 
     private let applyShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
+    private let applyPasteLastShortcut:
+        (HotKeyConfiguration) -> Result<Void, Error>
+    private let applyPrivateModeShortcut:
+        (HotKeyConfiguration) -> Result<Void, Error>
+    private let applyHoldToDictate: (Bool, HoldKeyChoice) -> Void
     private var eventMonitor: Any?
 
     init(
         currentShortcut: HotKeyConfiguration,
+        pasteLastShortcut: HotKeyConfiguration,
+        privateModeShortcut: HotKeyConfiguration,
+        holdToDictateEnabled: Bool,
+        holdKey: HoldKeyChoice,
         applyShortcut: @escaping
-            (HotKeyConfiguration) -> Result<Void, Error>
+            (HotKeyConfiguration) -> Result<Void, Error>,
+        applyPasteLastShortcut: @escaping
+            (HotKeyConfiguration) -> Result<Void, Error>,
+        applyPrivateModeShortcut: @escaping
+            (HotKeyConfiguration) -> Result<Void, Error>,
+        applyHoldToDictate: @escaping (Bool, HoldKeyChoice) -> Void
     ) {
         self.currentShortcut = currentShortcut
+        self.pasteLastShortcut = pasteLastShortcut
+        self.privateModeShortcut = privateModeShortcut
+        self.holdToDictateEnabled = holdToDictateEnabled
+        self.holdKey = holdKey
         self.applyShortcut = applyShortcut
+        self.applyPasteLastShortcut = applyPasteLastShortcut
+        self.applyPrivateModeShortcut = applyPrivateModeShortcut
+        self.applyHoldToDictate = applyHoldToDictate
         refreshSystemStatus()
+    }
+
+    var isCapturingShortcut: Bool {
+        shortcutTarget == .dictation
+    }
+
+    var isCapturingPasteLastShortcut: Bool {
+        shortcutTarget == .pasteLast
+    }
+
+    var isCapturingPrivateModeShortcut: Bool {
+        shortcutTarget == .privateMode
     }
 
     deinit {
@@ -69,13 +112,15 @@ final class SettingsViewModel: ObservableObject {
         isLocalModelReady = (try? ZenVoiceConfiguration.discover()) != nil
     }
 
-    func beginShortcutCapture() {
-        guard !isCapturingShortcut else {
+    func beginShortcutCapture(
+        for target: ShortcutTarget = .dictation
+    ) {
+        guard shortcutTarget == nil else {
             return
         }
 
         shortcutError = nil
-        isCapturingShortcut = true
+        shortcutTarget = target
         eventMonitor = NSEvent.addLocalMonitorForEvents(
             matching: .keyDown
         ) { [weak self] event in
@@ -85,12 +130,30 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func cancelShortcutCapture() {
-        isCapturingShortcut = false
+        shortcutTarget = nil
         removeEventMonitor()
     }
 
     func resetShortcut() {
-        apply(.dictationDefault)
+        apply(.dictationDefault, to: .dictation)
+    }
+
+    func resetPasteLastShortcut() {
+        apply(.pasteLastDefault, to: .pasteLast)
+    }
+
+    func resetPrivateModeShortcut() {
+        apply(.privateModeDefault, to: .privateMode)
+    }
+
+    func setHoldToDictateEnabled(_ enabled: Bool) {
+        holdToDictateEnabled = enabled
+        applyHoldToDictate(enabled, holdKey)
+    }
+
+    func setHoldKey(_ choice: HoldKeyChoice) {
+        holdKey = choice
+        applyHoldToDictate(holdToDictateEnabled, choice)
     }
 
     func requestMicrophoneAccess() {
@@ -132,7 +195,9 @@ final class SettingsViewModel: ObservableObject {
             return
         }
 
-        guard let keyLabel = keyLabel(for: event) else {
+        guard let keyLabel = HotKeyConfiguration.canonicalLabel(
+            forKeyCode: UInt32(event.keyCode)
+        ) else {
             shortcutError = "That key is not supported. Try another combination."
             cancelShortcutCapture()
             return
@@ -143,14 +208,37 @@ final class SettingsViewModel: ObservableObject {
             modifiers: modifiers,
             keyLabel: keyLabel
         )
-        apply(configuration)
+        guard let shortcutTarget else {
+            return
+        }
+        apply(configuration, to: shortcutTarget)
     }
 
-    private func apply(_ configuration: HotKeyConfiguration) {
+    private func apply(
+        _ configuration: HotKeyConfiguration,
+        to target: ShortcutTarget
+    ) {
         cancelShortcutCapture()
-        switch applyShortcut(configuration) {
+        let result: Result<Void, Error>
+        switch target {
+        case .dictation:
+            result = applyShortcut(configuration)
+        case .pasteLast:
+            result = applyPasteLastShortcut(configuration)
+        case .privateMode:
+            result = applyPrivateModeShortcut(configuration)
+        }
+
+        switch result {
         case .success:
-            currentShortcut = configuration
+            switch target {
+            case .dictation:
+                currentShortcut = configuration
+            case .pasteLast:
+                pasteLastShortcut = configuration
+            case .privateMode:
+                privateModeShortcut = configuration
+            }
             shortcutError = nil
         case .failure(let error):
             shortcutError = error.localizedDescription
@@ -182,50 +270,6 @@ final class SettingsViewModel: ObservableObject {
             result.insert(.shift)
         }
         return result
-    }
-
-    private func keyLabel(for event: NSEvent) -> String? {
-        let specialKeys: [UInt16: String] = [
-            36: "Return",
-            48: "Tab",
-            49: "Space",
-            51: "Delete",
-            53: "Escape",
-            71: "Clear",
-            76: "Enter",
-            115: "Home",
-            116: "Page Up",
-            117: "Forward Delete",
-            119: "End",
-            121: "Page Down",
-            123: "←",
-            124: "→",
-            125: "↓",
-            126: "↑",
-            122: "F1",
-            120: "F2",
-            99: "F3",
-            118: "F4",
-            96: "F5",
-            97: "F6",
-            98: "F7",
-            100: "F8",
-            101: "F9",
-            109: "F10",
-            103: "F11",
-            111: "F12"
-        ]
-
-        if let specialKey = specialKeys[event.keyCode] {
-            return specialKey
-        }
-
-        guard let characters = event.charactersIgnoringModifiers?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-            !characters.isEmpty else {
-            return nil
-        }
-        return characters.uppercased()
     }
 
     private func openSystemSettings(_ urlString: String) {
