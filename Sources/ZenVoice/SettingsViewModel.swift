@@ -30,6 +30,29 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
+    enum AudioDoctorState: Equatable {
+        case idle
+        case running
+        case passed
+        case quiet
+        case failed(String)
+
+        var title: String {
+            switch self {
+            case .idle:
+                return "Ready to test"
+            case .running:
+                return "Listening…"
+            case .passed:
+                return "Microphone sounds good"
+            case .quiet:
+                return "Signal is very quiet"
+            case .failed(let message):
+                return message
+            }
+        }
+    }
+
     @Published private(set) var currentShortcut: HotKeyConfiguration
     @Published private(set) var pasteLastShortcut: HotKeyConfiguration
     @Published private(set) var privateModeShortcut: HotKeyConfiguration
@@ -43,6 +66,10 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var instantRefineMode: InstantRefineMode
     @Published private(set) var languageProfile: LanguageProfile
     @Published var languageError: String?
+    @Published private(set) var microphones: [MicrophoneDevice] = []
+    @Published private(set) var selectedMicrophoneUID: String?
+    @Published private(set) var audioDoctorState: AudioDoctorState = .idle
+    @Published private(set) var audioDoctorLevel = 0.0
 
     private let applyShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
@@ -53,6 +80,10 @@ final class SettingsViewModel: ObservableObject {
     private let applyHoldToDictate: (Bool, HoldKeyChoice) -> Void
     private let applyLanguageProfile:
         (LanguageProfile) -> Result<Void, Error>
+    private let canRunAudioDoctor: () -> Bool
+    private let audioDoctorRecorder = AudioRecorder()
+    private var audioDoctorTask: Task<Void, Never>?
+    private var microphoneObserverTokens: [NSObjectProtocol] = []
     private var eventMonitor: Any?
 
     init(
@@ -69,7 +100,8 @@ final class SettingsViewModel: ObservableObject {
             (HotKeyConfiguration) -> Result<Void, Error>,
         applyHoldToDictate: @escaping (Bool, HoldKeyChoice) -> Void,
         applyLanguageProfile: @escaping
-            (LanguageProfile) -> Result<Void, Error>
+            (LanguageProfile) -> Result<Void, Error>,
+        canRunAudioDoctor: @escaping () -> Bool
     ) {
         self.currentShortcut = currentShortcut
         self.pasteLastShortcut = pasteLastShortcut
@@ -81,8 +113,13 @@ final class SettingsViewModel: ObservableObject {
         self.applyPrivateModeShortcut = applyPrivateModeShortcut
         self.applyHoldToDictate = applyHoldToDictate
         self.applyLanguageProfile = applyLanguageProfile
+        self.canRunAudioDoctor = canRunAudioDoctor
         instantRefineMode = InstantRefinePreferences.load()
         languageProfile = LanguagePreferences.load()
+        selectedMicrophoneUID =
+            MicrophonePreferences.selectedDeviceUID()
+        refreshMicrophones()
+        observeMicrophoneChanges()
         refreshSystemStatus()
     }
 
@@ -99,8 +136,13 @@ final class SettingsViewModel: ObservableObject {
     }
 
     deinit {
+        audioDoctorTask?.cancel()
+        audioDoctorRecorder.cancel()
         if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
+        }
+        for token in microphoneObserverTokens {
+            NotificationCenter.default.removeObserver(token)
         }
     }
 
@@ -204,6 +246,109 @@ final class SettingsViewModel: ObservableObject {
                 outputMode: .spokenLanguage
             )
         )
+    }
+
+    var selectedMicrophoneName: String {
+        guard let selectedMicrophoneUID else {
+            return microphones.first(where: \.isDefault)?.name
+                ?? "System Default"
+        }
+        return microphones.first {
+            $0.id == selectedMicrophoneUID
+        }?.name ?? "Disconnected microphone"
+    }
+
+    func selectMicrophone(_ uid: String?) {
+        guard audioDoctorState != .running else {
+            return
+        }
+        selectedMicrophoneUID = uid
+        MicrophonePreferences.save(deviceUID: uid)
+        audioDoctorState = .idle
+        audioDoctorLevel = 0
+    }
+
+    func refreshMicrophones() {
+        microphones = MicrophoneCatalog.devices()
+    }
+
+    func runAudioDoctor() {
+        guard audioDoctorState != .running else {
+            return
+        }
+        guard microphoneStatus == .allowed else {
+            audioDoctorState = .failed(
+                "Allow microphone access before running the test."
+            )
+            return
+        }
+        guard canRunAudioDoctor() else {
+            audioDoctorState = .failed(
+                "Finish the current dictation before testing the microphone."
+            )
+            return
+        }
+        if let selectedMicrophoneUID,
+           microphones.contains(
+            where: {
+                $0.id == selectedMicrophoneUID && $0.isConnected
+            }
+           ) == false {
+            audioDoctorState = .failed(
+                "The selected microphone is not connected."
+            )
+            return
+        }
+
+        audioDoctorLevel = 0
+        audioDoctorState = .running
+        do {
+            try audioDoctorRecorder.start(
+                selectedDeviceUID: selectedMicrophoneUID
+            ) { [weak self] level in
+                DispatchQueue.main.async {
+                    self?.audioDoctorLevel = max(
+                        self?.audioDoctorLevel ?? 0,
+                        level
+                    )
+                }
+            }
+        } catch {
+            audioDoctorState = .failed(error.localizedDescription)
+            return
+        }
+
+        audioDoctorTask?.cancel()
+        audioDoctorTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled, let self else {
+                return
+            }
+            let recordedAudio = audioDoctorRecorder.stop()
+            guard let url = recordedAudio?.url else {
+                audioDoctorState = .failed(
+                    "The microphone test did not capture audio."
+                )
+                audioDoctorTask = nil
+                return
+            }
+            let testFile = try? AVAudioFile(forReading: url)
+            let hasValidLocalFormat =
+                testFile?.processingFormat.sampleRate == 16_000
+                && testFile?.processingFormat.channelCount == 1
+                && (testFile?.length ?? 0) > 0
+            try? FileManager.default.removeItem(at: url)
+            guard hasValidLocalFormat else {
+                audioDoctorState = .failed(
+                    "The microphone signal could not be prepared for local transcription."
+                )
+                audioDoctorTask = nil
+                return
+            }
+            audioDoctorState =
+                audioDoctorLevel >= 0.08 ? .passed : .quiet
+            audioDoctorTask = nil
+        }
     }
 
     func requestMicrophoneAccess() {
@@ -310,6 +455,25 @@ final class SettingsViewModel: ObservableObject {
             refreshSystemStatus()
         case .failure(let error):
             languageError = error.localizedDescription
+        }
+    }
+
+    private func observeMicrophoneChanges() {
+        let center = NotificationCenter.default
+        let names: [Notification.Name] = [
+            AVCaptureDevice.wasConnectedNotification,
+            AVCaptureDevice.wasDisconnectedNotification
+        ]
+        microphoneObserverTokens = names.map { name in
+            center.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.refreshMicrophones()
+                }
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 import AVFoundation
+import AudioToolbox
 import Foundation
 import ZenVoiceCore
 
@@ -11,6 +12,7 @@ final class AudioRecorder {
     enum RecorderError: LocalizedError {
         case unableToCreateRecorder
         case unableToStart
+        case invalidInputFormat
 
         var errorDescription: String? {
             switch self {
@@ -18,22 +20,31 @@ final class AudioRecorder {
                 return "ZenVoice could not open the microphone."
             case .unableToStart:
                 return "ZenVoice could not start recording."
+            case .invalidInputFormat:
+                return "The selected microphone returned an unsupported audio format."
             }
         }
     }
 
-    private var recorder: AVAudioRecorder?
-    private var meterTimer: Timer?
+    private let engine = AVAudioEngine()
+    private var audioFile: AVAudioFile?
+    private var converter: AVAudioConverter?
+    private var targetFormat: AVAudioFormat?
     private var recordingURL: URL?
     private var recordingStartedAt: Date?
     private var audioLevelMeter = AudioLevelMeter()
+    private var levelChanged: ((Double) -> Void)?
+    private var isTapInstalled = false
+    private(set) var activeDeviceUID: String?
 
     var isRecording: Bool {
-        recorder?.isRecording == true
+        engine.isRunning
     }
 
     func start(
         recordingURL requestedURL: URL? = nil,
+        selectedDeviceUID: String? =
+            MicrophonePreferences.selectedDeviceUID(),
         levelChanged: @escaping (Double) -> Void
     ) throws {
         let url = requestedURL
@@ -41,47 +52,98 @@ final class AudioRecorder {
                 .appendingPathComponent("zenvoice-\(UUID().uuidString)")
                 .appendingPathExtension("wav")
 
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVSampleRateKey: 16_000.0,
-            AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsFloatKey: false,
-            AVLinearPCMIsBigEndianKey: false
-        ]
+        let inputNode = engine.inputNode
+        let effectiveDeviceUID = selectedDeviceUID
+            ?? AVCaptureDevice.default(for: .audio)?.uniqueID
+        if let effectiveDeviceUID {
+            var deviceID = try MicrophoneCatalog.audioDeviceID(
+                uid: effectiveDeviceUID
+            )
+            guard let audioUnit = inputNode.audioUnit,
+                  AudioUnitSetProperty(
+                    audioUnit,
+                    kAudioOutputUnitProperty_CurrentDevice,
+                    kAudioUnitScope_Global,
+                    0,
+                    &deviceID,
+                    UInt32(MemoryLayout<AudioDeviceID>.size)
+                  ) == noErr else {
+                throw RecorderError.unableToCreateRecorder
+            }
+        }
 
-        guard let recorder = try? AVAudioRecorder(url: url, settings: settings) else {
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0,
+              inputFormat.channelCount > 0,
+              let targetFormat = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: 16_000,
+                channels: 1,
+                interleaved: false
+              ),
+              let converter = AVAudioConverter(
+                from: inputFormat,
+                to: targetFormat
+              ) else {
+            throw RecorderError.invalidInputFormat
+        }
+
+        let audioFile: AVAudioFile
+        do {
+            audioFile = try AVAudioFile(
+                forWriting: url,
+                settings: targetFormat.settings,
+                commonFormat: .pcmFormatFloat32,
+                interleaved: false
+            )
+        } catch {
             throw RecorderError.unableToCreateRecorder
         }
 
-        recorder.isMeteringEnabled = true
-        guard recorder.prepareToRecord(), recorder.record() else {
-            throw RecorderError.unableToStart
-        }
-
-        self.recorder = recorder
+        self.audioFile = audioFile
+        self.converter = converter
+        self.targetFormat = targetFormat
+        self.levelChanged = levelChanged
+        activeDeviceUID = effectiveDeviceUID
         recordingURL = url
         recordingStartedAt = Date()
         audioLevelMeter = AudioLevelMeter()
-        meterTimer?.invalidate()
-        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) {
-            [weak self, weak recorder] _ in
-            guard let self, let recorder else { return }
-            recorder.updateMeters()
 
-            let level = audioLevelMeter.update(
-                averageDecibels: recorder.averagePower(forChannel: 0),
-                peakDecibels: recorder.peakPower(forChannel: 0)
-            )
-            levelChanged(level)
+        inputNode.installTap(
+            onBus: 0,
+            bufferSize: 1_024,
+            format: inputFormat
+        ) { [weak self] buffer, _ in
+            self?.process(buffer)
+        }
+        isTapInstalled = true
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            if isTapInstalled {
+                inputNode.removeTap(onBus: 0)
+                isTapInstalled = false
+            }
+            try? FileManager.default.removeItem(at: url)
+            reset()
+            throw RecorderError.unableToStart
         }
     }
 
     func stop() -> RecordedAudio? {
-        meterTimer?.invalidate()
-        meterTimer = nil
-        recorder?.stop()
-        recorder = nil
+        if isTapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            isTapInstalled = false
+        }
+        if engine.isRunning {
+            engine.stop()
+        }
+        audioFile = nil
+        converter = nil
+        targetFormat = nil
+        levelChanged = nil
+        activeDeviceUID = nil
         defer {
             recordingURL = nil
             recordingStartedAt = nil
@@ -99,13 +161,84 @@ final class AudioRecorder {
     }
 
     func cancel() {
-        meterTimer?.invalidate()
-        meterTimer = nil
-        recorder?.stop()
-        recorder?.deleteRecording()
-        recorder = nil
+        let url = recordingURL
+        _ = stop()
+        if let url {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func process(_ buffer: AVAudioPCMBuffer) {
+        reportLevel(from: buffer)
+        guard let converter,
+              let targetFormat,
+              let audioFile else {
+            return
+        }
+
+        let ratio = targetFormat.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount(
+            max(1, ceil(Double(buffer.frameLength) * ratio) + 8)
+        )
+        guard let converted = AVAudioPCMBuffer(
+            pcmFormat: targetFormat,
+            frameCapacity: capacity
+        ) else {
+            return
+        }
+
+        var suppliedInput = false
+        var conversionError: NSError?
+        _ = converter.convert(
+            to: converted,
+            error: &conversionError
+        ) { _, status in
+            if suppliedInput {
+                status.pointee = .noDataNow
+                return nil
+            }
+            suppliedInput = true
+            status.pointee = .haveData
+            return buffer
+        }
+        guard conversionError == nil,
+              converted.frameLength > 0 else {
+            return
+        }
+        try? audioFile.write(from: converted)
+    }
+
+    private func reportLevel(from buffer: AVAudioPCMBuffer) {
+        guard buffer.format.commonFormat == .pcmFormatFloat32,
+              let channel = buffer.floatChannelData?.pointee,
+              buffer.frameLength > 0 else {
+            return
+        }
+        var sumSquares: Float = 0
+        var peak: Float = 0
+        for index in 0..<Int(buffer.frameLength) {
+            let sample = abs(channel[index])
+            sumSquares += sample * sample
+            peak = max(peak, sample)
+        }
+        let rms = sqrt(sumSquares / Float(buffer.frameLength))
+        let averageDecibels = 20 * log10(max(rms, 0.000_001))
+        let peakDecibels = 20 * log10(max(peak, 0.000_001))
+        let level = audioLevelMeter.update(
+            averageDecibels: averageDecibels,
+            peakDecibels: peakDecibels
+        )
+        levelChanged?(level)
+    }
+
+    private func reset() {
+        isTapInstalled = false
+        audioFile = nil
+        converter = nil
+        targetFormat = nil
+        levelChanged = nil
+        activeDeviceUID = nil
         recordingURL = nil
         recordingStartedAt = nil
     }
-
 }

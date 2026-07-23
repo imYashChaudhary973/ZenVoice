@@ -5,6 +5,7 @@ import ZenVoiceStorage
 struct ZenVoiceSettingsView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case overview = "Overview"
+        case audio = "Audio"
         case models = "Models"
         case languages = "Languages"
         case refine = "Instant Refine"
@@ -20,6 +21,8 @@ struct ZenVoiceSettingsView: View {
             switch self {
             case .overview:
                 return "rectangle.grid.2x2"
+            case .audio:
+                return "mic"
             case .models:
                 return "cpu"
             case .languages:
@@ -166,6 +169,8 @@ struct ZenVoiceSettingsView: View {
                 appState: appState,
                 openShortcuts: { selection = .shortcuts }
             )
+        case .audio:
+            AudioScreen(viewModel: viewModel)
         case .models:
             ModelsScreen(viewModel: modelManagerViewModel)
         case .languages:
@@ -217,6 +222,253 @@ struct ZenVoiceSettingsView: View {
                 .foregroundStyle(ZenDesign.Semantic.accent)
                 .frame(width: size, height: size)
         }
+    }
+}
+
+private struct AudioScreen: View {
+    @ObservedObject var viewModel: SettingsViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                PageHeader(
+                    eyebrow: "MICROPHONE",
+                    title: "Audio",
+                    subtitle:
+                        "Choose a microphone and verify its signal before dictating."
+                )
+
+                ZenCard {
+                    VStack(alignment: .leading, spacing: 13) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Input device")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text(viewModel.selectedMicrophoneName)
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                            }
+                            Spacer()
+                            StatusPill(
+                                title:
+                                    viewModel.selectedMicrophoneUID == nil
+                                        ? "Follows macOS"
+                                        : "Pinned",
+                                isPositive: true
+                            )
+                        }
+
+                        Button {
+                            viewModel.selectMicrophone(nil)
+                        } label: {
+                            microphoneRow(
+                                name: "System Default",
+                                detail:
+                                    "Follow the current macOS input automatically.",
+                                selected:
+                                    viewModel.selectedMicrophoneUID == nil,
+                                badge: "RECOMMENDED"
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(
+                            viewModel.audioDoctorState == .running
+                        )
+
+                        Divider()
+                            .overlay(ZenDesign.Semantic.border)
+
+                        if viewModel.microphones.isEmpty {
+                            Text("No connected microphones were found.")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.danger
+                                )
+                                .padding(.vertical, 8)
+                        } else {
+                            ForEach(viewModel.microphones) { microphone in
+                                Button {
+                                    viewModel.selectMicrophone(microphone.id)
+                                } label: {
+                                    microphoneRow(
+                                        name: microphone.name,
+                                        detail: microphoneDetail(microphone),
+                                        selected:
+                                            viewModel.selectedMicrophoneUID
+                                                == microphone.id,
+                                        badge:
+                                            microphone.isDefault
+                                                ? "DEFAULT"
+                                                : nil
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(
+                                    !microphone.isConnected
+                                        || viewModel.audioDoctorState
+                                            == .running
+                                )
+                            }
+                        }
+                    }
+                }
+
+                ZenCard {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(spacing: 13) {
+                            ZStack {
+                                RoundedRectangle(
+                                    cornerRadius: ZenDesign.Radius.small,
+                                    style: .continuous
+                                )
+                                .fill(ZenDesign.Semantic.accentMuted)
+                                Image(systemName: "waveform.badge.magnifyingglass")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.accent
+                                    )
+                            }
+                            .frame(width: 44, height: 44)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Audio Doctor")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text(viewModel.audioDoctorState.title)
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(
+                                        audioDoctorTint
+                                    )
+                            }
+                            Spacer()
+                            Button(
+                                viewModel.audioDoctorState == .running
+                                    ? "Testing…"
+                                    : "Run 3-second test",
+                                action: viewModel.runAudioDoctor
+                            )
+                            .buttonStyle(ZenPrimaryButtonStyle())
+                            .disabled(
+                                viewModel.audioDoctorState == .running
+                            )
+                        }
+
+                        ProgressView(value: viewModel.audioDoctorLevel)
+                            .progressViewStyle(.linear)
+                            .tint(audioDoctorTint)
+                            .accessibilityLabel("Microphone signal level")
+                            .accessibilityValue(
+                                "\(Int((viewModel.audioDoctorLevel * 100).rounded())) percent"
+                            )
+
+                        HStack(spacing: 16) {
+                            PrivacyFact(
+                                icon: "speaker.slash",
+                                text:
+                                    "The temporary test recording is deleted immediately."
+                            )
+                            PrivacyFact(
+                                icon: "network.slash",
+                                text: "No test audio leaves this Mac."
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    "If a pinned microphone disconnects during dictation, ZenVoice stops safely, preserves recoverable audio according to your Privacy setting, and asks you to choose another input."
+                )
+                .font(.system(size: 9))
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            }
+            .padding(.horizontal, 34)
+            .padding(.top, 34)
+            .padding(.bottom, 36)
+        }
+        .background(ZenDesign.Semantic.canvas)
+        .onAppear {
+            viewModel.refreshMicrophones()
+        }
+    }
+
+    private var audioDoctorTint: Color {
+        switch viewModel.audioDoctorState {
+        case .passed:
+            return ZenDesign.Semantic.success
+        case .quiet, .failed:
+            return ZenDesign.Semantic.danger
+        case .idle, .running:
+            return ZenDesign.Semantic.accent
+        }
+    }
+
+    private func microphoneDetail(_ microphone: MicrophoneDevice) -> String {
+        if !microphone.isConnected {
+            return "Disconnected"
+        }
+        if microphone.isInUseByAnotherApplication {
+            return "Connected • also in use by another app"
+        }
+        return microphone.isDefault
+            ? "Connected • current macOS default"
+            : "Connected"
+    }
+
+    private func microphoneRow(
+        name: String,
+        detail: String,
+        selected: Bool,
+        badge: String?
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(
+                systemName:
+                    selected ? "checkmark.circle.fill" : "circle"
+            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(
+                selected
+                    ? ZenDesign.Semantic.success
+                    : ZenDesign.Semantic.textTertiary
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Text(detail)
+                    .font(.system(size: 9))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if let badge {
+                Text(badge)
+                    .font(.system(size: 7, weight: .bold))
+                    .tracking(0.5)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 46)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+            .fill(
+                selected
+                    ? ZenDesign.Semantic.accentMuted
+                    : Color.clear
+            )
+        }
+        .contentShape(Rectangle())
     }
 }
 
