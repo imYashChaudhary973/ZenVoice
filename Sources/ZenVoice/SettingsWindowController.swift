@@ -11,6 +11,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let modelManagerViewModel: ModelManagerViewModel
     private let refinementModelManagerViewModel:
         RefinementModelManagerViewModel
+    private let applicationProfileViewModel:
+        ApplicationProfileViewModel
     private var hasCenteredWindow = false
 
     init(
@@ -21,6 +23,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         modelManagerViewModel: ModelManagerViewModel,
         refinementModelManagerViewModel:
             RefinementModelManagerViewModel,
+        applicationProfileViewModel:
+            ApplicationProfileViewModel,
         appState: AppState
     ) {
         self.viewModel = viewModel
@@ -30,6 +34,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.modelManagerViewModel = modelManagerViewModel
         self.refinementModelManagerViewModel =
             refinementModelManagerViewModel
+        self.applicationProfileViewModel =
+            applicationProfileViewModel
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
             styleMask: [
@@ -66,6 +72,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 modelManagerViewModel: modelManagerViewModel,
                 refinementModelManagerViewModel:
                     refinementModelManagerViewModel,
+                applicationProfileViewModel:
+                    applicationProfileViewModel,
                 appState: appState
             )
         )
@@ -78,6 +86,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         voiceProfileViewModel.refresh()
         modelManagerViewModel.refresh()
         refinementModelManagerViewModel.refresh()
+        applicationProfileViewModel.refresh()
         if !hasCenteredWindow {
             window.center()
             hasCenteredWindow = true

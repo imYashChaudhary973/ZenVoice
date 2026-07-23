@@ -20,7 +20,7 @@ pass its verification gate before dependent work begins.
 | M12 | Microphone selection, disconnection recovery, and Audio Doctor | Implemented; hardware-disconnect QA pending |
 | M13 | Stable live transcript preview and commit-on-pause | Implemented; spoken-flow QA pending |
 | M14 | Curated downloadable local refinement models | Implemented; broader language QA pending |
-| M15 | Application profiles, context box, and local voice commands | Planned |
+| M15 | Application profiles, context box, and local voice commands | Implemented; cross-app spoken QA pending |
 | M16 | Correction Review, local learning controls, and Recovery Inbox | Planned |
 | M17 | Onboarding, accessibility, privacy dashboard, and release polish | Planned |
 

@@ -29,6 +29,15 @@ public struct ZenVoiceConfiguration {
             ?? modelURL.deletingPathExtension().lastPathComponent
     }
 
+    public var modelLanguageCapability: ModelLanguageCapability {
+        VerifiedModelCatalog.model(
+            filename: modelURL.lastPathComponent
+        )?.languageCapability
+            ?? (modelURL.lastPathComponent.contains(".en.")
+                ? .english
+                : .multilingual)
+    }
+
     public static func discover(
         languageProfile: LanguageProfile? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment,

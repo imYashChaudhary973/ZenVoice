@@ -92,6 +92,11 @@ launching the application:
   restarts, and explicit layout commands before paste. Its meaning guard
   rejects destructive or vocabulary-expanding candidates.
 - `InstantRefinePreferences` persists Off, Clean, or Agent Prompt mode locally.
+- `ApplicationProfilePreferences` stores non-sensitive per-app language,
+  refinement, and voice-command settings by bundle identifier.
+- `LocalVoiceCommandEngine` applies reviewed layout and punctuation commands
+  before refinement. `NextDictationContext` bounds and sanitizes the
+  memory-only hint passed to local runtimes.
 - `VerifiedRefinementModelCatalog` is the independent allowlist for Qwen
   publisher metadata, immutable revisions, exact GGUF files, licence links,
   size, SHA-256, and minimum-memory guidance.
@@ -125,6 +130,8 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 - It sets an explicit Whisper language token by default, enables Whisper's
   local translation flag only for English-output profiles, and applies local
   transliteration only for Latin-script profiles.
+- The retained model context accepts a per-recording language profile and
+  sanitized initial prompt without loading a second copy of the model.
 - The model context is loaded lazily on the transcription queue and retained
   by the transcriber for subsequent dictations.
 - Model replacement creates a new transcriber; an active transcription keeps

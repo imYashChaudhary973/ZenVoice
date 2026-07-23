@@ -60,6 +60,11 @@ All notable ZenVoice changes are recorded here.
   retention, and deterministic fallback guards
 - Added in-app hardware guidance, download progress, selection, removal, and
   publisher-licence links for local refinement models
+- Added application profiles that select language, refinement mode, and local
+  voice-command behavior from the original target app
+- Added a bounded memory-only context box for the next dictation
+- Added deterministic layout and punctuation commands with English controls
+  plus Hindi, Spanish, French, Mandarin, and Arabic aliases
 
 ### Changed
 

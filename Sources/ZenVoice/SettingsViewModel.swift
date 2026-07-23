@@ -72,6 +72,8 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var audioDoctorLevel = 0.0
     @Published private(set) var livePreviewEnabled: Bool
     @Published private(set) var commitOnPauseEnabled: Bool
+    @Published private(set) var voiceCommandsEnabled: Bool
+    @Published var nextDictationContext = ""
 
     private let applyShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
@@ -122,6 +124,8 @@ final class SettingsViewModel: ObservableObject {
             LiveDictationPreferences.isPreviewEnabled()
         commitOnPauseEnabled =
             LiveDictationPreferences.isCommitOnPauseEnabled()
+        voiceCommandsEnabled =
+            LocalVoiceCommandPreferences.isEnabled()
         selectedMicrophoneUID =
             MicrophonePreferences.selectedDeviceUID()
         refreshMicrophones()
@@ -233,6 +237,19 @@ final class SettingsViewModel: ObservableObject {
             LiveDictationPreferences.isPreviewEnabled()
         commitOnPauseEnabled =
             LiveDictationPreferences.isCommitOnPauseEnabled()
+    }
+
+    var sanitizedNextDictationContext: String {
+        NextDictationContext.sanitized(nextDictationContext)
+    }
+
+    func clearNextDictationContext() {
+        nextDictationContext = ""
+    }
+
+    func setVoiceCommandsEnabled(_ enabled: Bool) {
+        LocalVoiceCommandPreferences.setEnabled(enabled)
+        voiceCommandsEnabled = enabled
     }
 
     func setInputLanguage(_ code: String) {

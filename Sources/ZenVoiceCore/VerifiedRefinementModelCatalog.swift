@@ -187,10 +187,17 @@ public enum RefinementModelSelectionPreferences {
 }
 
 public enum LocalRefinementPrompt {
-    public static func make(transcript: String) -> String {
-        """
+    public static func make(
+        transcript: String,
+        context: String = ""
+    ) -> String {
+        let safeContext = NextDictationContext.sanitized(context)
+        let contextLine = safeContext.isEmpty
+            ? "No additional context."
+            : "Relevant spelling and topic context: \(safeContext)"
+        return """
         <|im_start|>system
-        You clean speech transcripts. Keep the original language and meaning. Do not add, replace, translate, or invent words. You may remove filler words and immediate repetitions, fix capitalization and punctuation, and format explicit line-break commands. Return exactly one JSON object with one string field named text. No markdown or explanation.<|im_end|>
+        You clean speech transcripts. Keep the original language and meaning. Do not add, replace, translate, or invent words. You may remove filler words and immediate repetitions, fix capitalization and punctuation, and format explicit line-break commands. \(contextLine) Return exactly one JSON object with one string field named text. No markdown or explanation.<|im_end|>
         <|im_start|>user
         \(transcript)<|im_end|>
         <|im_start|>assistant

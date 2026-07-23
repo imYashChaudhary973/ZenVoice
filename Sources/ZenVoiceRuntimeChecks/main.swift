@@ -113,7 +113,9 @@ do {
     try runPass(2, transcriber: transcriber, audioURL: audioURL)
     do {
         _ = try transcriber.transcribe(
-            samples: Array(repeating: 0, count: 16_000)
+            samples: Array(repeating: 0, count: 16_000),
+            languageProfile: .english,
+            initialPrompt: "ZenVoice SwiftUI"
         )
     } catch WhisperTranscriber.TranscriptionError.noSpeech {
         // Direct in-memory samples reached the no-speech decision.
