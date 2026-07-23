@@ -363,6 +363,14 @@ final class ModelManagerViewModel: ObservableObject {
                 VerifiedModelDownloadError.modelNotInstalled.localizedDescription
             return
         }
+        let languageProfile = LanguagePreferences.load()
+        guard languageProfile.isCompatible(
+            with: model.languageCapability
+        ) else {
+            errorMessage =
+                "\(languageProfile.displayName) requires a multilingual model."
+            return
+        }
         ModelSelectionPreferences.save(model)
         selectedModelID = model.id
         errorMessage = nil
@@ -399,6 +407,12 @@ final class ModelManagerViewModel: ObservableObject {
 
     func isSelected(_ model: VerifiedModel) -> Bool {
         selectedModelID == model.id
+    }
+
+    func isLanguageCompatible(_ model: VerifiedModel) -> Bool {
+        LanguagePreferences.load().isCompatible(
+            with: model.languageCapability
+        )
     }
 
     func recommendation(for model: VerifiedModel) -> ModelRecommendation {

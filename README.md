@@ -46,6 +46,9 @@ analytics, or cloud transcription services in the current application.
   controls.
 - Verified English and multilingual model downloads with pinned revisions and
   SHA-256 validation.
+- Explicit English-safe language profiles with 64 selectable languages.
+- Hinglish Latin-script output plus native-script and local English-translation
+  modes for multilingual dictation.
 - Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
   private local timing samples.
 - Local Instant Refine with Off, Clean, and Agent Prompt modes.
@@ -104,6 +107,9 @@ clipboard.
 Open **Models** to download a checksum-verified English or multilingual model.
 The pinned `whisper.cpp` runtime is bundled in the app; Homebrew is not
 required.
+
+Open **Languages** to choose English, Hinglish, automatic detection, or another
+spoken language. Any non-English profile requires a Multilingual model.
 
 ## Use ZenVoice
 
@@ -166,6 +172,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Voice Profile and Corrections](docs/VOICE_PROFILE.md)
 - [Private Highlight Cards](docs/SHARING.md)
 - [Instant Refine](docs/INSTANT_REFINE.md)
+- [Language Profiles](docs/LANGUAGES.md)
 - [Release Readiness](docs/RELEASE_READINESS.md)
 - [M9 Security Review](docs/SECURITY_REVIEW.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)

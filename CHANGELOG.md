@@ -43,6 +43,10 @@ All notable ZenVoice changes are recorded here.
 - Added a meaning guard that rejects destructive or vocabulary-expanding
   automatic refinement
 - Added visible model-download percentage and isolated cancellation state
+- Added M11 explicit language profiles with 64 supported Whisper language codes
+- Added an English-safe default, a Hinglish Latin-script preset, local English
+  translation, and native-script output modes
+- Added language/model compatibility guards and menu-bar quick profiles
 
 ### Changed
 

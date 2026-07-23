@@ -35,6 +35,8 @@ recorded in
 - [x] Third-party notices and fail-closed release-readiness checks
 - [x] Deterministic Instant Refine with Clean and Agent Prompt modes
 - [x] Visible model-download progress and cancellation isolation
+- [x] Explicit English-safe language selection with 64 local languages
+- [x] Hinglish Latin-script, native-script, and English-translation outputs
 
 ## Next: quality and daily reliability
 
@@ -48,7 +50,7 @@ recorded in
 ## Later: multilingual and distribution readiness
 
 - [x] Add local model selection for English and multilingual Whisper models
-- [ ] Add explicit language selection and optional local detection
+- [x] Add explicit language selection and optional local detection
 - [x] Add local snippets and conservative voice corrections
 - [ ] Evaluate optional local-only rewriting through Ollama
 - [ ] Curate downloadable local text-refinement models with meaning guards

@@ -78,7 +78,12 @@ launching the application:
   restarts, and explicit layout commands before paste. Its meaning guard
   rejects destructive or vocabulary-expanding candidates.
 - `InstantRefinePreferences` persists Off, Clean, or Agent Prompt mode locally.
-- `ZenVoiceConfiguration` discovers the selected verified model.
+- `LanguageCatalog` exposes the reviewed language codes and product support
+  level. `LanguagePreferences` persists the explicit input/output profile.
+- `LocalTransliterator` converts supported native scripts to Latin characters
+  after transcription without a network service.
+- `ZenVoiceConfiguration` discovers the selected verified model and rejects
+  incompatible language/model combinations.
 - `VerifiedModelCatalog` is the signed allowlist for model publisher, source,
   revision, size, format, language capability, licence, and SHA-256.
 - `TranscriptionResult` carries raw and cleaned text without deciding its
@@ -95,6 +100,9 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 
 - `WhisperTranscriber` calls the official pinned `whisper.cpp` XCFramework
   directly instead of launching a child process.
+- It sets an explicit Whisper language token by default, enables Whisper's
+  local translation flag only for English-output profiles, and applies local
+  transliteration only for Latin-script profiles.
 - The model context is loaded lazily on the transcription queue and retained
   by the transcriber for subsequent dictations.
 - Model replacement creates a new transcriber; an active transcription keeps
@@ -193,7 +201,8 @@ ZenBar.
 
 - The first transcription after launch or model selection pays the model-load
   cost; later dictations reuse that in-memory context.
-- Multilingual models currently use local automatic language detection.
+- English remains explicit even with a multilingual model. Automatic language
+  detection is an opt-in profile because short phrases are easy to misclassify.
 - Users can configure toggle dictation, paste-last, and Private Dictation
   shortcuts. Hold-to-dictate supports Fn and right-side modifier keys.
 - Automatic paste uses the system clipboard and a synthetic `Command + V`

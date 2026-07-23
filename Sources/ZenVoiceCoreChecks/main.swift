@@ -464,3 +464,87 @@ guard shareSummary.totalWordCount == 12_345,
 }
 
 print("ZenVoiceCoreChecks: privacy-safe share summary passed")
+
+let supportedLanguages = LanguageCatalog.languages
+guard supportedLanguages.count >= 50,
+      Set(supportedLanguages.map(\.code)).count
+        == supportedLanguages.count,
+      supportedLanguages.first == LanguageCatalog.language(code: "en"),
+      LanguageCatalog.language(code: "es")?.displayName == "Spanish",
+      LanguageCatalog.language(code: "fr")?.displayName == "French",
+      LanguageCatalog.language(code: "zh")?.displayName
+        == "Mandarin Chinese",
+      LanguageCatalog.language(code: "hi")?.supportLevel
+        == .recommended else {
+    FileHandle.standardError.write(
+        Data("FAIL: supported language catalogue is invalid\n".utf8)
+    )
+    exit(1)
+}
+
+let languageSuite = "ZenVoiceLanguages.\(UUID().uuidString)"
+guard let languageDefaults = UserDefaults(suiteName: languageSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create language preference fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    languageDefaults.removePersistentDomain(forName: languageSuite)
+}
+guard LanguagePreferences.load(defaults: languageDefaults) == .english else {
+    FileHandle.standardError.write(
+        Data("FAIL: language profile did not default to English\n".utf8)
+    )
+    exit(1)
+}
+LanguagePreferences.save(.hinglish, defaults: languageDefaults)
+guard LanguagePreferences.load(defaults: languageDefaults) == .hinglish,
+      LanguageProfile.english.isCompatible(with: .english),
+      !LanguageProfile.hinglish.isCompatible(with: .english),
+      LanguageProfile.hinglish.isCompatible(with: .multilingual) else {
+    FileHandle.standardError.write(
+        Data("FAIL: language profile persistence or compatibility failed\n".utf8)
+    )
+    exit(1)
+}
+
+let englishConfiguration = ZenVoiceConfiguration(
+    modelURL: URL(fileURLWithPath: "/tmp/ggml-base.en.bin")
+)
+let translatedSpanish = LanguageProfile(
+    inputLanguageCode: "es",
+    outputMode: .englishTranslation
+)
+let translationConfiguration = ZenVoiceConfiguration(
+    modelURL: URL(fileURLWithPath: "/tmp/ggml-base.bin"),
+    languageProfile: translatedSpanish
+)
+guard englishConfiguration.language == "en",
+      !englishConfiguration.shouldTranslateToEnglish,
+      translationConfiguration.language == "es",
+      translationConfiguration.shouldTranslateToEnglish,
+      !translationConfiguration.shouldTransliterateToLatin else {
+    FileHandle.standardError.write(
+        Data("FAIL: language runtime configuration is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+let romanized = LocalTransliterator.latinScript(
+    "नमस्ते दुनिया, build the API"
+)
+guard romanized == "namaste duniya, build the API",
+      LocalTransliterator.latinScript("Keep SwiftUI as-is.")
+        == "Keep SwiftUI as-is.",
+      LocalTransliterator.latinScript("¿Qué página?")
+        == "¿Qué página?" else {
+    FileHandle.standardError.write(
+        Data("FAIL: local transliteration changed the wrong text\n".utf8)
+    )
+    exit(1)
+}
+
+print(
+    "ZenVoiceCoreChecks: \(supportedLanguages.count) language profiles passed"
+)

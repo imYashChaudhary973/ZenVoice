@@ -41,6 +41,8 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var accessibilityStatus: PermissionStatus = .needsAccess
     @Published private(set) var isLocalModelReady = false
     @Published private(set) var instantRefineMode: InstantRefineMode
+    @Published private(set) var languageProfile: LanguageProfile
+    @Published var languageError: String?
 
     private let applyShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
@@ -49,6 +51,8 @@ final class SettingsViewModel: ObservableObject {
     private let applyPrivateModeShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
     private let applyHoldToDictate: (Bool, HoldKeyChoice) -> Void
+    private let applyLanguageProfile:
+        (LanguageProfile) -> Result<Void, Error>
     private var eventMonitor: Any?
 
     init(
@@ -63,7 +67,9 @@ final class SettingsViewModel: ObservableObject {
             (HotKeyConfiguration) -> Result<Void, Error>,
         applyPrivateModeShortcut: @escaping
             (HotKeyConfiguration) -> Result<Void, Error>,
-        applyHoldToDictate: @escaping (Bool, HoldKeyChoice) -> Void
+        applyHoldToDictate: @escaping (Bool, HoldKeyChoice) -> Void,
+        applyLanguageProfile: @escaping
+            (LanguageProfile) -> Result<Void, Error>
     ) {
         self.currentShortcut = currentShortcut
         self.pasteLastShortcut = pasteLastShortcut
@@ -74,7 +80,9 @@ final class SettingsViewModel: ObservableObject {
         self.applyPasteLastShortcut = applyPasteLastShortcut
         self.applyPrivateModeShortcut = applyPrivateModeShortcut
         self.applyHoldToDictate = applyHoldToDictate
+        self.applyLanguageProfile = applyLanguageProfile
         instantRefineMode = InstantRefinePreferences.load()
+        languageProfile = LanguagePreferences.load()
         refreshSystemStatus()
     }
 
@@ -161,6 +169,41 @@ final class SettingsViewModel: ObservableObject {
     func setInstantRefineMode(_ mode: InstantRefineMode) {
         instantRefineMode = mode
         InstantRefinePreferences.save(mode)
+    }
+
+    func setInputLanguage(_ code: String) {
+        setLanguageProfile(
+            LanguageProfile(
+                inputLanguageCode: code,
+                outputMode: languageProfile.outputMode
+            )
+        )
+    }
+
+    func setOutputMode(_ mode: TranscriptionOutputMode) {
+        setLanguageProfile(
+            LanguageProfile(
+                inputLanguageCode: languageProfile.inputLanguageCode,
+                outputMode: mode
+            )
+        )
+    }
+
+    func useEnglishProfile() {
+        setLanguageProfile(.english)
+    }
+
+    func useHinglishProfile() {
+        setLanguageProfile(.hinglish)
+    }
+
+    func useAutomaticProfile() {
+        setLanguageProfile(
+            LanguageProfile(
+                inputLanguageCode: LanguageProfile.automaticCode,
+                outputMode: .spokenLanguage
+            )
+        )
     }
 
     func requestMicrophoneAccess() {
@@ -256,6 +299,17 @@ final class SettingsViewModel: ObservableObject {
         if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
             self.eventMonitor = nil
+        }
+    }
+
+    private func setLanguageProfile(_ profile: LanguageProfile) {
+        switch applyLanguageProfile(profile) {
+        case .success:
+            languageProfile = profile
+            languageError = nil
+            refreshSystemStatus()
+        case .failure(let error):
+            languageError = error.localizedDescription
         }
     }
 
