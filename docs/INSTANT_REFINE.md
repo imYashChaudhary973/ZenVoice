@@ -29,6 +29,26 @@ Clean is the default. The selected mode is stored in local user defaults.
 Instant Refine runs after recording stops and before text is saved or pasted.
 Private Dictation uses the same in-memory refinement but stores no transcript.
 
+## Application-aware behavior
+
+An application profile is keyed only by the target app's bundle identifier.
+It can choose a language profile, an Instant Refine mode, and whether local
+voice commands are enabled. ZenVoice resolves the profile when recording
+starts and keeps that choice fixed for the entire recording, including stable
+phrase previews.
+
+The optional next-dictation context accepts up to 500 characters of names,
+product terms, or topic hints. It is sanitized, passed only to the in-process
+Whisper and local-refinement runtimes, never written to settings or History,
+and cleared when recording successfully starts.
+
+Local voice commands are deterministic and run before Instant Refine. The
+reviewed commands are new line, new paragraph, comma, full stop, question
+mark, and exclamation mark. English controls work with every language
+profile. Reviewed aliases are also included for Hindi, Spanish, French,
+Mandarin, and Arabic; other language profiles remain supported for
+transcription while their native command vocabulary is still preview work.
+
 ## Meaning guard
 
 The built-in engine is deterministic:
@@ -68,8 +88,9 @@ hardware requirements, and language claims are recorded in
 
 1. Measure real-language correction quality and end-to-end latency.
 2. Tune Fast versus Balanced recommendations from local benchmark evidence.
-3. Add new model entries only after the complete legal and integrity review.
-4. Keep live commit-on-pause opt-in until duplicate-free insertion is proven
+3. Expand native voice-command aliases only after spoken-language QA.
+4. Add new model entries only after the complete legal and integrity review.
+5. Keep live commit-on-pause opt-in until duplicate-free insertion is proven
    across supported target applications.
 
 ZenVoice will not continuously replace text inside another application until

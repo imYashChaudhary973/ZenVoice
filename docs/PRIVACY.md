@@ -49,6 +49,14 @@ network.
 
 - When history is enabled, ZenVoice stores the target application's bundle
   identifier and display name.
+- Application profiles store only the bundle identifier, display name,
+  language choice, refinement mode, and voice-command toggle in local
+  preferences.
+- The optional next-dictation context is bounded to 500 characters, held only
+  in memory, and cleared when recording starts. It is not stored in History,
+  preferences, logs, or analytics.
+- That temporary context is provided only to the local Whisper and optional
+  local refinement runtimes.
 - ZenVoice uses that application identity for a conservative local category;
   unknown applications remain **Other**, and the user can change a record's
   category in History.

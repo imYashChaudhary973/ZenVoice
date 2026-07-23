@@ -118,6 +118,9 @@ The checks cover:
 - Instant Refine fillers, repeated words, punctuation-marked restarts, agent
   prompt layout commands, persisted mode, disabled behavior, and destructive
   edit rejection.
+- application-profile persistence and removal, bounded context sanitization,
+  default-off voice commands, English and multilingual command aliases, and
+  per-call Whisper language/context arguments.
 
 GitHub Actions runs the same checks on macOS for each pull request and `main`
 push. Semgrep Community Edition runs independently on an Ubuntu runner. The

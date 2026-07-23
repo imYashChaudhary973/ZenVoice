@@ -54,6 +54,9 @@ recorded in
 - [x] Add local snippets and conservative voice corrections
 - [x] Add in-process local-only refinement through the pinned llama.cpp runtime
 - [x] Curate downloadable local text-refinement models with meaning guards
+- [x] Add per-application language and refinement profiles
+- [x] Add a memory-only next-dictation context box
+- [x] Add deterministic multilingual layout and punctuation voice commands
 - [ ] Add first-run onboarding and expanded permission recovery
 - [ ] Add Developer ID signing, notarization, and update delivery
 - [x] Complete the M9 engineering security review

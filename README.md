@@ -61,6 +61,11 @@ analytics, or cloud transcription services in the current application.
   Apache-2.0 licence links, exact size, and SHA-256 verification.
 - Grammar-constrained local JSON generation with a five-second deadline,
   no-invention meaning guard, and deterministic Clean fallback.
+- Per-application language, refinement, and voice-command profiles.
+- A memory-only context box for names and topic hints that clears when the
+  next recording starts.
+- Local layout and punctuation commands with English controls plus Hindi,
+  Spanish, French, Mandarin, and Arabic aliases.
 - Meaning-preserving cleanup for fillers, repeated words, spoken restarts, and
   explicit prompt layout commands.
 - Visible model-download percentage with reliable cancellation.
@@ -79,6 +84,7 @@ analytics, or cloud transcription services in the current application.
 ```text
 Hotkey
   → local microphone recording
+  → app profile + optional one-shot context
   → local Whisper transcription
   → conservative transcript cleanup
   → optional verified local text refinement
