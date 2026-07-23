@@ -140,6 +140,18 @@ model lifecycle without microphone or UI interaction.
 weighted WPM, current streak, and distinct application count. It has no field
 for transcript text, application identity, profile terms, or correction rules.
 
+## Delivery boundaries
+
+GitHub Actions runs deterministic Swift checks and packages an ad-hoc-signed
+app on a hosted macOS runner. A separate token-free Semgrep Community Edition
+job scans tracked source with read-only repository permissions.
+
+CI artifacts are verification builds, not public releases. Public distribution
+requires the independent gates in `docs/RELEASE_READINESS.md`, including a
+chosen ZenVoice licence, Developer ID Application signing, a secure timestamp,
+Apple notarization, a stapled ticket, clean-device QA, and founder approval.
+No signing or notarization credentials are stored in this repository.
+
 ## State model
 
 ZenBar exposes the actual dictation lifecycle:
@@ -176,3 +188,5 @@ ZenBar.
   approvals survive rebuilds. The Hardened Runtime signature includes only the
   audio-input resource entitlement required for recording. Public distribution
   will require Developer ID signing and notarization.
+- Automated security scanning identifies known code patterns; it cannot prove
+  that privacy promises, permission UX, or release decisions are correct.

@@ -123,6 +123,8 @@ Local-first does not mean risk-free:
 - Apple Development signing gives local builds a stable macOS identity but is
   not appropriate for public distribution.
 
-Before public release, the project should add hardened runtime configuration,
-Developer ID signing, notarization, dependency review, and a documented update
-mechanism.
+The project now records its release security review, third-party notices, and
+automated readiness checks. Public release remains blocked until the owner
+chooses a project licence and distribution policy, signs the exact artifact
+with Developer ID, completes Apple notarization, and finishes the manual
+privacy and clean-device QA checklist.

@@ -31,6 +31,8 @@ recorded in
 - [x] Private local insights, streaks, app usage, and editable categories
 - [x] Local voice profile and encrypted explicit correction rules
 - [x] Privacy-safe local highlight cards with preview and explicit export
+- [x] macOS CI and Semgrep Community Edition security scanning
+- [x] Third-party notices and fail-closed release-readiness checks
 
 ## Next: quality and daily reliability
 
@@ -48,7 +50,8 @@ recorded in
 - [ ] Evaluate optional local-only rewriting through Ollama
 - [ ] Add first-run onboarding and expanded permission recovery
 - [ ] Add Developer ID signing, notarization, and update delivery
-- [ ] Complete accessibility and security reviews
+- [x] Complete the M9 engineering security review
+- [ ] Complete release-candidate accessibility and clean-device QA
 
 ## Product decisions intentionally deferred
 

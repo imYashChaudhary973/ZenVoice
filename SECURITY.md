@@ -27,3 +27,7 @@ data in the report.
 Changes involving microphone permissions, Accessibility events, clipboard
 handling, executable paths, model downloads, signing, or updates require
 explicit security review.
+
+The current engineering threat review and public-distribution blockers are
+recorded in [M9 Security Review](docs/SECURITY_REVIEW.md) and
+[Release Readiness](docs/RELEASE_READINESS.md).

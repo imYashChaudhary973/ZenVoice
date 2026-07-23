@@ -14,7 +14,7 @@ pass its verification gate before dependent work begins.
 | M6 | Local insights and application categories | Complete |
 | M7 | Usage-based voice profile and explicit corrections | Complete |
 | M8 | Privacy-safe shareable highlight cards | Complete |
-| M9 | Public-distribution legal and security review | Planned |
+| M9 | Public-distribution legal and security review | Implemented; release gates pending |
 
 ## Delivery rules
 
@@ -25,7 +25,8 @@ pass its verification gate before dependent work begins.
   source, licence, checksum, format, and compatibility.
 - Analytics remain blocked until M1 provides durable and correctly migrated
   records.
-- Public distribution remains blocked until M9 is complete.
+- Public distribution remains blocked until every M9 manual release gate is
+  evidenced and approved.
 
 ## Pull request sequence
 

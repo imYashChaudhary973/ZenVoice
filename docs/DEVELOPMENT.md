@@ -85,6 +85,9 @@ can require approval again.
 swift run ZenVoiceCoreChecks
 swift run ZenVoiceStorageChecks
 swift run ZenVoiceRuntimeChecks
+swift build
+./Scripts/build-app.sh
+codesign --verify --deep --strict build/ZenVoice.app
 ```
 
 The checks cover:
@@ -112,6 +115,26 @@ The checks cover:
   through one persistent transcriber instance. This check skips only when no
   local model is installed.
 - privacy-safe numeric share-card payload validation.
+
+GitHub Actions runs the same checks on macOS for each pull request and `main`
+push. Semgrep Community Edition runs independently on an Ubuntu runner. The
+Semgrep job uses the public rule registry, does not require an account token,
+and has read-only repository permission.
+
+## Release readiness
+
+Development packaging is intentionally different from public distribution.
+After building, inspect the current gate:
+
+```bash
+./Scripts/check-release-readiness.sh
+```
+
+The command is expected to report blockers for private development builds. See
+[Release Readiness](RELEASE_READINESS.md),
+[M9 Security Review](SECURITY_REVIEW.md), and the root
+[Third-Party Notices](../THIRD_PARTY_NOTICES.md) before preparing any
+distributable artifact.
 
 ## Manual QA
 
