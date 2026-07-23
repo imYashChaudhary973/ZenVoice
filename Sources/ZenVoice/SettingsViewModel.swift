@@ -195,7 +195,9 @@ final class SettingsViewModel: ObservableObject {
             return
         }
 
-        guard let keyLabel = keyLabel(for: event) else {
+        guard let keyLabel = HotKeyConfiguration.canonicalLabel(
+            forKeyCode: UInt32(event.keyCode)
+        ) else {
             shortcutError = "That key is not supported. Try another combination."
             cancelShortcutCapture()
             return
@@ -268,50 +270,6 @@ final class SettingsViewModel: ObservableObject {
             result.insert(.shift)
         }
         return result
-    }
-
-    private func keyLabel(for event: NSEvent) -> String? {
-        let specialKeys: [UInt16: String] = [
-            36: "Return",
-            48: "Tab",
-            49: "Space",
-            51: "Delete",
-            53: "Escape",
-            71: "Clear",
-            76: "Enter",
-            115: "Home",
-            116: "Page Up",
-            117: "Forward Delete",
-            119: "End",
-            121: "Page Down",
-            123: "←",
-            124: "→",
-            125: "↓",
-            126: "↑",
-            122: "F1",
-            120: "F2",
-            99: "F3",
-            118: "F4",
-            96: "F5",
-            97: "F6",
-            98: "F7",
-            100: "F8",
-            101: "F9",
-            109: "F10",
-            103: "F11",
-            111: "F12"
-        ]
-
-        if let specialKey = specialKeys[event.keyCode] {
-            return specialKey
-        }
-
-        guard let characters = event.charactersIgnoringModifiers?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-            !characters.isEmpty else {
-            return nil
-        }
-        return characters.uppercased()
     }
 
     private func openSystemSettings(_ urlString: String) {

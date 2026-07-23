@@ -19,7 +19,7 @@ final class HoldToDictateController {
     }
 
     func update(isEnabled: Bool, key: HoldKeyChoice) {
-        if self.isEnabled, !isEnabled, isPressed {
+        if isPressed, !isEnabled || key != self.key {
             isPressed = false
             onRelease?()
         }
@@ -45,9 +45,10 @@ final class HoldToDictateController {
         guard isEnabled, event.keyCode == key.keyCode else {
             return
         }
-        let pressed = event.modifierFlags
-            .intersection(.deviceIndependentFlagsMask)
-            .contains(modifierFlag)
+        let pressed = CGEventSource.keyState(
+            .combinedSessionState,
+            key: CGKeyCode(event.keyCode)
+        )
         guard pressed != isPressed else {
             return
         }
@@ -56,15 +57,6 @@ final class HoldToDictateController {
             onPress?()
         } else {
             onRelease?()
-        }
-    }
-
-    private var modifierFlag: NSEvent.ModifierFlags {
-        switch key {
-        case .function: .function
-        case .rightOption: .option
-        case .rightControl: .control
-        case .rightShift: .shift
         }
     }
 

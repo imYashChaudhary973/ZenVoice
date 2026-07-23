@@ -127,11 +127,13 @@ private func checkRecoveryExpiry() throws {
     defer { fixture.cleanup() }
 
     let id = UUID()
+    let startedAt = Date(timeIntervalSince1970: 9_000)
     let audioURL = fixture.vault.recoveryAudioURL(for: id)
     try Data("audio".utf8).write(to: audioURL)
     try fixture.vault.begin(
         DictationDraft(
             id: id,
+            startedAt: startedAt,
             language: "en",
             modelID: "whisper-base.en",
             targetBundleID: nil,
@@ -154,6 +156,11 @@ private func checkRecoveryExpiry() throws {
     try require(failed.status == .failed, "recovered status")
     try require(failed.recoveryAudioURL == audioURL, "recovery audio path")
     try require(
+        failed.recoveryAudioExpiresAt
+            == startedAt.addingTimeInterval(DictationVault.recoveryLifetime),
+        "interrupted recovery expiry was extended from relaunch time"
+    )
+    try require(
         FileManager.default.fileExists(atPath: audioURL.path),
         "recovery audio was deleted too early"
     )
@@ -174,6 +181,98 @@ private func checkRecoveryExpiry() throws {
         try fixture.vault.record(id: id)?.recoveryAudioURL == nil,
         "expired audio path remains in database"
     )
+
+    let staleID = UUID()
+    let staleAudioURL = fixture.vault.recoveryAudioURL(for: staleID)
+    try Data("stale audio".utf8).write(to: staleAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: staleID,
+            startedAt: recoveryTime.addingTimeInterval(
+                -(DictationVault.recoveryLifetime + 1)
+            ),
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: nil,
+            recoveryAudioURL: staleAudioURL
+        )
+    )
+    try require(
+        try fixture.vault.recoverInterrupted(
+            retainAudio: true,
+            now: recoveryTime
+        ) == 1,
+        "stale interrupted record was not recovered"
+    )
+    try require(
+        try fixture.vault.purgeExpiredRecoveryAudio(now: recoveryTime) == 1,
+        "already-expired interrupted audio was retained"
+    )
+}
+
+private func checkPrivacySuppressionAndRecoveryCleanup() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let privateID = UUID()
+    let privateAudioURL = fixture.vault.recoveryAudioURL(for: privateID)
+    try Data("private audio".utf8).write(to: privateAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: privateID,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: nil,
+            recoveryAudioURL: privateAudioURL
+        )
+    )
+    try fixture.vault.suppressPersistence(id: privateID)
+    try require(
+        try fixture.vault.recoverInterrupted(retainAudio: true) == 1,
+        "suppressed dictation was not handled during recovery"
+    )
+    try require(
+        try fixture.vault.record(id: privateID) == nil,
+        "suppressed dictation survived restart recovery"
+    )
+    try require(
+        !FileManager.default.fileExists(atPath: privateAudioURL.path),
+        "suppressed recovery audio survived restart recovery"
+    )
+
+    let firstID = UUID()
+    let secondID = UUID()
+    for id in [firstID, secondID] {
+        let audioURL = fixture.vault.recoveryAudioURL(for: id)
+        try Data("failed audio".utf8).write(to: audioURL)
+        try fixture.vault.begin(
+            DictationDraft(
+                id: id,
+                language: "en",
+                modelID: "whisper-base.en",
+                targetBundleID: nil,
+                targetAppName: nil,
+                recoveryAudioURL: audioURL
+            )
+        )
+        try fixture.vault.markFailed(
+            id: id,
+            message: "test",
+            retainAudio: true
+        )
+    }
+    try require(
+        try fixture.vault.deleteAllRecoveryAudio() == 2,
+        "disabling recovery did not remove every retained recording"
+    )
+    for id in [firstID, secondID] {
+        try require(
+            try fixture.vault.record(id: id)?.recoveryAudioURL == nil,
+            "disabled recovery left an audio path"
+        )
+    }
 }
 
 private func checkDiscard() throws {
@@ -286,6 +385,72 @@ private func executeSQL(_ sql: String, databaseURL: URL) throws {
     }
 }
 
+private func checkVersionTwoMigration() throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let recoveryURL = directoryURL
+        .appendingPathComponent("Recovery", isDirectory: true)
+    let databaseURL = directoryURL.appendingPathComponent("version2.sqlite")
+    try FileManager.default.createDirectory(
+        at: recoveryURL,
+        withIntermediateDirectories: true
+    )
+    defer {
+        try? FileManager.default.removeItem(at: directoryURL)
+    }
+    try executeSQL(
+        """
+        CREATE TABLE dictations (
+            id TEXT PRIMARY KEY NOT NULL,
+            started_at REAL NOT NULL,
+            completed_at REAL,
+            duration_seconds REAL NOT NULL DEFAULT 0,
+            raw_transcript BLOB,
+            final_transcript BLOB,
+            word_count INTEGER NOT NULL DEFAULT 0,
+            words_per_minute REAL NOT NULL DEFAULT 0,
+            language TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            target_bundle_id TEXT,
+            target_app_name TEXT,
+            category TEXT NOT NULL DEFAULT 'other',
+            insertion_outcome TEXT,
+            correction_count INTEGER NOT NULL DEFAULT 0,
+            is_partial INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL,
+            recovery_audio_path TEXT,
+            recovery_audio_expires_at REAL,
+            error_message TEXT
+        );
+        PRAGMA user_version = 2;
+        """,
+        databaseURL: databaseURL
+    )
+    let vault = try DictationVault(
+        databaseURL: databaseURL,
+        recoveryDirectoryURL: recoveryURL,
+        keyProvider: StaticKeyProvider()
+    )
+    let id = UUID()
+    let audioURL = vault.recoveryAudioURL(for: id)
+    try Data("private audio".utf8).write(to: audioURL)
+    try vault.begin(
+        DictationDraft(
+            id: id,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: nil,
+            recoveryAudioURL: audioURL
+        )
+    )
+    try vault.suppressPersistence(id: id)
+    try require(
+        try vault.recoverInterrupted(retainAudio: true) == 1,
+        "version-two vault did not migrate privacy suppression"
+    )
+}
+
 private func checkPartialAndCipherBinding() throws {
     let fixture = try VaultFixture()
     defer { fixture.cleanup() }
@@ -377,9 +542,11 @@ do {
     try checkDiscard()
     try checkDeleteAllRotatesVault()
     try checkHistoryPreferencesDefaults()
+    try checkVersionTwoMigration()
     try checkPartialAndCipherBinding()
     try checkRecoveryPathConfinement()
-    print("ZenVoiceStorageChecks: 7 checks passed")
+    try checkPrivacySuppressionAndRecoveryCleanup()
+    print("ZenVoiceStorageChecks: 9 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

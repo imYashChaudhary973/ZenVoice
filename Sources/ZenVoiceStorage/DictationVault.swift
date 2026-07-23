@@ -238,12 +238,28 @@ public final class DictationVault: @unchecked Sendable {
         try deleteRecoveryAudioAndClear(id: id)
     }
 
+    public func suppressPersistence(id: UUID) throws {
+        try update(
+            """
+            UPDATE dictations
+            SET persistence_suppressed = 1
+            WHERE id = ?;
+            """,
+            bindings: { statement in
+                bind(id.uuidString, at: 1, in: statement)
+            }
+        )
+    }
+
     public func markFailed(
         id: UUID,
         message: String,
         retainAudio: Bool,
-        now: Date = Date()
+        now: Date = Date(),
+        recoveryExpiresAt: Date? = nil
     ) throws {
+        let expiry = recoveryExpiresAt
+            ?? now.addingTimeInterval(Self.recoveryLifetime)
         try update(
             """
             UPDATE dictations
@@ -259,8 +275,7 @@ public final class DictationVault: @unchecked Sendable {
                     sqlite3_bind_double(
                         statement,
                         4,
-                        now.addingTimeInterval(Self.recoveryLifetime)
-                            .timeIntervalSince1970
+                        expiry.timeIntervalSince1970
                     )
                 } else {
                     sqlite3_bind_null(statement, 4)
@@ -334,18 +349,22 @@ public final class DictationVault: @unchecked Sendable {
         retainAudio: Bool,
         now: Date = Date()
     ) throws -> Int {
-        let interruptedIDs = try recordIDs(
-            whereClause: "status IN ('recording', 'transcribing')"
-        )
-        for id in interruptedIDs {
+        let interrupted = try interruptedEntries()
+        for entry in interrupted {
+            if entry.persistenceSuppressed {
+                try discard(id: entry.id)
+                continue
+            }
             try markFailed(
-                id: id,
+                id: entry.id,
                 message: "ZenVoice closed before this dictation completed.",
                 retainAudio: retainAudio,
-                now: now
+                now: now,
+                recoveryExpiresAt:
+                    entry.startedAt.addingTimeInterval(Self.recoveryLifetime)
             )
         }
-        return interruptedIDs.count
+        return interrupted.count
     }
 
     @discardableResult
@@ -384,6 +403,15 @@ public final class DictationVault: @unchecked Sendable {
             }
             return optionalDate(at: 0, in: statement)
         }
+    }
+
+    @discardableResult
+    public func deleteAllRecoveryAudio() throws -> Int {
+        let entries = try recoveryEntries(whereClause: "1 = 1")
+        for entry in entries {
+            try deleteRecoveryAudioAndClear(id: entry.id)
+        }
+        return entries.count
     }
 
     public func recent(limit: Int = 100) throws -> [DictationRecord] {
@@ -446,6 +474,7 @@ public final class DictationVault: @unchecked Sendable {
                 insertion_outcome TEXT,
                 correction_count INTEGER NOT NULL DEFAULT 0,
                 is_partial INTEGER NOT NULL DEFAULT 0,
+                persistence_suppressed INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL,
                 recovery_audio_path TEXT,
                 recovery_audio_expires_at REAL,
@@ -462,8 +491,13 @@ public final class DictationVault: @unchecked Sendable {
                 "ALTER TABLE dictations ADD COLUMN is_partial INTEGER NOT NULL DEFAULT 0;"
             )
         }
-        if version < 2 {
-            try execute("PRAGMA user_version = 2;")
+        if version == 1 || version == 2 {
+            try execute(
+                "ALTER TABLE dictations ADD COLUMN persistence_suppressed INTEGER NOT NULL DEFAULT 0;"
+            )
+        }
+        if version < 3 {
+            try execute("PRAGMA user_version = 3;")
         }
     }
 
@@ -630,6 +664,38 @@ public final class DictationVault: @unchecked Sendable {
                    let id = UUID(uuidString: idValue),
                    let path = text(at: 1, in: statement) {
                     entries.append((id, path))
+                }
+            }
+            return entries
+        }
+    }
+
+    private func interruptedEntries() throws -> [
+        (id: UUID, startedAt: Date, persistenceSuppressed: Bool)
+    ] {
+        try queue.sync {
+            let statement = try prepare(
+                """
+                SELECT id, started_at, persistence_suppressed
+                FROM dictations
+                WHERE status IN ('recording', 'transcribing');
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+            var entries: [(UUID, Date, Bool)] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                if let idValue = text(at: 0, in: statement),
+                   let id = UUID(uuidString: idValue) {
+                    entries.append(
+                        (
+                            id,
+                            Date(
+                                timeIntervalSince1970:
+                                    sqlite3_column_double(statement, 1)
+                            ),
+                            sqlite3_column_int(statement, 2) == 1
+                        )
+                    )
                 }
             }
             return entries

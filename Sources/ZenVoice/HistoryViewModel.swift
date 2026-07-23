@@ -98,8 +98,18 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func setRetainsFailedAudio(_ enabled: Bool) {
+        if !enabled {
+            do {
+                _ = try vaultProvider().deleteAllRecoveryAudio()
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
+        }
         preferences.retainsFailedAudio = enabled
         retainsFailedAudio = enabled
+        errorMessage = nil
+        refresh()
     }
 
     func setPrivateModeEnabled(_ enabled: Bool) {

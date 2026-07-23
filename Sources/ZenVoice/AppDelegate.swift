@@ -64,7 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         let historyID = activeHistoryID
+        let processingHistoryID = transcribingHistoryID
         activeHistoryID = nil
+        transcribingHistoryID = nil
         let recordedAudio = recorder.stop()
         if let historyID {
             if nonPersistentHistoryIDs.contains(historyID)
@@ -80,6 +82,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } else if let recordedAudio {
             try? FileManager.default.removeItem(at: recordedAudio.url)
+        }
+        if let processingHistoryID,
+           nonPersistentHistoryIDs.contains(processingHistoryID)
+            || historyPreferences.isPrivateModeEnabled
+            || !historyPreferences.isHistoryEnabled {
+            try? dictationVault?.discard(id: processingHistoryID)
         }
     }
 
@@ -890,9 +898,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let activeHistoryID {
             nonPersistentHistoryIDs.insert(activeHistoryID)
+            do {
+                try dictationVault?.suppressPersistence(id: activeHistoryID)
+            } catch {
+                showError(
+                    "Private Dictation could not update local history: "
+                    + error.localizedDescription
+                )
+            }
         }
         if let transcribingHistoryID {
             nonPersistentHistoryIDs.insert(transcribingHistoryID)
+            do {
+                try dictationVault?.suppressPersistence(
+                    id: transcribingHistoryID
+                )
+            } catch {
+                showError(
+                    "Private Dictation could not update local history: "
+                    + error.localizedDescription
+                )
+            }
         }
     }
 

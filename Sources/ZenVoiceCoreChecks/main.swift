@@ -122,6 +122,20 @@ guard !unknownModifier.isValid else {
     exit(1)
 }
 
+let mismatchedLabel = HotKeyConfiguration(
+    keyCode: 49,
+    modifiers: [.control],
+    keyLabel: "P"
+)
+guard !mismatchedLabel.isValid,
+      HotKeyConfiguration.canonicalLabel(forKeyCode: 35) == "P",
+      HotKeyConfiguration.canonicalLabel(forKeyCode: 127) == nil else {
+    FileHandle.standardError.write(
+        Data("FAIL: hotkey labels are not bound to key codes\n".utf8)
+    )
+    exit(1)
+}
+
 for choice in HoldKeyChoice.allCases {
     let encoded = try JSONEncoder().encode(choice)
     guard try JSONDecoder().decode(HoldKeyChoice.self, from: encoded) == choice,
