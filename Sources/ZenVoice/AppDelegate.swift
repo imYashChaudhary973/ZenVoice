@@ -11,25 +11,31 @@ private struct ProcessedTranscription {
 
     init(
         result: TranscriptionResult,
+        refinement: InstantRefineResult,
         correctionApplication: CorrectionApplication?
     ) {
-        guard let correctionApplication,
-              correctionApplication.correctionCount > 0 else {
+        let personalCorrectionCount =
+            correctionApplication?.correctionCount ?? 0
+        let finalText = correctionApplication?.text ?? refinement.text
+        let totalCorrectionCount =
+            refinement.correctionCount + personalCorrectionCount
+        guard finalText != result.finalTranscript
+                || totalCorrectionCount > 0 else {
             self.result = result
             correctionUsages = []
             return
         }
         self.result = TranscriptionResult(
             rawTranscript: result.rawTranscript,
-            finalTranscript: correctionApplication.text,
+            finalTranscript: finalText,
             correctionCount:
                 result.correctionCount
-                + correctionApplication.correctionCount,
+                + totalCorrectionCount,
             isPartial: result.isPartial,
             modelID: result.modelID,
             processingDurationSeconds: result.processingDurationSeconds
         )
-        correctionUsages = correctionApplication.usages
+        correctionUsages = correctionApplication?.usages ?? []
     }
 }
 
@@ -712,17 +718,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.phase = .transcribing
         updateStartStopMenuTitle()
         let correctionVault = dictationVault
+        let instantRefineMode = InstantRefinePreferences.load()
 
         transcriptionQueue.async { [weak self] in
             do {
                 let result = try transcriber.transcribe(
                     audioURL: recordedAudio.url
                 )
+                let refinement = InstantRefineEngine().refine(
+                    result.finalTranscript,
+                    mode: instantRefineMode
+                )
                 let processed = ProcessedTranscription(
                     result: result,
+                    refinement: refinement,
                     correctionApplication:
                         try? correctionVault?.applyCorrections(
-                            to: result.finalTranscript
+                            to: refinement.text
                         )
                 )
                 DispatchQueue.main.async {
@@ -1070,14 +1082,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             durationSeconds: record.durationSeconds
         )
         let correctionVault = dictationVault
+        let instantRefineMode = InstantRefinePreferences.load()
         transcriptionQueue.async { [weak self] in
             do {
                 let result = try transcriber.transcribe(audioURL: audioURL)
+                let refinement = InstantRefineEngine().refine(
+                    result.finalTranscript,
+                    mode: instantRefineMode
+                )
                 let processed = ProcessedTranscription(
                     result: result,
+                    refinement: refinement,
                     correctionApplication:
                         try? correctionVault?.applyCorrections(
-                            to: result.finalTranscript
+                            to: refinement.text
                         )
                 )
                 DispatchQueue.main.async {

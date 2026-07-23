@@ -6,6 +6,7 @@ struct ZenVoiceSettingsView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case overview = "Overview"
         case models = "Models"
+        case refine = "Instant Refine"
         case history = "History"
         case insights = "Insights"
         case voiceProfile = "Voice Profile"
@@ -20,6 +21,8 @@ struct ZenVoiceSettingsView: View {
                 return "rectangle.grid.2x2"
             case .models:
                 return "cpu"
+            case .refine:
+                return "wand.and.stars"
             case .history:
                 return "clock.arrow.circlepath"
             case .insights:
@@ -162,6 +165,8 @@ struct ZenVoiceSettingsView: View {
             )
         case .models:
             ModelsScreen(viewModel: modelManagerViewModel)
+        case .refine:
+            InstantRefineScreen(viewModel: viewModel)
         case .history:
             HistoryScreen(viewModel: historyViewModel)
         case .insights:
@@ -311,6 +316,10 @@ private struct ModelsScreen: View {
                                 isSelected: viewModel.isSelected(model),
                                 isDownloading:
                                     viewModel.downloadingModelID == model.id,
+                                downloadProgress:
+                                    viewModel.downloadProgress,
+                                isVerifyingDownload:
+                                    viewModel.isVerifyingDownload,
                                 recommendation:
                                     viewModel.recommendation(for: model),
                                 benchmark:
@@ -357,6 +366,8 @@ private struct ModelRow: View {
     let isInstalled: Bool
     let isSelected: Bool
     let isDownloading: Bool
+    let downloadProgress: Double?
+    let isVerifyingDownload: Bool
     let recommendation: ModelRecommendation
     let benchmark: ModelBenchmarkSummary?
     let download: () -> Void
@@ -439,8 +450,20 @@ private struct ModelRow: View {
                 }
 
                 if isDownloading {
-                    ProgressView()
-                        .controlSize(.small)
+                    VStack(alignment: .trailing, spacing: 5) {
+                        ProgressView(value: downloadProgress ?? 0)
+                            .progressViewStyle(.linear)
+                            .frame(width: 88)
+                        Text(
+                            isVerifyingDownload
+                                ? "Verifying…"
+                                : "\(Int(((downloadProgress ?? 0) * 100).rounded()))%"
+                        )
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textTertiary
+                        )
+                    }
                     Button("Cancel", action: cancel)
                         .buttonStyle(ZenSecondaryButtonStyle())
                 } else if isInstalled {
@@ -457,6 +480,170 @@ private struct ModelRow: View {
                             recommendation.level == .insufficientStorage
                         )
                 }
+            }
+        }
+    }
+}
+
+private struct InstantRefineScreen: View {
+    @ObservedObject var viewModel: SettingsViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                PageHeader(
+                    eyebrow: "LOCAL TEXT REFINEMENT",
+                    title: "Instant Refine",
+                    subtitle:
+                        "Clean the local Whisper transcript before ZenVoice pastes it."
+                )
+
+                ZenCard {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(spacing: 14) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.accent
+                                )
+                                .frame(width: 46, height: 46)
+                                .background {
+                                    RoundedRectangle(
+                                        cornerRadius:
+                                            ZenDesign.Radius.small,
+                                        style: .continuous
+                                    )
+                                    .fill(
+                                        ZenDesign.Semantic.accentMuted
+                                    )
+                                }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Built-in refinement engine")
+                                    .font(
+                                        .system(
+                                            size: 13,
+                                            weight: .bold
+                                        )
+                                    )
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text(
+                                    "Runs on this Mac after transcription and before paste. No account, API key, or network request."
+                                )
+                                .font(.system(size: 10))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                                .fixedSize(
+                                    horizontal: false,
+                                    vertical: true
+                                )
+                            }
+                        }
+
+                        Picker(
+                            "Refinement mode",
+                            selection: Binding(
+                                get: { viewModel.instantRefineMode },
+                                set: {
+                                    viewModel.setInstantRefineMode($0)
+                                }
+                            )
+                        ) {
+                            ForEach(
+                                InstantRefineMode.allCases,
+                                id: \.self
+                            ) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("Instant Refine mode")
+
+                        Text(viewModel.instantRefineMode.detail)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textSecondary
+                            )
+                    }
+                }
+
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.md) {
+                    exampleCard
+                    safetyCard
+                }
+
+                ZenCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label(
+                            "Current delivery",
+                            systemImage: "scope"
+                        )
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textPrimary
+                        )
+                        Text(
+                            "This release refines the completed transcript before paste. Streaming stable phrases and downloadable refinement models are the next guarded stages."
+                        )
+                        .font(.system(size: 10))
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textSecondary
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(.horizontal, 34)
+            .padding(.top, 34)
+            .padding(.bottom, 36)
+        }
+        .background(ZenDesign.Semantic.canvas)
+    }
+
+    private var exampleCard: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("EXAMPLE")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1.1)
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textTertiary
+                    )
+                Text("“Create a login page, no wait, a sign-up page.”")
+                    .font(.system(size: 10))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textSecondary
+                    )
+                Text("Create a sign-up page.")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textPrimary
+                    )
+            }
+        }
+    }
+
+    private var safetyCard: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("MEANING GUARD")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1.1)
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textTertiary
+                    )
+                PrivacyFact(
+                    icon: "checkmark.shield.fill",
+                    text:
+                        "Rejects a refinement that removes too much of the original transcript."
+                )
+                PrivacyFact(
+                    icon: "text.badge.checkmark",
+                    text:
+                        "The built-in engine cannot invent new semantic words."
+                )
             }
         }
     }

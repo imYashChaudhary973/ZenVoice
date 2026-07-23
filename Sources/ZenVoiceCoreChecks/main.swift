@@ -35,6 +35,114 @@ for check in checks {
 
 print("ZenVoiceCoreChecks: \(checks.count) checks passed")
 
+let instantRefiner = InstantRefineEngine()
+let cleanRefinement = instantRefiner.refine(
+    "Um, create the the login page.",
+    mode: .clean
+)
+guard cleanRefinement.text == "Create the login page.",
+      cleanRefinement.correctionCount == 2,
+      !cleanRefinement.wasRejected else {
+    FileHandle.standardError.write(
+        Data("FAIL: clean Instant Refine result is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+let restartRefinement = instantRefiner.refine(
+    "Create a login page, no wait, a sign-up page using Swift.",
+    mode: .clean
+)
+guard restartRefinement.text
+        == "Create a sign-up page using Swift.",
+      restartRefinement.correctionCount == 1 else {
+    FileHandle.standardError.write(
+        Data(
+            (
+                "FAIL: spoken restart was not refined safely: "
+                    + "\(restartRefinement)\n"
+            ).utf8
+        )
+    )
+    exit(1)
+}
+
+let promptRefinement = instantRefiner.refine(
+    "Create the API new paragraph Add tests",
+    mode: .agentPrompt
+)
+guard promptRefinement.text == "Create the API\n\nAdd tests",
+      promptRefinement.correctionCount == 1 else {
+    FileHandle.standardError.write(
+        Data("FAIL: agent prompt layout command was not applied\n".utf8)
+    )
+    exit(1)
+}
+
+let rejectedRefinement = instantRefiner.refine(
+    "Um um um um um keep",
+    mode: .clean
+)
+guard rejectedRefinement.text == "Um um um um um keep",
+      rejectedRefinement.correctionCount == 0,
+      rejectedRefinement.wasRejected else {
+    FileHandle.standardError.write(
+        Data("FAIL: destructive refinement was not rejected\n".utf8)
+    )
+    exit(1)
+}
+
+let semanticNoWait = instantRefiner.refine(
+    "There is no wait time.",
+    mode: .clean
+)
+guard semanticNoWait.text == "There is no wait time.",
+      semanticNoWait.correctionCount == 0 else {
+    FileHandle.standardError.write(
+        Data("FAIL: semantic “no wait” phrase was changed\n".utf8)
+    )
+    exit(1)
+}
+
+let disabledRefinement = instantRefiner.refine(
+    "um keep this",
+    mode: .off
+)
+guard disabledRefinement.text == "um keep this",
+      disabledRefinement.correctionCount == 0 else {
+    FileHandle.standardError.write(
+        Data("FAIL: disabled Instant Refine changed text\n".utf8)
+    )
+    exit(1)
+}
+
+let refineSuite = "ZenVoiceCoreChecks.Refine.\(UUID().uuidString)"
+guard let refineDefaults = UserDefaults(suiteName: refineSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create refinement preference fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    refineDefaults.removePersistentDomain(forName: refineSuite)
+}
+guard InstantRefinePreferences.load(defaults: refineDefaults) == .clean else {
+    FileHandle.standardError.write(
+        Data("FAIL: Instant Refine did not default to Clean\n".utf8)
+    )
+    exit(1)
+}
+InstantRefinePreferences.save(.agentPrompt, defaults: refineDefaults)
+guard InstantRefinePreferences.load(defaults: refineDefaults)
+        == .agentPrompt else {
+    FileHandle.standardError.write(
+        Data("FAIL: Instant Refine preference did not persist\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: Instant Refine passed")
+
 var quietMeter = AudioLevelMeter()
 let quietLevel = quietMeter.update(
     averageDecibels: -42,

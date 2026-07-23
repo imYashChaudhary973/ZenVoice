@@ -25,6 +25,35 @@ enum VerifiedModelDownloadError: LocalizedError {
     }
 }
 
+enum VerifiedModelDownloadPhase: Sendable {
+    case downloading(Double)
+    case verifying
+}
+
+private final class DownloadTaskHandle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: URLSessionDownloadTask?
+    private var wasCancelled = false
+
+    func install(_ task: URLSessionDownloadTask) {
+        lock.lock()
+        self.task = task
+        let shouldCancel = wasCancelled
+        lock.unlock()
+        if shouldCancel {
+            task.cancel()
+        }
+    }
+
+    func cancel() {
+        lock.lock()
+        wasCancelled = true
+        let task = task
+        lock.unlock()
+        task?.cancel()
+    }
+}
+
 struct VerifiedModelDownloader {
     private let fileManager: FileManager
 
@@ -32,7 +61,11 @@ struct VerifiedModelDownloader {
         self.fileManager = fileManager
     }
 
-    func download(_ model: VerifiedModel) async throws -> URL {
+    func download(
+        _ model: VerifiedModel,
+        progress:
+            AsyncStream<VerifiedModelDownloadPhase>.Continuation
+    ) async throws -> URL {
         guard model.downloadURL.scheme == "https",
               model.downloadURL.host == "huggingface.co",
               model.downloadURL.path.contains(model.sourceRevision),
@@ -43,9 +76,14 @@ struct VerifiedModelDownloader {
         var request = URLRequest(url: model.downloadURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 60 * 60
-        let (temporaryURL, response) = try await URLSession.shared.download(
-            for: request
+        let (temporaryURL, response) = try await download(
+            request,
+            expectedSize: model.fileSizeBytes,
+            progress: progress
         )
+        defer {
+            try? fileManager.removeItem(at: temporaryURL)
+        }
         try Task.checkCancellation()
         guard let response = response as? HTTPURLResponse,
               (200...299).contains(response.statusCode),
@@ -53,6 +91,7 @@ struct VerifiedModelDownloader {
             throw VerifiedModelDownloadError.invalidResponse
         }
 
+        progress.yield(.verifying)
         let values = try temporaryURL.resourceValues(forKeys: [
             .isRegularFileKey,
             .fileSizeKey
@@ -91,10 +130,74 @@ struct VerifiedModelDownloader {
             ofItemAtPath: stagingURL.path
         )
         if fileManager.fileExists(atPath: destinationURL.path) {
-            try fileManager.removeItem(at: destinationURL)
+            _ = try fileManager.replaceItemAt(
+                destinationURL,
+                withItemAt: stagingURL,
+                backupItemName: nil,
+                options: .usingNewMetadataOnly
+            )
+        } else {
+            try fileManager.moveItem(at: stagingURL, to: destinationURL)
         }
-        try fileManager.moveItem(at: stagingURL, to: destinationURL)
         return destinationURL
+    }
+
+    private func download(
+        _ request: URLRequest,
+        expectedSize: Int64,
+        progress:
+            AsyncStream<VerifiedModelDownloadPhase>.Continuation
+    ) async throws -> (URL, URLResponse) {
+        let handle = DownloadTaskHandle()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let task = URLSession.shared.downloadTask(
+                    with: request
+                ) { temporaryURL, response, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if let temporaryURL, let response {
+                        do {
+                            let retainedURL =
+                                FileManager.default.temporaryDirectory
+                                .appendingPathComponent(
+                                    "ZenVoice-\(UUID().uuidString).download"
+                                )
+                            try FileManager.default.moveItem(
+                                at: temporaryURL,
+                                to: retainedURL
+                            )
+                            continuation.resume(
+                                returning: (retainedURL, response)
+                            )
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    } else {
+                        continuation.resume(
+                            throwing:
+                                VerifiedModelDownloadError.invalidResponse
+                        )
+                    }
+                }
+                handle.install(task)
+                task.resume()
+
+                Task.detached(priority: .utility) {
+                    while task.state == .running {
+                        let received = max(0, task.countOfBytesReceived)
+                        let fraction = min(
+                            1,
+                            Double(received) / Double(max(1, expectedSize))
+                        )
+                        progress.yield(.downloading(fraction))
+                        try? await Task.sleep(for: .milliseconds(150))
+                    }
+                }
+            }
+        } onCancel: {
+            handle.cancel()
+        }
     }
 }
 
@@ -106,6 +209,8 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var installedModelIDs: Set<String> = []
     @Published private(set) var selectedModelID: String?
     @Published private(set) var downloadingModelID: String?
+    @Published private(set) var downloadProgress: Double?
+    @Published private(set) var isVerifyingDownload = false
     @Published private(set) var isVerifying = false
     @Published private(set) var benchmarkSummaries:
         [String: ModelBenchmarkSummary] = [:]
@@ -115,6 +220,7 @@ final class ModelManagerViewModel: ObservableObject {
     private let fileManager: FileManager
     private let selectionChanged: () -> Void
     private var downloadTask: Task<Void, Never>?
+    private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
 
     init(
@@ -180,29 +286,75 @@ final class ModelManagerViewModel: ObservableObject {
             return
         }
         errorMessage = nil
+        let downloadID = UUID()
+        activeDownloadID = downloadID
         downloadingModelID = model.id
+        downloadProgress = 0
+        isVerifyingDownload = false
+        let downloader = downloader
+        let (progressStream, progressContinuation) =
+            AsyncStream<VerifiedModelDownloadPhase>.makeStream()
+        let progressTask = Task { [weak self] in
+            for await phase in progressStream {
+                guard self?.activeDownloadID == downloadID else {
+                    return
+                }
+                switch phase {
+                case .downloading(let fraction):
+                    self?.downloadProgress = fraction
+                    self?.isVerifyingDownload = false
+                case .verifying:
+                    self?.downloadProgress = 1
+                    self?.isVerifyingDownload = true
+                }
+            }
+        }
         downloadTask = Task { [weak self] in
+            defer {
+                progressContinuation.finish()
+                progressTask.cancel()
+            }
             do {
-                _ = try await self?.downloader.download(model)
+                _ = try await downloader.download(
+                    model,
+                    progress: progressContinuation
+                )
                 guard !Task.isCancelled else {
                     return
                 }
-                self?.installedModelIDs.insert(model.id)
-                self?.select(model)
+                guard let self else {
+                    return
+                }
+                installedModelIDs.insert(model.id)
+                select(model)
             } catch is CancellationError {
                 // Cancellation is an explicit user action.
             } catch {
-                self?.errorMessage = error.localizedDescription
+                guard let self,
+                      self.activeDownloadID == downloadID else {
+                    return
+                }
+                self.errorMessage = error.localizedDescription
             }
-            self?.downloadingModelID = nil
-            self?.downloadTask = nil
+            guard let self,
+                  self.activeDownloadID == downloadID else {
+                return
+            }
+            self.activeDownloadID = nil
+            self.downloadingModelID = nil
+            self.downloadProgress = nil
+            self.isVerifyingDownload = false
+            self.downloadTask = nil
         }
     }
 
     func cancelDownload() {
+        activeDownloadID = nil
         downloadTask?.cancel()
         downloadTask = nil
         downloadingModelID = nil
+        downloadProgress = nil
+        isVerifyingDownload = false
     }
 
     func select(_ model: VerifiedModel) {
