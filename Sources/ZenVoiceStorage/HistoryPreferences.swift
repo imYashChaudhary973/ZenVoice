@@ -17,12 +17,22 @@ public final class HistoryPreferences {
     }
 
     public var hasMadeHistoryChoice: Bool {
-        get { defaults.bool(forKey: Key.madeHistoryChoice) }
+        get {
+            guard defaults.object(forKey: Key.madeHistoryChoice) != nil else {
+                return true
+            }
+            return defaults.bool(forKey: Key.madeHistoryChoice)
+        }
         set { defaults.set(newValue, forKey: Key.madeHistoryChoice) }
     }
 
     public var isHistoryEnabled: Bool {
-        get { defaults.bool(forKey: Key.historyEnabled) }
+        get {
+            guard defaults.object(forKey: Key.historyEnabled) != nil else {
+                return true
+            }
+            return defaults.bool(forKey: Key.historyEnabled)
+        }
         set {
             defaults.set(newValue, forKey: Key.historyEnabled)
             if newValue {

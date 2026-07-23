@@ -94,6 +94,12 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     public func begin(_ draft: DictationDraft) throws {
+        guard validatedRecoveryAudioURL(
+            path: draft.recoveryAudioURL.path,
+            id: draft.id
+        ) != nil else {
+            throw DictationVaultError.invalidRecord
+        }
         try queue.sync {
             let sql = """
                 INSERT INTO dictations (
@@ -144,13 +150,20 @@ public final class DictationVault: @unchecked Sendable {
         rawTranscript: String,
         finalTranscript: String,
         completedAt: Date = Date(),
-        correctionCount: Int = 0
+        correctionCount: Int = 0,
+        isPartial: Bool = false
     ) throws {
         let wordCount = DictationMetrics.wordCount(in: finalTranscript)
 
         try queue.sync {
-            let encryptedRaw = try cipher.seal(rawTranscript)
-            let encryptedFinal = try cipher.seal(finalTranscript)
+            let encryptedRaw = try cipher.seal(
+                rawTranscript,
+                context: encryptionContext(id: id, field: "raw")
+            )
+            let encryptedFinal = try cipher.seal(
+                finalTranscript,
+                context: encryptionContext(id: id, field: "final")
+            )
             let duration = try durationSeconds(for: id)
             let wordsPerMinute = DictationMetrics.wordsPerMinute(
                 wordCount: wordCount,
@@ -161,7 +174,8 @@ public final class DictationVault: @unchecked Sendable {
                 UPDATE dictations
                 SET completed_at = ?, raw_transcript = ?,
                     final_transcript = ?, word_count = ?,
-                    words_per_minute = ?, correction_count = ?, status = ?,
+                    words_per_minute = ?, correction_count = ?,
+                    is_partial = ?, status = ?,
                     error_message = NULL
                 WHERE id = ?;
                 """
@@ -178,8 +192,9 @@ public final class DictationVault: @unchecked Sendable {
             sqlite3_bind_int64(statement, 4, Int64(wordCount))
             sqlite3_bind_double(statement, 5, wordsPerMinute)
             sqlite3_bind_int64(statement, 6, Int64(correctionCount))
-            bind(DictationStatus.ready.rawValue, at: 7, in: statement)
-            bind(id.uuidString, at: 8, in: statement)
+            sqlite3_bind_int(statement, 7, isPartial ? 1 : 0)
+            bind(DictationStatus.ready.rawValue, at: 8, in: statement)
+            bind(id.uuidString, at: 9, in: statement)
             try stepDone(statement)
             try requireChangedRow()
         }
@@ -276,9 +291,12 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     public func deleteAll() throws {
-        let existingRecords = try recent(limit: Int.max)
-        for record in existingRecords {
-            if let audioURL = record.recoveryAudioURL,
+        let existingRecovery = try recoveryEntries(whereClause: "1 = 1")
+        for entry in existingRecovery {
+            if let audioURL = validatedRecoveryAudioURL(
+                path: entry.path,
+                id: entry.id
+            ),
                FileManager.default.fileExists(atPath: audioURL.path) {
                 try FileManager.default.removeItem(at: audioURL)
             }
@@ -295,23 +313,20 @@ public final class DictationVault: @unchecked Sendable {
 
     @discardableResult
     public func purgeRecords(startedBefore cutoff: Date) throws -> Int {
-        let expired = try queue.sync {
-            try records(
-                whereClause: "started_at < ?",
-                orderAndLimit: "ORDER BY started_at ASC",
-                bindWhere: { statement in
-                    sqlite3_bind_double(
-                        statement,
-                        1,
-                        cutoff.timeIntervalSince1970
-                    )
-                }
-            )
+        let expiredIDs = try recordIDs(
+            whereClause: "started_at < ?",
+            bindWhere: { statement in
+                sqlite3_bind_double(
+                    statement,
+                    1,
+                    cutoff.timeIntervalSince1970
+                )
+            }
+        )
+        for id in expiredIDs {
+            try discard(id: id)
         }
-        for record in expired {
-            try discard(id: record.id)
-        }
-        return expired.count
+        return expiredIDs.count
     }
 
     @discardableResult
@@ -319,46 +334,56 @@ public final class DictationVault: @unchecked Sendable {
         retainAudio: Bool,
         now: Date = Date()
     ) throws -> Int {
-        let interrupted = try queue.sync {
-            try records(
-                whereClause:
-                    "status IN ('recording', 'transcribing')",
-                orderAndLimit: "ORDER BY started_at ASC"
-            )
-        }
-        for record in interrupted {
+        let interruptedIDs = try recordIDs(
+            whereClause: "status IN ('recording', 'transcribing')"
+        )
+        for id in interruptedIDs {
             try markFailed(
-                id: record.id,
+                id: id,
                 message: "ZenVoice closed before this dictation completed.",
                 retainAudio: retainAudio,
                 now: now
             )
         }
-        return interrupted.count
+        return interruptedIDs.count
     }
 
     @discardableResult
     public func purgeExpiredRecoveryAudio(
         now: Date = Date()
     ) throws -> Int {
-        let expired = try queue.sync {
-            try records(
-                whereClause:
-                    "recovery_audio_expires_at IS NOT NULL AND recovery_audio_expires_at <= ?",
-                orderAndLimit: "",
-                bindWhere: { statement in
-                    sqlite3_bind_double(
-                        statement,
-                        1,
-                        now.timeIntervalSince1970
-                    )
-                }
-            )
-        }
-        for record in expired {
-            try deleteRecoveryAudioAndClear(id: record.id)
+        let expired = try recoveryEntries(
+            whereClause:
+                "recovery_audio_expires_at IS NOT NULL AND recovery_audio_expires_at <= ?",
+            bindWhere: { statement in
+                sqlite3_bind_double(
+                    statement,
+                    1,
+                    now.timeIntervalSince1970
+                )
+            }
+        )
+        for entry in expired {
+            try deleteRecoveryAudioAndClear(id: entry.id)
         }
         return expired.count
+    }
+
+    public func nextRecoveryExpiry() throws -> Date? {
+        try queue.sync {
+            let statement = try prepare(
+                """
+                SELECT MIN(recovery_audio_expires_at)
+                FROM dictations
+                WHERE recovery_audio_expires_at IS NOT NULL;
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return nil
+            }
+            return optionalDate(at: 0, in: statement)
+        }
     }
 
     public func recent(limit: Int = 100) throws -> [DictationRecord] {
@@ -401,6 +426,7 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     private func migrate() throws {
+        let version = try userVersion()
         try execute(
             """
             CREATE TABLE IF NOT EXISTS dictations (
@@ -419,6 +445,7 @@ public final class DictationVault: @unchecked Sendable {
                 category TEXT NOT NULL DEFAULT 'other',
                 insertion_outcome TEXT,
                 correction_count INTEGER NOT NULL DEFAULT 0,
+                is_partial INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL,
                 recovery_audio_path TEXT,
                 recovery_audio_expires_at REAL,
@@ -428,9 +455,16 @@ public final class DictationVault: @unchecked Sendable {
                 ON dictations(started_at DESC);
             CREATE INDEX IF NOT EXISTS idx_dictations_status
                 ON dictations(status);
-            PRAGMA user_version = 1;
             """
         )
+        if version == 1 {
+            try execute(
+                "ALTER TABLE dictations ADD COLUMN is_partial INTEGER NOT NULL DEFAULT 0;"
+            )
+        }
+        if version < 2 {
+            try execute("PRAGMA user_version = 2;")
+        }
     }
 
     private func records(
@@ -444,7 +478,7 @@ public final class DictationVault: @unchecked Sendable {
                 raw_transcript, final_transcript, word_count,
                 words_per_minute, language, model_id, target_bundle_id,
                 target_app_name, category, insertion_outcome,
-                correction_count, status, recovery_audio_path,
+                correction_count, is_partial, status, recovery_audio_path,
                 recovery_audio_expires_at, error_message
             FROM dictations
             WHERE \(whereClause)
@@ -470,16 +504,24 @@ public final class DictationVault: @unchecked Sendable {
               let modelID = text(at: 9, in: statement),
               let categoryRaw = text(at: 12, in: statement),
               let category = DictationCategory(rawValue: categoryRaw),
-              let statusRaw = text(at: 15, in: statement),
+              let statusRaw = text(at: 16, in: statement),
               let status = DictationStatus(rawValue: statusRaw) else {
             throw DictationVaultError.invalidRecord
         }
 
-        let rawTranscript = try encryptedText(at: 4, in: statement)
-        let finalTranscript = try encryptedText(at: 5, in: statement)
+        let rawTranscript = try encryptedText(
+            at: 4,
+            in: statement,
+            context: encryptionContext(id: id, field: "raw")
+        )
+        let finalTranscript = try encryptedText(
+            at: 5,
+            in: statement,
+            context: encryptionContext(id: id, field: "final")
+        )
         let insertionOutcome = text(at: 13, in: statement)
             .flatMap(DictationStatus.init(rawValue:))
-        let recoveryPath = text(at: 16, in: statement)
+        let recoveryPath = text(at: 17, in: statement)
 
         return DictationRecord(
             id: id,
@@ -499,21 +541,25 @@ public final class DictationVault: @unchecked Sendable {
             category: category,
             insertionOutcome: insertionOutcome,
             correctionCount: Int(sqlite3_column_int64(statement, 14)),
+            isPartial: sqlite3_column_int(statement, 15) == 1,
             status: status,
-            recoveryAudioURL: recoveryPath.map(URL.init(fileURLWithPath:)),
-            recoveryAudioExpiresAt: optionalDate(at: 17, in: statement),
-            errorMessage: text(at: 18, in: statement)
+            recoveryAudioURL: recoveryPath.flatMap {
+                validatedRecoveryAudioURL(path: $0, id: id)
+            },
+            recoveryAudioExpiresAt: optionalDate(at: 18, in: statement),
+            errorMessage: text(at: 19, in: statement)
         )
     }
 
     private func encryptedText(
         at index: Int32,
-        in statement: OpaquePointer?
+        in statement: OpaquePointer?,
+        context: String
     ) throws -> String? {
         guard let data = data(at: index, in: statement) else {
             return nil
         }
-        return try cipher.open(data)
+        return try cipher.open(data, context: context)
     }
 
     private func durationSeconds(for id: UUID) throws -> TimeInterval {
@@ -529,11 +575,89 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     private func deleteRecoveryAudioAndClear(id: UUID) throws {
-        let url = try record(id: id)?.recoveryAudioURL
-        if let url, FileManager.default.fileExists(atPath: url.path) {
+        let path = try recoveryEntries(
+            whereClause: "id = ?",
+            bindWhere: { statement in
+                self.bind(id.uuidString, at: 1, in: statement)
+            }
+        ).first?.path
+        if let path,
+           let url = validatedRecoveryAudioURL(path: path, id: id),
+           FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
         try clearRecoveryAudio(id: id)
+    }
+
+    private func recordIDs(
+        whereClause: String,
+        bindWhere: ((OpaquePointer?) -> Void)? = nil
+    ) throws -> [UUID] {
+        try queue.sync {
+            let statement = try prepare(
+                "SELECT id FROM dictations WHERE \(whereClause);"
+            )
+            defer { sqlite3_finalize(statement) }
+            bindWhere?(statement)
+            var ids: [UUID] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                if let value = text(at: 0, in: statement),
+                   let id = UUID(uuidString: value) {
+                    ids.append(id)
+                }
+            }
+            return ids
+        }
+    }
+
+    private func recoveryEntries(
+        whereClause: String,
+        bindWhere: ((OpaquePointer?) -> Void)? = nil
+    ) throws -> [(id: UUID, path: String)] {
+        try queue.sync {
+            let statement = try prepare(
+                """
+                SELECT id, recovery_audio_path
+                FROM dictations
+                WHERE \(whereClause) AND recovery_audio_path IS NOT NULL;
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+            bindWhere?(statement)
+            var entries: [(UUID, String)] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                if let idValue = text(at: 0, in: statement),
+                   let id = UUID(uuidString: idValue),
+                   let path = text(at: 1, in: statement) {
+                    entries.append((id, path))
+                }
+            }
+            return entries
+        }
+    }
+
+    private func validatedRecoveryAudioURL(path: String, id: UUID) -> URL? {
+        let supplied = URL(fileURLWithPath: path).standardizedFileURL
+        let expected = recoveryAudioURL(for: id).standardizedFileURL
+        guard supplied.path == expected.path,
+              supplied.deletingLastPathComponent().path
+                == recoveryDirectoryURL.standardizedFileURL.path else {
+            return nil
+        }
+        return expected
+    }
+
+    private func encryptionContext(id: UUID, field: String) -> String {
+        "ZenVoice.dictation.v2|\(id.uuidString.lowercased())|\(field)"
+    }
+
+    private func userVersion() throws -> Int {
+        let statement = try prepare("PRAGMA user_version;")
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw DictationVaultError.database(databaseMessage)
+        }
+        return Int(sqlite3_column_int(statement, 0))
     }
 
     private func update(

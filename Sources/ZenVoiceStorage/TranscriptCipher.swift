@@ -86,6 +86,7 @@ public final class KeychainVaultKeyProvider: VaultKeyProviding {
 }
 
 struct TranscriptCipher {
+    private static let contextualHeader = Data("ZV2".utf8)
     private let key: SymmetricKey
 
     init(keyProvider: VaultKeyProviding) throws {
@@ -96,21 +97,37 @@ struct TranscriptCipher {
         key = SymmetricKey(data: keyData)
     }
 
-    func seal(_ text: String) throws -> Data {
-        let sealedBox = try AES.GCM.seal(Data(text.utf8), using: key)
+    func seal(_ text: String, context: String) throws -> Data {
+        let sealedBox = try AES.GCM.seal(
+            Data(text.utf8),
+            using: key,
+            authenticating: Data(context.utf8)
+        )
         guard let combined = sealedBox.combined else {
             throw VaultKeyError.invalidKey
         }
-        return combined
+        return Self.contextualHeader + combined
     }
 
-    func open(_ data: Data) throws -> String {
-        let sealedBox = try AES.GCM.SealedBox(combined: data)
-        let clearData = try AES.GCM.open(sealedBox, using: key)
+    func open(_ data: Data, context: String) throws -> String {
+        let clearData: Data
+        if data.starts(with: Self.contextualHeader) {
+            let sealedBox = try AES.GCM.SealedBox(
+                combined: data.dropFirst(Self.contextualHeader.count)
+            )
+            clearData = try AES.GCM.open(
+                sealedBox,
+                using: key,
+                authenticating: Data(context.utf8)
+            )
+        } else {
+            // Version 1 records predate authenticated field binding.
+            let sealedBox = try AES.GCM.SealedBox(combined: data)
+            clearData = try AES.GCM.open(sealedBox, using: key)
+        }
         guard let text = String(data: clearData, encoding: .utf8) else {
             throw VaultKeyError.invalidKey
         }
         return text
     }
 }
-

@@ -10,6 +10,7 @@ final class SettingsViewModel: ObservableObject {
     enum ShortcutTarget {
         case dictation
         case pasteLast
+        case privateMode
     }
 
     enum PermissionStatus: Equatable {
@@ -31,6 +32,9 @@ final class SettingsViewModel: ObservableObject {
 
     @Published private(set) var currentShortcut: HotKeyConfiguration
     @Published private(set) var pasteLastShortcut: HotKeyConfiguration
+    @Published private(set) var privateModeShortcut: HotKeyConfiguration
+    @Published private(set) var holdToDictateEnabled: Bool
+    @Published private(set) var holdKey: HoldKeyChoice
     @Published private(set) var shortcutTarget: ShortcutTarget?
     @Published var shortcutError: String?
     @Published private(set) var microphoneStatus: PermissionStatus = .needsAccess
@@ -41,20 +45,34 @@ final class SettingsViewModel: ObservableObject {
         (HotKeyConfiguration) -> Result<Void, Error>
     private let applyPasteLastShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
+    private let applyPrivateModeShortcut:
+        (HotKeyConfiguration) -> Result<Void, Error>
+    private let applyHoldToDictate: (Bool, HoldKeyChoice) -> Void
     private var eventMonitor: Any?
 
     init(
         currentShortcut: HotKeyConfiguration,
         pasteLastShortcut: HotKeyConfiguration,
+        privateModeShortcut: HotKeyConfiguration,
+        holdToDictateEnabled: Bool,
+        holdKey: HoldKeyChoice,
         applyShortcut: @escaping
             (HotKeyConfiguration) -> Result<Void, Error>,
         applyPasteLastShortcut: @escaping
-            (HotKeyConfiguration) -> Result<Void, Error>
+            (HotKeyConfiguration) -> Result<Void, Error>,
+        applyPrivateModeShortcut: @escaping
+            (HotKeyConfiguration) -> Result<Void, Error>,
+        applyHoldToDictate: @escaping (Bool, HoldKeyChoice) -> Void
     ) {
         self.currentShortcut = currentShortcut
         self.pasteLastShortcut = pasteLastShortcut
+        self.privateModeShortcut = privateModeShortcut
+        self.holdToDictateEnabled = holdToDictateEnabled
+        self.holdKey = holdKey
         self.applyShortcut = applyShortcut
         self.applyPasteLastShortcut = applyPasteLastShortcut
+        self.applyPrivateModeShortcut = applyPrivateModeShortcut
+        self.applyHoldToDictate = applyHoldToDictate
         refreshSystemStatus()
     }
 
@@ -64,6 +82,10 @@ final class SettingsViewModel: ObservableObject {
 
     var isCapturingPasteLastShortcut: Bool {
         shortcutTarget == .pasteLast
+    }
+
+    var isCapturingPrivateModeShortcut: Bool {
+        shortcutTarget == .privateMode
     }
 
     deinit {
@@ -118,6 +140,20 @@ final class SettingsViewModel: ObservableObject {
 
     func resetPasteLastShortcut() {
         apply(.pasteLastDefault, to: .pasteLast)
+    }
+
+    func resetPrivateModeShortcut() {
+        apply(.privateModeDefault, to: .privateMode)
+    }
+
+    func setHoldToDictateEnabled(_ enabled: Bool) {
+        holdToDictateEnabled = enabled
+        applyHoldToDictate(enabled, holdKey)
+    }
+
+    func setHoldKey(_ choice: HoldKeyChoice) {
+        holdKey = choice
+        applyHoldToDictate(holdToDictateEnabled, choice)
     }
 
     func requestMicrophoneAccess() {
@@ -187,6 +223,8 @@ final class SettingsViewModel: ObservableObject {
             result = applyShortcut(configuration)
         case .pasteLast:
             result = applyPasteLastShortcut(configuration)
+        case .privateMode:
+            result = applyPrivateModeShortcut(configuration)
         }
 
         switch result {
@@ -196,6 +234,8 @@ final class SettingsViewModel: ObservableObject {
                 currentShortcut = configuration
             case .pasteLast:
                 pasteLastShortcut = configuration
+            case .privateMode:
+                privateModeShortcut = configuration
             }
             shortcutError = nil
         case .failure(let error):

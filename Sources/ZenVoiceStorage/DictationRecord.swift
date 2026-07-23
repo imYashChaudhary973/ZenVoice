@@ -67,6 +67,7 @@ public struct DictationRecord: Identifiable, Sendable {
     public let category: DictationCategory
     public let insertionOutcome: DictationStatus?
     public let correctionCount: Int
+    public let isPartial: Bool
     public let status: DictationStatus
     public let recoveryAudioURL: URL?
     public let recoveryAudioExpiresAt: Date?
@@ -88,6 +89,7 @@ public struct DictationRecord: Identifiable, Sendable {
         category: DictationCategory,
         insertionOutcome: DictationStatus?,
         correctionCount: Int,
+        isPartial: Bool,
         status: DictationStatus,
         recoveryAudioURL: URL?,
         recoveryAudioExpiresAt: Date?,
@@ -108,6 +110,7 @@ public struct DictationRecord: Identifiable, Sendable {
         self.category = category
         self.insertionOutcome = insertionOutcome
         self.correctionCount = correctionCount
+        self.isPartial = isPartial
         self.status = status
         self.recoveryAudioURL = recoveryAudioURL
         self.recoveryAudioExpiresAt = recoveryAudioExpiresAt
@@ -130,4 +133,3 @@ public enum DictationMetrics {
         return Double(wordCount) / (durationSeconds / 60)
     }
 }
-

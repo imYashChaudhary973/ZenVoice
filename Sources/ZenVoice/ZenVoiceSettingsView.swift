@@ -1,4 +1,5 @@
 import SwiftUI
+import ZenVoiceCore
 import ZenVoiceStorage
 
 struct ZenVoiceSettingsView: View {
@@ -329,7 +330,7 @@ private struct HistoryScreen: View {
                 PageHeader(
                     eyebrow: "LOCAL VAULT",
                     title: "History",
-                    subtitle: "Recover, copy, or reuse dictations saved only on this Mac."
+                    subtitle: "Review and copy dictations saved only on this Mac."
                 )
 
                 if !viewModel.hasMadeHistoryChoice {
@@ -361,7 +362,6 @@ private struct HistoryScreen: View {
                                         HistoryRecordRow(
                                             record: record,
                                             copy: { viewModel.copy(record) },
-                                            paste: { viewModel.paste(record) },
                                             retry: { viewModel.retry(record) },
                                             delete: { viewModel.delete(record) }
                                         )
@@ -733,6 +733,115 @@ private struct ShortcutsScreen: View {
                         Divider()
                             .overlay(ZenDesign.Semantic.border)
 
+                        HStack(alignment: .center, spacing: 15) {
+                            ZStack {
+                                RoundedRectangle(
+                                    cornerRadius: 12,
+                                    style: .continuous
+                                )
+                                .fill(ZenDesign.Semantic.accentMuted)
+                                Image(systemName: "eye.slash.fill")
+                                    .font(.system(size: 19, weight: .semibold))
+                                    .foregroundStyle(ZenDesign.Semantic.accent)
+                            }
+                            .frame(width: 46, height: 46)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Toggle Private Dictation")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text("Instantly stop saving transcripts and audio.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                            }
+
+                            Spacer()
+
+                            ShortcutCaptureButton(
+                                displayName:
+                                    viewModel.privateModeShortcut.displayName,
+                                isCapturing:
+                                    viewModel.isCapturingPrivateModeShortcut,
+                                action: {
+                                    if viewModel
+                                        .isCapturingPrivateModeShortcut {
+                                        viewModel.cancelShortcutCapture()
+                                    } else {
+                                        viewModel.beginShortcutCapture(
+                                            for: .privateMode
+                                        )
+                                    }
+                                }
+                            )
+                        }
+
+                        Divider()
+                            .overlay(ZenDesign.Semantic.border)
+
+                        HStack(alignment: .center, spacing: 15) {
+                            ZStack {
+                                RoundedRectangle(
+                                    cornerRadius: 12,
+                                    style: .continuous
+                                )
+                                .fill(ZenDesign.Semantic.accentMuted)
+                                Image(systemName: "hand.tap.fill")
+                                    .font(.system(size: 19, weight: .semibold))
+                                    .foregroundStyle(ZenDesign.Semantic.accent)
+                            }
+                            .frame(width: 46, height: 46)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Hold to dictate")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text("Recording starts while the selected modifier key is held and finishes on release.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                            }
+
+                            Spacer()
+
+                            Picker(
+                                "Hold key",
+                                selection: Binding(
+                                    get: { viewModel.holdKey },
+                                    set: viewModel.setHoldKey
+                                )
+                            ) {
+                                ForEach(HoldKeyChoice.allCases, id: \.self) {
+                                    choice in
+                                    Text(choice.displayName).tag(choice)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 138)
+
+                            Toggle(
+                                "",
+                                isOn: Binding(
+                                    get: {
+                                        viewModel.holdToDictateEnabled
+                                    },
+                                    set:
+                                        viewModel
+                                            .setHoldToDictateEnabled
+                                )
+                            )
+                            .labelsHidden()
+                        }
+
+                        Divider()
+                            .overlay(ZenDesign.Semantic.border)
+
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("How to record")
@@ -755,6 +864,11 @@ private struct ShortcutsScreen: View {
 
                             Button("Reset Paste") {
                                 viewModel.resetPasteLastShortcut()
+                            }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+
+                            Button("Reset Private") {
+                                viewModel.resetPrivateModeShortcut()
                             }
                             .buttonStyle(ZenSecondaryButtonStyle())
                         }
@@ -925,7 +1039,7 @@ private struct PrivacyScreen: View {
 
                         PrivacyToggleRow(
                             title: "Save encrypted transcripts",
-                            detail: "Keep recoverable dictations in your local ZenVoice vault.",
+                            detail: "Save successful and partial transcripts in your encrypted local vault.",
                             isOn: Binding(
                                 get: { historyViewModel.historyEnabled },
                                 set: historyViewModel.setHistoryEnabled
@@ -934,7 +1048,7 @@ private struct PrivacyScreen: View {
 
                         PrivacyToggleRow(
                             title: "Keep failed audio for 24 hours",
-                            detail: "Allows a failed local transcription to be retried.",
+                            detail: "Only when no usable transcript was produced, so you can retry.",
                             isOn: Binding(
                                 get: {
                                     historyViewModel.retainsFailedAudio
@@ -947,7 +1061,7 @@ private struct PrivacyScreen: View {
 
                         PrivacyToggleRow(
                             title: "Private Dictation mode",
-                            detail: "New dictations are not added to history and failed audio is not retained.",
+                            detail: "While enabled, transcripts and audio are never saved.",
                             isOn: Binding(
                                 get: {
                                     historyViewModel.privateModeEnabled
@@ -957,7 +1071,6 @@ private struct PrivacyScreen: View {
                                         .setPrivateModeEnabled
                             )
                         )
-                        .disabled(!historyViewModel.historyEnabled)
                     }
                 }
 
@@ -992,7 +1105,7 @@ private struct PrivacyScreen: View {
                             icon: "clock.arrow.circlepath",
                             text: historyViewModel.historyEnabled
                                 ? "Transcript history is encrypted on this Mac"
-                                : "Transcript history stays off until you enable it"
+                                : "New transcript saving is paused"
                         )
                     }
                 }
@@ -1008,7 +1121,6 @@ private struct PrivacyScreen: View {
 private struct HistoryRecordRow: View {
     let record: ZenVoiceStorage.DictationRecord
     let copy: () -> Void
-    let paste: () -> Void
     let retry: () -> Void
     let delete: () -> Void
 
@@ -1037,6 +1149,11 @@ private struct HistoryRecordRow: View {
                             .foregroundStyle(
                                 ZenDesign.Semantic.textSecondary
                             )
+                    }
+                    if record.isPartial {
+                        Text("Partial")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(ZenDesign.Semantic.accent)
                     }
                 }
 
@@ -1072,8 +1189,6 @@ private struct HistoryRecordRow: View {
                 if record.finalTranscript != nil {
                     Button("Copy", action: copy)
                         .buttonStyle(ZenSecondaryButtonStyle())
-                    Button("Paste", action: paste)
-                        .buttonStyle(ZenPrimaryButtonStyle())
                 }
 
                 Menu {

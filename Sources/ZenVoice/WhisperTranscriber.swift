@@ -48,16 +48,14 @@ final class WhisperTranscriber: @unchecked Sendable {
         process.standardError = FileHandle.nullDevice
 
         try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            throw TranscriptionError.commandFailed
-        }
-
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         let rawTranscript = String(data: data, encoding: .utf8) ?? ""
         let finalTranscript = cleaner.clean(rawTranscript)
 
+        if process.terminationStatus != 0, finalTranscript.isEmpty {
+            throw TranscriptionError.commandFailed
+        }
         guard !finalTranscript.isEmpty else {
             throw TranscriptionError.noSpeech
         }
@@ -66,7 +64,8 @@ final class WhisperTranscriber: @unchecked Sendable {
             rawTranscript: rawTranscript
                 .trimmingCharacters(in: .whitespacesAndNewlines),
             finalTranscript: finalTranscript,
-            correctionCount: 0
+            correctionCount: 0,
+            isPartial: process.terminationStatus != 0
         )
     }
 }

@@ -21,17 +21,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var zenBarController: ZenBarPanelController!
     private var globalHotKey: GlobalHotKey?
     private var pasteLastGlobalHotKey: GlobalHotKey?
+    private var privateModeGlobalHotKey: GlobalHotKey?
+    private var holdToDictateController: HoldToDictateController?
     private var transcriber: WhisperTranscriber?
     private var resetWorkItem: DispatchWorkItem?
     private var currentHotKeyConfiguration = HotKeyPreferences.load()
     private var pasteLastHotKeyConfiguration =
         HotKeyPreferences.loadPasteLast()
+    private var privateModeHotKeyConfiguration =
+        HotKeyPreferences.loadPrivateMode()
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
     private var settingsWindowController: SettingsWindowController!
     private let historyPreferences = HistoryPreferences()
     private var dictationVault: DictationVault?
     private var activeHistoryID: UUID?
+    private var transcribingHistoryID: UUID?
+    private var nonPersistentHistoryIDs: Set<UUID> = []
+    private var holdKeyPressed = false
+    private var holdStartedRecording = false
+    private var recoveryExpiryTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -40,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureZenBar()
         configureHistoryStorage()
         configureHotKey()
+        configureHoldToDictate()
         configureSettingsWindow()
         zenBarController.show()
         settingsWindowController.show()
@@ -55,9 +65,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         let historyID = activeHistoryID
         activeHistoryID = nil
-        recorder.cancel()
+        let recordedAudio = recorder.stop()
         if let historyID {
-            try? dictationVault?.discard(id: historyID)
+            if nonPersistentHistoryIDs.contains(historyID)
+                || historyPreferences.isPrivateModeEnabled
+                || !historyPreferences.isHistoryEnabled {
+                try? dictationVault?.discard(id: historyID)
+            } else {
+                try? dictationVault?.markFailed(
+                    id: historyID,
+                    message: "ZenVoice closed before this dictation completed.",
+                    retainAudio: historyPreferences.retainsFailedAudio
+                )
+            }
+        } else if let recordedAudio {
+            try? FileManager.default.removeItem(at: recordedAudio.url)
         }
     }
 
@@ -82,24 +104,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureHistoryStorage() {
-        guard historyPreferences.isHistoryEnabled else {
-            return
-        }
-
         do {
+            if historyPreferences.isHistoryEnabled {
+                // Materialize the default so paused history can still display
+                // records and paste-last can recover them after relaunch.
+                historyPreferences.isHistoryEnabled = true
+            }
             let vault = try DictationVault.live()
             dictationVault = vault
             try vault.recoverInterrupted(
                 retainAudio: historyPreferences.retainsFailedAudio
             )
             try vault.purgeExpiredRecoveryAudio()
-            if let cutoff = Calendar.current.date(
-                byAdding: .day,
-                value: -historyPreferences.retentionDays,
-                to: Date()
-            ) {
-                try vault.purgeRecords(startedBefore: cutoff)
-            }
+            scheduleRecoveryExpiry()
         } catch {
             showError(error.localizedDescription)
         }
@@ -255,12 +272,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 showError(error.localizedDescription)
             }
         }
+
+        do {
+            privateModeGlobalHotKey = try makePrivateModeGlobalHotKey(
+                configuration: privateModeHotKeyConfiguration
+            )
+        } catch {
+            privateModeHotKeyConfiguration = .privateModeDefault
+            do {
+                privateModeGlobalHotKey = try makePrivateModeGlobalHotKey(
+                    configuration: privateModeHotKeyConfiguration
+                )
+                HotKeyPreferences.savePrivateMode(
+                    privateModeHotKeyConfiguration
+                )
+            } catch {
+                showError(error.localizedDescription)
+            }
+        }
+    }
+
+    private func configureHoldToDictate() {
+        let controller = HoldToDictateController(
+            isEnabled: HotKeyPreferences.isHoldToDictateEnabled(),
+            key: HotKeyPreferences.loadHoldKey()
+        )
+        controller.onPress = { [weak self] in
+            self?.holdToDictatePressed()
+        }
+        controller.onRelease = { [weak self] in
+            self?.holdToDictateReleased()
+        }
+        holdToDictateController = controller
     }
 
     private func configureSettingsWindow() {
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
             pasteLastShortcut: pasteLastHotKeyConfiguration,
+            privateModeShortcut: privateModeHotKeyConfiguration,
+            holdToDictateEnabled:
+                HotKeyPreferences.isHoldToDictateEnabled(),
+            holdKey: HotKeyPreferences.loadHoldKey(),
             applyShortcut: { [weak self] configuration in
                 guard let self else {
                     return .failure(
@@ -280,6 +333,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
                 return self.applyPasteLastHotKey(configuration)
+            },
+            applyPrivateModeShortcut: { [weak self] configuration in
+                guard let self else {
+                    return .failure(
+                        GlobalHotKey.HotKeyError.registrationFailed(
+                            configuration.displayName
+                        )
+                    )
+                }
+                return self.applyPrivateModeHotKey(configuration)
+            },
+            applyHoldToDictate: { [weak self] enabled, key in
+                self?.applyHoldToDictate(enabled: enabled, key: key)
             }
         )
         historyViewModel = HistoryViewModel(
@@ -292,9 +358,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return try self.resolvedVault()
             },
-            pasteRecord: { [weak self] record in
-                self?.pasteHistoryRecord(record)
-            },
             retryRecord: { [weak self] record in
                 guard let self else {
                     return .failure(
@@ -304,6 +367,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
                 return self.retryHistoryRecord(record)
+            },
+            privacyChanged: { [weak self] in
+                self?.handlePrivacyChanged()
             }
         )
         settingsWindowController = SettingsWindowController(
@@ -329,10 +395,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func makePrivateModeGlobalHotKey(
+        configuration: HotKeyConfiguration
+    ) throws -> GlobalHotKey {
+        try GlobalHotKey(configuration: configuration) { [weak self] in
+            self?.togglePrivateMode()
+        }
+    }
+
     private func applyHotKey(
         _ configuration: HotKeyConfiguration
     ) -> Result<Void, Error> {
-        guard configuration.isValid else {
+        guard configuration.isValid,
+              configuration != pasteLastHotKeyConfiguration,
+              configuration != privateModeHotKeyConfiguration else {
             return .failure(
                 GlobalHotKey.HotKeyError.registrationFailed(
                     configuration.displayName
@@ -361,7 +437,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyPasteLastHotKey(
         _ configuration: HotKeyConfiguration
     ) -> Result<Void, Error> {
-        guard configuration.isValid else {
+        guard configuration.isValid,
+              configuration != currentHotKeyConfiguration,
+              configuration != privateModeHotKeyConfiguration else {
             return .failure(
                 GlobalHotKey.HotKeyError.registrationFailed(
                     configuration.displayName
@@ -385,6 +463,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func applyPrivateModeHotKey(
+        _ configuration: HotKeyConfiguration
+    ) -> Result<Void, Error> {
+        guard configuration.isValid,
+              configuration != currentHotKeyConfiguration,
+              configuration != pasteLastHotKeyConfiguration else {
+            return .failure(
+                GlobalHotKey.HotKeyError.registrationFailed(
+                    configuration.displayName
+                )
+            )
+        }
+        if configuration == privateModeHotKeyConfiguration {
+            return .success(())
+        }
+
+        do {
+            let replacement = try makePrivateModeGlobalHotKey(
+                configuration: configuration
+            )
+            privateModeGlobalHotKey = replacement
+            privateModeHotKeyConfiguration = configuration
+            HotKeyPreferences.savePrivateMode(configuration)
+            return .success(())
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func applyHoldToDictate(
+        enabled: Bool,
+        key: HoldKeyChoice
+    ) {
+        HotKeyPreferences.saveHoldToDictateEnabled(enabled)
+        HotKeyPreferences.saveHoldKey(key)
+        holdToDictateController?.update(isEnabled: enabled, key: key)
+    }
+
     private var startStopMenuTitle: String {
         let action = recorder.isRecording
             ? "Stop and Insert"
@@ -404,7 +520,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func beginRecording() {
+    private func beginRecording(startedByHold: Bool = false) {
         guard !state.isBusy else {
             return
         }
@@ -418,15 +534,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
-            startRecorder()
+            startRecorder(startedByHold: startedByHold)
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
                 DispatchQueue.main.async {
-                    if granted {
-                        self?.startRecorder()
+                    guard let self else { return }
+                    if granted,
+                       !startedByHold || self.holdKeyPressed {
+                        self.startRecorder(startedByHold: startedByHold)
                     } else {
-                        self?.showError("Microphone permission is required.")
-                        self?.openMicrophoneSettings()
+                        if !granted {
+                            self.showError("Microphone permission is required.")
+                            self.openMicrophoneSettings()
+                        }
                     }
                 }
             }
@@ -440,7 +560,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func startRecorder() {
+    private func startRecorder(startedByHold: Bool = false) {
         resetWorkItem?.cancel()
         state.resetAudioSamples()
         var historyDraft: DictationDraft?
@@ -477,6 +597,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             state.phase = .listening
+            holdStartedRecording = startedByHold
             updateStartStopMenuTitle()
             if state.isZenBarVisible {
                 zenBarController.show()
@@ -491,12 +612,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func finishRecording() {
+        holdStartedRecording = false
         guard let recordedAudio = recorder.stop(), let transcriber else {
             showError("No recording was captured.")
             return
         }
         let historyID = activeHistoryID
         activeHistoryID = nil
+        transcribingHistoryID = historyID
 
         if let historyID {
             do {
@@ -549,6 +672,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         resetWorkItem?.cancel()
         let historyID = activeHistoryID
         activeHistoryID = nil
+        holdStartedRecording = false
         recorder.cancel()
         if let historyID {
             try? dictationVault?.discard(id: historyID)
@@ -563,15 +687,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?
     ) {
+        transcribingHistoryID = nil
+        let shouldPersist = historyID.map {
+            nonPersistentHistoryIDs.remove($0) == nil
+                && historyPreferences.isHistoryEnabled
+                && !historyPreferences.isPrivateModeEnabled
+        } ?? false
         var historySaveError: Error?
-        if let historyID {
+        if let historyID, shouldPersist {
             do {
                 let vault = try resolvedVault()
                 try vault.storeTranscript(
                     id: historyID,
                     rawTranscript: result.rawTranscript,
                     finalTranscript: result.finalTranscript,
-                    correctionCount: result.correctionCount
+                    correctionCount: result.correctionCount,
+                    isPartial: result.isPartial
                 )
                 try vault.deleteRecoveryAudio(id: historyID)
             } catch {
@@ -583,6 +714,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             }
         } else {
+            if let historyID {
+                try? resolvedVault().discard(id: historyID)
+            }
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
 
@@ -593,7 +727,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             switch self.inserter.insert(result.finalTranscript) {
             case .pasted:
-                if let historyID, historySaveError == nil {
+                if let historyID, shouldPersist, historySaveError == nil {
                     try? self.resolvedVault().markInsertion(
                         id: historyID,
                         outcome: .inserted
@@ -603,7 +737,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.historyViewModel?.refresh()
                 self.scheduleIdleReset(after: 1.5)
             case .copiedOnly:
-                if let historyID, historySaveError == nil {
+                if let historyID, shouldPersist, historySaveError == nil {
                     try? self.resolvedVault().markInsertion(
                         id: historyID,
                         outcome: .copiedOnly
@@ -627,17 +761,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?
     ) {
-        if let historyID {
+        transcribingHistoryID = nil
+        let shouldPersist = historyID.map {
+            nonPersistentHistoryIDs.remove($0) == nil
+                && historyPreferences.isHistoryEnabled
+                && !historyPreferences.isPrivateModeEnabled
+        } ?? false
+        if let historyID, shouldPersist {
             do {
                 try resolvedVault().markFailed(
                     id: historyID,
                     message: error.localizedDescription,
                     retainAudio: historyPreferences.retainsFailedAudio
                 )
+                scheduleRecoveryExpiry()
             } catch {
                 try? FileManager.default.removeItem(at: recordedAudio.url)
             }
         } else {
+            if let historyID {
+                try? resolvedVault().discard(id: historyID)
+            }
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
         historyViewModel?.refresh()
@@ -710,27 +854,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func pasteHistoryRecord(_ record: DictationRecord) {
-        guard let transcript = record.finalTranscript else {
+    private func holdToDictatePressed() {
+        guard !recorder.isRecording, !state.isBusy else {
             return
         }
+        holdKeyPressed = true
+        beginRecording(startedByHold: true)
+    }
 
-        settingsWindowController.hide()
-        if let bundleID = record.targetBundleID,
-           let target = NSRunningApplication.runningApplications(
-               withBundleIdentifier: bundleID
-           ).first {
-            target.activate()
+    private func holdToDictateReleased() {
+        holdKeyPressed = false
+        guard holdStartedRecording, recorder.isRecording else {
+            return
         }
+        finishRecording()
+    }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self else { return }
-            switch self.inserter.insert(transcript) {
-            case .pasted:
-                self.state.phase = .success
-                self.scheduleIdleReset(after: 1.5)
-            case .copiedOnly:
-                self.showError("Copied—enable Accessibility to auto-paste.")
+    private func togglePrivateMode() {
+        let enabled = !historyPreferences.isPrivateModeEnabled
+        historyViewModel?.setPrivateModeEnabled(enabled)
+        if historyViewModel == nil {
+            historyPreferences.isPrivateModeEnabled = enabled
+            handlePrivacyChanged()
+        }
+        state.phase = enabled
+            ? .error("Private Dictation on — nothing will be saved.")
+            : .success
+        scheduleIdleReset(after: 2)
+    }
+
+    private func handlePrivacyChanged() {
+        guard !historyPreferences.isHistoryEnabled
+                || historyPreferences.isPrivateModeEnabled else {
+            return
+        }
+        if let activeHistoryID {
+            nonPersistentHistoryIDs.insert(activeHistoryID)
+        }
+        if let transcribingHistoryID {
+            nonPersistentHistoryIDs.insert(transcribingHistoryID)
+        }
+    }
+
+    private func scheduleRecoveryExpiry() {
+        recoveryExpiryTimer?.invalidate()
+        guard let vault = dictationVault,
+              let expiry = try? vault.nextRecoveryExpiry() else {
+            return
+        }
+        let delay = max(1, expiry.timeIntervalSinceNow)
+        recoveryExpiryTimer = Timer.scheduledTimer(
+            withTimeInterval: delay,
+            repeats: false
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                _ = try? self.dictationVault?.purgeExpiredRecoveryAudio()
+                self.historyViewModel?.refresh()
+                self.scheduleRecoveryExpiry()
             }
         }
     }
@@ -771,6 +952,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         state.phase = .transcribing
+        transcribingHistoryID = record.id
         let recordedAudio = AudioRecorder.RecordedAudio(
             url: audioURL,
             durationSeconds: record.durationSeconds
@@ -803,13 +985,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID
     ) {
+        transcribingHistoryID = nil
+        guard nonPersistentHistoryIDs.remove(historyID) == nil,
+              historyPreferences.isHistoryEnabled,
+              !historyPreferences.isPrivateModeEnabled else {
+            try? resolvedVault().discard(id: historyID)
+            try? FileManager.default.removeItem(at: recordedAudio.url)
+            showError("Private Dictation was enabled; this retry was not saved.")
+            return
+        }
         do {
             let vault = try resolvedVault()
             try vault.storeTranscript(
                 id: historyID,
                 rawTranscript: result.rawTranscript,
                 finalTranscript: result.finalTranscript,
-                correctionCount: result.correctionCount
+                correctionCount: result.correctionCount,
+                isPartial: result.isPartial
             )
             try vault.deleteRecoveryAudio(id: historyID)
             state.lastTranscript = result.finalTranscript

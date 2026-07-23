@@ -17,12 +17,17 @@ final class GlobalHotKey {
     private var hotKeyReference: EventHotKeyRef?
     private var eventHandlerReference: EventHandlerRef?
     private let action: () -> Void
+    private let hotKeyID: EventHotKeyID
+
+    private static let identifierLock = NSLock()
+    private nonisolated(unsafe) static var nextIdentifier: UInt32 = 1
 
     init(
         configuration: HotKeyConfiguration,
         action: @escaping () -> Void
     ) throws {
         self.action = action
+        hotKeyID = Self.allocateIdentifier()
 
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -32,13 +37,28 @@ final class GlobalHotKey {
         let pointer = Unmanaged.passUnretained(self).toOpaque()
         let handlerStatus = InstallEventHandler(
             GetEventDispatcherTarget(),
-            { _, _, userData in
-                guard let userData else {
+            { _, event, userData in
+                guard let event, let userData else {
                     return OSStatus(eventNotHandledErr)
                 }
                 let hotKey = Unmanaged<GlobalHotKey>
                     .fromOpaque(userData)
                     .takeUnretainedValue()
+                var deliveredID = EventHotKeyID()
+                let readStatus = GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &deliveredID
+                )
+                guard readStatus == noErr,
+                      deliveredID.signature == hotKey.hotKeyID.signature,
+                      deliveredID.id == hotKey.hotKeyID.id else {
+                    return OSStatus(eventNotHandledErr)
+                }
                 DispatchQueue.main.async {
                     hotKey.action()
                 }
@@ -54,10 +74,6 @@ final class GlobalHotKey {
             throw HotKeyError.registrationFailed(configuration.displayName)
         }
 
-        let hotKeyID = EventHotKeyID(
-            signature: OSType(0x5A564F49),
-            id: UInt32.random(in: 1...UInt32.max)
-        )
         let modifiers = Self.carbonModifiers(for: configuration.modifiers)
         let registrationStatus = RegisterEventHotKey(
             configuration.keyCode,
@@ -74,6 +90,17 @@ final class GlobalHotKey {
             }
             throw HotKeyError.registrationFailed(configuration.displayName)
         }
+    }
+
+    private static func allocateIdentifier() -> EventHotKeyID {
+        identifierLock.lock()
+        defer { identifierLock.unlock() }
+        let identifier = nextIdentifier
+        nextIdentifier &+= 1
+        if nextIdentifier == 0 {
+            nextIdentifier = 1
+        }
+        return EventHotKeyID(signature: OSType(0x5A564F49), id: identifier)
     }
 
     private static func carbonModifiers(

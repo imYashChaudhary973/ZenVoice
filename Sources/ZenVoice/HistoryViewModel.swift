@@ -15,20 +15,20 @@ final class HistoryViewModel: ObservableObject {
 
     private let preferences: HistoryPreferences
     private let vaultProvider: () throws -> DictationVault
-    private let pasteRecord: (DictationRecord) -> Void
     private let retryRecord: (DictationRecord) -> Result<Void, Error>
+    private let privacyChanged: () -> Void
 
     init(
         preferences: HistoryPreferences,
         vaultProvider: @escaping () throws -> DictationVault,
-        pasteRecord: @escaping (DictationRecord) -> Void,
         retryRecord: @escaping
-            (DictationRecord) -> Result<Void, Error>
+            (DictationRecord) -> Result<Void, Error>,
+        privacyChanged: @escaping () -> Void
     ) {
         self.preferences = preferences
         self.vaultProvider = vaultProvider
-        self.pasteRecord = pasteRecord
         self.retryRecord = retryRecord
+        self.privacyChanged = privacyChanged
         historyEnabled = preferences.isHistoryEnabled
         hasMadeHistoryChoice = preferences.hasMadeHistoryChoice
         retainsFailedAudio = preferences.retainsFailedAudio
@@ -71,6 +71,7 @@ final class HistoryViewModel: ObservableObject {
             historyEnabled = true
             hasMadeHistoryChoice = true
             errorMessage = nil
+            privacyChanged()
             refresh()
         } catch {
             errorMessage = error.localizedDescription
@@ -82,6 +83,7 @@ final class HistoryViewModel: ObservableObject {
         historyEnabled = false
         preferences.hasMadeHistoryChoice = true
         hasMadeHistoryChoice = true
+        privacyChanged()
     }
 
     func setHistoryEnabled(_ enabled: Bool) {
@@ -91,6 +93,7 @@ final class HistoryViewModel: ObservableObject {
             preferences.isHistoryEnabled = false
             historyEnabled = false
             hasMadeHistoryChoice = true
+            privacyChanged()
         }
     }
 
@@ -102,6 +105,7 @@ final class HistoryViewModel: ObservableObject {
     func setPrivateModeEnabled(_ enabled: Bool) {
         preferences.isPrivateModeEnabled = enabled
         privateModeEnabled = enabled
+        privacyChanged()
     }
 
     func copy(_ record: DictationRecord) {
@@ -110,13 +114,6 @@ final class HistoryViewModel: ObservableObject {
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(transcript, forType: .string)
-    }
-
-    func paste(_ record: DictationRecord) {
-        guard record.finalTranscript != nil else {
-            return
-        }
-        pasteRecord(record)
     }
 
     func retry(_ record: DictationRecord) {

@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import ZenVoiceStorage
 
 private final class StaticKeyProvider: VaultKeyProviding {
@@ -246,7 +247,7 @@ private func checkDeleteAllRotatesVault() throws {
     )
 }
 
-private func checkHistoryPreferencesRequireChoice() throws {
+private func checkHistoryPreferencesDefaults() throws {
     let suiteName = "ZenVoiceStorageChecks.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
         throw CheckError.failed("could not create isolated user defaults")
@@ -256,8 +257,8 @@ private func checkHistoryPreferencesRequireChoice() throws {
     }
 
     let preferences = HistoryPreferences(defaults: defaults)
-    try require(!preferences.hasMadeHistoryChoice, "unexpected history choice")
-    try require(!preferences.isHistoryEnabled, "history enabled by default")
+    try require(preferences.hasMadeHistoryChoice, "history default not active")
+    try require(preferences.isHistoryEnabled, "history disabled by default")
     try require(preferences.retainsFailedAudio, "failed audio default")
 
     preferences.isHistoryEnabled = true
@@ -268,6 +269,106 @@ private func checkHistoryPreferencesRequireChoice() throws {
         "history activation not recorded"
     )
     try require(preferences.isPrivateModeEnabled, "private mode not saved")
+
+    preferences.isHistoryEnabled = false
+    let reloaded = HistoryPreferences(defaults: defaults)
+    try require(!reloaded.isHistoryEnabled, "explicit pause was not preserved")
+}
+
+private func executeSQL(_ sql: String, databaseURL: URL) throws {
+    var database: OpaquePointer?
+    guard sqlite3_open(databaseURL.path, &database) == SQLITE_OK else {
+        throw CheckError.failed("could not open verification database")
+    }
+    defer { sqlite3_close(database) }
+    guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
+        throw CheckError.failed("verification SQL failed")
+    }
+}
+
+private func checkPartialAndCipherBinding() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let id = UUID()
+    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    try Data("audio".utf8).write(to: audioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: id,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: nil,
+            recoveryAudioURL: audioURL
+        )
+    )
+    try fixture.vault.markTranscribing(id: id, durationSeconds: 10)
+    try fixture.vault.storeTranscript(
+        id: id,
+        rawTranscript: "partial raw",
+        finalTranscript: "Partial final",
+        isPartial: true
+    )
+    try require(
+        try fixture.vault.record(id: id)?.isPartial == true,
+        "partial transcript flag was not stored"
+    )
+
+    try executeSQL(
+        """
+        UPDATE dictations
+        SET raw_transcript = final_transcript,
+            final_transcript = raw_transcript
+        WHERE id = '\(id.uuidString)';
+        """,
+        databaseURL: fixture.databaseURL
+    )
+    do {
+        _ = try fixture.vault.record(id: id)
+        throw CheckError.failed("swapped ciphertext fields were accepted")
+    } catch let checkError as CheckError {
+        throw checkError
+    } catch {
+        // Expected: authenticated field context rejects the swap.
+    }
+
+    try fixture.vault.deleteAll()
+    try require(
+        try fixture.vault.recent().isEmpty,
+        "corrupt ciphertext blocked delete all"
+    )
+}
+
+private func checkRecoveryPathConfinement() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let id = UUID()
+    let outsideURL = fixture.directoryURL
+        .appendingPathComponent("outside.wav")
+    try Data("do not delete".utf8).write(to: outsideURL)
+    do {
+        try fixture.vault.begin(
+            DictationDraft(
+                id: id,
+                language: "en",
+                modelID: "whisper-base.en",
+                targetBundleID: nil,
+                targetAppName: nil,
+                recoveryAudioURL: outsideURL
+            )
+        )
+        throw CheckError.failed("external recovery path was accepted")
+    } catch let checkError as CheckError {
+        throw checkError
+    } catch {
+        // Expected: recovery files must use the vault-generated UUID path.
+    }
+    try require(
+        FileManager.default.fileExists(atPath: outsideURL.path),
+        "external file was modified"
+    )
 }
 
 do {
@@ -275,8 +376,10 @@ do {
     try checkRecoveryExpiry()
     try checkDiscard()
     try checkDeleteAllRotatesVault()
-    try checkHistoryPreferencesRequireChoice()
-    print("ZenVoiceStorageChecks: 5 checks passed")
+    try checkHistoryPreferencesDefaults()
+    try checkPartialAndCipherBinding()
+    try checkRecoveryPathConfinement()
+    print("ZenVoiceStorageChecks: 7 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)
