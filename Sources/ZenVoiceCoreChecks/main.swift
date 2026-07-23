@@ -63,3 +63,26 @@ guard AudioLevelMeter.normalize(decibels: -70) == 0,
 }
 
 print("ZenVoiceCoreChecks: audio level response passed")
+
+let defaultHotKey = HotKeyConfiguration.dictationDefault
+guard defaultHotKey.isValid,
+      defaultHotKey.displayName == "⌃ ⌥ Space" else {
+    FileHandle.standardError.write(
+        Data("FAIL: default hotkey configuration is invalid\n".utf8)
+    )
+    exit(1)
+}
+
+let encodedHotKey = try JSONEncoder().encode(defaultHotKey)
+let decodedHotKey = try JSONDecoder().decode(
+    HotKeyConfiguration.self,
+    from: encodedHotKey
+)
+guard decodedHotKey == defaultHotKey else {
+    FileHandle.standardError.write(
+        Data("FAIL: hotkey configuration did not persist correctly\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: hotkey configuration passed")

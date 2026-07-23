@@ -21,6 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalHotKey: GlobalHotKey?
     private var transcriber: WhisperTranscriber?
     private var resetWorkItem: DispatchWorkItem?
+    private var currentHotKeyConfiguration = HotKeyPreferences.load()
+    private var settingsViewModel: SettingsViewModel!
+    private var settingsWindowController: SettingsWindowController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -28,7 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureMenuBar()
         configureZenBar()
         configureHotKey()
+        configureSettingsWindow()
         zenBarController.show()
+        settingsWindowController.show()
 
         NotificationCenter.default.addObserver(
             self,
@@ -40,6 +45,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         recorder.cancel()
+    }
+
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        if !flag {
+            settingsWindowController.show()
+        }
+        return true
     }
 
     private func configureTranscriber() {
@@ -68,8 +83,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+
+        let openItem = NSMenuItem(
+            title: "Open ZenVoice…",
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
+        openItem.target = self
+        menu.addItem(openItem)
+
+        menu.addItem(.separator())
+
         startStopMenuItem = NSMenuItem(
-            title: "Start Dictation",
+            title: startStopMenuTitle,
             action: #selector(toggleRecording),
             keyEquivalent: ""
         )
@@ -141,12 +167,93 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureHotKey() {
         do {
-            globalHotKey = try GlobalHotKey { [weak self] in
-                self?.toggleRecording()
-            }
+            globalHotKey = try makeGlobalHotKey(
+                configuration: currentHotKeyConfiguration
+            )
         } catch {
-            showError(error.localizedDescription)
+            guard currentHotKeyConfiguration != .dictationDefault else {
+                showError(error.localizedDescription)
+                return
+            }
+
+            do {
+                currentHotKeyConfiguration = .dictationDefault
+                globalHotKey = try makeGlobalHotKey(
+                    configuration: currentHotKeyConfiguration
+                )
+                HotKeyPreferences.save(currentHotKeyConfiguration)
+            } catch {
+                showError(error.localizedDescription)
+            }
         }
+    }
+
+    private func configureSettingsWindow() {
+        settingsViewModel = SettingsViewModel(
+            currentShortcut: currentHotKeyConfiguration,
+            applyShortcut: { [weak self] configuration in
+                guard let self else {
+                    return .failure(
+                        GlobalHotKey.HotKeyError.registrationFailed(
+                            configuration.displayName
+                        )
+                    )
+                }
+                return self.applyHotKey(configuration)
+            }
+        )
+        settingsWindowController = SettingsWindowController(
+            viewModel: settingsViewModel,
+            appState: state
+        )
+    }
+
+    private func makeGlobalHotKey(
+        configuration: HotKeyConfiguration
+    ) throws -> GlobalHotKey {
+        try GlobalHotKey(configuration: configuration) { [weak self] in
+            self?.toggleRecording()
+        }
+    }
+
+    private func applyHotKey(
+        _ configuration: HotKeyConfiguration
+    ) -> Result<Void, Error> {
+        guard configuration.isValid else {
+            return .failure(
+                GlobalHotKey.HotKeyError.registrationFailed(
+                    configuration.displayName
+                )
+            )
+        }
+
+        if configuration == currentHotKeyConfiguration {
+            return .success(())
+        }
+
+        do {
+            let replacement = try makeGlobalHotKey(
+                configuration: configuration
+            )
+            globalHotKey = replacement
+            currentHotKeyConfiguration = configuration
+            HotKeyPreferences.save(configuration)
+            updateStartStopMenuTitle()
+            return .success(())
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private var startStopMenuTitle: String {
+        let action = recorder.isRecording
+            ? "Stop and Insert"
+            : "Start Dictation"
+        return "\(action)  \(currentHotKeyConfiguration.displayName)"
+    }
+
+    private func updateStartStopMenuTitle() {
+        startStopMenuItem?.title = startStopMenuTitle
     }
 
     @objc private func toggleRecording() {
@@ -203,7 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             state.phase = .listening
-            startStopMenuItem.title = "Stop and Insert"
+            updateStartStopMenuTitle()
             if state.isZenBarVisible {
                 zenBarController.show()
             }
@@ -219,7 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         state.phase = .transcribing
-        startStopMenuItem.title = "Start Dictation"
+        updateStartStopMenuTitle()
 
         transcriptionQueue.async { [weak self] in
             do {
@@ -244,7 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recorder.cancel()
         state.resetAudioSamples()
         state.phase = .idle
-        startStopMenuItem.title = "Start Dictation"
+        updateStartStopMenuTitle()
     }
 
     private func complete(transcript: String) {
@@ -265,7 +372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showError(_ message: String) {
         state.phase = .error(message)
-        startStopMenuItem?.title = "Start Dictation"
+        updateStartStopMenuTitle()
         if state.isZenBarVisible {
             zenBarController?.show()
         }
@@ -290,6 +397,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSPasteboard.general.setString(state.lastTranscript, forType: .string)
         state.phase = .success
         scheduleIdleReset(after: 1.5)
+    }
+
+    @objc private func openSettings() {
+        settingsWindowController.show()
     }
 
     @objc private func toggleZenBar() {

@@ -16,10 +16,11 @@
   <img alt="Private alpha" src="https://img.shields.io/badge/Status-Private_Alpha-5865F2">
 </p>
 
-ZenVoice is a native macOS menu-bar app inspired by the speed of modern voice
-dictation tools while keeping transcription, temporary audio, and configuration
-on your Mac. There are no accounts, subscriptions, analytics, or cloud
-transcription services in the current application.
+ZenVoice is a native macOS app inspired by the speed of modern voice dictation
+tools while keeping transcription, temporary audio, and configuration on your
+Mac. Its ZenBar stays close at hand, while a dedicated settings window provides
+clear controls and live system status. There are no accounts, subscriptions,
+analytics, or cloud transcription services in the current application.
 
 > [!IMPORTANT]
 > ZenVoice is currently a private personal project. Public distribution,
@@ -27,7 +28,9 @@ transcription services in the current application.
 
 ## What works today
 
-- Global `Control + Option + Space` dictation shortcut.
+- A native settings window with Overview, Shortcuts, and Privacy screens.
+- A configurable global dictation shortcut, defaulting to
+  `Control + Option + Space`.
 - Local English transcription through `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.
@@ -48,8 +51,8 @@ Hotkey
   → macOS clipboard and active-app paste
 ```
 
-The interface and permissions run natively with Swift, SwiftUI, AppKit,
-AVFoundation, and macOS Accessibility APIs. See
+The settings interface, ZenBar, and permission handling run natively with
+Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 [Architecture](docs/ARCHITECTURE.md) for the component-level design.
 
 ## Requirements
@@ -91,10 +94,15 @@ clipboard.
 
 ## Use ZenVoice
 
-1. Place the cursor in any editable text field.
-2. Press `Control + Option + Space`.
-3. Speak while ZenBar displays the live waveform.
-4. Press the shortcut again to stop, transcribe, and insert.
+1. Open the **Shortcuts** screen to keep the default shortcut or record your
+   own.
+2. Place the cursor in any editable text field.
+3. Press your shortcut.
+4. Speak while ZenBar displays the live waveform.
+5. Press the shortcut again to stop, transcribe, and insert.
+
+Closing the settings window keeps ZenVoice running in the menu bar. Select
+**Open ZenVoice…** from the menu-bar menu whenever you want it back.
 
 ## Verify
 
@@ -134,7 +142,7 @@ The complete development and manual QA procedure is in
 ## Project direction
 
 The immediate goal is a dependable personal dictation tool. Multilingual
-models, local vocabulary, lower transcription latency, settings, and
+models, local vocabulary, lower transcription latency, expanded settings, and
 distribution readiness come after the English macOS workflow is stable.
 
 ZenVoice intentionally has no license while its future distribution model is

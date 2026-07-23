@@ -106,27 +106,39 @@ The checks cover:
 - Whisper metadata removal;
 - conservative leading-filler cleanup;
 - microphone dB clamping;
-- louder input producing taller waveform levels.
+- louder input producing taller waveform levels;
+- valid default-hotkey display and serialization.
 
 ## Manual QA
 
 1. Launch `build/ZenVoice.app`.
-2. Confirm the Zen logo appears in the menu bar and ZenBar.
-3. Open TextEdit and place the cursor in a document.
-4. Press `Control + Option + Space`.
-5. Speak quietly and confirm ZenBar shows shorter waveform bars.
-6. Speak loudly and confirm ZenBar shows taller waveform bars.
-7. Select the checkmark and confirm the transcript is inserted into TextEdit.
-8. Start again, select cancel, and confirm no transcript is inserted.
-9. Toggle **Show Status Message** from the menu-bar app and confirm the
+2. Confirm the settings window opens and the Zen logo appears in the menu bar
+   and ZenBar.
+3. Open **Shortcuts**, select the current shortcut, and record a temporary
+   two-modifier combination.
+4. Quit and relaunch ZenVoice. Confirm the custom shortcut persisted, then use
+   **Reset Default**.
+5. Open **Privacy** and confirm Microphone, Accessibility, and local-model
+   status match System Settings and the local installation.
+6. Close the settings window and reopen it from **Open ZenVoice…** in the
+   menu-bar menu.
+7. Open TextEdit and place the cursor in a document.
+8. Press the configured shortcut.
+9. Speak quietly and confirm ZenBar shows shorter waveform bars.
+10. Speak loudly and confirm ZenBar shows taller waveform bars.
+11. Select the checkmark and confirm the transcript is inserted into TextEdit.
+12. Start again, select cancel, and confirm no transcript is inserted.
+13. Toggle **Show Status Message** from the menu-bar app and confirm the
    dictation message follows the preference.
-10. Press the shortcut again to confirm hotkey stop-and-insert still works.
-11. Disable Accessibility permission and repeat.
-12. Confirm the transcript remains available on the clipboard.
+14. Press the shortcut again to confirm hotkey stop-and-insert still works.
+15. Disable Accessibility permission and repeat.
+16. Confirm the transcript remains available on the clipboard.
 
 Also test:
 
 - denied microphone permission;
+- a shortcut without a modifier;
+- a shortcut already reserved by macOS or another application;
 - silence-only recording;
 - repeated hotkey presses during transcription;
 - app relaunch;

@@ -4,8 +4,17 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Added a native ZenVoice window with Overview, Shortcuts, and Privacy screens
+- Added a recorder for choosing a custom global dictation shortcut
+- Persisted the chosen shortcut locally and applied it without an app restart
+- Added live Microphone, Accessibility, and local-model status
+- Added an **Open ZenVoice…** command to the menu-bar menu
+
 ### Changed
 
+- Displayed the active dictation shortcut in the menu-bar action
 - Reduced ZenBar to a compact bottom-edge control strip
 - Added cancel and finish controls during dictation
 - Added an optional “Dictating with ZenVoice” message
@@ -19,7 +28,7 @@ All notable ZenVoice changes are recorded here.
 ### Planned
 
 - Lower-latency persistent local transcription
-- Configurable shortcuts and microphone selection
+- Microphone selection
 - Personal dictionary and multilingual models
 
 ## [0.1.0] - 2026-07-23
