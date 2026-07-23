@@ -995,7 +995,7 @@ private struct OverviewScreen: View {
                     StatusCard(
                         icon: "character.book.closed",
                         title: "Language",
-                        value: "English",
+                        value: appState.languageProfile.displayName,
                         tint: ZenDesign.Semantic.accent
                     )
                     StatusCard(
