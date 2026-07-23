@@ -6,17 +6,23 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let window: NSWindow
     private let viewModel: SettingsViewModel
     private let historyViewModel: HistoryViewModel
+    private let insightsViewModel: InsightsViewModel
+    private let voiceProfileViewModel: VoiceProfileViewModel
     private let modelManagerViewModel: ModelManagerViewModel
     private var hasCenteredWindow = false
 
     init(
         viewModel: SettingsViewModel,
         historyViewModel: HistoryViewModel,
+        insightsViewModel: InsightsViewModel,
+        voiceProfileViewModel: VoiceProfileViewModel,
         modelManagerViewModel: ModelManagerViewModel,
         appState: AppState
     ) {
         self.viewModel = viewModel
         self.historyViewModel = historyViewModel
+        self.insightsViewModel = insightsViewModel
+        self.voiceProfileViewModel = voiceProfileViewModel
         self.modelManagerViewModel = modelManagerViewModel
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
@@ -49,6 +55,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             rootView: ZenVoiceSettingsView(
                 viewModel: viewModel,
                 historyViewModel: historyViewModel,
+                insightsViewModel: insightsViewModel,
+                voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
                 appState: appState
             )
@@ -58,6 +66,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     func show() {
         viewModel.refreshSystemStatus()
         historyViewModel.refresh()
+        insightsViewModel.refresh()
+        voiceProfileViewModel.refresh()
         modelManagerViewModel.refresh()
         if !hasCenteredWindow {
             window.center()

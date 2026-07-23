@@ -28,10 +28,15 @@ analytics, or cloud transcription services in the current application.
 
 ## What works today
 
-- A native settings window with Overview, Shortcuts, and Privacy screens.
+- A native settings window with Overview, Models, History, Insights,
+  Shortcuts, and Privacy screens.
 - A configurable global dictation shortcut, defaulting to
   `Control + Option + Space`.
 - Encrypted local history by default, including usable partial transcriptions.
+- Private local insights for words, weighted WPM, streaks, apps, and work
+  categories.
+- A local language-usage profile with recurring phrases and encrypted explicit
+  correction rules.
 - Copy, retry, search, and delete controls for saved dictations.
 - A configurable `Control + Option + V` shortcut for pasting the latest
   dictation.
@@ -70,8 +75,8 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 - macOS 14 or newer
 - Apple Silicon Mac
 - Swift 5.10 or newer
-- [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp)
-- A local `ggml-base.en.bin` model
+- Internet access on the first build for the pinned `whisper.cpp` framework
+- A verified model downloaded from ZenVoice's Models screen
 
 ## Quick start
 
@@ -151,6 +156,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Development](docs/DEVELOPMENT.md)
 - [Privacy](docs/PRIVACY.md)
 - [Verified Model Catalogue](docs/MODEL_CATALOG.md)
+- [Voice Profile and Corrections](docs/VOICE_PROFILE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)

@@ -319,6 +319,7 @@ public final class DictationVault: @unchecked Sendable {
 
         try queue.sync {
             try execute("DELETE FROM dictations;")
+            try execute("DELETE FROM correction_rules;")
             try execute("PRAGMA wal_checkpoint(TRUNCATE);")
             try execute("VACUUM;")
             try keyProvider.deleteKey()
@@ -438,6 +439,206 @@ public final class DictationVault: @unchecked Sendable {
         }
     }
 
+    public func updateCategory(
+        id: UUID,
+        category: DictationCategory
+    ) throws {
+        try update(
+            "UPDATE dictations SET category = ? WHERE id = ?;",
+            bindings: { statement in
+                bind(category.rawValue, at: 1, in: statement)
+                bind(id.uuidString, at: 2, in: statement)
+            }
+        )
+    }
+
+    public func insights(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) throws -> LocalInsightsSnapshot {
+        let events: [DictationInsightEvent] = try queue.sync {
+            let statement = try prepare(
+                """
+                SELECT started_at, duration_seconds, word_count,
+                    correction_count, target_bundle_id, target_app_name,
+                    category
+                FROM dictations
+                WHERE final_transcript IS NOT NULL
+                    AND persistence_suppressed = 0;
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+            var values: [DictationInsightEvent] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                guard let categoryValue = text(at: 6, in: statement),
+                      let category = DictationCategory(
+                        rawValue: categoryValue
+                      ) else {
+                    throw DictationVaultError.invalidRecord
+                }
+                values.append(
+                    DictationInsightEvent(
+                        startedAt: Date(
+                            timeIntervalSince1970:
+                                sqlite3_column_double(statement, 0)
+                        ),
+                        durationSeconds:
+                            sqlite3_column_double(statement, 1),
+                        wordCount:
+                            Int(sqlite3_column_int64(statement, 2)),
+                        correctionCount:
+                            Int(sqlite3_column_int64(statement, 3)),
+                        targetBundleID: text(at: 4, in: statement),
+                        targetAppName: text(at: 5, in: statement),
+                        category: category
+                    )
+                )
+            }
+            return values
+        }
+        return LocalInsightsSnapshot.calculate(
+            events: events,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    public func addCorrectionRule(
+        source: String,
+        replacement: String,
+        id: UUID = UUID(),
+        createdAt: Date = Date()
+    ) throws {
+        let source = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let replacement = replacement.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !source.isEmpty,
+              !replacement.isEmpty,
+              source.count <= 120,
+              replacement.count <= 120,
+              source.caseInsensitiveCompare(replacement) != .orderedSame else {
+            throw DictationVaultError.invalidRecord
+        }
+        try queue.sync {
+            let existing = try correctionRulesLocked()
+            guard !existing.contains(where: {
+                $0.source.caseInsensitiveCompare(source) == .orderedSame
+            }) else {
+                throw DictationVaultError.invalidRecord
+            }
+            let statement = try prepare(
+                """
+                INSERT INTO correction_rules (
+                    id, source_text, replacement_text, usage_count, created_at
+                ) VALUES (?, ?, ?, 0, ?);
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+            bind(id.uuidString, at: 1, in: statement)
+            bind(
+                try cipher.seal(
+                    source,
+                    context: correctionContext(id: id, field: "source")
+                ),
+                at: 2,
+                in: statement
+            )
+            bind(
+                try cipher.seal(
+                    replacement,
+                    context: correctionContext(
+                        id: id,
+                        field: "replacement"
+                    )
+                ),
+                at: 3,
+                in: statement
+            )
+            sqlite3_bind_double(
+                statement,
+                4,
+                createdAt.timeIntervalSince1970
+            )
+            try stepDone(statement)
+        }
+    }
+
+    public func correctionRules() throws -> [CorrectionRule] {
+        try queue.sync {
+            try correctionRulesLocked()
+        }
+    }
+
+    public func deleteCorrectionRule(id: UUID) throws {
+        try queue.sync {
+            let statement = try prepare(
+                "DELETE FROM correction_rules WHERE id = ?;"
+            )
+            defer { sqlite3_finalize(statement) }
+            bind(id.uuidString, at: 1, in: statement)
+            try stepDone(statement)
+            try requireChangedRow()
+        }
+    }
+
+    public func applyCorrections(
+        to text: String
+    ) throws -> CorrectionApplication {
+        TranscriptCorrectionEngine.apply(
+            text,
+            rules: try correctionRules()
+        )
+    }
+
+    public func recordCorrectionUsage(
+        _ usages: [CorrectionUsage]
+    ) throws {
+        guard !usages.isEmpty else {
+            return
+        }
+        try queue.sync {
+            try execute("BEGIN IMMEDIATE TRANSACTION;")
+            do {
+                for usage in usages where usage.count > 0 {
+                    let statement = try prepare(
+                        """
+                        UPDATE correction_rules
+                        SET usage_count = usage_count + ?
+                        WHERE id = ?;
+                        """
+                    )
+                    defer { sqlite3_finalize(statement) }
+                    sqlite3_bind_int64(
+                        statement,
+                        1,
+                        Int64(usage.count)
+                    )
+                    bind(usage.ruleID.uuidString, at: 2, in: statement)
+                    try stepDone(statement)
+                }
+                try execute("COMMIT;")
+            } catch {
+                try? execute("ROLLBACK;")
+                throw error
+            }
+        }
+    }
+
+    public func voiceProfile(
+        limit: Int = 500,
+        calendar: Calendar = .current
+    ) throws -> VoiceProfileSnapshot {
+        let records = try recent(limit: limit).filter {
+            $0.finalTranscript != nil
+        }
+        return VoiceProfileSnapshot.calculate(
+            records: records,
+            correctionRules: try correctionRules(),
+            calendar: calendar
+        )
+    }
+
     private func openDatabase() throws {
         let status = sqlite3_open_v2(
             databaseURL.path,
@@ -484,6 +685,13 @@ public final class DictationVault: @unchecked Sendable {
                 ON dictations(started_at DESC);
             CREATE INDEX IF NOT EXISTS idx_dictations_status
                 ON dictations(status);
+            CREATE TABLE IF NOT EXISTS correction_rules (
+                id TEXT PRIMARY KEY NOT NULL,
+                source_text BLOB NOT NULL,
+                replacement_text BLOB NOT NULL,
+                usage_count INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL
+            );
             """
         )
         if version == 1 {
@@ -496,8 +704,8 @@ public final class DictationVault: @unchecked Sendable {
                 "ALTER TABLE dictations ADD COLUMN persistence_suppressed INTEGER NOT NULL DEFAULT 0;"
             )
         }
-        if version < 3 {
-            try execute("PRAGMA user_version = 3;")
+        if version < 4 {
+            try execute("PRAGMA user_version = 4;")
         }
     }
 
@@ -715,6 +923,56 @@ public final class DictationVault: @unchecked Sendable {
 
     private func encryptionContext(id: UUID, field: String) -> String {
         "ZenVoice.dictation.v2|\(id.uuidString.lowercased())|\(field)"
+    }
+
+    private func correctionContext(id: UUID, field: String) -> String {
+        "ZenVoice.correction.v1|\(id.uuidString.lowercased())|\(field)"
+    }
+
+    private func correctionRulesLocked() throws -> [CorrectionRule] {
+        let statement = try prepare(
+            """
+            SELECT id, source_text, replacement_text, usage_count, created_at
+            FROM correction_rules
+            ORDER BY usage_count DESC, created_at ASC;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        var rules: [CorrectionRule] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idValue = text(at: 0, in: statement),
+                  let id = UUID(uuidString: idValue),
+                  let sourceData = data(at: 1, in: statement),
+                  let replacementData = data(at: 2, in: statement) else {
+                throw DictationVaultError.invalidRecord
+            }
+            rules.append(
+                CorrectionRule(
+                    id: id,
+                    source: try cipher.open(
+                        sourceData,
+                        context: correctionContext(
+                            id: id,
+                            field: "source"
+                        )
+                    ),
+                    replacement: try cipher.open(
+                        replacementData,
+                        context: correctionContext(
+                            id: id,
+                            field: "replacement"
+                        )
+                    ),
+                    usageCount:
+                        Int(sqlite3_column_int64(statement, 3)),
+                    createdAt: Date(
+                        timeIntervalSince1970:
+                            sqlite3_column_double(statement, 4)
+                    )
+                )
+            )
+        }
+        return rules
     }
 
     private func userVersion() throws -> Int {

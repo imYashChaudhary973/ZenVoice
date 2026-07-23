@@ -536,6 +536,266 @@ private func checkRecoveryPathConfinement() throws {
     )
 }
 
+private func checkLocalInsights() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let now = Date(timeIntervalSince1970: 1_721_865_600)
+    let day = calendar.startOfDay(for: now)
+    let events = [
+        DictationInsightEvent(
+            startedAt: day,
+            durationSeconds: 60,
+            wordCount: 10,
+            correctionCount: 1,
+            targetBundleID: "com.apple.TextEdit",
+            targetAppName: "TextEdit",
+            category: .documents
+        ),
+        DictationInsightEvent(
+            startedAt: calendar.date(
+                byAdding: .day,
+                value: -1,
+                to: day
+            )!,
+            durationSeconds: 120,
+            wordCount: 20,
+            correctionCount: 2,
+            targetBundleID: "com.apple.TextEdit",
+            targetAppName: "TextEdit",
+            category: .documents
+        ),
+        DictationInsightEvent(
+            startedAt: calendar.date(
+                byAdding: .day,
+                value: -2,
+                to: day
+            )!,
+            durationSeconds: 30,
+            wordCount: 8,
+            correctionCount: 0,
+            targetBundleID: "com.openai.chatgpt",
+            targetAppName: "ChatGPT",
+            category: .aiPrompts
+        ),
+        DictationInsightEvent(
+            startedAt: calendar.date(
+                byAdding: .day,
+                value: -3,
+                to: day
+            )!,
+            durationSeconds: 10,
+            wordCount: 4,
+            correctionCount: 0,
+            targetBundleID: nil,
+            targetAppName: nil,
+            category: .other
+        )
+    ]
+    let snapshot = LocalInsightsSnapshot.calculate(
+        events: events,
+        now: now,
+        calendar: calendar
+    )
+    try require(snapshot.dictationCount == 4, "insight dictation count")
+    try require(snapshot.totalWordCount == 42, "insight total words")
+    try require(
+        abs(snapshot.weightedWordsPerMinute - (42 / (220 / 60))) < 0.001,
+        "weighted insight words per minute"
+    )
+    try require(snapshot.correctionCount == 3, "insight corrections")
+    try require(snapshot.distinctApplicationCount == 2, "distinct apps")
+    try require(snapshot.currentStreakDays == 3, "current streak")
+    try require(snapshot.longestStreakDays == 3, "longest streak")
+    try require(snapshot.recentActivity.count == 7, "seven-day activity")
+    try require(
+        snapshot.categories.first?.category == .documents,
+        "category ranking"
+    )
+    try require(
+        ApplicationCategoryClassifier.category(
+            bundleIdentifier: "com.openai.chatgpt",
+            appName: "ChatGPT"
+        ) == .aiPrompts,
+        "AI application classification"
+    )
+    try require(
+        ApplicationCategoryClassifier.category(
+            bundleIdentifier: "com.apple.Safari",
+            appName: "Safari"
+        ) == .other,
+        "unknown application classification"
+    )
+}
+
+private func checkCategoryCorrection() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let id = UUID()
+    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    try Data("audio".utf8).write(to: audioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: id,
+            language: "en",
+            modelID: "whisper-base-en",
+            targetBundleID: "com.apple.TextEdit",
+            targetAppName: "TextEdit",
+            category: .documents,
+            recoveryAudioURL: audioURL
+        )
+    )
+    try fixture.vault.markTranscribing(id: id, durationSeconds: 60)
+    try fixture.vault.storeTranscript(
+        id: id,
+        rawTranscript: "one two three four five",
+        finalTranscript: "One two three four five."
+    )
+    try fixture.vault.updateCategory(id: id, category: .workMessages)
+
+    try require(
+        try fixture.vault.record(id: id)?.category == .workMessages,
+        "corrected category was not stored"
+    )
+    let snapshot = try fixture.vault.insights()
+    try require(snapshot.totalWordCount == 5, "vault insight words")
+    try require(
+        snapshot.categories.first?.category == .workMessages,
+        "vault insight did not use corrected category"
+    )
+}
+
+private func checkCorrectionEngine() throws {
+    let firstID = UUID()
+    let secondID = UUID()
+    let application = TranscriptCorrectionEngine.apply(
+        "Use zen pens with git hub, not a zen pencil.",
+        rules: [
+            CorrectionRule(
+                id: firstID,
+                source: "zen pens",
+                replacement: "ZenPense"
+            ),
+            CorrectionRule(
+                id: secondID,
+                source: "git hub",
+                replacement: "GitHub"
+            )
+        ]
+    )
+    try require(
+        application.text
+            == "Use ZenPense with GitHub, not a zen pencil.",
+        "whole-phrase corrections"
+    )
+    try require(application.correctionCount == 2, "correction count")
+    try require(
+        Set(application.usages.map(\.ruleID)) == [firstID, secondID],
+        "correction rule usage"
+    )
+}
+
+private func checkEncryptedVoiceProfile() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let ruleID = UUID()
+    try fixture.vault.addCorrectionRule(
+        source: "zen pens",
+        replacement: "ZenPense",
+        id: ruleID,
+        createdAt: Date(timeIntervalSince1970: 1_000)
+    )
+
+    let application = try fixture.vault.applyCorrections(
+        to: "zen pens and zen pens"
+    )
+    try require(
+        application.text == "ZenPense and ZenPense",
+        "vault correction application"
+    )
+    try fixture.vault.recordCorrectionUsage(application.usages)
+    try require(
+        try fixture.vault.correctionRules().first?.usageCount == 2,
+        "correction usage was not recorded"
+    )
+
+    for (offset, transcript) in [
+        "Zen voice makes local voice useful",
+        "Zen voice keeps local voice private"
+    ].enumerated() {
+        let id = UUID()
+        let audioURL = fixture.vault.recoveryAudioURL(for: id)
+        try Data("audio".utf8).write(to: audioURL)
+        try fixture.vault.begin(
+            DictationDraft(
+                id: id,
+                startedAt: Date(
+                    timeIntervalSince1970:
+                        2_000 + TimeInterval(offset * 60)
+                ),
+                language: "en",
+                modelID: "whisper-base-en",
+                targetBundleID: "com.openai.codex",
+                targetAppName: "ChatGPT",
+                category: .aiPrompts,
+                recoveryAudioURL: audioURL
+            )
+        )
+        try fixture.vault.markTranscribing(
+            id: id,
+            durationSeconds: 30
+        )
+        try fixture.vault.storeTranscript(
+            id: id,
+            rawTranscript: transcript.lowercased(),
+            finalTranscript: transcript
+        )
+    }
+
+    let profile = try fixture.vault.voiceProfile()
+    try require(
+        profile.analyzedDictationCount == 2,
+        "voice profile dictation count"
+    )
+    try require(
+        profile.topWords.first?.text == "voice"
+            && profile.topWords.first?.count == 4,
+        "voice profile top words"
+    )
+    try require(
+        profile.catchPhrases.contains {
+            $0.text == "zen voice" && $0.count == 2
+        },
+        "voice profile recurring phrases"
+    )
+    try require(
+        profile.correctionRules.first?.usageCount == 2,
+        "voice profile correction ranking"
+    )
+
+    for suffix in ["", "-wal", "-shm"] {
+        let fileURL = URL(fileURLWithPath: fixture.databaseURL.path + suffix)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            continue
+        }
+        let text = String(
+            decoding: try Data(contentsOf: fileURL),
+            as: UTF8.self
+        )
+        try require(
+            !text.contains("zen pens") && !text.contains("ZenPense"),
+            "correction rule leaked into plaintext database\(suffix)"
+        )
+    }
+
+    try fixture.vault.deleteAll()
+    try require(
+        try fixture.vault.correctionRules().isEmpty,
+        "delete all retained correction rules"
+    )
+}
+
 do {
     try checkEncryptedStorage()
     try checkRecoveryExpiry()
@@ -546,7 +806,11 @@ do {
     try checkPartialAndCipherBinding()
     try checkRecoveryPathConfinement()
     try checkPrivacySuppressionAndRecoveryCleanup()
-    print("ZenVoiceStorageChecks: 9 checks passed")
+    try checkLocalInsights()
+    try checkCategoryCorrection()
+    try checkCorrectionEngine()
+    try checkEncryptedVoiceProfile()
+    print("ZenVoiceStorageChecks: 13 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

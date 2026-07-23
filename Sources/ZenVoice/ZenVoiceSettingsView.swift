@@ -7,6 +7,8 @@ struct ZenVoiceSettingsView: View {
         case overview = "Overview"
         case models = "Models"
         case history = "History"
+        case insights = "Insights"
+        case voiceProfile = "Voice Profile"
         case shortcuts = "Shortcuts"
         case privacy = "Privacy"
 
@@ -20,6 +22,10 @@ struct ZenVoiceSettingsView: View {
                 return "cpu"
             case .history:
                 return "clock.arrow.circlepath"
+            case .insights:
+                return "chart.bar.xaxis"
+            case .voiceProfile:
+                return "quote.bubble"
             case .shortcuts:
                 return "command"
             case .privacy:
@@ -30,6 +36,8 @@ struct ZenVoiceSettingsView: View {
 
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
+    @ObservedObject var insightsViewModel: InsightsViewModel
+    @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
     @ObservedObject var appState: AppState
     @State private var selection: Section = .overview
@@ -156,6 +164,10 @@ struct ZenVoiceSettingsView: View {
             ModelsScreen(viewModel: modelManagerViewModel)
         case .history:
             HistoryScreen(viewModel: historyViewModel)
+        case .insights:
+            InsightsScreen(viewModel: insightsViewModel)
+        case .voiceProfile:
+            VoiceProfileScreen(viewModel: voiceProfileViewModel)
         case .shortcuts:
             ShortcutsScreen(viewModel: viewModel)
         case .privacy:
@@ -621,6 +633,12 @@ private struct HistoryScreen: View {
                                             record: record,
                                             copy: { viewModel.copy(record) },
                                             retry: { viewModel.retry(record) },
+                                            setCategory: {
+                                                viewModel.setCategory(
+                                                    $0,
+                                                    for: record
+                                                )
+                                            },
                                             delete: { viewModel.delete(record) }
                                         )
 
@@ -832,6 +850,575 @@ private struct HistoryScreen: View {
                     $0.startedAt > $1.startedAt
                 }
             )
+        }
+    }
+}
+
+private struct InsightsScreen: View {
+    @ObservedObject var viewModel: InsightsViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                PageHeader(
+                    eyebrow: "PRIVATE ANALYTICS",
+                    title: "Insights",
+                    subtitle:
+                        "Understand your dictation habits from encrypted history on this Mac."
+                )
+
+                if let error = viewModel.errorMessage {
+                    ErrorBanner(message: error)
+                }
+
+                if viewModel.snapshot.dictationCount == 0 {
+                    emptyState
+                } else {
+                    metrics
+                    activity
+                    HStack(alignment: .top, spacing: ZenDesign.Spacing.md) {
+                        categoryBreakdown
+                        topApplications
+                    }
+                    privacyNote
+                }
+            }
+            .padding(.horizontal, 34)
+            .padding(.top, 34)
+            .padding(.bottom, 36)
+        }
+        .background(ZenDesign.Semantic.canvas)
+        .onAppear(perform: viewModel.refresh)
+    }
+
+    private var metrics: some View {
+        HStack(spacing: ZenDesign.Spacing.sm) {
+            StatusCard(
+                icon: "text.word.spacing",
+                title: "Total words",
+                value: viewModel.snapshot.totalWordCount.formatted(),
+                tint: ZenDesign.Semantic.accent
+            )
+            StatusCard(
+                icon: "speedometer",
+                title: "Average speed",
+                value:
+                    "\(Int(viewModel.snapshot.weightedWordsPerMinute.rounded())) WPM",
+                tint: Color(red: 0.48, green: 0.68, blue: 1.0)
+            )
+            StatusCard(
+                icon: "flame.fill",
+                title: "Current streak",
+                value:
+                    "\(viewModel.snapshot.currentStreakDays) day"
+                    + (viewModel.snapshot.currentStreakDays == 1 ? "" : "s"),
+                tint: Color(red: 0.95, green: 0.55, blue: 0.34)
+            )
+            StatusCard(
+                icon: "square.stack.3d.up.fill",
+                title: "Apps used",
+                value: viewModel.snapshot.distinctApplicationCount.formatted(),
+                tint: ZenDesign.Semantic.success
+            )
+        }
+    }
+
+    private var activity: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Last 7 days")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text(
+                            "\(viewModel.snapshot.dictationCount) dictations · "
+                                + "\(viewModel.snapshot.longestStreakDays)-day best streak"
+                        )
+                        .font(.system(size: 9))
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    }
+                    Spacer()
+                    Text("Local calendar")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+
+                HStack(alignment: .bottom, spacing: 12) {
+                    ForEach(viewModel.snapshot.recentActivity) { day in
+                        VStack(spacing: 7) {
+                            Text(day.wordCount.formatted())
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            RoundedRectangle(
+                                cornerRadius: 4,
+                                style: .continuous
+                            )
+                            .fill(
+                                day.wordCount > 0
+                                    ? ZenDesign.Semantic.accent
+                                    : ZenDesign.Semantic.surfaceRaised
+                            )
+                            .frame(
+                                height: activityHeight(for: day.wordCount)
+                            )
+                            Text(day.date.formatted(.dateTime.weekday(.narrow)))
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .frame(height: 94, alignment: .bottom)
+            }
+        }
+    }
+
+    private var categoryBreakdown: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Work by category")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                ForEach(viewModel.snapshot.categories) { insight in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 7) {
+                            Image(systemName: insight.category.icon)
+                                .foregroundStyle(ZenDesign.Semantic.accent)
+                                .frame(width: 14)
+                            Text(insight.category.displayName)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            Spacer()
+                            Text("\(insight.wordCount) words")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                        }
+                        ProgressView(
+                            value: Double(insight.wordCount),
+                            total: Double(maxCategoryWords)
+                        )
+                        .tint(ZenDesign.Semantic.accent)
+                    }
+                }
+            }
+        }
+    }
+
+    private var topApplications: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Most-used apps")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                if viewModel.snapshot.topApplications.isEmpty {
+                    Text("No application context has been saved yet.")
+                        .font(.system(size: 9))
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                } else {
+                    ForEach(
+                        Array(
+                            viewModel.snapshot.topApplications.enumerated()
+                        ),
+                        id: \.element.id
+                    ) { index, app in
+                        HStack(spacing: 9) {
+                            Text("\(index + 1)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                                .frame(width: 14)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(app.displayName)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                    .lineLimit(1)
+                                Text(
+                                    "\(app.dictationCount) dictations · "
+                                        + "\(app.wordCount) words"
+                                )
+                                .font(.system(size: 8))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var privacyNote: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "lock.shield.fill")
+                .foregroundStyle(ZenDesign.Semantic.success)
+            Text(
+                "Insights are calculated locally. ZenVoice stores app identity, not window titles, URLs, recipients, or surrounding text."
+            )
+            .font(.system(size: 9))
+            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+        }
+    }
+
+    private var emptyState: some View {
+        ZenCard {
+            VStack(spacing: 10) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.system(size: 26))
+                    .foregroundStyle(ZenDesign.Semantic.accent)
+                Text("Your local insights will appear here.")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Text(
+                    "Save a completed dictation to begin tracking words, speed, streaks, apps, and categories."
+                )
+                .font(.system(size: 10))
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+        }
+    }
+
+    private var maxCategoryWords: Int {
+        max(1, viewModel.snapshot.categories.map(\.wordCount).max() ?? 1)
+    }
+
+    private func activityHeight(for wordCount: Int) -> CGFloat {
+        let maximum = max(
+            1,
+            viewModel.snapshot.recentActivity.map(\.wordCount).max() ?? 1
+        )
+        guard wordCount > 0 else {
+            return 5
+        }
+        return 12 + 50 * CGFloat(wordCount) / CGFloat(maximum)
+    }
+}
+
+private struct VoiceProfileScreen: View {
+    @ObservedObject var viewModel: VoiceProfileViewModel
+    @State private var heardPhrase = ""
+    @State private var replacementPhrase = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                PageHeader(
+                    eyebrow: "LOCAL LANGUAGE PROFILE",
+                    title: "Voice Profile",
+                    subtitle:
+                        "Teach ZenVoice your words and review language patterns from recent local history."
+                )
+
+                profileSummary
+
+                if let error = viewModel.errorMessage {
+                    ErrorBanner(message: error)
+                }
+
+                corrections
+
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.md) {
+                    topWords
+                    catchPhrases
+                }
+
+                HStack(spacing: 9) {
+                    Image(systemName: "person.crop.circle.badge.xmark")
+                        .foregroundStyle(ZenDesign.Semantic.success)
+                    Text(
+                        "This is a language-usage profile, not a biometric voiceprint. ZenVoice does not identify or authenticate people."
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                }
+            }
+            .padding(.horizontal, 34)
+            .padding(.top, 34)
+            .padding(.bottom, 36)
+        }
+        .background(ZenDesign.Semantic.canvas)
+        .onAppear(perform: viewModel.refresh)
+    }
+
+    private var profileSummary: some View {
+        HStack(spacing: ZenDesign.Spacing.sm) {
+            StatusCard(
+                icon: "waveform",
+                title: "Analyzed",
+                value:
+                    "\(viewModel.snapshot.analyzedDictationCount) dictations",
+                tint: ZenDesign.Semantic.accent
+            )
+            StatusCard(
+                icon: "clock",
+                title: "Most active",
+                value: activeHourLabel,
+                tint: Color(red: 0.48, green: 0.68, blue: 1.0)
+            )
+            StatusCard(
+                icon: "text.badge.checkmark",
+                title: "Corrections",
+                value:
+                    "\(viewModel.snapshot.correctionRules.count) rules",
+                tint: ZenDesign.Semantic.success
+            )
+        }
+    }
+
+    private var corrections: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Personal corrections")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Text(
+                        "Explicit whole-word replacements are encrypted and applied locally."
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                }
+
+                HStack(spacing: 10) {
+                    correctionField(
+                        title: "WHEN ZENVOICE HEARS",
+                        placeholder: "zen pens",
+                        text: $heardPhrase
+                    )
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    correctionField(
+                        title: "REPLACE WITH",
+                        placeholder: "ZenPense",
+                        text: $replacementPhrase
+                    )
+                    Button("Add Rule") {
+                        if viewModel.addRule(
+                            source: heardPhrase,
+                            replacement: replacementPhrase
+                        ) {
+                            heardPhrase = ""
+                            replacementPhrase = ""
+                        }
+                    }
+                    .buttonStyle(ZenPrimaryButtonStyle())
+                    .disabled(
+                        heardPhrase.trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        ).isEmpty
+                            || replacementPhrase.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            ).isEmpty
+                    )
+                }
+
+                if viewModel.snapshot.correctionRules.isEmpty {
+                    Text(
+                        "No personal corrections yet. Add only terms you want ZenVoice to replace automatically."
+                    )
+                    .font(.system(size: 9))
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(
+                            Array(
+                                viewModel.snapshot.correctionRules.enumerated()
+                            ),
+                            id: \.element.id
+                        ) { index, rule in
+                            HStack(spacing: 10) {
+                                Text(rule.source)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textTertiary
+                                    )
+                                Text(rule.replacement)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Spacer()
+                                Text(
+                                    "Used \(rule.usageCount) time"
+                                        + (rule.usageCount == 1 ? "" : "s")
+                                )
+                                .font(.system(size: 8))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                                Button {
+                                    viewModel.deleteRule(rule)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(ZenDesign.Semantic.danger)
+                            }
+                            .padding(.vertical, 9)
+                            if index
+                                < viewModel.snapshot.correctionRules.count - 1 {
+                                Divider().overlay(
+                                    ZenDesign.Semantic.border
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var topWords: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 13) {
+                Text("Most-used words")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                if viewModel.snapshot.topWords.isEmpty {
+                    emptyProfileText
+                } else {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(
+                                .adaptive(minimum: 70),
+                                spacing: 8
+                            )
+                        ],
+                        alignment: .leading,
+                        spacing: 8
+                    ) {
+                        ForEach(viewModel.snapshot.topWords) { item in
+                            HStack(spacing: 6) {
+                                Text(item.text)
+                                    .lineLimit(1)
+                                Text("\(item.count)")
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.accent
+                                    )
+                            }
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textSecondary
+                            )
+                            .padding(.horizontal, 9)
+                            .frame(height: 28)
+                            .background {
+                                Capsule().fill(
+                                    ZenDesign.Semantic.surfaceRaised
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var catchPhrases: some View {
+        ZenCard {
+            VStack(alignment: .leading, spacing: 13) {
+                Text("Recurring phrases")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                if viewModel.snapshot.catchPhrases.isEmpty {
+                    emptyProfileText
+                } else {
+                    ForEach(viewModel.snapshot.catchPhrases) { item in
+                        HStack(spacing: 8) {
+                            Image(systemName: "quote.opening")
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.accent
+                                )
+                            Text(item.text)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textPrimary
+                                )
+                                .lineLimit(1)
+                            Spacer()
+                            Text("×\(item.count)")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptyProfileText: some View {
+        Text("More saved dictations are needed.")
+            .font(.system(size: 9))
+            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+    }
+
+    private var activeHourLabel: String {
+        guard let hour = viewModel.snapshot.mostActiveHour,
+              let date = Calendar.current.date(
+                from: DateComponents(hour: hour)
+              ) else {
+            return "Not enough data"
+        }
+        return date.formatted(date: .omitted, time: .shortened)
+    }
+
+    private func correctionField(
+        title: String,
+        placeholder: String,
+        text: Binding<String>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.system(size: 7, weight: .bold))
+                .tracking(0.7)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 10))
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                .padding(.horizontal, 10)
+                .frame(height: 34)
+                .background {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .fill(ZenDesign.Semantic.surfaceRaised)
+                    .overlay {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.small,
+                            style: .continuous
+                        )
+                        .strokeBorder(
+                            ZenDesign.Semantic.border,
+                            lineWidth: 1
+                        )
+                    }
+                }
         }
     }
 }
@@ -1380,6 +1967,7 @@ private struct HistoryRecordRow: View {
     let record: ZenVoiceStorage.DictationRecord
     let copy: () -> Void
     let retry: () -> Void
+    let setCategory: (DictationCategory) -> Void
     let delete: () -> Void
 
     var body: some View {
@@ -1413,6 +2001,9 @@ private struct HistoryRecordRow: View {
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(ZenDesign.Semantic.accent)
                     }
+                    Text(record.category.displayName)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(ZenDesign.Semantic.accent)
                 }
 
                 Text(transcript)
@@ -1450,6 +2041,22 @@ private struct HistoryRecordRow: View {
                 }
 
                 Menu {
+                    Menu("Category") {
+                        ForEach(DictationCategory.allCases) { category in
+                            Button {
+                                setCategory(category)
+                            } label: {
+                                if record.category == category {
+                                    Label(
+                                        category.displayName,
+                                        systemImage: "checkmark"
+                                    )
+                                } else {
+                                    Text(category.displayName)
+                                }
+                            }
+                        }
+                    }
                     Button("Delete", role: .destructive, action: delete)
                 } label: {
                     Image(systemName: "ellipsis")
@@ -1488,6 +2095,21 @@ private struct HistoryRecordRow: View {
         record.status == .failed
             ? ZenDesign.Semantic.danger
             : ZenDesign.Semantic.accent
+    }
+}
+
+private extension DictationCategory {
+    var icon: String {
+        switch self {
+        case .documents: "doc.text"
+        case .email: "envelope"
+        case .workMessages: "person.2"
+        case .personalMessages: "message"
+        case .aiPrompts: "sparkles"
+        case .notes: "note.text"
+        case .development: "chevron.left.forwardslash.chevron.right"
+        case .other: "square.grid.2x2"
+        }
     }
 }
 

@@ -45,8 +45,38 @@ network.
 
 - When history is enabled, ZenVoice stores the target application's bundle
   identifier and display name.
+- ZenVoice uses that application identity for a conservative local category;
+  unknown applications remain **Other**, and the user can change a record's
+  category in History.
 - ZenVoice does not store window titles, browser URLs, surrounding text,
   recipients, document contents, or geographic location.
+
+### Insights
+
+- Insights are derived locally from completed encrypted-history records.
+- Aggregate fields include total words, recording duration, weighted
+  words-per-minute, correction count, streak days, application counts, and
+  user-correctable categories.
+- A streak day requires at least one completed dictation containing five final
+  words.
+- Private Dictation and unsaved dictations never contribute to insights.
+- ZenVoice does not send insight data, app identity, or category data to a
+  server.
+
+### Voice profile and corrections
+
+- The Voice Profile is a local language-usage profile, not a biometric
+  voiceprint.
+- ZenVoice analyzes up to 500 recent saved transcripts in-process for frequent
+  words, recurring phrases, and the most active hour.
+- Personal correction source and replacement phrases are encrypted in the
+  local vault with the same Keychain-protected key as transcripts.
+- Only rules explicitly saved inside ZenVoice are applied. ZenVoice does not
+  watch or infer later edits made in another application.
+- Correction usage increases only when the corrected transcript is saved to
+  history. Private Dictation and unsaved dictations leave no correction-usage
+  event.
+- Delete All removes correction rules before rotating the vault key.
 
 ### Models and configuration
 
