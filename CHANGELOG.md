@@ -65,8 +65,6 @@ All notable ZenVoice changes are recorded here.
 - Added a bounded memory-only context box for the next dictation
 - Added deterministic layout and punctuation commands with English controls
   plus Hindi, Spanish, French, Mandarin, and Arabic aliases
-- Added a local Correction Review showing heard and saved encrypted transcript
-  text
 - Added controls to pause correction rules, pause history pattern analysis,
   and delete all correction rules without deleting transcripts
 - Added a Recovery Inbox filter for failed and usable partial dictations
@@ -75,8 +73,25 @@ All notable ZenVoice changes are recorded here.
 - Added a local privacy inventory with confirmed recovery-audio deletion
 - Added Reduce Motion support and explicit success announcements to ZenBar
 
+### Removed
+
+- Removed Correction Review and stopped Voice Profile from loading raw and
+  final transcript pairs solely for comparison.
+
 ### Changed
 
+- Redesigned Overview around actionable readiness, private local activity, and
+  direct navigation to the setting that needs attention.
+- Made model rows adapt at compact window widths while keeping Use, Remove,
+  Download, and status controls aligned.
+- Clarified custom-shortcut capture with explicit Change and Cancel states,
+  including shortcut personalization during setup.
+- Corrected hold-to-dictate modifier press and release detection and added
+  actionable Accessibility feedback for global use.
+- Kept the setup guide automatic for fresh installs, dismissible once, and
+  manually reopenable without forcing returning users through it again.
+- Standardized the native SF Pro hierarchy and removed inconsistent rounded
+  text variants.
 - Displayed the active dictation shortcut in the menu-bar action
 - Reduced ZenBar to a compact bottom-edge control strip
 - Added cancel and finish controls during dictation

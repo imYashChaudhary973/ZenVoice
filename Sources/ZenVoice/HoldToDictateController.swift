@@ -19,12 +19,13 @@ final class HoldToDictateController {
     }
 
     func update(isEnabled: Bool, key: HoldKeyChoice) {
-        if isPressed, !isEnabled || key != self.key {
+        if isPressed {
             isPressed = false
             onRelease?()
         }
         self.isEnabled = isEnabled
         self.key = key
+        reinstallMonitors()
     }
 
     private func installMonitors() {
@@ -45,10 +46,7 @@ final class HoldToDictateController {
         guard isEnabled, event.keyCode == key.keyCode else {
             return
         }
-        let pressed = CGEventSource.keyState(
-            .combinedSessionState,
-            key: CGKeyCode(event.keyCode)
-        )
+        let pressed = isModifierPressed(in: event.modifierFlags)
         guard pressed != isPressed else {
             return
         }
@@ -57,6 +55,40 @@ final class HoldToDictateController {
             onPress?()
         } else {
             onRelease?()
+        }
+    }
+
+    private func isModifierPressed(
+        in flags: NSEvent.ModifierFlags
+    ) -> Bool {
+        let flags = flags.intersection(
+            .deviceIndependentFlagsMask
+        )
+        switch key {
+        case .function:
+            return flags.contains(.function)
+        case .rightOption:
+            return flags.contains(.option)
+        case .rightControl:
+            return flags.contains(.control)
+        case .rightShift:
+            return flags.contains(.shift)
+        }
+    }
+
+    private func reinstallMonitors() {
+        removeMonitors()
+        installMonitors()
+    }
+
+    private func removeMonitors() {
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+            self.localMonitor = nil
+        }
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
+            self.globalMonitor = nil
         }
     }
 

@@ -21,7 +21,7 @@ pass its verification gate before dependent work begins.
 | M13 | Stable live transcript preview and commit-on-pause | Implemented; spoken-flow QA pending |
 | M14 | Curated downloadable local refinement models | Implemented; broader language QA pending |
 | M15 | Application profiles, context box, and local voice commands | Implemented; cross-app spoken QA pending |
-| M16 | Correction Review, local learning controls, and Recovery Inbox | Implemented; spoken recovery QA pending |
+| M16 | Local learning controls and Recovery Inbox | Implemented; spoken recovery QA pending |
 | M17 | Onboarding, accessibility, privacy dashboard, and release polish | Implemented; clean-device and distribution gates pending |
 
 ## Delivery rules

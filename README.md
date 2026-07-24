@@ -66,8 +66,6 @@ analytics, or cloud transcription services in the current application.
   next recording starts.
 - Local layout and punctuation commands with English controls plus Hindi,
   Spanish, French, Mandarin, and Arabic aliases.
-- A Correction Review that compares encrypted before/after transcript text
-  without creating training data.
 - Explicit controls to pause personal rules or local pattern analysis and to
   delete correction rules independently from History.
 - A Recovery Inbox for failed and usable partial dictations with Copy, Retry,

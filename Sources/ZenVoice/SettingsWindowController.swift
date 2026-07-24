@@ -40,7 +40,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             applicationProfileViewModel
         self.onboardingViewModel = onboardingViewModel
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 1_200, height: 800),
             styleMask: [
                 .titled,
                 .closable,
@@ -57,13 +57,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified
-        window.backgroundColor = NSColor(
-            red: 0.035,
-            green: 0.037,
-            blue: 0.045,
-            alpha: 1
-        )
-        window.minSize = NSSize(width: 720, height: 500)
+        window.backgroundColor = .windowBackgroundColor
+        window.minSize = NSSize(width: 900, height: 640)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentViewController = NSHostingController(

@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import Combine
 import Foundation
 import ZenVoiceCore
 import ZenVoiceRuntime
@@ -85,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var holdToDictateController: HoldToDictateController?
     private var transcriber: WhisperTranscriber?
     private var resetWorkItem: DispatchWorkItem?
+    private var stateObservers: Set<AnyCancellable> = []
     private var currentHotKeyConfiguration = HotKeyPreferences.load()
     private var pasteLastHotKeyConfiguration =
         HotKeyPreferences.loadPasteLast()
@@ -141,7 +143,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureHotKey()
         configureHoldToDictate()
         configureSettingsWindow()
-        zenBarController.show()
         settingsWindowController.show()
 
         NotificationCenter.default.addObserver(
@@ -313,11 +314,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         zenBarMenuItem = NSMenuItem(
-            title: "Hide ZenBar",
+            title: "Show ZenVoice at all times",
             action: #selector(toggleZenBar),
             keyEquivalent: ""
         )
         zenBarMenuItem.target = self
+        zenBarMenuItem.state =
+            state.showsZenVoiceAtAllTimes ? .on : .off
         menu.addItem(zenBarMenuItem)
 
         statusMessageMenuItem = NSMenuItem(
@@ -384,6 +387,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.finishRecording()
             }
         )
+        state.$phase
+            .combineLatest(state.$showsZenVoiceAtAllTimes)
+            .sink { [weak self] phase, showsAtAllTimes in
+                self?.updateZenBarPresentation(
+                    phase: phase,
+                    showsAtAllTimes: showsAtAllTimes
+                )
+            }
+            .store(in: &stateObservers)
     }
 
     private func configureHotKey() {
@@ -481,6 +493,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             holdToDictateEnabled:
                 HotKeyPreferences.isHoldToDictateEnabled(),
             holdKey: HotKeyPreferences.loadHoldKey(),
+            showsZenVoiceAtAllTimes:
+                state.showsZenVoiceAtAllTimes,
             applyShortcut: { [weak self] configuration in
                 guard let self else {
                     return .failure(
@@ -513,6 +527,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             applyHoldToDictate: { [weak self] enabled, key in
                 self?.applyHoldToDictate(enabled: enabled, key: key)
+            },
+            applyZenBarPreference: { [weak self] enabled in
+                self?.state.setShowsZenVoiceAtAllTimes(enabled)
             },
             applyLanguageProfile: { [weak self] profile in
                 guard let self else {
@@ -904,9 +921,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             beginLivePreviewSession()
             holdStartedRecording = startedByHold
             updateStartStopMenuTitle()
-            if state.isZenBarVisible {
-                zenBarController.show()
-            }
         } catch {
             liveSamplesEnabledForRecording = false
             if let historyID = historyDraft?.id {
@@ -1606,9 +1620,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showError(_ message: String) {
         state.phase = .error(message)
         updateStartStopMenuTitle()
-        if state.isZenBarVisible {
-            zenBarController?.show()
-        }
         scheduleIdleReset(after: 4)
     }
 
@@ -1878,14 +1889,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleZenBar() {
-        state.isZenBarVisible.toggle()
-        if state.isZenBarVisible {
+        let enabled = !state.showsZenVoiceAtAllTimes
+        if let settingsViewModel {
+            settingsViewModel.setShowsZenVoiceAtAllTimes(enabled)
+        } else {
+            state.setShowsZenVoiceAtAllTimes(enabled)
+        }
+    }
+
+    private func updateZenBarPresentation(
+        phase: AppState.Phase,
+        showsAtAllTimes: Bool
+    ) {
+        let showsForActiveDictation: Bool
+        switch phase {
+        case .listening, .transcribing, .inserting, .error:
+            showsForActiveDictation = true
+        case .idle, .success:
+            showsForActiveDictation = false
+        }
+
+        if showsAtAllTimes || showsForActiveDictation {
             zenBarController.show()
-            zenBarMenuItem.title = "Hide ZenBar"
         } else {
             zenBarController.hide()
-            zenBarMenuItem.title = "Show ZenBar"
         }
+        zenBarMenuItem?.state = showsAtAllTimes ? .on : .off
     }
 
     @objc private func requestAccessibilityPermission() {

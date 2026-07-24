@@ -1,9 +1,12 @@
 import AVFoundation
 import AudioToolbox
+import CoreMedia
 import Foundation
 import ZenVoiceCore
 
-final class AudioRecorder {
+final class AudioRecorder: NSObject,
+    AVCaptureAudioDataOutputSampleBufferDelegate
+{
     struct RecordedAudio {
         let url: URL
         let durationSeconds: TimeInterval
@@ -31,15 +34,18 @@ final class AudioRecorder {
         }
     }
 
-    private var engine = AVAudioEngine()
+    private let captureQueue = DispatchQueue(
+        label: "dev.yashchaudhary.ZenVoice.audioCapture",
+        qos: .userInitiated
+    )
+    private var captureSession: AVCaptureSession?
+    private var audioOutput: AVCaptureAudioDataOutput?
     private var audioFile: AVAudioFile?
-    private var converter: AVAudioConverter?
     private var targetFormat: AVAudioFormat?
     private var recordingURL: URL?
     private var recordingStartedAt: Date?
     private var audioLevelMeter = AudioLevelMeter()
     private var levelChanged: ((Double) -> Void)?
-    private var isTapInstalled = false
     private(set) var activeDeviceUID: String?
     private let sampleLock = NSLock()
     private var capturedSamples: [Float] = []
@@ -47,7 +53,7 @@ final class AudioRecorder {
     private var capturesLiveSamples = false
 
     var isRecording: Bool {
-        engine.isRunning
+        captureSession?.isRunning == true
     }
 
     func start(
@@ -57,49 +63,29 @@ final class AudioRecorder {
         capturesLiveSamples: Bool = false,
         levelChanged: @escaping (Double) -> Void
     ) throws {
-        // A device selected through CurrentDevice remains attached to the
-        // underlying audio unit. Recreate the engine for every session so
-        // choosing System Default after a pinned microphone really returns
-        // routing control to macOS.
-        engine = AVAudioEngine()
         let url = requestedURL
             ?? FileManager.default.temporaryDirectory
                 .appendingPathComponent("zenvoice-\(UUID().uuidString)")
                 .appendingPathExtension("wav")
 
-        let inputNode = engine.inputNode
-        let effectiveDeviceUID = selectedDeviceUID
-            ?? AVCaptureDevice.default(for: .audio)?.uniqueID
-        if let pinnedDeviceUID = selectedDeviceUID {
-            var deviceID = try MicrophoneCatalog.audioDeviceID(
-                uid: pinnedDeviceUID
-            )
-            guard let audioUnit = inputNode.audioUnit,
-                  AudioUnitSetProperty(
-                    audioUnit,
-                    kAudioOutputUnitProperty_CurrentDevice,
-                    kAudioUnitScope_Global,
-                    0,
-                    &deviceID,
-                    UInt32(MemoryLayout<AudioDeviceID>.size)
-                  ) == noErr else {
-                throw RecorderError.unableToCreateRecorder
-            }
+        guard let device = resolvedDevice(uid: selectedDeviceUID),
+              device.isConnected else {
+            throw RecorderError.unableToCreateRecorder
         }
 
-        let inputFormat = inputNode.outputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0,
-              inputFormat.channelCount > 0,
-              let targetFormat = AVAudioFormat(
-                commonFormat: .pcmFormatFloat32,
-                sampleRate: 16_000,
-                channels: 1,
-                interleaved: false
-              ),
-              let converter = AVAudioConverter(
-                from: inputFormat,
-                to: targetFormat
-              ) else {
+        let input: AVCaptureDeviceInput
+        do {
+            input = try AVCaptureDeviceInput(device: device)
+        } catch {
+            throw RecorderError.unableToCreateRecorder
+        }
+
+        guard let targetFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16_000,
+            channels: 1,
+            interleaved: false
+        ) else {
             throw RecorderError.invalidInputFormat
         }
 
@@ -115,11 +101,35 @@ final class AudioRecorder {
             throw RecorderError.unableToCreateRecorder
         }
 
+        let session = AVCaptureSession()
+        let output = AVCaptureAudioDataOutput()
+        output.audioSettings = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 16_000.0,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: true
+        ]
+
+        session.beginConfiguration()
+        guard session.canAddInput(input),
+              session.canAddOutput(output) else {
+            session.commitConfiguration()
+            try? FileManager.default.removeItem(at: url)
+            throw RecorderError.unableToCreateRecorder
+        }
+        session.addInput(input)
+        session.addOutput(output)
+        output.setSampleBufferDelegate(self, queue: captureQueue)
+        session.commitConfiguration()
+
         self.audioFile = audioFile
-        self.converter = converter
+        self.audioOutput = output
         self.targetFormat = targetFormat
         self.levelChanged = levelChanged
-        activeDeviceUID = effectiveDeviceUID
+        activeDeviceUID = device.uniqueID
         recordingURL = url
         recordingStartedAt = Date()
         audioLevelMeter = AudioLevelMeter()
@@ -128,23 +138,12 @@ final class AudioRecorder {
             capturedSamples.removeAll(keepingCapacity: true)
             lastSpeechSampleIndex = 0
         }
+        captureSession = session
 
-        inputNode.installTap(
-            onBus: 0,
-            bufferSize: 1_024,
-            format: inputFormat
-        ) { [weak self] buffer, _ in
-            self?.process(buffer)
+        captureQueue.sync {
+            session.startRunning()
         }
-        isTapInstalled = true
-        engine.prepare()
-        do {
-            try engine.start()
-        } catch {
-            if isTapInstalled {
-                inputNode.removeTap(onBus: 0)
-                isTapInstalled = false
-            }
+        guard session.isRunning else {
             try? FileManager.default.removeItem(at: url)
             reset()
             throw RecorderError.unableToStart
@@ -154,18 +153,18 @@ final class AudioRecorder {
     func stop(
         preserveLiveSamples: Bool = false
     ) -> RecordedAudio? {
-        if isTapInstalled {
-            engine.inputNode.removeTap(onBus: 0)
-            isTapInstalled = false
-        }
-        if engine.isRunning {
-            engine.stop()
+        if let captureSession {
+            captureQueue.sync {
+                audioOutput?.setSampleBufferDelegate(nil, queue: nil)
+                captureSession.stopRunning()
+            }
         }
         audioFile = nil
-        converter = nil
+        audioOutput = nil
         targetFormat = nil
         levelChanged = nil
         activeDeviceUID = nil
+        captureSession = nil
         capturesLiveSamples = false
         if !preserveLiveSamples {
             releaseCapturedSamples()
@@ -234,54 +233,86 @@ final class AudioRecorder {
         }
     }
 
-    private func process(_ buffer: AVAudioPCMBuffer) {
-        let speechDetected = reportLevel(from: buffer)
-        guard let converter,
-              let targetFormat,
-              let audioFile else {
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        guard let buffer = pcmBuffer(from: sampleBuffer),
+              buffer.frameLength > 0 else {
             return
         }
+        process(buffer)
+    }
 
-        let ratio = targetFormat.sampleRate / buffer.format.sampleRate
-        let capacity = AVAudioFrameCount(
-            max(1, ceil(Double(buffer.frameLength) * ratio) + 8)
+    private func resolvedDevice(uid: String?) -> AVCaptureDevice? {
+        guard let uid else {
+            return AVCaptureDevice.default(for: .audio)
+        }
+        return AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.microphone, .external],
+            mediaType: .audio,
+            position: .unspecified
         )
-        guard let converted = AVAudioPCMBuffer(
-            pcmFormat: targetFormat,
-            frameCapacity: capacity
-        ) else {
+        .devices
+        .first { $0.uniqueID == uid }
+    }
+
+    private func pcmBuffer(
+        from sampleBuffer: CMSampleBuffer
+    ) -> AVAudioPCMBuffer? {
+        guard let formatDescription =
+                CMSampleBufferGetFormatDescription(sampleBuffer),
+              let streamDescription =
+                CMAudioFormatDescriptionGetStreamBasicDescription(
+                    formatDescription
+                ),
+              let format = AVAudioFormat(
+                streamDescription: streamDescription
+              ) else {
+            return nil
+        }
+
+        let sampleCount = CMSampleBufferGetNumSamples(sampleBuffer)
+        guard sampleCount > 0,
+              sampleCount <= Int(UInt32.max),
+              let buffer = AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: AVAudioFrameCount(sampleCount)
+              ) else {
+            return nil
+        }
+        buffer.frameLength = AVAudioFrameCount(sampleCount)
+        let status = CMSampleBufferCopyPCMDataIntoAudioBufferList(
+            sampleBuffer,
+            at: 0,
+            frameCount: Int32(sampleCount),
+            into: buffer.mutableAudioBufferList
+        )
+        return status == noErr ? buffer : nil
+    }
+
+    private func process(_ buffer: AVAudioPCMBuffer) {
+        guard let targetFormat,
+              buffer.format.sampleRate == targetFormat.sampleRate,
+              buffer.format.channelCount == targetFormat.channelCount,
+              buffer.format.commonFormat == .pcmFormatFloat32,
+              let channel = buffer.floatChannelData?.pointee else {
             return
         }
 
-        var suppliedInput = false
-        var conversionError: NSError?
-        _ = converter.convert(
-            to: converted,
-            error: &conversionError
-        ) { _, status in
-            if suppliedInput {
-                status.pointee = .noDataNow
-                return nil
-            }
-            suppliedInput = true
-            status.pointee = .haveData
-            return buffer
-        }
-        guard conversionError == nil,
-              converted.frameLength > 0 else {
-            return
-        }
-        try? audioFile.write(from: converted)
-        guard let channel = converted.floatChannelData?.pointee else {
-            return
-        }
+        let speechDetected = reportLevel(
+            channel: channel,
+            frameLength: buffer.frameLength
+        )
+        try? audioFile?.write(from: buffer)
         guard capturesLiveSamples else {
             return
         }
         let samples = Array(
             UnsafeBufferPointer(
                 start: channel,
-                count: Int(converted.frameLength)
+                count: Int(buffer.frameLength)
             )
         )
         sampleLock.withLock {
@@ -292,20 +323,21 @@ final class AudioRecorder {
         }
     }
 
-    private func reportLevel(from buffer: AVAudioPCMBuffer) -> Bool {
-        guard buffer.format.commonFormat == .pcmFormatFloat32,
-              let channel = buffer.floatChannelData?.pointee,
-              buffer.frameLength > 0 else {
+    private func reportLevel(
+        channel: UnsafeMutablePointer<Float>,
+        frameLength: AVAudioFrameCount
+    ) -> Bool {
+        guard frameLength > 0 else {
             return false
         }
         var sumSquares: Float = 0
         var peak: Float = 0
-        for index in 0..<Int(buffer.frameLength) {
+        for index in 0..<Int(frameLength) {
             let sample = abs(channel[index])
             sumSquares += sample * sample
             peak = max(peak, sample)
         }
-        let rms = sqrt(sumSquares / Float(buffer.frameLength))
+        let rms = sqrt(sumSquares / Float(frameLength))
         let averageDecibels = 20 * log10(max(rms, 0.000_001))
         let peakDecibels = 20 * log10(max(peak, 0.000_001))
         let level = audioLevelMeter.update(
@@ -317,9 +349,11 @@ final class AudioRecorder {
     }
 
     private func reset() {
-        isTapInstalled = false
+        audioOutput?.setSampleBufferDelegate(nil, queue: nil)
+        captureSession?.stopRunning()
+        captureSession = nil
+        audioOutput = nil
         audioFile = nil
-        converter = nil
         targetFormat = nil
         levelChanged = nil
         activeDeviceUID = nil

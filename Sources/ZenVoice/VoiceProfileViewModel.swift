@@ -1,4 +1,3 @@
-import AppKit
 import Combine
 import Foundation
 import ZenVoiceStorage
@@ -6,8 +5,6 @@ import ZenVoiceStorage
 @MainActor
 final class VoiceProfileViewModel: ObservableObject {
     @Published private(set) var snapshot = VoiceProfileSnapshot.empty
-    @Published private(set) var correctionReviewRecords:
-        [DictationRecord] = []
     @Published private(set) var appliesCorrectionRules: Bool
     @Published private(set) var analyzesHistory: Bool
     @Published var errorMessage: String?
@@ -43,15 +40,6 @@ final class VoiceProfileViewModel: ObservableObject {
                     mostActiveHour: nil
                 )
             }
-            correctionReviewRecords = try vault.recent(limit: 100)
-                .filter {
-                    $0.correctionCount > 0
-                        && $0.rawTranscript != nil
-                        && $0.finalTranscript != nil
-                        && $0.rawTranscript != $0.finalTranscript
-                }
-                .prefix(8)
-                .map { $0 }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -106,11 +94,4 @@ final class VoiceProfileViewModel: ObservableObject {
         }
     }
 
-    func copy(_ text: String?) {
-        guard let text, !text.isEmpty else {
-            return
-        }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
 }

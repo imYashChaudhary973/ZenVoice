@@ -10,9 +10,10 @@ device inventory is sent anywhere.
 - **Pinned microphone** keeps using the chosen connected device until the user
   selects another input or returns to System Default.
 
-ZenVoice records through `AVAudioEngine`, routes the engine to the selected
-Core Audio device, and converts the captured signal to 16 kHz mono floating
-point PCM for the local Whisper runtime.
+ZenVoice records through `AVCaptureSession` with the selected
+`AVCaptureDevice`. `AVCaptureAudioDataOutput` supplies ordered 16 kHz mono
+floating-point PCM buffers for the waveform, live preview, and local Whisper
+runtime.
 
 ## Audio Doctor
 

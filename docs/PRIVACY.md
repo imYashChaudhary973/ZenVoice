@@ -95,8 +95,6 @@ These counts are derived in-process and are not telemetry.
   history. Private Dictation and unsaved dictations leave no correction-usage
   event.
 - Delete All removes correction rules before rotating the vault key.
-- Correction Review decrypts before/after text only while rendering the local
-  Voice Profile screen. It creates no training dataset or review table.
 - Personal rule application and saved-history pattern analysis can be paused
   independently. Pausing leaves existing encrypted data untouched.
 - Delete All Rules removes correction rules without deleting transcript
