@@ -58,6 +58,7 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var privateModeShortcut: HotKeyConfiguration
     @Published private(set) var holdToDictateEnabled: Bool
     @Published private(set) var holdKey: HoldKeyChoice
+    @Published private(set) var showsZenVoiceAtAllTimes: Bool
     @Published private(set) var shortcutTarget: ShortcutTarget?
     @Published var shortcutError: String?
     @Published private(set) var microphoneStatus: PermissionStatus = .needsAccess
@@ -82,6 +83,7 @@ final class SettingsViewModel: ObservableObject {
     private let applyPrivateModeShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
     private let applyHoldToDictate: (Bool, HoldKeyChoice) -> Void
+    private let applyZenBarPreference: (Bool) -> Void
     private let applyLanguageProfile:
         (LanguageProfile) -> Result<Void, Error>
     private let canRunAudioDoctor: () -> Bool
@@ -96,6 +98,7 @@ final class SettingsViewModel: ObservableObject {
         privateModeShortcut: HotKeyConfiguration,
         holdToDictateEnabled: Bool,
         holdKey: HoldKeyChoice,
+        showsZenVoiceAtAllTimes: Bool,
         applyShortcut: @escaping
             (HotKeyConfiguration) -> Result<Void, Error>,
         applyPasteLastShortcut: @escaping
@@ -103,6 +106,7 @@ final class SettingsViewModel: ObservableObject {
         applyPrivateModeShortcut: @escaping
             (HotKeyConfiguration) -> Result<Void, Error>,
         applyHoldToDictate: @escaping (Bool, HoldKeyChoice) -> Void,
+        applyZenBarPreference: @escaping (Bool) -> Void,
         applyLanguageProfile: @escaping
             (LanguageProfile) -> Result<Void, Error>,
         canRunAudioDoctor: @escaping () -> Bool
@@ -112,10 +116,12 @@ final class SettingsViewModel: ObservableObject {
         self.privateModeShortcut = privateModeShortcut
         self.holdToDictateEnabled = holdToDictateEnabled
         self.holdKey = holdKey
+        self.showsZenVoiceAtAllTimes = showsZenVoiceAtAllTimes
         self.applyShortcut = applyShortcut
         self.applyPasteLastShortcut = applyPasteLastShortcut
         self.applyPrivateModeShortcut = applyPrivateModeShortcut
         self.applyHoldToDictate = applyHoldToDictate
+        self.applyZenBarPreference = applyZenBarPreference
         self.applyLanguageProfile = applyLanguageProfile
         self.canRunAudioDoctor = canRunAudioDoctor
         instantRefineMode = InstantRefinePreferences.load()
@@ -168,9 +174,16 @@ final class SettingsViewModel: ObservableObject {
             microphoneStatus = .needsAccess
         }
 
+        let previousAccessibilityStatus = accessibilityStatus
         accessibilityStatus = AXIsProcessTrusted()
             ? .allowed
             : .needsAccess
+        if accessibilityStatus == .allowed,
+           previousAccessibilityStatus != .allowed,
+           holdToDictateEnabled {
+            shortcutError = nil
+            applyHoldToDictate(true, holdKey)
+        }
         isLocalModelReady = (try? ZenVoiceConfiguration.discover()) != nil
     }
 
@@ -211,11 +224,24 @@ final class SettingsViewModel: ObservableObject {
     func setHoldToDictateEnabled(_ enabled: Bool) {
         holdToDictateEnabled = enabled
         applyHoldToDictate(enabled, holdKey)
+        if enabled, accessibilityStatus != .allowed {
+            shortcutError =
+                "Hold to dictate needs Accessibility permission to detect the key outside ZenVoice."
+            requestAccessibilityAccess()
+        } else {
+            shortcutError = nil
+        }
     }
 
     func setHoldKey(_ choice: HoldKeyChoice) {
         holdKey = choice
         applyHoldToDictate(holdToDictateEnabled, choice)
+        shortcutError = nil
+    }
+
+    func setShowsZenVoiceAtAllTimes(_ enabled: Bool) {
+        showsZenVoiceAtAllTimes = enabled
+        applyZenBarPreference(enabled)
     }
 
     func setInstantRefineMode(_ mode: InstantRefineMode) {

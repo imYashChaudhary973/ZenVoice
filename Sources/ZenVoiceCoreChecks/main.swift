@@ -932,3 +932,29 @@ guard !LiveDictationPreferences.isPreviewEnabled(
 }
 
 print("ZenVoiceCoreChecks: live dictation preferences passed")
+
+let zenBarSuite = "ZenVoiceZenBar.\(UUID().uuidString)"
+guard let zenBarDefaults = UserDefaults(suiteName: zenBarSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create ZenVoice bar preference fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    zenBarDefaults.removePersistentDomain(forName: zenBarSuite)
+}
+guard ZenBarPreferences.showsAtAllTimes(defaults: zenBarDefaults) else {
+    FileHandle.standardError.write(
+        Data("FAIL: ZenVoice bar did not default to always visible\n".utf8)
+    )
+    exit(1)
+}
+ZenBarPreferences.setShowsAtAllTimes(false, defaults: zenBarDefaults)
+guard !ZenBarPreferences.showsAtAllTimes(defaults: zenBarDefaults) else {
+    FileHandle.standardError.write(
+        Data("FAIL: ZenVoice bar preference did not persist\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: ZenVoice bar preference passed")

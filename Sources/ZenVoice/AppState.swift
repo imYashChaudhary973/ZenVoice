@@ -35,7 +35,7 @@ final class AppState: ObservableObject {
 
     @Published var phase: Phase = .idle
     @Published var audioSamples = Array(repeating: 0.0, count: 13)
-    @Published var isZenBarVisible = true
+    @Published private(set) var showsZenVoiceAtAllTimes: Bool
     @Published var showsStatusMessage: Bool
     @Published var lastTranscript = ""
     @Published var languageProfile: LanguageProfile
@@ -43,6 +43,8 @@ final class AppState: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         languageProfile = LanguagePreferences.load(defaults: defaults)
+        showsZenVoiceAtAllTimes =
+            ZenBarPreferences.showsAtAllTimes(defaults: defaults)
         if defaults.object(forKey: Self.statusMessagePreferenceKey) == nil {
             showsStatusMessage = true
         } else {
@@ -78,5 +80,16 @@ final class AppState: ObservableObject {
             showsStatusMessage,
             forKey: Self.statusMessagePreferenceKey
         )
+    }
+
+    func setShowsZenVoiceAtAllTimes(
+        _ enabled: Bool,
+        defaults: UserDefaults = .standard
+    ) {
+        ZenBarPreferences.setShowsAtAllTimes(
+            enabled,
+            defaults: defaults
+        )
+        showsZenVoiceAtAllTimes = enabled
     }
 }
