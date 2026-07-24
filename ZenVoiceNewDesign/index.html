@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZenVoice — Redesign Prototype</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- prototype-only controls (not part of the app design) -->
+  <div id="proto-bar" role="toolbar" aria-label="Prototype controls">
+    <button id="pb-onboarding" title="Replay the first-run flow">First-run</button>
+    <button id="pb-zenbar" title="Simulate a dictation">Dictate demo</button>
+    <button id="pb-private" title="Simulate a private dictation">Private</button>
+    <button id="pb-error" title="Simulate a failed dictation">Error</button>
+    <button id="pb-menubar" title="Toggle the menu bar popover">Menu bar</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button id="pb-theme" title="Toggle light / dark"></button>
+  </div>
+
+  <div class="mac-window" role="application" aria-label="ZenVoice">
+
+    <div class="titlebar">
+      <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+      <span class="titlebar-title">ZenVoice</span>
+    </div>
+
+    <div class="app-shell">
+      <nav class="sidebar" id="sidebar" aria-label="Sections"></nav>
+      <main class="content" id="content"></main>
+    </div>
+
+    <!-- ZenBar HUD -->
+    <div id="zenbar" hidden aria-live="polite"></div>
+
+    <!-- menu bar popover mock -->
+    <div id="menubar-pop" hidden role="menu" aria-label="ZenVoice menu bar"></div>
+
+    <!-- first-run onboarding -->
+    <div id="onboarding" hidden role="dialog" aria-modal="true"
+         aria-label="ZenVoice setup"></div>
+
+  </div>
+</div>
+
+<div id="toast-region" aria-live="polite"></div>
+
+<script src="js/icons.js"></script>
+<script src="js/data.js"></script>
+<script src="js/screens/home.js"></script>
+<script src="js/screens/shortcuts.js"></script>
+<script src="js/screens/audio.js"></script>
+<script src="js/screens/languages.js"></script>
+<script src="js/screens/refine.js"></script>
+<script src="js/screens/voice-profile.js"></script>
+<script src="js/screens/app-profiles.js"></script>
+<script src="js/screens/history.js"></script>
+<script src="js/screens/insights.js"></script>
+<script src="js/screens/models.js"></script>
+<script src="js/screens/privacy.js"></script>
+<script src="js/screens/help.js"></script>
+<script src="js/onboarding.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
