@@ -71,6 +71,15 @@ public struct HotKeyConfiguration: Codable, Equatable, Sendable {
         return symbols.joined(separator: " ")
     }
 
+    // A previous revision additionally required Command or Control here, on
+    // the theory that Option is the alternate-character modifier and so
+    // Option-only shortcuts are swallowed by the text input system in any app
+    // with a focused text field. Measurement disproved it: a Carbon hot key
+    // registered on ⌥Space was delivered in Dia and in a terminal alike. The
+    // rule only had the effect of invalidating shortcuts people were already
+    // using, which `HotKeyPreferences` then silently replaced with the
+    // default — so the user's own key stopped responding while the settings
+    // screen still displayed it. Do not reintroduce it without evidence.
     public var isValid: Bool {
         !modifiers.isEmpty
             && modifiers.containsOnlySupportedModifiers

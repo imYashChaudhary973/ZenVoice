@@ -8,16 +8,17 @@ enum HotKeyPreferences {
     private static let holdEnabledPreferenceKey = "ZenVoice.holdToDictate.enabled"
     private static let holdKeyPreferenceKey = "ZenVoice.holdToDictate.key"
 
+    /// Shortcuts that had to be replaced while loading, as "before → after"
+    /// descriptions, so the app can say what changed instead of leaving the
+    /// user to discover it by pressing a key that no longer answers.
+    nonisolated(unsafe) private(set) static var replacedShortcuts: [String] = []
+
     static func load(defaults: UserDefaults = .standard) -> HotKeyConfiguration {
-        guard let data = defaults.data(forKey: preferenceKey),
-              let configuration = try? JSONDecoder().decode(
-                HotKeyConfiguration.self,
-                from: data
-              ),
-              configuration.isValid else {
-            return .dictationDefault
-        }
-        return configuration
+        load(
+            key: preferenceKey,
+            fallback: .dictationDefault,
+            defaults: defaults
+        )
     }
 
     static func save(
@@ -33,15 +34,11 @@ enum HotKeyPreferences {
     static func loadPasteLast(
         defaults: UserDefaults = .standard
     ) -> HotKeyConfiguration {
-        guard let data = defaults.data(forKey: pasteLastPreferenceKey),
-              let configuration = try? JSONDecoder().decode(
-                HotKeyConfiguration.self,
-                from: data
-              ),
-              configuration.isValid else {
-            return .pasteLastDefault
-        }
-        return configuration
+        load(
+            key: pasteLastPreferenceKey,
+            fallback: .pasteLastDefault,
+            defaults: defaults
+        )
     }
 
     static func savePasteLast(
@@ -110,11 +107,24 @@ enum HotKeyPreferences {
               let configuration = try? JSONDecoder().decode(
                 HotKeyConfiguration.self,
                 from: data
-              ),
-              configuration.isValid else {
+              ) else {
             return fallback
         }
-        return configuration
+
+        if configuration.isValid {
+            return configuration
+        }
+
+        // Returning the fallback without writing it back leaves the stored
+        // preference — and so the settings screen — showing a shortcut the app
+        // is not listening for. That is how a working shortcut turns into a
+        // dead key with nothing on screen to explain it. Persist the
+        // substitution and record it so the app can say what changed.
+        save(fallback, key: key, defaults: defaults)
+        replacedShortcuts.append(
+            "\(configuration.displayName) → \(fallback.displayName)"
+        )
+        return fallback
     }
 
     private static func save(

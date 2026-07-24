@@ -494,6 +494,34 @@ guard !unknownModifier.isValid else {
     exit(1)
 }
 
+// Option-only shortcuts must stay valid. A previous revision rejected them,
+// believing the text input system swallowed them in apps with a focused text
+// field; a registered ⌥Space hot key was measured being delivered in both a
+// browser and a terminal. Rejecting them invalidated shortcuts already in use,
+// which were then silently swapped for the default. Guard against a
+// reintroduction.
+for optionOnly in [
+    HotKeyConfiguration(keyCode: 49, modifiers: [.option], keyLabel: "Space"),
+    HotKeyConfiguration(keyCode: 46, modifiers: [.option], keyLabel: "M"),
+    HotKeyConfiguration(
+        keyCode: 35,
+        modifiers: [.option, .shift],
+        keyLabel: "P"
+    ),
+    HotKeyConfiguration(keyCode: 49, modifiers: [.shift], keyLabel: "Space")
+] {
+    guard optionOnly.isValid else {
+        FileHandle.standardError.write(
+            Data(
+                "FAIL: shortcut \(optionOnly.displayName) must remain valid\n".utf8
+            )
+        )
+        exit(1)
+    }
+}
+
+print("ZenVoiceCoreChecks: option-only shortcuts remain valid")
+
 let mismatchedLabel = HotKeyConfiguration(
     keyCode: 49,
     modifiers: [.control],

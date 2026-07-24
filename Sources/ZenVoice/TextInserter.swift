@@ -19,21 +19,27 @@ final class TextInserter {
         }
 
         let source = CGEventSource(stateID: .hidSystemState)
-        let keyDown = CGEvent(
-            keyboardEventSource: source,
-            virtualKey: 9,
-            keyDown: true
-        )
-        let keyUp = CGEvent(
-            keyboardEventSource: source,
-            virtualKey: 9,
-            keyDown: false
-        )
+        // Optional-chaining these posts would report `.pasted` even when the
+        // events were never created, so a silent failure looked identical to
+        // a successful insertion — including in saved history. The transcript
+        // is on the pasteboard either way, so say so honestly instead.
+        guard let keyDown = CGEvent(
+                keyboardEventSource: source,
+                virtualKey: 9,
+                keyDown: true
+              ),
+              let keyUp = CGEvent(
+                keyboardEventSource: source,
+                virtualKey: 9,
+                keyDown: false
+              ) else {
+            return .copiedOnly
+        }
 
-        keyDown?.flags = .maskCommand
-        keyUp?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
-        keyUp?.post(tap: .cghidEventTap)
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
         return .pasted
     }
 

@@ -3,7 +3,26 @@ import SwiftUI
 
 @MainActor
 final class ZenBarPanelController {
+    private static let overlayCollectionBehavior:
+        NSWindow.CollectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle
+        ]
+
+    /// Entering a native full-screen space animates for roughly three quarters
+    /// of a second, and `activeSpaceDidChangeNotification` fires while that is
+    /// still running — early enough that the outgoing space is often still the
+    /// one in front. Re-asserting once at that instant puts the panel back on
+    /// the space being left behind, so the checks are spread across the
+    /// animation and stop as soon as the panel is confirmed to have made it.
+    private static let reassertDelays: [TimeInterval] = [0.15, 0.4, 0.9, 1.6]
+
     private let panel: NSPanel
+    private var isShowing = false
+    private var spaceObserver: NSObjectProtocol?
+    private var reassertWorkItems: [DispatchWorkItem] = []
 
     init(
         state: AppState,
@@ -22,14 +41,14 @@ final class ZenBarPanelController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
-        panel.level = .statusBar
+        // `.statusBar` (25) sits below the levels some apps use for their
+        // full-screen and presentation windows. `.screenSaver` clears those
+        // with room to spare while still staying under the shielding level,
+        // so the bar never covers system alerts or the menu bar.
+        panel.level = .screenSaver
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [
-            .canJoinAllSpaces,
-            .fullScreenAuxiliary,
-            .stationary
-        ]
+        panel.collectionBehavior = Self.overlayCollectionBehavior
         panel.contentView = NSHostingView(
             rootView: ZenBarView(
                 state: state,
@@ -38,15 +57,123 @@ final class ZenBarPanelController {
                 finishRecording: finishRecording
             )
         )
+
+        observeActiveSpaceChanges()
+    }
+
+    deinit {
+        if let spaceObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver)
+        }
+        for item in reassertWorkItems {
+            item.cancel()
+        }
     }
 
     func show() {
+        isShowing = true
+        // Re-ordering is what moves the panel between spaces, but it blinks
+        // the bar out for a frame. show() runs on every phase change of a
+        // dictation, so pay that cost only when the panel is not already on
+        // the space in front.
+        if isPanelOnActiveSpace() {
+            positionAtBottomCenter()
+            panel.orderFrontRegardless()
+        } else {
+            presentOnActiveSpace()
+        }
+        scheduleSpaceReassertions()
+    }
+
+    func hide() {
+        isShowing = false
+        cancelPendingReassertions()
+        panel.orderOut(nil)
+    }
+
+    /// The window server binds a window to a space when the window is ordered
+    /// in, and `orderFrontRegardless()` on a panel it still considers ordered
+    /// in is a no-op — the binding is never reconsidered. That is why the bar
+    /// stayed stranded on the desktop space once a browser or terminal moved
+    /// to its own full-screen space. Ordering the panel out first is what
+    /// forces the decision to be made again, against the space in front now.
+    private func presentOnActiveSpace() {
+        panel.orderOut(nil)
+        panel.collectionBehavior = Self.overlayCollectionBehavior
         positionAtBottomCenter()
         panel.orderFrontRegardless()
     }
 
-    func hide() {
-        panel.orderOut(nil)
+    /// Switching spaces — including entering or leaving another app's
+    /// full-screen space — can leave the panel behind on the space it was
+    /// ordered into. Re-assert it against the space that is now active.
+    private func observeActiveSpaceChanges() {
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.scheduleSpaceReassertions()
+            }
+        }
+    }
+
+    /// Re-orders the panel only when it is genuinely missing from the space in
+    /// front, so an ordinary desktop switch does not flicker the bar.
+    private func scheduleSpaceReassertions() {
+        cancelPendingReassertions()
+        guard isShowing else {
+            return
+        }
+
+        for delay in Self.reassertDelays {
+            let item = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.isShowing else {
+                        return
+                    }
+                    guard !self.isPanelOnActiveSpace() else {
+                        return
+                    }
+                    self.presentOnActiveSpace()
+                }
+            }
+            reassertWorkItems.append(item)
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + delay,
+                execute: item
+            )
+        }
+    }
+
+    private func cancelPendingReassertions() {
+        for item in reassertWorkItems {
+            item.cancel()
+        }
+        reassertWorkItems.removeAll()
+    }
+
+    /// `CGWindowListCopyWindowInfo` with `.optionOnScreenOnly` reports only the
+    /// windows on the space that is currently in front, so matching the panel's
+    /// window number against that list is the one dependable way to tell
+    /// whether the bar actually followed the user across.
+    private func isPanelOnActiveSpace() -> Bool {
+        let windowNumber = panel.windowNumber
+        guard windowNumber > 0 else {
+            return false
+        }
+        guard let windows = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            return false
+        }
+
+        return windows.contains { window in
+            let number = window[kCGWindowNumber as String] as? NSNumber
+            return number?.intValue == windowNumber
+        }
     }
 
     func positionAtBottomCenter() {
@@ -61,6 +188,24 @@ final class ZenBarPanelController {
         let x = visibleFrame.midX - panel.frame.width / 2
         let y = visibleFrame.minY + 6
         panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    /// `CGWindowListCopyWindowInfo` reports bounds in Core Graphics global
+    /// coordinates (origin top-left of the primary display, y growing down),
+    /// while `NSScreen.frame` is AppKit global coordinates (origin bottom-left,
+    /// y growing up). Comparing the two directly only appears to work on a
+    /// single display, where both ranges happen to coincide; with a second
+    /// display attached it picks the wrong screen.
+    private func convertToAppKit(_ rect: CGRect) -> CGRect {
+        guard let primary = NSScreen.screens.first else {
+            return rect
+        }
+        return CGRect(
+            x: rect.minX,
+            y: primary.frame.maxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
     }
 
     private func screenForFrontmostApplication() -> NSScreen? {
@@ -90,11 +235,13 @@ final class ZenBarPanelController {
                 continue
             }
 
-            let bounds = CGRect(
-                x: x.doubleValue,
-                y: y.doubleValue,
-                width: width.doubleValue,
-                height: height.doubleValue
+            let bounds = convertToAppKit(
+                CGRect(
+                    x: x.doubleValue,
+                    y: y.doubleValue,
+                    width: width.doubleValue,
+                    height: height.doubleValue
+                )
             )
             let center = CGPoint(x: bounds.midX, y: bounds.midY)
             if let screen = NSScreen.screens.first(where: {

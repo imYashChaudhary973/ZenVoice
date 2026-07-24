@@ -460,6 +460,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 showError(error.localizedDescription)
             }
         }
+
+        announceReplacedShortcutsIfNeeded()
+    }
+
+    /// A shortcut that had to be replaced on load is worth saying out loud. The
+    /// alternative is the user pressing keys that quietly do nothing while the
+    /// settings screen appears to agree with them.
+    private func announceReplacedShortcutsIfNeeded() {
+        let replaced = HotKeyPreferences.replacedShortcuts
+        guard !replaced.isEmpty else {
+            return
+        }
+
+        showError("Shortcut changed: \(replaced.joined(separator: ", "))")
     }
 
     private func configureHoldToDictate() {

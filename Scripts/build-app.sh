@@ -11,6 +11,37 @@ entitlements_path="$project_dir/Resources/ZenVoice.entitlements"
 signing_identity=${ZENVOICE_SIGNING_IDENTITY:-}
 
 cd "$project_dir"
+
+# SwiftUI's @State/@Binding/@Environment are macros, and the compiler plugin
+# that expands them (libSwiftUIMacros.dylib) ships with Xcode — the Command
+# Line Tools alone do not carry it. Building against a developer directory
+# without the plugin does not fail with a clear message: every property wrapper
+# silently fails to expand, surfacing instead as dozens of misleading
+# "cannot find '$foo' in scope" and "'self' is immutable" errors in SwiftUI
+# code that is perfectly valid. Resolve a toolchain that has it up front.
+swiftui_macro_plugin="Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins/libSwiftUIMacros.dylib"
+developer_dir=""
+for candidate in \
+    "${DEVELOPER_DIR:-}" \
+    "$(xcode-select -p 2>/dev/null || true)" \
+    /Applications/Xcode.app/Contents/Developer \
+    /Applications/Xcode-beta.app/Contents/Developer
+do
+    [[ -n "$candidate" && -f "$candidate/$swiftui_macro_plugin" ]] || continue
+    developer_dir="$candidate"
+    break
+done
+
+if [[ -z "$developer_dir" ]]; then
+    echo "Error: no Xcode toolchain provides $swiftui_macro_plugin." >&2
+    echo "SwiftUI's @State macros cannot expand without it, and the Command" >&2
+    echo "Line Tools do not include it. Install Xcode, or set DEVELOPER_DIR to" >&2
+    echo "a developer directory that has the plugin." >&2
+    exit 1
+fi
+
+export DEVELOPER_DIR="$developer_dir"
+
 swift build -c release
 "$project_dir/Scripts/generate-app-icon.sh" \
     "$brand_dir/ZenLogo.png" \

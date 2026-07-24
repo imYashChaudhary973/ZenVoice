@@ -4,9 +4,33 @@
 
 - macOS 14 or newer on Apple Silicon
 - Swift 5.10 or newer
+- **Xcode**, not just the Command Line Tools — SwiftUI's `@State`, `@Binding`
+  and `@Environment` are macros, and the plugin that expands them
+  (`libSwiftUIMacros.dylib`) is only shipped with Xcode
 - Internet access on the first build so Swift Package Manager can fetch the
   pinned `whisper.cpp` XCFramework
 - A verified GGML model downloaded from ZenVoice's **Models** screen
+
+If `xcode-select -p` points at `/Library/Developer/CommandLineTools`, the
+SwiftUI macro plugin is missing and `swift build` fails on valid code with
+dozens of misleading errors — `cannot find '$someState' in scope` and
+`cannot assign to property: 'self' is immutable`, mostly in
+`ZenVoiceSettingsView.swift`. The one real error is buried among them:
+
+```
+external macro implementation type 'SwiftUIMacros.StateMacro' could not be
+found for macro 'State()'; plugin for module 'SwiftUIMacros' not found
+```
+
+Point the toolchain at Xcode to fix it:
+
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+```
+
+Setting `DEVELOPER_DIR` to the same path works too and needs no `sudo`.
+`Scripts/build-app.sh` resolves a suitable toolchain by itself and fails with
+an explicit message when none is installed.
 
 ## Configuration
 
