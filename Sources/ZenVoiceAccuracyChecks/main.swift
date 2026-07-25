@@ -334,6 +334,27 @@ private func measure() -> Bool {
         )?.finalTranscript ?? ""
     }
 
+    // A real-speech corpus need not be English. ZENVOICE_ACCURACY_CORPUS_LANGUAGE
+    // decodes it in its own language instead, which is the only way to get a
+    // Hinglish baseline — and .en models cannot do it at all, so the model has
+    // to be multilingual too.
+    let corpusProfile = environment["ZENVOICE_ACCURACY_CORPUS_LANGUAGE"]
+        .map {
+            LanguageProfile(
+                inputLanguageCode: $0,
+                outputMode: .spokenLanguage
+            )
+        } ?? .english
+
+    func decodeCorpus(_ samples: [Float]) -> String {
+        (
+            try? transcriber.transcribe(
+                samples: samples,
+                languageProfile: corpusProfile
+            )
+        )?.finalTranscript ?? ""
+    }
+
     report()
     report("ZenVoice accuracy — model \(configuration.modelID)")
     report(
@@ -1041,6 +1062,8 @@ private func measure() -> Bool {
             report("  " + String(repeating: "-", count: 60))
             var corpusWhole = Scoring.Result.zero
             var corpusSegmented = Scoring.Result.zero
+            var corpusSeconds: TimeInterval = 0
+            var corpusAudioSeconds: TimeInterval = 0
             for clip in corpus {
                 // Real recordings arrive at whatever level they were captured
                 // at, so the synthetic degradation is deliberately not applied.
@@ -1049,10 +1072,13 @@ private func measure() -> Bool {
                     report("  \(clip.name): could not read audio")
                     continue
                 }
-                let whole = decode(samples)
+                let decodeStart = Date()
+                let whole = decodeCorpus(samples)
+                corpusSeconds += Date().timeIntervalSince(decodeStart)
+                corpusAudioSeconds += Double(samples.count) / 16_000
                 let segments = LiveSegmentation.segments(of: samples)
                 let segmented = segments
-                    .map { decode(Array($0)) }
+                    .map { decodeCorpus(Array($0)) }
                     .filter { !$0.isEmpty }
                     .joined(separator: " ")
                 let wholeScore = Scoring.wordErrorRate(
@@ -1094,6 +1120,21 @@ private func measure() -> Bool {
                         format: "%+9.1f pts",
                         (corpusSegmented.rate - corpusWhole.rate) * 100
                     )
+            )
+            // Reported as a multiple of the audio's own duration, because
+            // that is what decides whether a model is usable: a dictation
+            // finishes in its length divided by this.
+            report(
+                String(
+                    format:
+                        "  real-speech decode %.2f s for %.0f s of audio"
+                        + " (%.0fx real time)",
+                    corpusSeconds,
+                    corpusAudioSeconds,
+                    corpusSeconds > 0
+                        ? corpusAudioSeconds / corpusSeconds
+                        : 0
+                )
             )
             report()
         }

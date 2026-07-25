@@ -79,6 +79,74 @@ recommendation question rather than a technical one — see
 `ModelRecommendations` — but the evidence says the larger model earns its
 place on hardware that can hold it.
 
+## Accuracy against speed
+
+Every installed model, on the same 24 real English utterances. Decode is
+expressed as a multiple of the audio's own length, because that is what
+decides usability: a dictation finishes in its duration divided by this.
+
+| tier | model | WER | decode |
+| --- | --- | --- | --- |
+| tiny | `tiny.en` | 5.4% | 100x real time |
+| base | `base.en` | 4.8% | 63x |
+| medium | `medium.en` | **2.9%** | 10x |
+| tiny | `tiny` (multilingual) | 5.9% | 95x |
+| medium | `medium` (multilingual) | **2.7%** | 9x |
+
+Three things fall out.
+
+**The tiny-to-base step is nearly free and nearly worthless** — 0.6 points for
+a third of the speed. **The base-to-medium step is where the accuracy is**:
+1.9 points, almost 40% of the remaining errors, for 6x the decode.
+
+**Ten times real time is still fast.** A 60-second dictation decodes in six
+seconds on medium. Since decoding starts when the user stops talking, the
+question is whether six seconds of waiting is worse than one — not whether the
+machine can keep up.
+
+**The multilingual build is not a compromise for English.** `medium`
+multilingual scored 2.7% against `medium.en`'s 2.9%, and `tiny` multilingual
+5.9% against 5.4%. At the medium tier the English-only build buys nothing,
+which matters because only the multilingual builds can do Hindi at all.
+
+## Hinglish
+
+30 real code-switched utterances from the
+[MUCS 2021](https://www.openslr.org/104/) Hindi-English test set — genuine
+Hinglish, 16 kHz, human transcribed.
+
+**The headline number is not reportable, and the reason matters more than the
+number.** Scored as word error rate against the corpus reference, `medium`
+reaches 52.6% on a clip it essentially heard correctly:
+
+```
+reference  लिबर ऑफिस impress में एक प्रस्तुति document बनाना और बुनियादी formatting …
+medium     लिबर आफिस इमप्रेस में एक प्रस्तुती डोक्यूमेंट बनाना और बुन्यादी फॉर्मेटिंग …
+```
+
+The words are right. Whisper writes the English ones phonetically in
+Devanagari; the reference writes them in Latin. Most of that 52.6% is a
+disagreement about **writing convention**, not about what was said — which is
+exactly why the harness scores Hinglish on loanword preservation rather than
+on script.
+
+Two findings do survive:
+
+- **`tiny` is unusable for Hinglish.** It produces romanized approximations
+  ("Libar office in impressed me, a prostitute document banaana") and falls
+  into hallucination loops — one clip emitted "We are in India," roughly a
+  hundred times, scoring 411%. The loops are also pathologically slow, because
+  the decoder runs to its token limit on every window instead of stopping. A
+  five-minute corpus took over fifty minutes.
+- **`medium` hears code-switched speech well.** The content is close to
+  correct; what it gets wrong is which alphabet to use for the English words.
+
+That reframes the Hinglish problem. It is not primarily an accuracy problem to
+be solved with a bigger model — it is a **script convention** problem, which is
+what `LanguageProfile.hinglish` and `LocalTransliterator` already exist to
+handle. Whether they handle it well is a separate measurement, and this corpus
+is now the way to make it.
+
 ## Open
 
 - **Hinglish is unmeasured here.** LibriSpeech is read English. The
