@@ -768,6 +768,50 @@ scored against the *cleaned* reference, so a more verbatim transcript
 necessarily scores worse. That number measures how much work is left for
 refinement, not how well the model heard.
 
+### 8.4 Phrase-level restarts, fixed
+
+The gap 8.3 exposed, closed. Clean now collapses a repeated *phrase* — bounded
+at two to four words, blocked by a line break or by punctuation between the
+halves, so "New York, New York" and "come on, come on" survive as the
+deliberate repeats they are.
+
+```
+                       before          after
+disfluent raw          27.7%           27.7%
+after clean            15.4%  -12.3     12.3%  -15.4 pts
+clips changed          4 of 8          5 of 8
+insertions             6               4
+unhandled clips        3               2
+clean-speech delta     +0.0            +0.0
+semantic violations    0               0
+```
+
+Pinned by four text-level checks, which matter more than the harness number:
+the restart collapses, a *tripled* restart collapses to one rather than two,
+a non-adjacent recurrence ("the more you test the more you learn") survives,
+and a punctuated deliberate repeat survives.
+
+### 8.5 The instrument caught its first real change
+
+Re-running after the fix reproduced every figure exactly — OVERALL, long-form,
+and both refinement cohorts — confirming 8.2 holds across the whole harness
+rather than only the section originally compared.
+
+That reproducibility immediately paid for itself. Between two runs the
+transcription section moved (whole 5.4% → 4.7%, segmentation cost
+0.0 → +2.4 pts) with no committed change to transcription. Because the harness
+is now deterministic, that shift had to have a cause, and it did: parallel work
+in the tree added `WhisperDecoding.leadInSilenceSeconds` and made
+`WhisperTranscriber` pad every recording with half a second of silence.
+
+Worth flagging to whoever owns that change: the padding improves
+whole-recording word error rate but moves segmented decoding the other way,
+turning a 0.0-point segmentation cost into +2.4. The release path decodes
+whole, so this is not urgent, but live preview does not.
+
+Under the old sampled decode this would have been invisible — indistinguishable
+from the ±1 point the harness produced on its own.
+
 This is the first real gap the harness has surfaced under conditions where its
 answer can be trusted, and it is directly actionable. Single-word repetition
 ("the the") is still collapsed by the decoder, and `dis-quantity` remains a
