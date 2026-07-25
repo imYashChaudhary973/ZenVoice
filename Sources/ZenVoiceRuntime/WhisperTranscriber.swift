@@ -128,7 +128,12 @@ public final class WhisperTranscriber: @unchecked Sendable {
             // the greedy or beam result rather than being resampled.
             parameters.temperature_inc = 0
         }
-        parameters.no_timestamps = true
+        // Timestamps must stay on. With them suppressed whisper returns the
+        // whole recording as a single segment spanning the full window, so
+        // there is nothing to derive paragraph structure from — the pauses
+        // exist in the audio but never reach us. print_timestamps keeps them
+        // out of the text.
+        parameters.no_timestamps = false
         parameters.print_special = false
         parameters.print_progress = false
         parameters.print_realtime = false
@@ -158,14 +163,50 @@ public final class WhisperTranscriber: @unchecked Sendable {
         }
 
         var rawTranscript = ""
+        var segments: [TranscriptSegment] = []
         let segmentCount = whisper_full_n_segments(context)
         for index in 0..<segmentCount {
             guard let text = whisper_full_get_segment_text(context, index) else {
                 continue
             }
-            rawTranscript += String(cString: text)
+            let piece = String(cString: text)
+            rawTranscript += piece
+            // whisper reports segment times in centiseconds, measured
+            // against the padded buffer it was given. Subtracting the lead-in
+            // puts them back on the caller's own timeline, which is what the
+            // silence detection is measured against — leaving the offset in
+            // skews every boundary by half a second and pauses stop lining up
+            // with the segments they belong to.
+            let start =
+                Double(whisper_full_get_segment_t0(context, index)) / 100
+                - WhisperDecoding.leadInSilenceSeconds
+            let end =
+                Double(whisper_full_get_segment_t1(context, index)) / 100
+                - WhisperDecoding.leadInSilenceSeconds
+            segments.append(
+                TranscriptSegment(
+                    text: piece,
+                    startSeconds: max(0, start),
+                    endSeconds: max(0, end)
+                )
+            )
         }
-        let cleanedTranscript = cleaner.clean(rawTranscript)
+        // Paragraph structure comes from the speaker's own pauses, measured
+        // from the audio because whisper's segment bounds abut and contain no
+        // silence. Cleaning runs per paragraph: TranscriptCleaner collapses
+        // all whitespace, so cleaning the joined text would erase the breaks
+        // it was just given.
+        let structured = segments.isEmpty
+            ? rawTranscript
+            : SpokenStructure.text(
+                from: segments,
+                silences: SpokenStructure.silences(in: samples)
+            )
+        let cleanedTranscript = structured
+            .components(separatedBy: "\n\n")
+            .map { cleaner.clean($0) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
         // A Hinglish-native model has already written Latin script, and
         // romanizing it again would only damage text that is correct.
         let needsTransliteration = activeProfile.shouldTransliterateToLatin
@@ -186,7 +227,8 @@ public final class WhisperTranscriber: @unchecked Sendable {
             isPartial: false,
             modelID: configuration.modelID,
             processingDurationSeconds:
-                Date().timeIntervalSince(processingStartedAt)
+                Date().timeIntervalSince(processingStartedAt),
+            segments: segments
         )
     }
 

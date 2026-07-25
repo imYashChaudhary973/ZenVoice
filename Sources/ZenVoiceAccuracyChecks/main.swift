@@ -97,6 +97,68 @@ private extension String {
 /// Runs the measurement in its own scope so the Whisper context is released
 /// before the process exits. Leaving it alive trips a Metal teardown assertion
 /// inside ggml during static destruction.
+
+/// Prints the segment timings Whisper reports, and the paragraph structure
+/// they imply. Verifies the timestamps survive `no_timestamps`, which
+/// suppresses timestamp *tokens* but is not documented to affect segment
+/// bounds.
+private func probeSpokenStructure() -> Bool {
+    guard let configuration = try? ZenVoiceConfiguration.discover(
+        languageProfile: .english
+    ) else {
+        skip("no speech model available.")
+    }
+    let directory = environment["ZENVOICE_ACCURACY_FIXTURES"]
+        .map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenvoice-accuracy-fixtures")
+    guard let clips = try? Fixtures.render(into: directory),
+          let clip = clips.first else {
+        skip("fixtures unavailable.")
+    }
+    let transcriber = WhisperTranscriber(
+        configuration: configuration,
+        isReproducible: true
+    )
+    let samples = Fixtures.degraded(
+        (try? Fixtures.samples(at: clip.url)) ?? [],
+        gain: 0.35,
+        noise: 0.004
+    )
+    guard let result = try? transcriber.transcribe(
+        samples: samples,
+        languageProfile: .english
+    ) else {
+        fail("could not transcribe \(clip.name)")
+    }
+    report()
+    report("spoken structure — \(clip.name)")
+    report("  segments: \(result.segments.count)")
+    for segment in result.segments {
+        report(
+            String(
+                format: "  %6.2f–%6.2f  %@",
+                segment.startSeconds,
+                segment.endSeconds,
+                segment.text.trimmingCharacters(in: .whitespaces)
+            )
+        )
+    }
+    let silences = SpokenStructure.silences(in: samples)
+    report(
+        "  silences: " + silences.map {
+            String(format: "%.2f–%.2f", $0.start, $0.end)
+        }.joined(separator: ", ")
+    )
+    report()
+    report("  structured:")
+    report(
+        SpokenStructure.text(from: result.segments, silences: silences)
+    )
+    report()
+    return true
+}
+
 /// Scores refinement against human-annotated disfluent/fluent pairs.
 ///
 /// Synthetic fixtures could not settle whether refinement generalises — the
@@ -1106,7 +1168,9 @@ private func measure() -> Bool {
 // ZENVOICE_REFINE_PROBE=1 answers the scaling question on its own, in seconds
 // rather than the minutes a full transcription pass costs.
 let outcome: Bool
-if let corpus = environment["ZENVOICE_REFINE_TEXTEVAL"] {
+if flag("ZENVOICE_STRUCTURE_PROBE") {
+    outcome = probeSpokenStructure()
+} else if let corpus = environment["ZENVOICE_REFINE_TEXTEVAL"] {
     outcome = evaluateTextCorpus(path: corpus)
 } else {
     outcome = measure()

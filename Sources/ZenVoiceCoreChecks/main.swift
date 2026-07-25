@@ -414,6 +414,83 @@ guard InstantRefinePreferences.load(defaults: refineDefaults)
 
 print("ZenVoiceCoreChecks: Instant Refine passed")
 
+// Paragraph structure from the speaker's pauses.
+//
+// The silences are supplied rather than measured here, because the point
+// under test is the decision, not the energy detection.
+let structureSegments = [
+    TranscriptSegment(
+        text: "Please refactor the middleware.",
+        startSeconds: 0,
+        endSeconds: 3
+    ),
+    TranscriptSegment(
+        text: "It validates the token.",
+        startSeconds: 4.5,
+        endSeconds: 7
+    ),
+    TranscriptSegment(
+        text: "And returns unauthorized.",
+        startSeconds: 7.1,
+        endSeconds: 9
+    )
+]
+// A long pause after a finished sentence, and a short one after the next.
+let structured = SpokenStructure.text(
+    from: structureSegments,
+    silences: [
+        (0.2, 0.3), (1.1, 1.2), (3.0, 4.5), (5.4, 5.5), (7.0, 7.1)
+    ]
+)
+guard structured == """
+Please refactor the middleware.
+
+It validates the token. And returns unauthorized.
+""" else {
+    FileHandle.standardError.write(
+        Data("FAIL: paragraph structure is wrong: \(structured)\n".utf8)
+    )
+    exit(1)
+}
+
+// Without the audio there are no pauses to read, so no break may be invented.
+guard SpokenStructure.text(from: structureSegments, silences: [])
+        == "Please refactor the middleware. It validates the token. "
+            + "And returns unauthorized." else {
+    FileHandle.standardError.write(
+        Data("FAIL: a break was taken without any measured pause\n".utf8)
+    )
+    exit(1)
+}
+
+// A pause mid-sentence is hesitation, not a new thought. The previous segment
+// has to have come to a close before its pause can end a paragraph.
+let unfinished = SpokenStructure.text(
+    from: [
+        TranscriptSegment(
+            text: "Please refactor the",
+            startSeconds: 0,
+            endSeconds: 3
+        ),
+        TranscriptSegment(
+            text: "middleware today.",
+            startSeconds: 4.5,
+            endSeconds: 6
+        )
+    ],
+    silences: [(0.2, 0.3), (3.0, 4.5)]
+)
+guard unfinished == "Please refactor the middleware today." else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: a paragraph broke mid-sentence: \(unfinished)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: spoken structure passed")
+
 let applicationSuite =
     "ZenVoiceCoreChecks.ApplicationProfiles.\(UUID().uuidString)"
 guard let applicationDefaults =

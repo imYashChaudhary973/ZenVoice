@@ -3,6 +3,8 @@
 Instant Refine is the local text-processing stage between Whisper
 transcription and personal correction rules.
 
+Paragraph breaks come before any of this, from the speaker's own pauses.
+
 ```text
 Local audio
   → selected local Whisper model
@@ -118,3 +120,32 @@ hardware requirements, and language claims are recorded in
 ZenVoice will not continuously replace text inside another application until
 focus changes, cursor movement, undo behavior, and application compatibility
 have reliable tests.
+
+## Paragraph structure
+
+A minute of dictation used to arrive as one unbroken block. Breaks now come
+from the speaker's pauses, which is a fact about the recording rather than a
+judgement about the words — no model is involved.
+
+Two obstacles had to be cleared, both invisible until measured:
+
+- `no_timestamps` was on, so Whisper returned the whole recording as a single
+  segment spanning its full window. There was nothing to align text against.
+- With timestamps on, Whisper's segments *abut*: `t1` of one equals `t0` of
+  the next, so every gap computes as zero even across a pause of a second and
+  a half. The segment times align text to the recording but do not contain the
+  silence.
+
+So the pauses are measured from the audio, using the same adaptive noise floor
+as live dictation, and matched against the segment boundaries. The threshold
+adapts to the speaker — 2.5× their median silence, clamped to between 0.9 s
+and 3.0 s — because the research consensus is against fixed thresholds and a
+deliberate talker means something different by a one-second pause than a fast
+one does.
+
+A break is only taken where the previous segment ended on a full stop. A pause
+mid-sentence is someone hesitating, not starting a new thought.
+
+Still to calibrate: the thresholds are set from literature and synthetic
+fixtures whose 1.4 s pauses were chosen for a different purpose. Real
+recordings should set them.
