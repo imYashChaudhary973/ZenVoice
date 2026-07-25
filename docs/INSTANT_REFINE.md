@@ -25,6 +25,15 @@ Local audio
   them in commas, because `like` and `you know` are ordinary words elsewhere —
   “I like the way you know the answer” is left alone. `er` is not treated as a
   filler at all, so “err on the side of caution” keeps its verb.
+
+  Hindi is covered by the same rules. The repetition patterns are script
+  neutral, but only after their character classes were widened to admit
+  combining marks — a Devanagari vowel sign is a mark rather than a letter, so
+  the classes used to break a word in half and no Hindi repeat could ever
+  match. Hindi hesitation sounds (उम्म, अम्म, अअअ) and the stalling phrase
+  “वो क्या कहते हैं” are removed alongside their English counterparts. Measured
+  on 400 human-annotated Hindi pairs, this took refinement from 0.5 points of
+  improvement to 8.2.
 - **Agent Prompt:** includes Clean behavior and honors the explicit spoken
   commands “new line” and “new paragraph.”
 There is no language-model mode. There used to be, and it was removed rather

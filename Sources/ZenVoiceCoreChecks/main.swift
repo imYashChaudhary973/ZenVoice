@@ -265,6 +265,84 @@ guard deliberateRepeat.text
     exit(1)
 }
 
+// Devanagari repetition. This did not work at all until the character classes
+// admitted combining marks: a Hindi vowel sign is a mark, not a letter, so
+// [\p{L}\p{N}] broke "गूगल" after its first consonant and no repeat could
+// ever match. The rules looked script-neutral and silently were not.
+let devanagariRepeat = instantRefiner.refine(
+    "गूगल गूगल फिट पर 100 पुशअप जोड़ो",
+    mode: .clean
+)
+guard devanagariRepeat.text == "गूगल फिट पर 100 पुशअप जोड़ो" else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: Devanagari repetition survived: "
+                + "\(devanagariRepeat.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+let devanagariPhraseRepeat = instantRefiner.refine(
+    "आज रात आज रात की पार्टी के बारे में मैसेजेस दिखाओ",
+    mode: .clean
+)
+guard devanagariPhraseRepeat.text
+        == "आज रात की पार्टी के बारे में मैसेजेस दिखाओ" else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: Devanagari phrase repetition survived: "
+                + "\(devanagariPhraseRepeat.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// Hindi hesitation sounds, the counterparts of um and uh.
+let hindiFiller = instantRefiner.refine(
+    "मुझे उम्म, १२३४ स्ट्रीट से पिक करें",
+    mode: .clean
+)
+guard hindiFiller.text == "मुझे १२३४ स्ट्रीट से पिक करें" else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: Hindi filler survived: \(hindiFiller.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// "वो क्या कहते हैं" is a speaker stalling for a word, like "you know".
+let hindiStall = instantRefiner.refine(
+    "इस नंबर को पापा के वो क्या कहते हैं ऑफिस नंबर करके ऐड करो",
+    mode: .clean
+)
+guard hindiStall.text == "इस नंबर को पापा के ऑफिस नंबर करके ऐड करो" else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: Hindi stall phrase survived: \(hindiStall.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// A Hindi word that merely begins with the filler letters must survive. The
+// filler needs a doubled म where अमेरिका has a vowel sign.
+let hindiLookalike = instantRefiner.refine(
+    "अमेरिका से मेरा पार्सल कब आएगा",
+    mode: .clean
+)
+guard hindiLookalike.text == "अमेरिका से मेरा पार्सल कब आएगा",
+      hindiLookalike.correctionCount == 0 else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: a Hindi word was mistaken for a filler: "
+                + "\(hindiLookalike.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
 // "err" is a verb, not a filler stem. Its near-miss with "er" is why "er" is
 // not in the stem list at all.
 let errRefinement = instantRefiner.refine(
