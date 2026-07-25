@@ -120,6 +120,72 @@ enum Scoring {
         return result
     }
 
+    struct LoanwordResult {
+        var preserved: Int
+        var total: Int
+        /// The English words that did not come back as English.
+        var lost: [String]
+
+        var rate: Double {
+            total == 0 ? 0 : Double(preserved) / Double(total)
+        }
+
+        var percentage: String {
+            String(format: "%.0f%%", rate * 100)
+        }
+
+        static func + (lhs: LoanwordResult, rhs: LoanwordResult) -> Self {
+            LoanwordResult(
+                preserved: lhs.preserved + rhs.preserved,
+                total: lhs.total + rhs.total,
+                lost: lhs.lost + rhs.lost
+            )
+        }
+
+        static let zero = LoanwordResult(preserved: 0, total: 0, lost: [])
+    }
+
+    /// How many of the English words in a code-switched sentence survived as
+    /// English.
+    ///
+    /// This is the metric the Hinglish path is actually judged on. Word error
+    /// rate cannot do the job — Hinglish has no canonical spelling, so half the
+    /// "errors" it reports are legitimate spelling variation. Meanwhile the
+    /// check that Hinglish output merely contains no Devanagari is passed
+    /// equally by `kampyutara par kama kara raha hum` and by
+    /// `computer par kaam kar raha hoon`, so it cannot see the defect either.
+    ///
+    /// Asking whether `computer` came back as `computer` is unambiguous, is
+    /// independent of romanization convention, and is exactly the failure
+    /// documented in `docs/hinglish/01-diagnosis.md`: an English word spoken
+    /// mid-sentence is written by Whisper in Devanagari and then romanized back
+    /// by a transform that has no idea it was ever English.
+    ///
+    /// Multi-word terms are matched as a whole sequence, so `pull request`
+    /// counts once and only when both words survive in order.
+    static func loanwordPreservation(
+        expected: [String],
+        hypothesis: String
+    ) -> LoanwordResult {
+        guard !expected.isEmpty else {
+            return .zero
+        }
+        // Padded so a term match is always bounded by spaces, which keeps
+        // `test` from matching inside `stetasa` or `latest`.
+        let haystack = " " + normalize(hypothesis).joined(separator: " ") + " "
+        var result = LoanwordResult.zero
+        for term in expected {
+            let needle = " " + normalize(term).joined(separator: " ") + " "
+            result.total += 1
+            if haystack.contains(needle) {
+                result.preserved += 1
+            } else {
+                result.lost.append(term)
+            }
+        }
+        return result
+    }
+
     /// Fraction of n-grams that have appeared before.
     ///
     /// Whisper's classic long-form failure is a loop — it emits the same phrase

@@ -657,6 +657,103 @@ private func measure() -> Bool {
         report()
     }
 
+    // ---- Hinglish loanword preservation ----
+    //
+    // The check above only asks whether Devanagari is gone. That is passed
+    // equally by `kampyutara par kama kara raha hum` and by
+    // `computer par kaam kar raha hoon`, so it cannot see the defect that
+    // actually makes Hinglish unusable. This asks the question that can be
+    // answered without a canonical spelling: did the English words come back as
+    // English?
+    // A metric that always returned zero would produce exactly the baseline
+    // reported below, so it has to demonstrate it can tell the two apart before
+    // its verdict on real audio means anything.
+    let metricOnGoodOutput = Scoring.loanwordPreservation(
+        expected: ["project", "status", "pull request"],
+        hypothesis: "project ka status kya hai, pull request review kar do"
+    )
+    let metricOnBrokenOutput = Scoring.loanwordPreservation(
+        expected: ["project", "status", "pull request"],
+        hypothesis: "projekta ka stetasa kya hai, pula rikvesta raviyu kara do"
+    )
+    guard metricOnGoodOutput.preserved == 3, metricOnBrokenOutput.preserved == 0
+    else {
+        fail(
+            "loanword metric is broken: natural Hinglish scored "
+                + "\(metricOnGoodOutput.preserved)/3 and romanized mush scored "
+                + "\(metricOnBrokenOutput.preserved)/3"
+        )
+    }
+
+    var hinglishLoanwords = Scoring.LoanwordResult.zero
+    let hinglishShouldRun = configuration.modelLanguageCapability == .multilingual
+        && Fixtures.isHindiVoiceInstalled()
+    if hinglishShouldRun,
+       let hinglishClips = try? Fixtures.renderHinglish(into: fixtureDirectory),
+       !hinglishClips.isEmpty {
+        report("  Hinglish (English words surviving as English)")
+        report("  " + String(repeating: "-", count: 60))
+        for clip in hinglishClips {
+            let samples = Fixtures.degraded(
+                (try? Fixtures.samples(at: clip.url)) ?? [],
+                gain: gain,
+                noise: noise
+            )
+            guard !samples.isEmpty else { continue }
+
+            let latin = (
+                try? transcriber.transcribe(
+                    samples: samples,
+                    languageProfile: .hinglish
+                )
+            )?.finalTranscript ?? ""
+            let loanwords = Scoring.loanwordPreservation(
+                expected: clip.sentence.loanwords ?? [],
+                hypothesis: latin
+            )
+            hinglishLoanwords = hinglishLoanwords + loanwords
+
+            report(
+                "  "
+                    + clip.name.padding(toLength: 28, withPad: " ", startingAt: 0)
+                    + "\(loanwords.preserved)/\(loanwords.total)".leftPadded(to: 7)
+                    + loanwords.percentage.leftPadded(to: 8)
+                    + (loanwords.lost.isEmpty
+                        ? ""
+                        : "   lost: " + loanwords.lost.joined(separator: ", "))
+            )
+            if isVerbose {
+                report("      hinglish: \(latin.isEmpty ? "<empty>" : latin)")
+            }
+            if latin.isEmpty {
+                hindiFailures.append(
+                    "\(clip.name) produced no Hinglish transcript"
+                )
+            }
+        }
+        report("  " + String(repeating: "-", count: 60))
+        report(
+            "  "
+                + "OVERALL".padding(toLength: 28, withPad: " ", startingAt: 0)
+                + "\(hinglishLoanwords.preserved)/\(hinglishLoanwords.total)"
+                    .leftPadded(to: 7)
+                + hinglishLoanwords.percentage.leftPadded(to: 8)
+        )
+        report()
+    }
+
+    // The whole section sits behind optional rendering, so a fixture set that
+    // quietly stopped producing clips would read as a clean run rather than as
+    // lost coverage. Measured 2026-07-25 on Whisper Medium: 0/26. That zero is
+    // the defect, not a harness fault — see docs/hinglish/05-update-2026-07.md.
+    // The floor rises to a real threshold when a Hinglish-native model lands;
+    // until then the only thing worth asserting is that it still measures.
+    if hinglishShouldRun, hinglishLoanwords.total == 0 {
+        hindiFailures.append(
+            "Hinglish loanword coverage produced no measurements"
+        )
+    }
+
     // ---- real speech ----
     //
     // Optional operator-supplied recordings. Every synthetic number above is

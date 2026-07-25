@@ -80,6 +80,45 @@ Hinglish has no single correct spelling, so asserting a word error rate against
 it would be measuring taste. The harness checks the property the feature
 actually promises instead — that nothing is left in the original script.
 
+## Hinglish loanword preservation
+
+The script check above is necessary but nowhere near sufficient. It is passed
+equally by both of these:
+
+```
+kampyutara par kama kara raha hum     ← what ZenVoice produces today
+computer par kaam kar raha hoon       ← what a person would write
+```
+
+Neither contains Devanagari, so neither trips the assertion — while only one of
+them is usable. The defect that makes Hinglish bad is therefore invisible to it.
+
+What *can* be scored without a canonical spelling is whether the English half of
+a code-switched sentence survived as English. Four fixtures carry the loanword
+set from `docs/hinglish/01-diagnosis.md`, and each records the English spellings
+those words must come back as:
+
+```
+  hin-status@170wpm               0/3      0%   lost: project, status, email
+  hin-review@170wpm               0/4      0%   lost: pull request, review, computer, test
+  ------------------------------------------------------------
+  OVERALL                        0/26      0%
+```
+
+The English words are written in Devanagari in the fixture on purpose. `Lekha`
+is a Hindi voice, so `स्टेटस` gets voiced the way an Indian speaker actually
+says *status* — which is the audio the Hinglish profile has to survive. Latin
+text handed to a Hindi voice would produce a pronunciation no Hinglish speaker
+uses.
+
+**Baseline, measured 2026-07-25 on Whisper Medium: 0/26.** Every English word is
+destroyed. That is the defect, not a harness fault; the cause and the plan are in
+[docs/hinglish/05-update-2026-07.md](hinglish/05-update-2026-07.md).
+
+Because a metric that always returned zero would print exactly that baseline,
+the harness first scores a known-good and a known-broken string and fails if it
+cannot tell them apart. The zero means something only because that check passed.
+
 ## Real speech
 
 ```sh
@@ -112,6 +151,14 @@ The run fails when:
 - long-form output invents more than 5% of the reference length, or repeats more
   than 10% of its 5-grams
 - Hindi produces no transcript, or Hinglish output still contains Devanagari
+- the loanword metric cannot distinguish natural Hinglish from romanized mush
+- Hinglish coverage should have run but produced no measurements at all, which
+  would turn lost coverage into a clean run
+
+There is deliberately **no threshold on loanword preservation yet**. Today's
+score is zero, so any floor would either fail every run or assert nothing. The
+floor becomes real when a Hinglish-native model lands, and raising it is the
+gate that adoption has to clear.
 
 ## Environment
 

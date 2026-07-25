@@ -20,6 +20,17 @@ enum Fixtures {
         /// way to measure whether refinement earns its place.
         var spokenPhrases: [String]?
 
+        /// The English words in a code-switched sentence, spelled as English.
+        ///
+        /// Hinglish has no canonical spelling — *kya* and *kyaa* are both
+        /// right — so a word error rate against it scores taste rather than
+        /// accuracy. What can be scored is whether the English half of the
+        /// sentence survives as English. A speaker who says "project ka status"
+        /// expects `project` and `status` back; `projekta` and `stetasa` are
+        /// unambiguously wrong no matter which romanization convention the rest
+        /// of the sentence follows.
+        var loanwords: [String]?
+
         /// The reference transcript, without any pause markup.
         var text: String { phrases.joined(separator: " ") }
 
@@ -135,6 +146,59 @@ enum Fixtures {
                 "प्रिया ने कहा कि यह बदलाव ठीक है",
                 "लेकिन परीक्षण पहले चलाना होगा।"
             ]
+        )
+    ]
+
+    /// Code-switched Hinglish — English content words on Hindi grammar, which
+    /// is how a technical user actually dictates.
+    ///
+    /// The English words are written in Devanagari here on purpose. `Lekha` is
+    /// a Hindi voice, and handing it Latin text produces either an English
+    /// pronunciation or nothing usable; `स्टेटस` gets voiced the way an Indian
+    /// speaker actually says *status*, which is the audio the Hinglish profile
+    /// has to cope with. The Devanagari spelling is the fixture's reference for
+    /// word error rate, and ``Sentence/loanwords`` records what those same
+    /// words must look like coming out.
+    ///
+    /// The vocabulary is deliberately the set from
+    /// `docs/hinglish/01-diagnosis.md`, so the measured baseline is directly
+    /// comparable to the failures recorded there.
+    static let hinglishSentences: [Sentence] = [
+        Sentence(
+            id: "hin-status",
+            label: "project status",
+            phrases: [
+                "प्रोजेक्ट का स्टेटस क्या है",
+                "मैंने ईमेल भेज दिया।"
+            ],
+            loanwords: ["project", "status", "email"]
+        ),
+        Sentence(
+            id: "hin-server",
+            label: "server down",
+            phrases: [
+                "सर्वर डाउन है",
+                "थोड़ा सा वेट करो।"
+            ],
+            loanwords: ["server", "down", "wait"]
+        ),
+        Sentence(
+            id: "hin-meeting",
+            label: "meeting and file",
+            phrases: [
+                "मुझे मीटिंग में जाना है",
+                "यह फ़ाइल डाउनलोड कर दो।"
+            ],
+            loanwords: ["meeting", "file", "download"]
+        ),
+        Sentence(
+            id: "hin-review",
+            label: "pull request review",
+            phrases: [
+                "प्रिया ने पुल रिक्वेस्ट रिव्यू किया",
+                "लेकिन कंप्यूटर पर टेस्ट चलाना होगा।"
+            ],
+            loanwords: ["pull request", "review", "computer", "test"]
         )
     ]
 
@@ -276,6 +340,16 @@ enum Fixtures {
     ) throws -> [Clip] {
         try render(
             hindiSentences.map { ($0, hindiRates) },
+            into: directory,
+            voice: hindiVoice
+        )
+    }
+
+    static func renderHinglish(
+        into directory: URL
+    ) throws -> [Clip] {
+        try render(
+            hinglishSentences.map { ($0, hindiRates) },
             into: directory,
             voice: hindiVoice
         )
