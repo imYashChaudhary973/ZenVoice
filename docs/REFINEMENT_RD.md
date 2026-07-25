@@ -742,18 +742,31 @@ behaviour 6.4.1 predicts.
 ### 8.3 What the deterministic decode revealed
 
 Pinning the decode changed one entry in the unhandled list, and it reverses
-part of 0.1:
+part of 0.1. Both lines are the **raw transcript** of the same fixture — the
+input to refinement, not its output — under the two decode configurations:
 
 ```
-before:  We should probably revert the change before the release.
-after:   We should we should probably revert the change before the release.
+spoken by the fixture:  "We should we should probably revert the change …"
+
+sampled decode:  We should we should → We should probably revert the change …
+pinned decode:   We should we should probably revert the change …
 ```
 
-The doubled phrase **survives** under the pinned decode. So "Whisper already
-removed it" was partly an artifact of temperature fallback resampling that
-segment, not a reliable property of the decoder. Phrase-level repetition is a
-genuine refinement gap after all: Clean's repetition regex is single-token
-(`\b(word)\b (word)+`) and cannot see a repeated *phrase*.
+This is not a regression. The pinned decode is the *more faithful*
+transcription: the speaker really did say it twice, and now Whisper reports
+that. Refinement's behaviour is unchanged — what changed is that the
+disfluency now reaches it, and Clean fails to remove it.
+
+So "Whisper already removed it" was an artifact of temperature fallback
+resampling that segment, not a reliable property of the decoder. Phrase-level
+repetition is a genuine refinement gap after all: Clean's repetition regex is
+single-token (`\b(word)\b (word)+`) and cannot see a repeated *phrase*.
+
+The disfluent cohort's raw word error rate rising from 24.6% to 27.7% is the
+same effect and equally not a degradation. Raw transcripts in that cohort are
+scored against the *cleaned* reference, so a more verbatim transcript
+necessarily scores worse. That number measures how much work is left for
+refinement, not how well the model heard.
 
 This is the first real gap the harness has surfaced under conditions where its
 answer can be trusted, and it is directly actionable. Single-word repetition
