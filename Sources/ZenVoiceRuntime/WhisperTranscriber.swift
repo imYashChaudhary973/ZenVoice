@@ -27,6 +27,9 @@ public final class WhisperTranscriber: @unchecked Sendable {
     private let configuration: ZenVoiceConfiguration
     private let cleaner = TranscriptCleaner()
     private var context: OpaquePointer?
+    /// Resolved once — it reads the model file when the model is not in the
+    /// catalogue, and transcription happens far too often to repeat that.
+    private let usesBeamSearch: Bool
 
     public var modelID: String {
         configuration.modelID
@@ -46,6 +49,7 @@ public final class WhisperTranscriber: @unchecked Sendable {
 
     public init(configuration: ZenVoiceConfiguration) {
         self.configuration = configuration
+        usesBeamSearch = configuration.usesBeamSearchDecoding
         whisper_log_set({ _, _, _ in }, nil)
     }
 
@@ -84,8 +88,13 @@ public final class WhisperTranscriber: @unchecked Sendable {
         let processingStartedAt = Date()
         let context = try loadedContext()
         var parameters = whisper_full_default_params(
-            WHISPER_SAMPLING_GREEDY
+            usesBeamSearch
+                ? WHISPER_SAMPLING_BEAM_SEARCH
+                : WHISPER_SAMPLING_GREEDY
         )
+        if usesBeamSearch {
+            parameters.beam_search.beam_size = WhisperDecoding.beamSize
+        }
         parameters.n_threads = Int32(
             max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
         )

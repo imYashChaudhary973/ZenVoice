@@ -39,6 +39,32 @@ public enum LiveDictationPreferences {
     }
 }
 
+/// How a finished dictation turns into the text handed to the target app.
+public enum DictationCompletionStrategy: Equatable, Sendable {
+    /// Decode the complete recording in a single pass.
+    ///
+    /// Whisper is markedly more accurate when it hears a whole utterance than
+    /// when it is fed the fragments the pause detector cut, because words on
+    /// either side of a cut lose their context. This is the accurate path and
+    /// the default.
+    case wholeRecording
+
+    /// Concatenate the preview fragments and append whatever followed the last
+    /// one.
+    ///
+    /// Only correct when preview text has already been inserted into the target
+    /// app: at that point the inserted text is a fact on screen, and replacing
+    /// it wholesale is a separate problem from transcribing accurately.
+    case segments
+
+    public static func resolve(
+        usesLivePreview: Bool,
+        hasInsertedPreviewText: Bool
+    ) -> DictationCompletionStrategy {
+        usesLivePreview && hasInsertedPreviewText ? .segments : .wholeRecording
+    }
+}
+
 public enum StableTranscriptComposer {
     public static func appending(
         _ phrase: String,
