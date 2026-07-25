@@ -1119,6 +1119,80 @@ Measured: **+3.1 points** on disfluent speech, equal to the oracle ceiling;
 **zero** clean-speech clips changed; **zero** semantic violations; latency
 linear in dictation length.
 
+## 8.9 Validated against a real corpus, and the answer changes
+
+Eight synthetic fixtures could not settle whether the scorer generalises,
+because its entire +3.1 came from **one** of them. Refinement is a text stage,
+so validating it needs no audio — only pairs of what was said and what was
+meant.
+
+[DISCO](https://github.com/vineet2104/DISCO) supplies exactly that: human
+annotated disfluent/fluent pairs across English, Hindi, German and French,
+released with the paper. 400 pairs per language, sampled to those where the two
+sides differ. `ZENVOICE_REFINE_TEXTEVAL=<tsv>` scores them.
+
+```
+English, 400 human-annotated pairs
+disfluent input         23.2%    +0.0 pts
+after clean              7.2%   -15.9 pts    0 damaged
+after clean + scorer     7.2%   -15.9 pts    0 damaged
+oracle (ceiling)         7.2%   -16.0 pts
+
+Hindi, 400 human-annotated pairs
+disfluent input         27.2%    +0.0 pts
+after clean             26.7%    -0.5 pts    0 damaged
+after clean + scorer    26.7%    -0.5 pts    0 damaged
+oracle (ceiling)        26.7%    -0.5 pts
+```
+
+### 8.9.1 Clean generalises. The model does not.
+
+**Clean holds up on real data** — 15.9 points on 400 human-annotated English
+pairs, against 15.4 on the synthetic fixtures. Zero sentences damaged: 57
+already-fluent sentences were altered, but every one only in capitalization or
+spacing, which is the feature working rather than damage.
+
+**The scorer contributes 0.0 points**, and the oracle ceiling sits **0.1 points**
+above Clean. That is the decisive number. A flawless judge — one that reads the
+answer key — would add a tenth of a point to real English dictation once the
+deterministic rules have run. There is no headroom for a model to compete for.
+
+The +3.1 in 8.7 was one synthetic fixture, exactly as 8.8 warned. Fifty times
+more evidence reverses the conclusion.
+
+So the final call on the local model is not "withheld until a better model
+arrives" but **withheld because there is nothing left for one to do.** The
+scorer remains the best architecture found — it just has no work.
+
+### 8.9.2 Hindi is nearly untouched, and that is the real opportunity
+
+Clean improves Hindi by **0.5 points against 15.9 for English**. Roughly 26.7
+points of Hindi disfluency pass straight through.
+
+That is not a subtle gap, and for a product whose differentiator is Hinglish it
+is the most valuable finding here. The cause is plain: every rule in
+`InstantRefineEngine` is English — the filler stems are `um|uh|erm|ah|hm`, the
+discourse markers are "you know" and "like", the correction cues are "no wait"
+and "actually". None of them fire on Hindi.
+
+The Hindi oracle ceiling of 0.5 does **not** mean Hindi is unimprovable. It
+means `RefineLab`'s candidate rules are English too, so a perfect judge is
+being offered nothing worth judging. The achievable gain is closer to the 26.7
+points sitting between the disfluent and fluent sides.
+
+**This is deterministic rule work, not model work** — the same kind that took
+English from 7.7 to 15.4 this session, applied to Hindi fillers, repetitions
+and correction cues.
+
+### 8.9.3 Caveat on the corpus
+
+DISCO's disfluent side is human transcription, so it retains fillers Whisper
+strips before refinement ever sees them. Clean's 15.9 points is therefore
+flattering relative to in-product conditions, where the input arrives partly
+cleaned. It does not change the comparison between stages, which all saw the
+same input, and it makes the near-zero remaining headroom finding stronger
+rather than weaker: on genuinely Whisper-cleaned text there is even less left.
+
 ## 9. Suggested sequence
 
 Revised after the section 6–8 research. The ordering changed in two places:

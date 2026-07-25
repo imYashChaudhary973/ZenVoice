@@ -334,6 +334,184 @@ private func sweepScorer() -> Bool {
     return true
 }
 
+/// Scores refinement against human-annotated disfluent/fluent pairs.
+///
+/// The eight synthetic fixtures could not settle whether the scorer
+/// generalises — its entire measured gain came from one of them. Refinement is
+/// a text stage, so validating it needs no audio at all, only pairs of what was
+/// said and what was meant. A published corpus supplies thousands, annotated by
+/// people rather than by a text-to-speech voice.
+///
+/// Format: one pair per line, disfluent and fluent separated by a tab.
+///
+/// Two cohorts fall out of the same file for free. The disfluent side is where
+/// refinement must help; the fluent side is text that needs no change at all,
+/// so any edit there is damage.
+private func evaluateTextCorpus(path: String) -> Bool {
+    guard let contents = try? String(contentsOfFile: path, encoding: .utf8)
+    else {
+        fail("could not read text corpus at \(path)")
+    }
+    let pairs = contents
+        .split(separator: "\n")
+        .compactMap { line -> (disfluent: String, fluent: String)? in
+            let parts = line.components(separatedBy: "\t")
+            guard parts.count >= 2,
+                  !parts[0].isEmpty,
+                  !parts[1].isEmpty else { return nil }
+            return (parts[0], parts[1])
+        }
+    guard !pairs.isEmpty else {
+        fail("no usable pairs in \(path)")
+    }
+
+    let installed = VerifiedRefinementModelCatalog.models
+        .compactMap { model -> URL? in
+            guard let url = try? VerifiedRefinementModelCatalog
+                .installedURL(for: model),
+                FileManager.default.fileExists(atPath: url.path) else {
+                return nil
+            }
+            return url
+        }
+        .first
+    let modelURL = environment["ZENVOICE_REFINEMENT_MODEL_PATH"]
+        .map { URL(fileURLWithPath: $0) } ?? installed
+    let refiner = modelURL.map(LocalTextRefiner.init(modelURL:))
+    _ = try? refiner?.logLikelihood(of: "warm up the model")
+    let margin = Double(environment["ZENVOICE_LAB_MARGIN"] ?? "") ?? 0.4
+    RefineLab.windowRadius = Int(
+        environment["ZENVOICE_LAB_RADIUS"] ?? ""
+    ) ?? 8
+
+    func clean(_ text: String) -> String {
+        InstantRefineEngine().refine(text, mode: .clean).text
+    }
+    func scored(_ text: String) -> String {
+        guard let refiner else { return clean(text) }
+        return RefineLab.scorer(
+            clean(text),
+            refiner: refiner,
+            margin: margin
+        )
+    }
+
+    var rawTotal = Scoring.Result.zero
+    var cleanTotal = Scoring.Result.zero
+    var scorerTotal = Scoring.Result.zero
+    var oracleTotal = Scoring.Result.zero
+    var cleanDamage = 0
+    var scorerDamage = 0
+    // Word-preserving edits — recapitalization, spacing — counted apart from
+    // damage, because they are the feature working.
+    var cleanCosmetic = 0
+    var cleanExamples: [String] = []
+    var scorerExamples: [String] = []
+    var scorerSeconds: TimeInterval = 0
+
+    for pair in pairs {
+        rawTotal = rawTotal + Scoring.wordErrorRate(
+            reference: pair.fluent,
+            hypothesis: pair.disfluent
+        )
+        let cleaned = clean(pair.disfluent)
+        cleanTotal = cleanTotal + Scoring.wordErrorRate(
+            reference: pair.fluent,
+            hypothesis: cleaned
+        )
+        let started = Date()
+        let scoredText = scored(pair.disfluent)
+        scorerSeconds += Date().timeIntervalSince(started)
+        scorerTotal = scorerTotal + Scoring.wordErrorRate(
+            reference: pair.fluent,
+            hypothesis: scoredText
+        )
+        oracleTotal = oracleTotal + Scoring.wordErrorRate(
+            reference: pair.fluent,
+            hypothesis: RefineLab.oracle(
+                clean(pair.disfluent),
+                reference: pair.fluent
+            )
+        )
+        // The fluent side needs no editing, so any change to it is damage —
+        // but only if it changed the words. Recapitalizing a corpus sentence
+        // that happens to start lowercase is the feature working, not damage,
+        // and counting it as damage would condemn correct behaviour.
+        let cleanedFluent = clean(pair.fluent)
+        if cleanedFluent != pair.fluent {
+            if Scoring.normalize(cleanedFluent)
+                == Scoring.normalize(pair.fluent) {
+                cleanCosmetic += 1
+            } else {
+                cleanDamage += 1
+                if cleanExamples.count < 8 {
+                    cleanExamples.append(
+                        "    “\(pair.fluent)”\n      → “\(cleanedFluent)”"
+                    )
+                }
+            }
+        }
+        let scoredFluent = scored(pair.fluent)
+        if scoredFluent != pair.fluent,
+           Scoring.normalize(scoredFluent) != Scoring.normalize(pair.fluent) {
+            scorerDamage += 1
+            if scorerExamples.count < 8 {
+                scorerExamples.append(
+                    "    “\(pair.fluent)”\n      → “\(scoredFluent)”"
+                )
+            }
+        }
+    }
+
+    report()
+    report(
+        "text corpus — \(URL(fileURLWithPath: path).lastPathComponent)"
+            + " (\(pairs.count) human-annotated pairs)"
+    )
+    report("  margin \(margin), radius \(RefineLab.windowRadius)")
+    report("  " + String(repeating: "-", count: 66))
+    func row(_ name: String, _ score: Scoring.Result, _ damage: Int?) {
+        let delta = (score.rate - rawTotal.rate) * 100
+        report(
+            "  "
+                + name.padding(toLength: 22, withPad: " ", startingAt: 0)
+                + score.percentage.leftPadded(to: 7)
+                + String(format: "%+9.1f pts", delta)
+                + (damage.map {
+                    String(format: "   %4d damaged", $0)
+                } ?? "              —")
+        )
+    }
+    row("disfluent input", rawTotal, nil)
+    row("after clean", cleanTotal, cleanDamage)
+    row("after clean + scorer", scorerTotal, scorerDamage)
+    row("oracle (ceiling)", oracleTotal, nil)
+    report()
+    report(
+        String(
+            format: "  scorer cost %.0f ms total, %.1f ms per sentence",
+            scorerSeconds * 1_000,
+            scorerSeconds * 1_000 / Double(pairs.count)
+        )
+    )
+    report(
+        "  \(cleanCosmetic) fluent sentences recased or respaced only"
+            + " (not damage)"
+    )
+    if !cleanExamples.isEmpty {
+        report()
+        report("  clean altered words in already-fluent text:")
+        cleanExamples.forEach { report($0) }
+    }
+    if !scorerExamples.isEmpty {
+        report()
+        report("  scorer altered words in already-fluent text:")
+        scorerExamples.forEach { report($0) }
+    }
+    report()
+    return true
+}
+
 private func measure() -> Bool {
     let configuration: ZenVoiceConfiguration
     do {
@@ -1299,6 +1477,8 @@ if flag("ZENVOICE_REFINE_PROBE") {
     outcome = probeScorerLatency()
 } else if flag("ZENVOICE_REFINE_SWEEP") {
     outcome = sweepScorer()
+} else if let corpus = environment["ZENVOICE_REFINE_TEXTEVAL"] {
+    outcome = evaluateTextCorpus(path: corpus)
 } else {
     outcome = measure()
 }
