@@ -59,6 +59,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.toolbarStyle = .unified
         window.backgroundColor = .windowBackgroundColor
         window.minSize = NSSize(width: 900, height: 640)
+        // Menu-bar apps don't get full screen for free: the green zoom
+        // button only offers it when the window opts in explicitly.
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentViewController = NSHostingController(
@@ -86,6 +89,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         modelManagerViewModel.refresh()
         refinementModelManagerViewModel.refresh()
         applicationProfileViewModel.refresh()
+        // Accessory apps can't enter native full screen; become a regular
+        // app while the window is open so the green button works.
+        NSApp.setActivationPolicy(.regular)
         if !hasCenteredWindow {
             window.center()
             hasCenteredWindow = true
@@ -96,9 +102,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func hide() {
         window.orderOut(nil)
+        NSApp.setActivationPolicy(.accessory)
     }
 
     func windowWillClose(_ notification: Notification) {
         viewModel.cancelShortcutCapture()
+        // Back to a pure menu-bar presence once the window is gone.
+        NSApp.setActivationPolicy(.accessory)
     }
 }

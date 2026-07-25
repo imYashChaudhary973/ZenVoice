@@ -143,6 +143,39 @@ public enum VerifiedModelCatalog {
             size: 147_951_465
         ),
         model(
+            id: "whisper-small-en",
+            name: "Whisper Small",
+            filename: "ggml-small.en.bin",
+            tier: .balanced,
+            language: .english,
+            sha256:
+                "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d",
+            size: 487_614_201
+        ),
+        model(
+            id: "whisper-small-multilingual",
+            name: "Whisper Small",
+            filename: "ggml-small.bin",
+            tier: .balanced,
+            language: .multilingual,
+            sha256:
+                "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+            size: 487_601_967
+        ),
+        // Matches Whisper Medium's accuracy at roughly a third of the download,
+        // and handles every language rather than English alone. The default
+        // recommendation on Apple Silicon.
+        model(
+            id: "whisper-large-v3-turbo",
+            name: "Whisper Turbo",
+            filename: "ggml-large-v3-turbo-q5_0.bin",
+            tier: .highAccuracy,
+            language: .multilingual,
+            sha256:
+                "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
+            size: 574_041_195
+        ),
+        model(
             id: "whisper-medium-en",
             name: "Whisper Medium",
             filename: "ggml-medium.en.bin",

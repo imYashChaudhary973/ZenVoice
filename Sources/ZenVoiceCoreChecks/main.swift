@@ -18,6 +18,41 @@ let checks: [(name: String, actual: String, expected: String)] = [
         "removes only a leading filler",
         cleaner.clean("um, this is, um, still meaningful."),
         "This is, um, still meaningful."
+    ),
+    (
+        "drops a parenthesised non-speech annotation",
+        cleaner.clean("(static)"),
+        ""
+    ),
+    (
+        "drops multiple non-speech annotations",
+        cleaner.clean("(wind blowing) (computer speaking)"),
+        ""
+    ),
+    (
+        "keeps dictated asides in parentheses",
+        cleaner.clean("the total (before tax) is fifty"),
+        "The total (before tax) is fifty"
+    ),
+    (
+        "drops a bare filler token",
+        cleaner.clean("you"),
+        ""
+    ),
+    (
+        "drops a bare filler token with punctuation",
+        cleaner.clean("You."),
+        ""
+    ),
+    (
+        "keeps you inside real speech",
+        cleaner.clean("can you review this"),
+        "Can you review this"
+    ),
+    (
+        "keeps a standalone thank you",
+        cleaner.clean("Thank you."),
+        "Thank you."
     )
 ]
 
@@ -494,6 +529,34 @@ guard !unknownModifier.isValid else {
     exit(1)
 }
 
+// Option-only shortcuts must stay valid. A previous revision rejected them,
+// believing the text input system swallowed them in apps with a focused text
+// field; a registered ⌥Space hot key was measured being delivered in both a
+// browser and a terminal. Rejecting them invalidated shortcuts already in use,
+// which were then silently swapped for the default. Guard against a
+// reintroduction.
+for optionOnly in [
+    HotKeyConfiguration(keyCode: 49, modifiers: [.option], keyLabel: "Space"),
+    HotKeyConfiguration(keyCode: 46, modifiers: [.option], keyLabel: "M"),
+    HotKeyConfiguration(
+        keyCode: 35,
+        modifiers: [.option, .shift],
+        keyLabel: "P"
+    ),
+    HotKeyConfiguration(keyCode: 49, modifiers: [.shift], keyLabel: "Space")
+] {
+    guard optionOnly.isValid else {
+        FileHandle.standardError.write(
+            Data(
+                "FAIL: shortcut \(optionOnly.displayName) must remain valid\n".utf8
+            )
+        )
+        exit(1)
+    }
+}
+
+print("ZenVoiceCoreChecks: option-only shortcuts remain valid")
+
 let mismatchedLabel = HotKeyConfiguration(
     keyCode: 49,
     modifiers: [.control],
@@ -522,7 +585,7 @@ for choice in HoldKeyChoice.allCases {
 print("ZenVoiceCoreChecks: private and hold controls passed")
 
 let verifiedModels = VerifiedModelCatalog.models
-guard verifiedModels.count == 6,
+guard verifiedModels.count == 9,
       Set(verifiedModels.map(\.id)).count == verifiedModels.count,
       Set(verifiedModels.map(\.filename)).count == verifiedModels.count,
       Set(verifiedModels.map(\.tier))
@@ -632,17 +695,118 @@ let twentyFourGigabyteProfile = HardwareProfile(
     architecture: "Apple Silicon",
     availableModelStorageBytes: 10_000_000_000
 )
-guard ModelRecommendationEngine.recommendedTier(
+// Apple Silicon transcribes on the GPU, so every Metal-capable Mac should be
+// steered to Turbo rather than being downgraded on memory alone. Recommending
+// by memory sent 16 GB Macs to Whisper Base, which loses roughly one word in
+// three at speed.
+guard ModelRecommendationEngine.recommendedModelID(
     for: eightGigabyteProfile
-) == .fast,
+) == "whisper-large-v3-turbo",
+ModelRecommendationEngine.recommendedModelID(
+    for: sixteenGigabyteProfile
+) == "whisper-large-v3-turbo",
+ModelRecommendationEngine.recommendedModelID(
+    for: twentyFourGigabyteProfile
+) == "whisper-large-v3-turbo",
 ModelRecommendationEngine.recommendedTier(
     for: sixteenGigabyteProfile
-) == .balanced,
-ModelRecommendationEngine.recommendedTier(
-    for: twentyFourGigabyteProfile
 ) == .highAccuracy else {
     FileHandle.standardError.write(
-        Data("FAIL: hardware model tiers are incorrect\n".utf8)
+        Data("FAIL: hardware model recommendation is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// Without a Metal path, model size turns straight into waiting, so the
+// recommendation has to come down.
+let intelProfile = HardwareProfile(
+    physicalMemoryBytes: 16 * 1_073_741_824,
+    logicalCoreCount: 8,
+    architecture: "Intel",
+    availableModelStorageBytes: 10_000_000_000
+)
+let smallIntelProfile = HardwareProfile(
+    physicalMemoryBytes: 8 * 1_073_741_824,
+    logicalCoreCount: 4,
+    architecture: "Intel",
+    availableModelStorageBytes: 10_000_000_000
+)
+guard ModelRecommendationEngine.recommendedModelID(
+    for: intelProfile
+) == "whisper-small-multilingual",
+ModelRecommendationEngine.recommendedModelID(
+    for: smallIntelProfile
+) == "whisper-tiny-multilingual",
+!intelProfile.hasGPUAcceleratedTranscription,
+twentyFourGigabyteProfile.hasGPUAcceleratedTranscription else {
+    FileHandle.standardError.write(
+        Data("FAIL: non-Metal model recommendation is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// Speech detection has to work relative to the room, not against a fixed level.
+// A quiet microphone puts ordinary speech below the old absolute threshold, and
+// the symptom was silent: live preview simply never appeared.
+var quietRoom = SpeechActivityDetector()
+for _ in 0..<200 {
+    // Room tone at -62 dBFS, well below the old -38 dBFS cutoff.
+    _ = quietRoom.isSpeech(averageDecibels: -62, peakDecibels: -55)
+}
+guard quietRoom.noiseFloor < -55,
+      // Speech 17 dB above that floor must register even though it would have
+      // failed the old fixed threshold outright.
+      quietRoom.isSpeech(averageDecibels: -45, peakDecibels: -35),
+      // Room tone itself must not.
+      !quietRoom.isSpeech(averageDecibels: -61, peakDecibels: -54) else {
+    FileHandle.standardError.write(
+        Data("FAIL: quiet-room speech detection is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// The floor must not run away upward in a loud room, or nothing registers.
+var loudRoom = SpeechActivityDetector()
+for _ in 0..<500 {
+    _ = loudRoom.isSpeech(averageDecibels: -20, peakDecibels: -10)
+}
+guard loudRoom.noiseFloor <= NoiseFloorEstimator.maximumFloorDecibels,
+      loudRoom.isSpeech(averageDecibels: -5, peakDecibels: 0) else {
+    FileHandle.standardError.write(
+        Data("FAIL: loud-room speech detection is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// Beam search is worth its extra decode time on the small, uncertain models and
+// measured as pure cost on the large ones, so the gate must fall between Base
+// and Small.
+guard WhisperDecoding.usesBeamSearch(modelFileSizeBytes: 77_704_715),
+WhisperDecoding.usesBeamSearch(modelFileSizeBytes: 147_964_211),
+!WhisperDecoding.usesBeamSearch(modelFileSizeBytes: 487_614_201),
+!WhisperDecoding.usesBeamSearch(modelFileSizeBytes: 574_041_195),
+!WhisperDecoding.usesBeamSearch(modelFileSizeBytes: 1_533_774_781),
+!WhisperDecoding.usesBeamSearch(modelFileSizeBytes: 0) else {
+    FileHandle.standardError.write(
+        Data("FAIL: beam search gating is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// Exactly one model may carry the recommendation badge, otherwise the UI is
+// telling the user two different things at once.
+let recommendedCount = VerifiedModelCatalog.models.filter {
+    ModelRecommendationEngine.recommendation(
+        for: $0,
+        profile: twentyFourGigabyteProfile
+    ).level == .recommended
+}.count
+guard recommendedCount == 1 else {
+    FileHandle.standardError.write(
+        Data(
+            "FAIL: \(recommendedCount) models marked recommended, expected 1\n"
+                .utf8
+        )
     )
     exit(1)
 }
@@ -897,6 +1061,32 @@ guard StablePauseDetector.isStable(
 ) else {
     FileHandle.standardError.write(
         Data("FAIL: stable pause thresholds are incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// A finished dictation must be decoded from the whole recording. Preview
+// fragments are only allowed to stand in when some of them have already been
+// inserted into the target app, because at that point the text on screen is a
+// fact that has to be reconciled rather than replaced.
+guard DictationCompletionStrategy.resolve(
+    usesLivePreview: false,
+    hasInsertedPreviewText: false
+) == .wholeRecording,
+DictationCompletionStrategy.resolve(
+    usesLivePreview: true,
+    hasInsertedPreviewText: false
+) == .wholeRecording,
+DictationCompletionStrategy.resolve(
+    usesLivePreview: true,
+    hasInsertedPreviewText: true
+) == .segments,
+DictationCompletionStrategy.resolve(
+    usesLivePreview: false,
+    hasInsertedPreviewText: true
+) == .wholeRecording else {
+    FileHandle.standardError.write(
+        Data("FAIL: dictation completion strategy is incorrect\n".utf8)
     )
     exit(1)
 }

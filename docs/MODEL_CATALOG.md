@@ -28,12 +28,35 @@ Python objects, or install repository scripts.
 | Fast | Multilingual | `ggml-tiny.bin` | 77,691,713 B | `be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21` |
 | Balanced | English | `ggml-base.en.bin` | 147,964,211 B | `a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002` |
 | Balanced | Multilingual | `ggml-base.bin` | 147,951,465 B | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` |
+| Balanced | English | `ggml-small.en.bin` | 487,614,201 B | `c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d` |
+| Balanced | Multilingual | `ggml-small.bin` | 487,601,967 B | `1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b` |
+| High Accuracy | Multilingual | `ggml-large-v3-turbo-q5_0.bin` | 574,041,195 B | `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2` |
 | High Accuracy | English | `ggml-medium.en.bin` | 1,533,774,781 B | `cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356` |
 | High Accuracy | Multilingual | `ggml-medium.bin` | 1,533,763,059 B | `6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208` |
 
 The catalogue metadata was verified against the official Hugging Face API on
-2026-07-23. Any model revision or file replacement requires a new review and
-new checksum; existing entries must not silently follow a moving branch.
+2026-07-25 at the pinned revision. Any model revision or file replacement
+requires a new review and new checksum; existing entries must not silently
+follow a moving branch.
+
+## Which model gets recommended
+
+`ModelRecommendationEngine.recommendedModelID(for:)` names exactly one model per
+Mac, and only that model carries the "Recommended" badge.
+
+| Mac | Recommendation | Why |
+| --- | --- | --- |
+| Apple Silicon, ≥ 8 GB | Whisper Turbo | Matches Whisper Medium's accuracy at about a third of the download, and is multilingual |
+| Apple Silicon, < 8 GB | Whisper Small (multilingual) | Keeps memory pressure down without falling back to Base |
+| Intel, ≥ 16 GB | Whisper Small (multilingual) | No Metal path, so size turns directly into waiting |
+| Intel, < 16 GB | Whisper Tiny (multilingual) | Responsiveness has to win |
+
+This replaced a rule that picked a tier from installed memory alone, which sent
+capable 16 GB Apple Silicon Macs to Whisper Base — measured at roughly one word
+in three wrong when the speaker is fast. Memory says nothing about whether a Mac
+can transcribe quickly; the presence of a Metal path does. See
+[ACCURACY_HARNESS.md](ACCURACY_HARNESS.md) for how the underlying numbers are
+produced.
 
 ## M14 refinement catalogue
 

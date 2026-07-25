@@ -29,6 +29,29 @@ public struct ZenVoiceConfiguration {
             ?? modelURL.deletingPathExtension().lastPathComponent
     }
 
+    /// Size of the selected model on disk, preferring the catalogue's reviewed
+    /// figure and falling back to the file itself for a legacy or overridden
+    /// model.
+    public var modelFileSizeBytes: Int64 {
+        if let model = VerifiedModelCatalog.model(
+            filename: modelURL.lastPathComponent
+        ) {
+            return model.fileSizeBytes
+        }
+        let attributes = try? FileManager.default.attributesOfItem(
+            atPath: modelURL.path(percentEncoded: false)
+        )
+        return (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    /// Smaller models are uncertain enough that exploring alternatives finds a
+    /// better transcript; larger ones are not. See ``WhisperDecoding``.
+    public var usesBeamSearchDecoding: Bool {
+        WhisperDecoding.usesBeamSearch(
+            modelFileSizeBytes: modelFileSizeBytes
+        )
+    }
+
     public var modelLanguageCapability: ModelLanguageCapability {
         VerifiedModelCatalog.model(
             filename: modelURL.lastPathComponent

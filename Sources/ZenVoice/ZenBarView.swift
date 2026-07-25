@@ -79,10 +79,10 @@ struct ZenBarView: View {
                 Button(action: finishRecording) {
                     ZStack {
                         Circle()
-                            .fill(Color.white)
+                            .fill(ZenDesign.Primitive.gold300)
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .black))
-                            .foregroundStyle(Color.black.opacity(0.82))
+                            .foregroundStyle(ZenDesign.Primitive.ink950)
                     }
                     .frame(width: 20, height: 20)
                 }
@@ -114,7 +114,7 @@ struct ZenBarView: View {
         case .success:
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color(red: 0.40, green: 0.88, blue: 0.55))
+                    .foregroundStyle(ZenDesign.Primitive.green400)
                 Text("Done")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
@@ -127,7 +127,7 @@ struct ZenBarView: View {
             Button(action: toggleRecording) {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundStyle(Color(red: 1.0, green: 0.43, blue: 0.43))
+                        .foregroundStyle(ZenDesign.Primitive.red400)
                     Text("Try again")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
@@ -163,7 +163,7 @@ struct ZenBarView: View {
 
     private var barBackground: some View {
         Capsule()
-            .fill(Color(red: 0.045, green: 0.048, blue: 0.058).opacity(0.98))
+            .fill(ZenDesign.Primitive.ink950.opacity(0.97))
             .overlay {
                 Capsule()
                     .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.75)

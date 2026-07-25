@@ -54,6 +54,9 @@ final class GlobalHotKey {
                     nil,
                     &deliveredID
                 )
+                // Every GlobalHotKey installs a handler on the same dispatcher
+                // target, so each one is offered every hot key event and has
+                // to recognise its own by identifier.
                 guard readStatus == noErr,
                       deliveredID.signature == hotKey.hotKeyID.signature,
                       deliveredID.id == hotKey.hotKeyID.id else {

@@ -1,18 +1,19 @@
 import Foundation
 import ZenVoiceCore
-import ZenVoiceRefinementRuntime
 
-final class LocalRefinementCoordinator: @unchecked Sendable {
+public final class LocalRefinementCoordinator: @unchecked Sendable {
+    public init() {}
+
     private let lock = NSLock()
     private var refiner: LocalTextRefiner?
 
-    func update(modelURL: URL?) {
+    public func update(modelURL: URL?) {
         lock.withLock {
             refiner = modelURL.map(LocalTextRefiner.init(modelURL:))
         }
     }
 
-    func refine(
+    public func refine(
         _ transcript: String,
         mode: InstantRefineMode,
         languageCode: String = "en",

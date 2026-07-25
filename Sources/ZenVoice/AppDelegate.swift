@@ -3,8 +3,38 @@ import AVFoundation
 import Combine
 import Foundation
 import ZenVoiceCore
+import ZenVoiceRefinementRuntime
 import ZenVoiceRuntime
 import ZenVoiceStorage
+
+/// Live preview text held back in case the whole-recording decode fails.
+///
+/// The preview is built from fragments and is less accurate, so it is only ever
+/// used when the single-pass decode produced nothing at all.
+private struct LivePreviewFallback {
+    let rawTranscript: String
+    let finalTranscript: String
+    let correctionCount: Int
+    let processingDurationSeconds: TimeInterval
+    let correctionUsages: [CorrectionUsage]
+
+    func processed(modelID: String) -> ProcessedTranscription? {
+        guard !finalTranscript.isEmpty else {
+            return nil
+        }
+        return ProcessedTranscription(
+            result: TranscriptionResult(
+                rawTranscript: rawTranscript,
+                finalTranscript: finalTranscript,
+                correctionCount: correctionCount,
+                isPartial: true,
+                modelID: modelID,
+                processingDurationSeconds: processingDurationSeconds
+            ),
+            correctionUsages: correctionUsages
+        )
+    }
+}
 
 private struct ProcessedTranscription {
     let result: TranscriptionResult
@@ -460,6 +490,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 showError(error.localizedDescription)
             }
         }
+
+        announceReplacedShortcutsIfNeeded()
+    }
+
+    /// A shortcut that had to be replaced on load is worth saying out loud. The
+    /// alternative is the user pressing keys that quietly do nothing while the
+    /// settings screen appears to agree with them.
+    private func announceReplacedShortcutsIfNeeded() {
+        let replaced = HotKeyPreferences.replacedShortcuts
+        guard !replaced.isEmpty else {
+            return
+        }
+
+        showError("Shortcut changed: \(replaced.joined(separator: ", "))")
     }
 
     private func configureHoldToDictate() {
@@ -970,7 +1014,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let recordedAudio = recorder.stop(
             preserveLiveSamples: usesLivePreview
         )
-        let remainingSamples = usesLivePreview
+
+        // Live preview text is exactly that — a preview. Whisper is markedly
+        // more accurate when it hears a whole utterance than when it is fed the
+        // fragments the pause detector cut, because words either side of a cut
+        // lose their context. So unless preview text has already been inserted
+        // into the target app, the committed transcript comes from decoding the
+        // complete recording in one pass. ZenVoiceAccuracyChecks measures the
+        // gap the two strategies produce.
+        let completesFromSegments = DictationCompletionStrategy.resolve(
+            usesLivePreview: usesLivePreview,
+            hasInsertedPreviewText: !liveInsertedStableTranscript.isEmpty
+        ) == .segments
+
+        let remainingSamples = completesFromSegments
             ? recorder.samples(after: liveCommittedSampleIndex)
             : []
         recorder.releaseCapturedSamples()
@@ -1006,85 +1063,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             learningPreferences.appliesCorrectionRules
         let behavior = activeDictationBehavior
 
-        if usesLivePreview {
+        if completesFromSegments {
+            // Preview text is already on screen, but it was decoded from
+            // fragments and the whole recording decodes more accurately. Try to
+            // verify and swap what was inserted for the better transcript; only
+            // if that cannot be done safely does the fragment path stand.
+            let insertedText = liveInsertedStableTranscript
             transcriptionQueue.async { [weak self] in
-                do {
-                    let processed: ProcessedTranscription?
-                    if remainingSamples.count >= 1_600 {
-                        let result = try transcriber.transcribe(
-                            samples: remainingSamples,
-                            languageProfile:
-                                behavior.languageProfile,
-                            initialPrompt: behavior.context
-                        )
-                        let refinement =
-                            self?.refinementCoordinator.refine(
-                                result.finalTranscript,
-                                mode: behavior.refinementMode,
-                                languageCode:
-                                    behavior.languageProfile
-                                        .inputLanguageCode,
-                                context: behavior.context,
-                                voiceCommandsEnabled:
-                                    behavior.voiceCommandsEnabled
-                            ) ?? InstantRefineEngine().refine(
-                                result.finalTranscript,
-                                mode: .clean
-                            )
-                        processed = ProcessedTranscription(
-                            result: result,
-                            refinement: refinement,
-                            correctionApplication:
-                                appliesCorrectionRules
-                                    ? try? correctionVault?
-                                        .applyCorrections(
-                                            to: refinement.text
-                                        )
-                                    : nil
-                        )
-                    } else {
-                        processed = nil
-                    }
-                    DispatchQueue.main.async {
-                        self?.completeLiveRecording(
-                            remaining: processed,
-                            recordedAudio: recordedAudio,
-                            historyID: historyID,
-                            remainderWasExpected:
-                                remainingSamples.count >= 1_600
-                        )
-                    }
-                } catch WhisperTranscriber.TranscriptionError.noSpeech {
-                    DispatchQueue.main.async {
-                        self?.completeLiveRecording(
-                            remaining: nil,
-                            recordedAudio: recordedAudio,
-                            historyID: historyID,
-                            remainderWasExpected: false
-                        )
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        guard let self else { return }
-                        if self.liveStableFinalTranscript.isEmpty {
-                            self.resetLivePreviewSession()
-                            self.handleTranscriptionFailure(
-                                error,
-                                recordedAudio: recordedAudio,
-                                historyID: historyID
-                            )
-                        } else {
-                            self.completeLiveRecording(
-                                remaining: nil,
+                guard let upgrade = self?.wholeRecordingUpgrade(
+                    transcriber: transcriber,
+                    recordedAudio: recordedAudio,
+                    behavior: behavior,
+                    correctionVault: correctionVault,
+                    appliesCorrectionRules: appliesCorrectionRules
+                ) else {
+                    self?.completeFromSegments(
+                        transcriber: transcriber,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID,
+                        behavior: behavior,
+                        remainingSamples: remainingSamples,
+                        correctionVault: correctionVault,
+                        appliesCorrectionRules: appliesCorrectionRules
+                    )
+                    return
+                }
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    let replaced = self.inserter.replaceTextBeforeCaret(
+                        insertedText + " ",
+                        with: upgrade.result.finalTranscript + " "
+                    )
+                    guard replaced == .replaced else {
+                        self.transcriptionQueue.async {
+                            self.completeFromSegments(
+                                transcriber: transcriber,
                                 recordedAudio: recordedAudio,
                                 historyID: historyID,
-                                remainderWasExpected: true
+                                behavior: behavior,
+                                remainingSamples: remainingSamples,
+                                correctionVault: correctionVault,
+                                appliesCorrectionRules: appliesCorrectionRules
                             )
                         }
+                        return
                     }
+                    self.resetLivePreviewSession()
+                    self.state.liveTranscriptPreview = ""
+                    // The text is already in place, so there is nothing left
+                    // to insert.
+                    self.complete(
+                        processed: upgrade,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID,
+                        insertionText: "",
+                        hasPriorInsertion: true
+                    )
                 }
             }
             return
+        }
+
+        // The single-pass decode supersedes any preview text, but keep that
+        // text as a fallback: if decoding the whole recording finds no speech
+        // we would rather hand over an imperfect preview than lose the
+        // dictation outright.
+        let previewFallback = LivePreviewFallback(
+            rawTranscript: liveStableRawTranscript,
+            finalTranscript: liveStableFinalTranscript,
+            correctionCount: liveStableCorrectionCount,
+            processingDurationSeconds: liveStableProcessingDuration,
+            correctionUsages: liveCorrectionUsages
+        )
+        let previewTargetProcess = liveTargetProcessIdentifier
+        resetLivePreviewSession()
+        state.liveTranscriptPreview = ""
+
+        // Decoding the whole recording is more accurate but takes about a
+        // second, and the user is staring at nothing for all of it. Since the
+        // preview already knows roughly what they said, put that on screen now
+        // and swap in the accurate transcript when it arrives — they get
+        // immediate feedback and the better text.
+        var insertedPreview = ""
+        if !previewFallback.finalTranscript.isEmpty,
+           AXIsProcessTrusted(),
+           NSWorkspace.shared.frontmostApplication?.processIdentifier
+            == previewTargetProcess {
+            let candidate = previewFallback.finalTranscript + " "
+            if case .pasted = inserter.insert(candidate) {
+                insertedPreview = candidate
+                state.phase = .inserting
+            }
         }
 
         transcriptionQueue.async { [weak self] in
@@ -1119,18 +1188,166 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             : nil
                 )
                 DispatchQueue.main.async {
-                    self?.complete(
+                    guard let self else { return }
+                    guard !insertedPreview.isEmpty else {
+                        self.complete(
+                            processed: processed,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID
+                        )
+                        return
+                    }
+                    _ = self.inserter.replaceTextBeforeCaret(
+                        insertedPreview,
+                        with: processed.result.finalTranscript + " "
+                    )
+                    // Whether or not the swap succeeded, preview text is
+                    // already on screen. Inserting again would give the user
+                    // their dictation twice, which is worse than either
+                    // failure on its own — so the accurate transcript is
+                    // recorded in history and nothing further is typed.
+                    self.complete(
                         processed: processed,
                         recordedAudio: recordedAudio,
-                        historyID: historyID
+                        historyID: historyID,
+                        insertionText: "",
+                        hasPriorInsertion: true
                     )
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self?.handleTranscriptionFailure(
+                    guard let self else { return }
+                    guard let recovered = previewFallback.processed(
+                        modelID: transcriber.modelID
+                    ) else {
+                        self.handleTranscriptionFailure(
+                            error,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID
+                        )
+                        return
+                    }
+                    self.complete(
+                        processed: recovered,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID,
+                        insertionText: insertedPreview.isEmpty ? nil : "",
+                        hasPriorInsertion: !insertedPreview.isEmpty
+                    )
+                }
+            }
+        }
+    }
+
+    /// Decodes the complete recording and runs it through refinement and
+    /// personal corrections, or returns nil if it produced nothing usable.
+    ///
+    /// Called off the main thread.
+    private nonisolated func wholeRecordingUpgrade(
+        transcriber: WhisperTranscriber,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        behavior: ActiveDictationBehavior,
+        correctionVault: DictationVault?,
+        appliesCorrectionRules: Bool
+    ) -> ProcessedTranscription? {
+        guard let result = try? transcriber.transcribe(
+            audioURL: recordedAudio.url,
+            languageProfile: behavior.languageProfile,
+            initialPrompt: behavior.context
+        ) else {
+            return nil
+        }
+        let refinement = refinementCoordinator.refine(
+            result.finalTranscript,
+            mode: behavior.refinementMode,
+            languageCode: behavior.languageProfile.inputLanguageCode,
+            context: behavior.context,
+            voiceCommandsEnabled: behavior.voiceCommandsEnabled
+        )
+        return ProcessedTranscription(
+            result: result,
+            refinement: refinement,
+            correctionApplication: appliesCorrectionRules
+                ? try? correctionVault?.applyCorrections(to: refinement.text)
+                : nil
+        )
+    }
+
+    /// Falls back to the original behaviour: transcribe whatever followed the
+    /// last committed phrase and append it to the preview text already on
+    /// screen. Used when the inserted text could not be verified and replaced.
+    ///
+    /// Called off the main thread.
+    private nonisolated func completeFromSegments(
+        transcriber: WhisperTranscriber,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        historyID: UUID?,
+        behavior: ActiveDictationBehavior,
+        remainingSamples: [Float],
+        correctionVault: DictationVault?,
+        appliesCorrectionRules: Bool
+    ) {
+        let expectsRemainder = remainingSamples.count >= 1_600
+        do {
+            let processed: ProcessedTranscription?
+            if expectsRemainder {
+                let result = try transcriber.transcribe(
+                    samples: remainingSamples,
+                    languageProfile: behavior.languageProfile,
+                    initialPrompt: behavior.context
+                )
+                let refinement = refinementCoordinator.refine(
+                    result.finalTranscript,
+                    mode: behavior.refinementMode,
+                    languageCode: behavior.languageProfile.inputLanguageCode,
+                    context: behavior.context,
+                    voiceCommandsEnabled: behavior.voiceCommandsEnabled
+                )
+                processed = ProcessedTranscription(
+                    result: result,
+                    refinement: refinement,
+                    correctionApplication: appliesCorrectionRules
+                        ? try? correctionVault?.applyCorrections(
+                            to: refinement.text
+                        )
+                        : nil
+                )
+            } else {
+                processed = nil
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.completeLiveRecording(
+                    remaining: processed,
+                    recordedAudio: recordedAudio,
+                    historyID: historyID,
+                    remainderWasExpected: expectsRemainder
+                )
+            }
+        } catch WhisperTranscriber.TranscriptionError.noSpeech {
+            DispatchQueue.main.async { [weak self] in
+                self?.completeLiveRecording(
+                    remaining: nil,
+                    recordedAudio: recordedAudio,
+                    historyID: historyID,
+                    remainderWasExpected: false
+                )
+            }
+        } catch {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if self.liveStableFinalTranscript.isEmpty {
+                    self.resetLivePreviewSession()
+                    self.handleTranscriptionFailure(
                         error,
                         recordedAudio: recordedAudio,
                         historyID: historyID
+                    )
+                } else {
+                    self.completeLiveRecording(
+                        remaining: nil,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID,
+                        remainderWasExpected: true
                     )
                 }
             }

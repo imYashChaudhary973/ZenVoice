@@ -48,6 +48,14 @@ public struct HardwareProfile: Equatable, Sendable {
         max(1, Int(physicalMemoryBytes / 1_073_741_824))
     }
 
+    /// Apple Silicon decodes on the GPU through Metal, so a larger model costs
+    /// far less time than the same model does on Intel. Model choice has to
+    /// account for this — memory alone says nothing about how fast a Mac can
+    /// actually transcribe.
+    public var hasGPUAcceleratedTranscription: Bool {
+        architecture == "Apple Silicon"
+    }
+
     public var summary: String {
         "\(memoryGigabytes) GB memory • \(logicalCoreCount) cores • \(architecture)"
     }
@@ -77,17 +85,39 @@ public struct ModelRecommendation: Equatable, Sendable {
 }
 
 public enum ModelRecommendationEngine {
+    /// The one model this Mac should use.
+    ///
+    /// Recommending by memory alone sent capable Apple Silicon Macs to Whisper
+    /// Base, which loses roughly one word in three when the user speaks
+    /// quickly. Turbo matches Whisper Medium's accuracy at about a third of the
+    /// download, is multilingual, and decodes on the GPU — so on any Mac with a
+    /// Metal path it is the right default regardless of installed memory.
+    public static func recommendedModelID(
+        for profile: HardwareProfile
+    ) -> String {
+        guard profile.hasGPUAcceleratedTranscription else {
+            // No Metal path: model size translates directly into waiting.
+            return profile.memoryGigabytes >= 16
+                ? "whisper-small-multilingual"
+                : "whisper-tiny-multilingual"
+        }
+        return profile.memoryGigabytes >= 8
+            ? "whisper-large-v3-turbo"
+            : "whisper-small-multilingual"
+    }
+
+    public static func recommendedModel(
+        for profile: HardwareProfile
+    ) -> VerifiedModel? {
+        VerifiedModelCatalog.model(id: recommendedModelID(for: profile))
+    }
+
+    /// The tier containing the recommended model, so tier-level UI stays
+    /// consistent with the model-level recommendation.
     public static func recommendedTier(
         for profile: HardwareProfile
     ) -> ModelPerformanceTier {
-        switch profile.memoryGigabytes {
-        case ..<12:
-            .fast
-        case 12..<20:
-            .balanced
-        default:
-            .highAccuracy
-        }
+        recommendedModel(for: profile)?.tier ?? .balanced
     }
 
     public static func recommendation(
@@ -107,21 +137,34 @@ public enum ModelRecommendationEngine {
             )
         }
 
-        let recommendedTier = recommendedTier(for: profile)
-        if model.tier == recommendedTier {
+        if model.id == recommendedModelID(for: profile) {
             return ModelRecommendation(
                 level: .recommended,
                 title: "Recommended",
-                rationale:
-                    "\(model.tier.displayName) fits this Mac's \(profile.memoryGigabytes) GB memory profile."
+                rationale: profile.hasGPUAcceleratedTranscription
+                    ? "Best accuracy for its size on this Mac's GPU, and it handles every language."
+                    : "The best accuracy this Mac can transcribe without a noticeable wait."
             )
         }
-        if model.tier == .highAccuracy, profile.memoryGigabytes < 16 {
+
+        // Large downloads that are not the recommendation are usually a worse
+        // trade than the recommendation itself: same accuracy, several times
+        // the disk.
+        if model.fileSizeBytes > 1_000_000_000 {
+            return ModelRecommendation(
+                level: .caution,
+                title: "Larger than needed",
+                rationale:
+                    "Whisper Turbo reaches the same accuracy in a fraction of the space; this remains available if you prefer it."
+            )
+        }
+        if model.tier == .highAccuracy,
+           !profile.hasGPUAcceleratedTranscription {
             return ModelRecommendation(
                 level: .caution,
                 title: "May feel slow",
                 rationale:
-                    "High Accuracy is best with at least 16 GB memory; manual override remains available."
+                    "High Accuracy without GPU transcription can lag behind speech; manual override remains available."
             )
         }
         return ModelRecommendation(
