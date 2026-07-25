@@ -414,6 +414,50 @@ guard InstantRefinePreferences.load(defaults: refineDefaults)
 
 print("ZenVoiceCoreChecks: Instant Refine passed")
 
+// A Hinglish user must be recommended the specialist, whatever their hardware.
+//
+// Recommending on hardware alone sent them to Whisper Turbo, which preserves
+// none of the English half of a code-switched sentence and, measured on real
+// recordings, does not terminate on it at all — 73 seconds of audio ran for
+// fifteen minutes before being abandoned.
+let capableMac = HardwareProfile(
+    physicalMemoryBytes: 32 * 1_073_741_824,
+    logicalCoreCount: 12,
+    architecture: "Apple Silicon",
+    availableModelStorageBytes: 200 * 1_073_741_824
+)
+guard ModelRecommendationEngine.recommendedModelID(
+        for: capableMac,
+        language: .hinglish
+      ) == "hindi2hinglish-apex",
+      ModelRecommendationEngine.recommendedModelID(
+        for: capableMac,
+        language: .english
+      ) == "whisper-large-v3-turbo" else {
+    FileHandle.standardError.write(
+        Data("FAIL: Hinglish was not recommended its specialist\n".utf8)
+    )
+    exit(1)
+}
+
+// And a general multilingual model must not be offered for Hinglish at all.
+guard !LanguageProfile.hinglish.isCompatible(with: .multilingual),
+      LanguageProfile.hinglish.isCompatible(with: .hinglish),
+      // The reverse still holds: the specialist is not a general model.
+      !LanguageProfile.english.isCompatible(with: .hinglish),
+      LanguageProfile.english.isCompatible(with: .multilingual),
+      // A non-English language that is not Hinglish still uses a general
+      // multilingual model, which is the only option it has.
+      LanguageProfile(inputLanguageCode: "es", outputMode: .spokenLanguage)
+        .isCompatible(with: .multilingual) else {
+    FileHandle.standardError.write(
+        Data("FAIL: language/model compatibility is wrong\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: language-aware model recommendation passed")
+
 // Paragraph structure from the speaker's pauses.
 //
 // The silences are supplied rather than measured here, because the point
@@ -1151,7 +1195,12 @@ LanguagePreferences.save(.hinglish, defaults: languageDefaults)
 guard LanguagePreferences.load(defaults: languageDefaults) == .hinglish,
       LanguageProfile.english.isCompatible(with: .english),
       !LanguageProfile.hinglish.isCompatible(with: .english),
-      LanguageProfile.hinglish.isCompatible(with: .multilingual),
+      // A general multilingual model is no longer offered for Hinglish. It
+      // used to be, on the theory that it worked badly rather than not at
+      // all; measured on 30 real code-switched recordings it preserves 0 of
+      // 31 English words and does not terminate — 73 seconds of audio ran for
+      // fifteen minutes under Whisper Turbo before being abandoned.
+      !LanguageProfile.hinglish.isCompatible(with: .multilingual),
       // A Hinglish model is a specialist. It serves the Hinglish profile and
       // nothing else — measured at 20.9% word error rate on English dictation
       // against Whisper Medium's 2.0%, so letting it near another profile

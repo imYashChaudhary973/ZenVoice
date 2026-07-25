@@ -85,13 +85,21 @@ Every installed model, on the same 24 real English utterances. Decode is
 expressed as a multiple of the audio's own length, because that is what
 decides usability: a dictation finishes in its duration divided by this.
 
-| tier | model | WER | decode |
-| --- | --- | --- | --- |
-| tiny | `tiny.en` | 5.4% | 100x real time |
-| base | `base.en` | 4.8% | 63x |
-| medium | `medium.en` | **2.9%** | 10x |
-| tiny | `tiny` (multilingual) | 5.9% | 95x |
-| medium | `medium` (multilingual) | **2.7%** | 9x |
+| tier | model | WER | decode | size |
+| --- | --- | --- | --- | --- |
+| tiny | `tiny.en` | 5.4% | 100x real time | 74 MB |
+| base | `base.en` | 4.8% | 63x | 141 MB |
+| high | **`large-v3-turbo`** | **3.3%** | 9x | **547 MB** |
+| high | `medium.en` | 2.9% | 10x | 1.5 GB |
+| high | `medium` (multilingual) | **2.7%** | 9x | 1.5 GB |
+
+`large-v3-turbo` is the shipped default on any Metal Mac and had never been
+measured. It is 1.5 points better than base for the same speed as medium at a
+third of the size. The code comment claiming it "matches Whisper Medium's
+accuracy" was **not accurate** — medium is 0.6 points better, about a fifth of
+the remaining errors — but at three times the disk for no speed gain, so turbo
+remains the right default. The claim had simply never been through the
+harness.
 
 Three things fall out.
 

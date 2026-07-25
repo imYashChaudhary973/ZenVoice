@@ -88,13 +88,39 @@ public enum ModelRecommendationEngine {
     /// The one model this Mac should use.
     ///
     /// Recommending by memory alone sent capable Apple Silicon Macs to Whisper
-    /// Base, which loses roughly one word in three when the user speaks
-    /// quickly. Turbo matches Whisper Medium's accuracy at about a third of the
-    /// download, is multilingual, and decodes on the GPU — so on any Mac with a
-    /// Metal path it is the right default regardless of installed memory.
+    /// Base. Turbo is multilingual, decodes on the GPU, and costs about a
+    /// third of Medium's download, so on any Mac with a Metal path it is the
+    /// right default.
+    ///
+    /// Measured on 24 real recordings, rather than asserted:
+    ///
+    ///     tiny.en      5.4%   100x real time
+    ///     base.en      4.8%    63x
+    ///     turbo        3.3%     9x    547 MB
+    ///     medium.en    2.9%    10x    1.5 GB
+    ///     medium       2.7%     9x    1.5 GB
+    ///
+    /// An earlier version of this comment claimed Turbo "matches Whisper
+    /// Medium's accuracy". It does not — Medium is 0.6 points better, about a
+    /// fifth of the remaining errors — but it costs three times the disk for
+    /// the same speed, so Turbo remains the better default. The claim was
+    /// simply never measured.
     public static func recommendedModelID(
-        for profile: HardwareProfile
+        for profile: HardwareProfile,
+        language: LanguageProfile = .english
     ) -> String {
+        // Hinglish is decided by the language, not the hardware. Every general
+        // model reaches it by transcribing Devanagari and romanizing, which
+        // destroys the English half of the sentence — measured at 0 of 31
+        // English words preserved, against 82 of 96 for the specialist — and
+        // it does so 30x slower, because general models fail to terminate on
+        // code-switched speech.
+        //
+        // Recommending on hardware alone sent every Hinglish user to a model
+        // that cannot do the one thing they chose the app for.
+        if language == .hinglish {
+            return "hindi2hinglish-apex"
+        }
         guard profile.hasGPUAcceleratedTranscription else {
             // No Metal path: model size translates directly into waiting.
             return profile.memoryGigabytes >= 16
@@ -107,22 +133,27 @@ public enum ModelRecommendationEngine {
     }
 
     public static func recommendedModel(
-        for profile: HardwareProfile
+        for profile: HardwareProfile,
+        language: LanguageProfile = .english
     ) -> VerifiedModel? {
-        VerifiedModelCatalog.model(id: recommendedModelID(for: profile))
+        VerifiedModelCatalog.model(
+            id: recommendedModelID(for: profile, language: language)
+        )
     }
 
     /// The tier containing the recommended model, so tier-level UI stays
     /// consistent with the model-level recommendation.
     public static func recommendedTier(
-        for profile: HardwareProfile
+        for profile: HardwareProfile,
+        language: LanguageProfile = .english
     ) -> ModelPerformanceTier {
-        recommendedModel(for: profile)?.tier ?? .balanced
+        recommendedModel(for: profile, language: language)?.tier ?? .balanced
     }
 
     public static func recommendation(
         for model: VerifiedModel,
-        profile: HardwareProfile
+        profile: HardwareProfile,
+        language: LanguageProfile = .english
     ) -> ModelRecommendation {
         let installationHeadroom = max(
             model.fileSizeBytes * 2,
@@ -137,7 +168,10 @@ public enum ModelRecommendationEngine {
             )
         }
 
-        if model.id == recommendedModelID(for: profile) {
+        if model.id == recommendedModelID(
+            for: profile,
+            language: language
+        ) {
             return ModelRecommendation(
                 level: .recommended,
                 title: "Recommended",

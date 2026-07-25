@@ -1517,7 +1517,8 @@ private struct ModelsScreen: View {
 
     private var recommendedTier: ModelPerformanceTier {
         ModelRecommendationEngine.recommendedTier(
-            for: viewModel.hardwareProfile
+            for: viewModel.hardwareProfile,
+            language: LanguagePreferences.load()
         )
     }
 

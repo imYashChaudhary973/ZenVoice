@@ -439,9 +439,14 @@ final class ModelManagerViewModel: ObservableObject {
     }
 
     func recommendation(for model: VerifiedModel) -> ModelRecommendation {
+        // The user's language decides this as much as their hardware does.
+        // Recommending on hardware alone pointed every Hinglish user at a
+        // general model, which preserves none of the English half of a
+        // code-switched sentence.
         ModelRecommendationEngine.recommendation(
             for: model,
-            profile: hardwareProfile
+            profile: hardwareProfile,
+            language: LanguagePreferences.load()
         )
     }
 

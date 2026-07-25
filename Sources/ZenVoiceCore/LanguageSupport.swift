@@ -162,12 +162,27 @@ public struct LanguageProfile:
         case .english:
             return !requiresMultilingualModel
         case .multilingual:
-            return true
+            // A general multilingual model is not an option for Hinglish. It
+            // was allowed on the theory that it "still works, just badly";
+            // measured against 30 real code-switched recordings it does not
+            // work at all. It preserves **0 of 31** English words, respelling
+            // `document` as डोक्यूमेंट and `tutorial` as टिटूटूरल — every
+            // English word phonetically rewritten in a script the reader did
+            // not ask for. The specialist preserves 82 of 96.
+            //
+            // It is also 30x slower on that audio, because general models fail
+            // to *terminate* on code-switched speech: one clip made Whisper
+            // Tiny emit "We are in India" about a hundred times, and the
+            // decoder then runs to its token limit on every window. Thirty
+            // clips took the specialist 29 seconds and Medium over fifteen
+            // minutes.
+            //
+            // See docs/TRANSCRIPTION_ACCURACY.md.
+            return self != .hinglish
         case .hinglish:
-            // A Hinglish model is a specialist, not a better multilingual one.
-            // General multilingual models stay selectable for Hinglish — that
-            // is the existing behaviour and it still works, just badly — but
-            // the reverse is not true.
+            // The reverse still holds: a Hinglish specialist is not a better
+            // multilingual model. It scores 16.8% word error rate on English
+            // against Medium's 2.0%.
             return self == .hinglish
         }
     }
