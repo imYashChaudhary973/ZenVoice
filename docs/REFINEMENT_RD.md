@@ -818,6 +818,90 @@ answer can be trusted, and it is directly actionable. Single-word repetition
 transcription error rather than a refinement problem — so of the three
 originally dismissed, one comes back as a true defect.
 
+## 8.6 The edit-script redesign: architecture solved, model not
+
+6.4.1 argued the refiner must emit an edit script rather than the transcript.
+Implemented: the model now receives numbered words and replies with the
+indices to delete, under a grammar that admits only `{"drop":[…]}` with
+integers. It is structurally incapable of emitting a word, so invention,
+substitution and reordering are unreachable rather than caught afterwards.
+
+| | full rewrite | drop list |
+| --- | --- | --- |
+| latency, disfluent clips | 235 ms/clip | 194 ms/clip |
+| latency, clean clips (longer) | 539 ms/clip | 194 ms/clip |
+| length coupling | 2.3× | **1.0×** |
+| rejection rate, clean speech | 67% | 33% |
+| clean-speech damage | +0.0 | +0.0 |
+| semantic violations | 0 | 0 |
+| contribution over Clean | 0.0 pts | **0.0 pts** |
+
+Latency is now flat: identical on both cohorts despite clean clips being
+substantially longer. That was the point of 6.4.1 and it worked — the
+five-second deadline no longer lands at ~120 words, because output length
+tracks the number of corrections rather than the text. Rejections halved
+because a malformed reply is now unrepresentable.
+
+**The model still contributes nothing.** Two prompt iterations did not move it:
+
+- Without worked examples, Qwen 1.5B answered `{"drop":[1,2,3,4,5,6]}` for a
+  sentence needing no edits — delete everything. The guard caught it.
+- With five worked examples including a near-verbatim demonstration of the
+  self-correction case, it still failed to find "Tuesday actually Wednesday".
+
+### 8.6.1 Quoting spans was tried, and was worse
+
+If the model cannot map "Tuesday" to its index, the obvious fix is to let it
+quote the phrase instead — copying rather than counting, which small models do
+far better. Implemented and measured, and it must not ship:
+
+| | drop indices | quoted spans |
+| --- | --- | --- |
+| clean speech WER | 4.0% (+0.0) | **4.4% (+0.3)** |
+| clean clips changed | 0 | 1 |
+| rejection rate, clean | 33% | 58% |
+| contribution over Clean | 0.0 pts | 0.0 pts |
+
+Quoting made the model more capable and more dangerous at once. It began
+removing meaningful text from clean speech — the exact failure the "must not
+meddle" cohort exists to catch — while still not finding the self-correction.
+The guard could not stop it: a span quoted verbatim from the transcript,
+containing no negation and no number, is indistinguishable from filler by any
+rule that does not already understand the sentence.
+
+That is the crux, and it generalises past this experiment: **the guard can
+bound how much the model deletes, never whether it should.** Only the model can
+judge that, and Qwen 2.5 1.5B cannot. Reverted to indices, which are strictly
+safer — they cannot express a deletion the guard cannot bound.
+
+### 8.6.2 Where this leaves the local model
+
+Honestly stated: the architectural objections are answered, and the capability
+objection is now the whole problem.
+
+- Latency is flat and 2.8× better on longer dictation.
+- Rejection halved; safety is structural rather than inspected.
+- Contribution remains 0.0 points, on every configuration tried.
+
+The remaining options are all about the model, not the plumbing:
+
+1. **A more capable local model.** Qwen 3 1.7B, Gemma 3 1B, or a LoRA
+   fine-tuned on exactly this drop task. A small model trained on the task
+   will beat a general model several times its size, and generating that
+   training data is tractable.
+2. **Apple Foundation Models** at roughly 3B (6.5). Now more interesting than
+   6.5 concluded, because the edit-script design removed the latency objection
+   that demoted it — its ~30 tokens/second no longer matters when the output
+   is five tokens long. The open question is still whether it supports
+   constrained decoding.
+3. **Retire the mode.** Everything users currently get from refinement comes
+   from the deterministic path, which improved from 7.7 to 15.4 points this
+   session. A 1.1 GB download contributing 0.0 points is difficult to justify
+   in a product that promises local-only simplicity.
+
+Option 3 deserves genuine consideration rather than being the fallback. The
+measured case for the download is currently zero.
+
 ## 9. Suggested sequence
 
 Revised after the section 6–8 research. The ordering changed in two places:

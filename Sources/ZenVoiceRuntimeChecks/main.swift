@@ -91,9 +91,9 @@ do {
             safeBaseline,
             timeLimit: 5
         )
-        guard LocalRefinementGuard.validatedCandidate(
+        guard LocalRefinementGuard.validatedDrops(
             output: localOutput,
-            original: safeBaseline
+            words: LocalRefinementPrompt.words(in: safeBaseline)
         ) != nil else {
             throw NSError(
                 domain: "ZenVoiceRuntimeChecks",

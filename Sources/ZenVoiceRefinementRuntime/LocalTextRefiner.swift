@@ -89,7 +89,10 @@ public final class LocalTextRefiner: @unchecked Sendable {
         _ transcript: String,
         context: String = "",
         timeLimit: TimeInterval = 5,
-        maximumOutputTokens: Int32 = 192
+        // A drop list is a handful of integers, not a restated transcript, so
+        // the budget no longer has to scale with the dictation. 64 tokens
+        // covers far more deletions than the guard's 40% ceiling permits.
+        maximumOutputTokens: Int32 = 64
     ) throws -> String {
         try lock.withLock {
             _ = Self.backendInitialized
@@ -257,14 +260,9 @@ public final class LocalTextRefiner: @unchecked Sendable {
         ) else {
             throw RefinementError.contextCreationFailed
         }
-        let grammar = #"""
-        root ::= "{" ws "\"text\"" ws ":" ws string "}" ws
-        string ::= "\"" ([^"\\\x7F\x00-\x1F] | "\\" (["\\bfnrt] | "u" [0-9a-fA-F]{4}))* "\"" ws
-        ws ::= | " " | "\n" [ \t]{0,20}
-        """#
         guard let grammarSampler = llama_sampler_init_grammar(
             vocab,
-            grammar,
+            LocalRefinementPrompt.dropGrammar,
             "root"
         ) else {
             throw RefinementError.contextCreationFailed

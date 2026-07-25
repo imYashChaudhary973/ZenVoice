@@ -74,11 +74,11 @@ public final class LocalRefinementCoordinator: @unchecked Sendable {
                 safeBaseline,
                 context: context
             )
-            guard let candidate =
-                LocalRefinementGuard.validatedCandidate(
-                    output: output,
-                    original: safeBaseline
-                ) else {
+            let words = LocalRefinementPrompt.words(in: safeBaseline)
+            guard let drops = LocalRefinementGuard.validatedDrops(
+                output: output,
+                words: words
+            ) else {
                 return InstantRefineResult(
                     text: safeBaseline,
                     correctionCount:
@@ -87,12 +87,28 @@ public final class LocalRefinementCoordinator: @unchecked Sendable {
                     wasRejected: true
                 )
             }
+            guard !drops.isEmpty else {
+                return InstantRefineResult(
+                    text: safeBaseline,
+                    correctionCount:
+                        commandResult.correctionCount
+                        + cleanResult.correctionCount
+                )
+            }
+            // Deleting a word can leave doubled punctuation or a lowercased
+            // sentence opening, so the deterministic pass runs once more over
+            // the result. It cannot undo the deletion — it only tidies around
+            // it.
+            let candidate = InstantRefineEngine().refine(
+                LocalRefinementGuard.applying(drops: drops, to: words),
+                mode: .clean
+            ).text
             return InstantRefineResult(
                 text: candidate,
                 correctionCount:
                     commandResult.correctionCount
                     + cleanResult.correctionCount
-                    + (candidate == safeBaseline ? 0 : 1)
+                    + drops.count
             )
         } catch {
             return InstantRefineResult(

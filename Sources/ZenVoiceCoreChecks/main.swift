@@ -363,40 +363,82 @@ guard refinementModels.count == 2,
     exit(1)
 }
 
-let safeLocalCandidate =
-    LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Create the local app."}"#,
-        original: "create the local app"
-    )
-guard safeLocalCandidate == "Create the local app.",
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Create the cloud app."}"#,
-        original: "Create the local app."
+// The local model now returns the indices of words to delete rather than a
+// rewritten transcript, so the guard checks a drop list. Invention,
+// substitution and reordering are no longer things it has to detect — they
+// are unreachable, because the output is always a subsequence of the input.
+let dropWords = LocalRefinementPrompt.words(in: "Um, create the local app.")
+guard LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[1]}"#,
+        words: dropWords
+      ) == [0],
+      LocalRefinementGuard.applying(drops: [0], to: dropWords)
+        == "create the local app.",
+      // An empty list is a valid answer: nothing needed removing.
+      LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[]}"#,
+        words: dropWords
+      ) == [],
+      // Out of range, in both directions.
+      LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[99]}"#,
+        words: dropWords
       ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Keep"}"#,
-        original: "Please keep every important word here"
+      LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[0]}"#,
+        words: dropWords
       ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Do share this file."}"#,
-        original: "Do not share this file."
+      // Malformed, and fenced markdown.
+      LocalRefinementGuard.validatedDrops(
+        output: "not json",
+        words: dropWords
       ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"The file deletes the app."}"#,
-        original: "The app deletes the file."
+      LocalRefinementGuard.validatedDrops(
+        output: "```json\n{\"drop\":[1]}\n```",
+        words: dropWords
       ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Keep keep this local."}"#,
-        original: "Keep this local."
-      ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: "```json\n{\"text\":\"Keep this\"}\n```",
-        original: "Keep this"
-      ) == nil,
+      // A multi-word drop, which is how a self-correction is removed.
+      LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[4,5]}"#,
+        words: LocalRefinementPrompt.words(
+            in: "Send it on Tuesday actually Wednesday"
+        )
+      ) == [3, 4],
       LocalRefinementPrompt.make(transcript: "Hola mundo")
-        .contains("Hola mundo") else {
+        .contains("1 Hola 2 mundo") else {
     FileHandle.standardError.write(
-        Data("FAIL: local refinement meaning guard is unsafe\n".utf8)
+        Data("FAIL: local refinement drop guard is unsafe\n".utf8)
+    )
+    exit(1)
+}
+
+// The rule that protects meaning rather than tidiness. A dropped negation
+// leaves a sentence that reads perfectly and means the opposite, which a user
+// proof-reading their own dictation will not catch.
+guard LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[2]}"#,
+        words: LocalRefinementPrompt.words(in: "Do not share this file.")
+      ) == nil,
+      LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[5]}"#,
+        words: LocalRefinementPrompt.words(
+            in: "Increase the timeout to thirty seconds."
+        )
+      ) == nil,
+      LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[5]}"#,
+        words: LocalRefinementPrompt.words(
+            in: "Increase the timeout to 30 seconds."
+        )
+      ) == nil,
+      // Dropping most of the sentence is a misunderstanding, not an unusually
+      // messy one, so the whole edit is refused.
+      LocalRefinementGuard.validatedDrops(
+        output: #"{"drop":[1,2,3]}"#,
+        words: LocalRefinementPrompt.words(in: "Keep every word here")
+      ) == nil else {
+    FileHandle.standardError.write(
+        Data("FAIL: drop guard permitted a meaning-changing deletion\n".utf8)
     )
     exit(1)
 }
