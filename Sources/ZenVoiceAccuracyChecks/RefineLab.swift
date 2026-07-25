@@ -26,6 +26,64 @@ import ZenVoiceRefinementRuntime
 //             and that answers whether fine-tuning is worth starting.
 
 enum RefineLab {
+    /// Counts of what the scorer actually asked the model, so the reported
+    /// cost is not a median dominated by clips that never called it.
+    struct Telemetry {
+        var candidates = 0
+        var modelCalls = 0
+        var modelSeconds: TimeInterval = 0
+
+        mutating func reset() {
+            self = Telemetry()
+        }
+    }
+
+    nonisolated(unsafe) static var telemetry = Telemetry()
+
+    /// Words of context kept either side of a candidate when scoring it.
+    ///
+    /// Wide enough to carry the grammar the judgement depends on — "on Tuesday
+    /// actually Wednesday" needs the words around it to read as a correction —
+    /// and narrow enough that the cost per check does not grow with the
+    /// dictation.
+    static let windowRadius = 8
+
+    /// How the scorer's cost grows with dictation length.
+    ///
+    /// The question this exists to answer: the scorer scores the *whole*
+    /// transcript once per candidate, and candidates grow with length, so cost
+    /// plausibly grows with the square of it. That is the same failure the
+    /// edit-script redesign removed, in a new disguise, and it would sink the
+    /// approach on long dictation.
+    ///
+    /// Text-only, so it needs no audio and no Whisper — the curve is a
+    /// property of the scorer, not of transcription.
+    static func latencyProbe(
+        refiner: LocalTextRefiner,
+        margin: Double
+    ) -> [(words: Int, candidates: Int, calls: Int, milliseconds: Double)] {
+        // One unit is a plausible sentence carrying a correction cue and a
+        // hedge, so candidate count scales with length the way real dictation
+        // would.
+        let unit =
+            "We should ship the beta on Thursday actually Friday "
+            + "and the API just returns a cached response."
+        return [1, 2, 4, 8, 16].map { repeats in
+            let transcript = Array(repeating: unit, count: repeats)
+                .joined(separator: " ")
+            telemetry.reset()
+            let started = Date()
+            _ = scorer(transcript, refiner: refiner, margin: margin)
+            let elapsed = Date().timeIntervalSince(started) * 1_000
+            return (
+                words: LocalRefinementPrompt.words(in: transcript).count,
+                candidates: telemetry.candidates,
+                calls: telemetry.modelCalls,
+                milliseconds: elapsed
+            )
+        }
+    }
+
     /// A contiguous span the rules suspect is disfluent.
     struct Candidate {
         let range: Range<Int>
@@ -137,18 +195,52 @@ enum RefineLab {
     ) -> String {
         let words = LocalRefinementPrompt.words(in: transcript)
         let candidates = candidates(in: words)
-        guard !candidates.isEmpty,
-              let baseline = try? refiner.logLikelihood(of: transcript) else {
+        telemetry.candidates += candidates.count
+        guard !candidates.isEmpty else {
             return transcript
         }
+
         var accepted: [(Candidate, Double)] = []
         for candidate in candidates {
-            let edited = candidate.applied(to: words)
-                .joined(separator: " ")
-            guard let score = try? refiner.logLikelihood(of: edited) else {
+            // Score a window around the candidate rather than the whole
+            // transcript.
+            //
+            // Scoring the whole text per candidate made cost grow with the
+            // square of dictation length — measured at 1.4 s for 17 words and
+            // 5.7 minutes for 272 — because both the number of candidates and
+            // the cost of each scoring pass grow together. That is the same
+            // failure the edit-script redesign removed, wearing a new hat.
+            //
+            // Whether "Tuesday actually" is a correction is settled by the
+            // words either side of it; a sentence three paragraphs later has
+            // no bearing. Bounding the context makes each check a fixed cost
+            // and the total linear in the number of candidates.
+            let lower = max(0, candidate.range.lowerBound - windowRadius)
+            let upper = min(
+                words.count,
+                candidate.range.upperBound + windowRadius
+            )
+            let window = Array(words[lower..<upper])
+            let localStart = candidate.range.lowerBound - lower
+            let localEnd = candidate.range.upperBound - lower
+            let localRange = localStart..<localEnd
+            var without = window
+            without.removeSubrange(localRange)
+            guard !without.isEmpty else { continue }
+
+            let callStart = Date()
+            guard let withSpan = try? refiner.logLikelihood(
+                of: window.joined(separator: " ")
+            ),
+            let withoutSpan = try? refiner.logLikelihood(
+                of: without.joined(separator: " ")
+            ) else {
                 continue
             }
-            let gain = score - baseline
+            telemetry.modelCalls += 2
+            telemetry.modelSeconds += Date().timeIntervalSince(callStart)
+
+            let gain = withoutSpan - withSpan
             if gain > margin {
                 accepted.append((candidate, gain))
             }

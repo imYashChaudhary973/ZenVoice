@@ -975,14 +975,67 @@ correctly every time. Same model, same information, opposite outcomes —
 because one question relies on instruction-following and the other on the
 thing a language model actually is.
 
-### 8.7.3 Latency
+### 8.7.3 Latency, and the flaw the median was hiding
 
-The scorer's median is 1–2 ms per clip, against 476–580 ms for the generation
-design. That figure needs a caveat: most clips produce no candidates at all, so
-the scorer returns without calling the model and the median reflects those.
-Cost scales with candidate count and the true per-candidate cost is not
-isolated by this measurement — it should be before shipping. Even so, the
-design does no generation whatsoever, which is where 25–40 ms per token went.
+The scorer's median of 1–2 ms per clip was worthless as a measurement. Most
+clips produce no candidates at all, so the scorer returned without calling the
+model, and the median described only the clips where nothing happened.
+
+Probing it properly — text only, no audio, `ZENVOICE_REFINE_PROBE=1` — found
+something worse than an optimistic number:
+
+```
+words  candidates  calls        total     per call   per word
+   17           4      5       1441 ms     288.2 ms    84.77 ms
+   34           8      9       5499 ms     611.0 ms   161.73 ms
+   68          16     17      21469 ms    1262.9 ms   315.73 ms
+  136          32     33      85069 ms    2577.8 ms   625.51 ms
+  272          64     65     341439 ms    5252.9 ms  1255.29 ms
+```
+
+Per-word cost doubles as length doubles: **quadratic**. A 272-word dictation
+took 5.7 minutes, and even 17 words cost 1.4 s — worse than the 476 ms
+generation design it was meant to replace. This is the same failure 6.4.1
+removed, returning in a new disguise, because both the number of candidates
+and the cost of each scoring pass grow with length.
+
+Two fixes:
+
+1. **Score a window, not the transcript.** Whether "Tuesday actually" is a
+   correction is settled by the words either side of it; a sentence three
+   paragraphs later has no bearing. Bounding the context to eight words each
+   side makes every check a fixed cost, so the total grows with the number of
+   candidates rather than with length × candidates.
+2. **Vectorize the normalization.** Each scored position exponentiates all
+   ~152k of the model's logits. In scalar Swift that measured 44 ms per call
+   and dwarfed the model's own forward pass — the bottleneck was arithmetic,
+   not inference. Accelerate does it across SIMD lanes.
+
+```
+words  candidates  calls        total     per call   per word
+   17           4      8        159 ms      19.9 ms     9.38 ms
+   34           8     16        324 ms      20.2 ms     9.52 ms
+   68          16     32        651 ms      20.3 ms     9.58 ms
+  136          32     64       1306 ms      20.4 ms     9.61 ms
+  272          64    128       2620 ms      20.5 ms     9.63 ms
+```
+
+Per-word is flat, so the cost is now **linear**. At 272 words that is 341 s
+down to 2.6 s, about 130× — and accuracy is unchanged: still 9.2%, still equal
+to the oracle, still zero clips changed on clean speech. The window costs
+nothing in quality.
+
+Release and debug builds measure the same, which locates the remaining 20 ms
+per call in the model's forward pass rather than in Swift: asking for logits at
+every position forces the full vocabulary projection for each one.
+
+**Still open.** The probe is deliberately candidate-dense — one candidate per
+four words, where most real clips produce none — so 2.6 s is a stress-test
+figure rather than a typical one. But the constant factor is not yet good
+enough for a long dictation, and two known reductions remain: request logits
+only for positions at or after the edit, since the shared prefix is identical
+in both texts (~2×), and stop emitting three width-variants per correction cue
+(~2–3× fewer calls).
 
 ### 8.7.4 What this changes
 

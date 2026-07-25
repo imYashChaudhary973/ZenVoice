@@ -98,6 +98,72 @@ private extension String {
 /// Runs the measurement in its own scope so the Whisper context is released
 /// before the process exits. Leaving it alive trips a Metal teardown assertion
 /// inside ggml during static destruction.
+/// Measures how the scorer's cost grows with dictation length.
+///
+/// Separate from `measure()` and text-only, because the curve is a property of
+/// the scorer rather than of transcription — waiting on Whisper to answer it
+/// would cost minutes for no extra information.
+private func probeScorerLatency() -> Bool {
+    let installed = VerifiedRefinementModelCatalog.models
+        .compactMap { model -> URL? in
+            guard let url = try? VerifiedRefinementModelCatalog
+                .installedURL(for: model),
+                FileManager.default.fileExists(atPath: url.path) else {
+                return nil
+            }
+            return url
+        }
+        .first
+    guard let modelURL = environment["ZENVOICE_REFINEMENT_MODEL_PATH"]
+        .map({ URL(fileURLWithPath: $0) }) ?? installed else {
+        print("scorer latency probe skipped — no refinement model installed")
+        return true
+    }
+    let refiner = LocalTextRefiner(modelURL: modelURL)
+    // Warm the model so the first row does not carry the load time.
+    _ = try? refiner.logLikelihood(of: "warm up the model")
+
+    let margin = Double(environment["ZENVOICE_LAB_MARGIN"] ?? "") ?? 0.05
+    report()
+    report("scorer latency — how cost grows with dictation length")
+    report("  " + String(repeating: "-", count: 62))
+    report("  words  candidates  calls        total     per call   per word")
+    var previous: (words: Int, milliseconds: Double)?
+    for row in RefineLab.latencyProbe(refiner: refiner, margin: margin) {
+        let perCall = row.calls == 0
+            ? 0
+            : row.milliseconds / Double(row.calls)
+        let perWord = row.words == 0
+            ? 0
+            : row.milliseconds / Double(row.words)
+        report(
+            String(
+                format: "  %5d  %10d  %5d  %9.0f ms  %8.1f ms  %7.2f ms",
+                row.words,
+                row.candidates,
+                row.calls,
+                row.milliseconds,
+                perCall,
+                perWord
+            )
+        )
+        previous = (row.words, row.milliseconds)
+        _ = previous
+    }
+    report()
+    report(
+        "  Reading it: if per-word stays flat the cost is linear and fine. If"
+    )
+    report(
+        "  per-word climbs with length the cost is quadratic, which is the"
+    )
+    report(
+        "  failure the edit-script redesign removed, returning in disguise."
+    )
+    report()
+    return true
+}
+
 private func measure() -> Bool {
     let configuration: ZenVoiceConfiguration
     do {
@@ -1056,4 +1122,10 @@ private func measure() -> Bool {
     return true
 }
 
-exit(measure() ? 0 : 1)
+// ZENVOICE_REFINE_PROBE=1 answers the scaling question on its own, in seconds
+// rather than the minutes a full transcription pass costs.
+exit(
+    (flag("ZENVOICE_REFINE_PROBE") ? probeScorerLatency() : measure())
+        ? 0
+        : 1
+)

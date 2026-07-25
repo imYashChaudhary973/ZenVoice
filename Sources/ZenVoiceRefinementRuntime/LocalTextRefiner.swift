@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 import ZenVoiceCore
 import llama
@@ -156,7 +157,16 @@ public final class LocalTextRefiner: @unchecked Sendable {
                 throw RefinementError.decodeFailed
             }
 
+            // Normalizing a position means exponentiating every one of the
+            // model's ~152k logits, once per token. Scalar Swift measured 44 ms
+            // for a short window, which dwarfed the model's own forward pass —
+            // the bottleneck was arithmetic, not inference. Accelerate does the
+            // same work across SIMD lanes.
+            //
+            // The scratch buffer is allocated once and reused, because
+            // allocating 152k floats per token position was itself a cost.
             let vocabSize = Int(llama_vocab_n_tokens(vocab))
+            var scratch = [Float](repeating: 0, count: vocabSize)
             var total = 0.0
             for index in 0..<(tokens.count - 1) {
                 guard let logits = llama_get_logits_ith(
@@ -165,18 +175,27 @@ public final class LocalTextRefiner: @unchecked Sendable {
                 ) else {
                     continue
                 }
-                // Log-sum-exp with the max subtracted, so exponentiating a
-                // large logit cannot overflow.
-                var maximum = -Float.greatestFiniteMagnitude
-                for value in 0..<vocabSize {
-                    maximum = max(maximum, logits[value])
-                }
-                var sumExp = 0.0
-                for value in 0..<vocabSize {
-                    sumExp += exp(Double(logits[value] - maximum))
-                }
+                var maximum: Float = 0
+                vDSP_maxv(logits, 1, &maximum, vDSP_Length(vocabSize))
+                // Shifting by the maximum before exponentiating is what stops
+                // a large logit overflowing.
+                var shift = -maximum
+                vDSP_vsadd(
+                    logits,
+                    1,
+                    &shift,
+                    &scratch,
+                    1,
+                    vDSP_Length(vocabSize)
+                )
+                var elementCount = Int32(vocabSize)
+                vvexpf(&scratch, scratch, &elementCount)
+                var sumExp: Float = 0
+                vDSP_sve(scratch, 1, &sumExp, vDSP_Length(vocabSize))
+
                 let target = Int(tokens[index + 1])
-                total += Double(logits[target] - maximum) - log(sumExp)
+                total += Double(logits[target] - maximum)
+                    - Double(log(sumExp))
             }
             return total / Double(tokens.count - 1)
         }
