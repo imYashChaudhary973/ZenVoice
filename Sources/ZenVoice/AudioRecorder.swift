@@ -51,6 +51,18 @@ final class AudioRecorder: NSObject,
     private var capturedSamples: [Float] = []
     private var lastSpeechSampleIndex = 0
     private var capturesLiveSamples = false
+    private var speechDetector = SpeechActivityDetector()
+    /// Where the last consumed phrase ended.
+    private var committedSampleIndex = 0
+    /// A completed phrase boundary, remembered until someone asks for it.
+    ///
+    /// Stability used to be evaluated only when the preview timer fired every
+    /// 0.35 s, but it needs 0.70 s of silence to be true — so a pause barely
+    /// over 0.70 s was only noticed if a tick happened to land inside it, and
+    /// otherwise vanished as soon as speech resumed and moved
+    /// `lastSpeechSampleIndex` forward. Latching the boundary the moment it
+    /// occurs makes detection independent of when anyone looks.
+    private var latchedBoundary: Int?
 
     var isRecording: Bool {
         captureSession?.isRunning == true
@@ -137,6 +149,9 @@ final class AudioRecorder: NSObject,
         sampleLock.withLock {
             capturedSamples.removeAll(keepingCapacity: true)
             lastSpeechSampleIndex = 0
+            committedSampleIndex = 0
+            latchedBoundary = nil
+            speechDetector = SpeechActivityDetector()
         }
         captureSession = session
 
@@ -193,25 +208,20 @@ final class AudioRecorder: NSObject,
         }
     }
 
-    func stableSegment(
-        after sampleIndex: Int,
-        minimumSpeechDuration: TimeInterval = 0.45,
-        requiredSilenceDuration: TimeInterval = 0.70
-    ) -> StableAudioSegment? {
+    func stableSegment(after sampleIndex: Int) -> StableAudioSegment? {
         sampleLock.withLock {
             let start = max(0, min(sampleIndex, capturedSamples.count))
-            guard StablePauseDetector.isStable(
-                segmentStart: start,
-                totalSamples: capturedSamples.count,
-                lastSpeechSample: lastSpeechSampleIndex,
-                minimumSpeechDuration: minimumSpeechDuration,
-                requiredSilenceDuration: requiredSilenceDuration
-            ) else {
+            committedSampleIndex = max(committedSampleIndex, start)
+            guard let boundary = latchedBoundary,
+                  boundary > start,
+                  boundary <= capturedSamples.count else {
                 return nil
             }
+            latchedBoundary = nil
+            committedSampleIndex = boundary
             return StableAudioSegment(
-                samples: Array(capturedSamples[start...]),
-                endSampleIndex: capturedSamples.count
+                samples: Array(capturedSamples[start..<boundary]),
+                endSampleIndex: boundary
             )
         }
     }
@@ -230,6 +240,9 @@ final class AudioRecorder: NSObject,
         sampleLock.withLock {
             capturedSamples.removeAll(keepingCapacity: false)
             lastSpeechSampleIndex = 0
+            committedSampleIndex = 0
+            latchedBoundary = nil
+            speechDetector = SpeechActivityDetector()
         }
     }
 
@@ -320,6 +333,16 @@ final class AudioRecorder: NSObject,
             if speechDetected {
                 lastSpeechSampleIndex = capturedSamples.count
             }
+            // Evaluate on every buffer rather than on a timer, and hold the
+            // first boundary found until it is consumed.
+            if latchedBoundary == nil,
+               StablePauseDetector.isStable(
+                segmentStart: committedSampleIndex,
+                totalSamples: capturedSamples.count,
+                lastSpeechSample: lastSpeechSampleIndex
+               ) {
+                latchedBoundary = capturedSamples.count
+            }
         }
     }
 
@@ -345,7 +368,10 @@ final class AudioRecorder: NSObject,
             peakDecibels: peakDecibels
         )
         levelChanged?(level)
-        return averageDecibels > -38 || peakDecibels > -28
+        return speechDetector.isSpeech(
+            averageDecibels: averageDecibels,
+            peakDecibels: peakDecibels
+        )
     }
 
     private func reset() {
