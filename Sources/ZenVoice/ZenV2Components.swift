@@ -1,0 +1,673 @@
+import SwiftUI
+
+// MARK: - ZenVoice v2 component vocabulary
+// SwiftUI port of the prototype's shared components
+// (ZenVoiceNewDesign/css/base.css). Every redesigned screen is composed
+// from these pieces so the vocabulary stays identical across the app.
+
+/// Screen scaffold: 20px bold title, secondary subtitle, 780pt content
+/// column, prototype paddings, canvas background.
+struct ZenScreen<Content: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GeometryReader { proxy in
+            // Fluid column: ~80% of the window's content width, so full
+            // screen fills the space instead of leaving fixed margins.
+            // Clamped for readability on very large displays.
+            let available = max(
+                0, proxy.size.width - 2 * ZenDesign.Spacing.xl
+            )
+            let column = min(min(max(available * 0.8, 612), 1240), available)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(ZenDesign.Typography.pageTitle)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text(subtitle)
+                            .font(ZenDesign.Typography.body)
+                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    content
+                }
+                .frame(maxWidth: column, alignment: .leading)
+                .padding(.horizontal, ZenDesign.Spacing.xl)
+                .padding(.top, ZenDesign.Spacing.lg + 4)
+                .padding(.bottom, ZenDesign.Spacing.xxl)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .background(ZenDesign.Semantic.canvas)
+    }
+}
+
+/// Section: 15px heading, optional trailing caption, content below.
+struct ZenSection<Content: View>: View {
+    let title: String
+    var caption: String?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(ZenDesign.Typography.sectionTitle)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Spacer()
+                if let caption {
+                    Text(caption)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+            }
+            content
+        }
+    }
+}
+
+/// Panel: surface, 1px border, 12pt radius. Rows inside are separated
+/// with `ZenPanelDivider`.
+struct ZenPanel<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content
+        }
+        .background(ZenDesign.Semantic.surface)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+            .strokeBorder(ZenDesign.Semantic.border)
+        }
+    }
+}
+
+struct ZenPanelDivider: View {
+    var body: some View {
+        Divider().overlay(ZenDesign.Semantic.border)
+    }
+}
+
+/// List row: icon chip · title/sub · trailing control (prototype `.row`).
+struct ZenRow<Trailing: View>: View {
+    var icon: String?
+    var iconTint: Color?
+    var iconBackground: Color?
+    let title: String
+    var subtitle: String?
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: ZenDesign.Spacing.sm) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(
+                        iconTint ?? ZenDesign.Semantic.textSecondary
+                    )
+                    .frame(width: 28, height: 28)
+                    .background {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(
+                                iconBackground
+                                    ?? ZenDesign.Semantic.surfaceRaised
+                            )
+                    }
+                    .accessibilityHidden(true)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(ZenDesign.Typography.bodyStrong)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: ZenDesign.Spacing.sm)
+
+            trailing
+        }
+        .padding(.horizontal, ZenDesign.Spacing.md)
+        .padding(.vertical, ZenDesign.Spacing.sm)
+        .frame(minHeight: 52)
+    }
+}
+
+extension ZenRow where Trailing == EmptyView {
+    init(
+        icon: String? = nil,
+        iconTint: Color? = nil,
+        iconBackground: Color? = nil,
+        title: String,
+        subtitle: String? = nil
+    ) {
+        self.init(
+            icon: icon,
+            iconTint: iconTint,
+            iconBackground: iconBackground,
+            title: title,
+            subtitle: subtitle,
+            trailing: { EmptyView() }
+        )
+    }
+}
+
+/// Keyboard-key chip (prototype `.kbd`).
+struct ZenKbd: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+            .padding(.horizontal, 6)
+            .frame(minWidth: 22, minHeight: 22)
+            .background {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(ZenDesign.Semantic.surface)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(ZenDesign.Semantic.borderStrong)
+                    }
+                    .shadow(
+                        color: ZenDesign.Semantic.borderStrong.opacity(0.7),
+                        radius: 0,
+                        y: 1
+                    )
+            }
+    }
+}
+
+/// Shortcut combo rendered as individual key chips.
+struct ZenKbdGroup: View {
+    let combo: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                ZenKbd(text: key)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(combo)
+    }
+
+    private var keys: [String] {
+        // "⌃⌥Space" → ["⌃", "⌥", "Space"]; tolerate arbitrary display names.
+        var result: [String] = []
+        var current = ""
+        for char in combo {
+            if "⌃⌥⇧⌘".contains(char) {
+                if !current.isEmpty { result.append(current); current = "" }
+                result.append(String(char))
+            } else if char == " " || char == "+" {
+                if !current.isEmpty { result.append(current); current = "" }
+            } else {
+                current.append(char)
+            }
+        }
+        if !current.isEmpty { result.append(current) }
+        return result.isEmpty ? [combo] : result
+    }
+}
+
+/// Badge (prototype `.badge`): quiet capsule with optional dot/icon.
+struct ZenBadge: View {
+    enum Kind {
+        case neutral, success, accent, danger, warn
+    }
+
+    let text: String
+    var kind: Kind = .neutral
+    var systemImage: String?
+    var showsDot = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if showsDot {
+                Circle().fill(foreground).frame(width: 6, height: 6)
+            }
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 9, weight: .bold))
+            }
+            Text(text)
+        }
+        .font(ZenDesign.Typography.captionStrong)
+        .foregroundStyle(foreground)
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .background { Capsule().fill(background) }
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .neutral: return ZenDesign.Semantic.textSecondary
+        case .success: return ZenDesign.Semantic.success
+        case .accent: return ZenDesign.Semantic.accent
+        case .danger: return ZenDesign.Semantic.danger
+        case .warn: return ZenDesign.Semantic.warn
+        }
+    }
+
+    private var background: Color {
+        switch kind {
+        case .neutral: return ZenDesign.Semantic.surfaceRaised
+        case .success: return ZenDesign.Semantic.successMuted
+        case .accent: return ZenDesign.Semantic.accentMuted
+        case .danger: return ZenDesign.Semantic.dangerMuted
+        case .warn: return ZenDesign.Semantic.warnMuted
+        }
+    }
+}
+
+/// Inline banner (prototype `.banner`).
+struct ZenBanner: View {
+    enum Kind {
+        case info, warn, danger, success
+    }
+
+    let kind: Kind
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .padding(.top, 1)
+            Text(text)
+                .font(ZenDesign.Typography.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(foreground)
+        .padding(ZenDesign.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+            .fill(background)
+        }
+        .overlay {
+            if kind == .info {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.medium,
+                    style: .continuous
+                )
+                .strokeBorder(ZenDesign.Semantic.border)
+            }
+        }
+    }
+
+    private var foreground: Color {
+        switch kind {
+        case .info: return ZenDesign.Semantic.textSecondary
+        case .warn: return ZenDesign.Semantic.warn
+        case .danger: return ZenDesign.Semantic.danger
+        case .success: return ZenDesign.Semantic.success
+        }
+    }
+
+    private var background: Color {
+        switch kind {
+        case .info: return ZenDesign.Semantic.surfaceRaised
+        case .warn: return ZenDesign.Semantic.warnMuted
+        case .danger: return ZenDesign.Semantic.dangerMuted
+        case .success: return ZenDesign.Semantic.successMuted
+        }
+    }
+}
+
+/// Stat tile (prototype `.stat`).
+struct ZenStatTile: View {
+    let value: String
+    let label: String
+    var detail: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value)
+                .font(ZenDesign.Typography.metric)
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            Text(label)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            if let detail {
+                Text(detail)
+                    .font(ZenDesign.Typography.captionStrong)
+                    .foregroundStyle(ZenDesign.Semantic.success)
+            }
+        }
+        .padding(ZenDesign.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ZenDesign.Semantic.surface)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+            .strokeBorder(ZenDesign.Semantic.border)
+        }
+    }
+}
+
+/// Label · percent · thin bar (prototype `.meter-row`).
+struct ZenMeterRow: View {
+    let label: String
+    let percent: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(ZenDesign.Typography.body)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Spacer()
+                Text("\(percent)%")
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(ZenDesign.Semantic.surfaceSunken)
+                    Capsule()
+                        .fill(ZenDesign.Semantic.accent)
+                        .frame(
+                            width: proxy.size.width
+                                * CGFloat(max(0, min(percent, 100))) / 100
+                        )
+                }
+            }
+            .frame(height: 4)
+        }
+        .padding(.vertical, ZenDesign.Spacing.xs)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(percent) percent")
+    }
+}
+
+/// Underline tab strip (prototype `.tabs`).
+struct ZenTabStrip<Tab: Hashable>: View {
+    struct Item {
+        let tab: Tab
+        let title: String
+        var badge: Int = 0
+    }
+
+    let items: [Item]
+    @Binding var selection: Tab
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: ZenDesign.Spacing.md) {
+                ForEach(items, id: \.tab) { item in
+                    Button {
+                        selection = item.tab
+                    } label: {
+                        VStack(spacing: 8) {
+                            HStack(spacing: 6) {
+                                Text(item.title)
+                                    .font(ZenDesign.Typography.bodyStrong)
+                                if item.badge > 0 {
+                                    Text("\(item.badge)")
+                                        .font(
+                                            .system(
+                                                size: 10, weight: .semibold
+                                            )
+                                        )
+                                        .foregroundStyle(
+                                            ZenDesign.Semantic.warn
+                                        )
+                                        .padding(.horizontal, 6)
+                                        .frame(height: 16)
+                                        .background {
+                                            Capsule().fill(
+                                                ZenDesign.Semantic.warnMuted
+                                            )
+                                        }
+                                }
+                            }
+                            .foregroundStyle(
+                                selection == item.tab
+                                    ? ZenDesign.Semantic.textPrimary
+                                    : ZenDesign.Semantic.textTertiary
+                            )
+                            Rectangle()
+                                .fill(
+                                    selection == item.tab
+                                        ? ZenDesign.Semantic.accent
+                                        : Color.clear
+                                )
+                                .frame(height: 2)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(item.title)
+                    .accessibilityAddTraits(
+                        selection == item.tab ? .isSelected : []
+                    )
+                }
+                Spacer()
+            }
+            Divider().overlay(ZenDesign.Semantic.border)
+        }
+    }
+}
+
+/// Search field (prototype `.search-wrap`).
+struct ZenSearchField: View {
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(ZenDesign.Typography.body)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+            .fill(ZenDesign.Semantic.surface)
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .strokeBorder(ZenDesign.Semantic.borderStrong)
+            }
+        }
+    }
+}
+
+/// Selectable card for mode/priority pickers (prototype `.reco button`,
+/// `.lang-chip`).
+struct ZenChoiceCard: View {
+    let title: String
+    var badge: String?
+    let detail: String
+    let selected: Bool
+    var titleIcon: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    if let titleIcon {
+                        Image(systemName: titleIcon)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(
+                                selected
+                                    ? ZenDesign.Semantic.accent
+                                    : ZenDesign.Semantic.textSecondary
+                            )
+                    }
+                    Text(title)
+                        .font(ZenDesign.Typography.bodyStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    if let badge {
+                        ZenBadge(text: badge, kind: .neutral)
+                    }
+                    Spacer(minLength: 0)
+                    if selected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(ZenDesign.Semantic.accent)
+                    }
+                }
+                Text(detail)
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(ZenDesign.Spacing.sm + 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.medium,
+                    style: .continuous
+                )
+                .fill(
+                    selected
+                        ? ZenDesign.Semantic.accentMuted
+                        : ZenDesign.Semantic.surface
+                )
+            }
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.medium,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    selected
+                        ? ZenDesign.Semantic.accent
+                        : ZenDesign.Semantic.border
+                )
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Accent-tinted switch with standard macOS behavior.
+struct ZenSwitch: View {
+    @Binding var isOn: Bool
+    let label: String
+
+    var body: some View {
+        Toggle(label, isOn: $isOn)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .tint(ZenDesign.Semantic.accent)
+            .accessibilityLabel(label)
+    }
+}
+
+/// Small ghost icon button (prototype `.icon-btn`).
+struct ZenIconButton: View {
+    let systemImage: String
+    let label: String
+    var isDanger = false
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(
+                    hovering
+                        ? (isDanger
+                            ? ZenDesign.Semantic.danger
+                            : ZenDesign.Semantic.textPrimary)
+                        : ZenDesign.Semantic.textTertiary
+                )
+                .frame(width: 26, height: 26)
+                .background {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .fill(
+                        hovering
+                            ? (isDanger
+                                ? ZenDesign.Semantic.dangerMuted
+                                : ZenDesign.Semantic.surfaceRaised)
+                            : Color.clear
+                    )
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(label)
+    }
+}
+
+/// Mono metadata line for model rows (size · revision · checksum).
+struct ZenModelMeta: View {
+    let parts: [String]
+
+    var body: some View {
+        Text(parts.joined(separator: "  ·  "))
+            .font(ZenDesign.Typography.monoSmall)
+            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+    }
+}
