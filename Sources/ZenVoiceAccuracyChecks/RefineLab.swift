@@ -46,7 +46,7 @@ enum RefineLab {
     /// actually Wednesday" needs the words around it to read as a correction —
     /// and narrow enough that the cost per check does not grow with the
     /// dictation.
-    static let windowRadius = 8
+    nonisolated(unsafe) static var windowRadius = 8
 
     /// How the scorer's cost grows with dictation length.
     ///

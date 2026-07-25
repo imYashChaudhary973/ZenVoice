@@ -164,6 +164,176 @@ private func probeScorerLatency() -> Bool {
     return true
 }
 
+/// Sweeps the scorer's settings against the fixtures.
+///
+/// Decodes every clip once and then replays the scorer over those fixed
+/// transcripts, so a dozen configurations cost one transcription pass instead
+/// of a dozen. The threshold is the setting that decides whether this is safe
+/// to ship, and guessing it — as 8.7 did at 0.05 — is not good enough.
+///
+/// The rule applied when reading the table: any setting that changes even one
+/// clean-speech clip is disqualified regardless of what it gains, because
+/// silently deleting a word someone meant is worse than leaving an "um" in.
+private func sweepScorer() -> Bool {
+    let configuration: ZenVoiceConfiguration
+    do {
+        configuration = try ZenVoiceConfiguration.discover(
+            languageProfile: .english
+        )
+    } catch {
+        skip("no speech model available for the sweep.")
+    }
+
+    let fixtureDirectory = environment["ZENVOICE_ACCURACY_FIXTURES"]
+        .map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "zenvoice-accuracy-fixtures",
+                isDirectory: true
+            )
+    guard let cleanClips = try? Fixtures.render(into: fixtureDirectory),
+          let disfluentClips = try? Fixtures.renderDisfluent(
+            into: fixtureDirectory
+          ) else {
+        skip("fixtures could not be rendered.")
+    }
+
+    let installed = VerifiedRefinementModelCatalog.models
+        .compactMap { model -> URL? in
+            guard let url = try? VerifiedRefinementModelCatalog
+                .installedURL(for: model),
+                FileManager.default.fileExists(atPath: url.path) else {
+                return nil
+            }
+            return url
+        }
+        .first
+    guard let modelURL = environment["ZENVOICE_REFINEMENT_MODEL_PATH"]
+        .map({ URL(fileURLWithPath: $0) }) ?? installed else {
+        skip("no refinement model installed.")
+    }
+
+    let transcriber = WhisperTranscriber(
+        configuration: configuration,
+        isReproducible: true
+    )
+    let gain = value("ZENVOICE_ACCURACY_GAIN", default: 0.35)
+    let noise = value("ZENVOICE_ACCURACY_NOISE", default: 0.004)
+
+    // (transcript after deterministic Clean, reference, is disfluent)
+    var items: [(text: String, reference: String, disfluent: Bool)] = []
+    for (clips, disfluent) in [(disfluentClips, true), (cleanClips, false)] {
+        for clip in clips {
+            let samples = Fixtures.degraded(
+                (try? Fixtures.samples(at: clip.url)) ?? [],
+                gain: gain,
+                noise: noise
+            )
+            guard !samples.isEmpty,
+                  let decoded = try? transcriber.transcribe(
+                    samples: samples,
+                    languageProfile: .english
+                  ) else {
+                continue
+            }
+            items.append(
+                (
+                    InstantRefineEngine().refine(
+                        decoded.finalTranscript,
+                        mode: .clean
+                    ).text,
+                    clip.sentence.text,
+                    disfluent
+                )
+            )
+        }
+    }
+
+    let refiner = LocalTextRefiner(modelURL: modelURL)
+    _ = try? refiner.logLikelihood(of: "warm up the model")
+
+    // Baselines, so every row can be read as a delta rather than an absolute.
+    var cleanBaseline = Scoring.Result.zero
+    var disfluentBaseline = Scoring.Result.zero
+    for item in items {
+        let score = Scoring.wordErrorRate(
+            reference: item.reference,
+            hypothesis: item.text
+        )
+        if item.disfluent {
+            disfluentBaseline = disfluentBaseline + score
+        } else {
+            cleanBaseline = cleanBaseline + score
+        }
+    }
+
+    let margins = (environment["ZENVOICE_LAB_MARGINS"]
+        ?? "0.0,0.02,0.05,0.1,0.2,0.4")
+        .split(separator: ",")
+        .compactMap { Double($0) }
+    let radii = (environment["ZENVOICE_LAB_RADII"] ?? "8")
+        .split(separator: ",")
+        .compactMap { Int($0) }
+
+    report()
+    report("scorer sweep — model \(modelURL.lastPathComponent)")
+    report(
+        "  baseline after clean: disfluent "
+            + disfluentBaseline.percentage
+            + ", clean " + cleanBaseline.percentage
+    )
+    report("  " + String(repeating: "-", count: 66))
+    report(
+        "  radius  margin   disfluent   gain    clean   damaged   verdict"
+    )
+    for radius in radii {
+        RefineLab.windowRadius = radius
+        for margin in margins {
+            var disfluent = Scoring.Result.zero
+            var cleanScore = Scoring.Result.zero
+            var damaged = 0
+            for item in items {
+                let refined = RefineLab.scorer(
+                    item.text,
+                    refiner: refiner,
+                    margin: margin
+                )
+                let score = Scoring.wordErrorRate(
+                    reference: item.reference,
+                    hypothesis: refined
+                )
+                if item.disfluent {
+                    disfluent = disfluent + score
+                } else {
+                    cleanScore = cleanScore + score
+                    if refined != item.text { damaged += 1 }
+                }
+            }
+            let gainPoints =
+                (disfluentBaseline.rate - disfluent.rate) * 100
+            // Damage disqualifies regardless of gain.
+            let verdict = damaged > 0
+                ? "rejected"
+                : (gainPoints >= 0.5 ? "PASSES BAR" : "no gain")
+            report(
+                String(
+                    format:
+                        "  %6d  %6.2f   %8.1f%%  %+5.1f  %7.1f%%  %7d   %@",
+                    radius,
+                    margin,
+                    disfluent.rate * 100,
+                    gainPoints,
+                    cleanScore.rate * 100,
+                    damaged,
+                    verdict
+                )
+            )
+        }
+    }
+    report()
+    return true
+}
+
 private func measure() -> Bool {
     let configuration: ZenVoiceConfiguration
     do {
@@ -1124,8 +1294,12 @@ private func measure() -> Bool {
 
 // ZENVOICE_REFINE_PROBE=1 answers the scaling question on its own, in seconds
 // rather than the minutes a full transcription pass costs.
-exit(
-    (flag("ZENVOICE_REFINE_PROBE") ? probeScorerLatency() : measure())
-        ? 0
-        : 1
-)
+let outcome: Bool
+if flag("ZENVOICE_REFINE_PROBE") {
+    outcome = probeScorerLatency()
+} else if flag("ZENVOICE_REFINE_SWEEP") {
+    outcome = sweepScorer()
+} else {
+    outcome = measure()
+}
+exit(outcome ? 0 : 1)

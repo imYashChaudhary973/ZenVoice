@@ -145,6 +145,14 @@ enum Scoring {
         static let zero = LoanwordResult(preserved: 0, total: 0, lost: [])
     }
 
+    /// Fewest loanwords a Hinglish-capable model may preserve before the run
+    /// fails, out of the 26 the fixtures contain.
+    ///
+    /// Applies only to a model that claims `.hinglish`. A general multilingual
+    /// model scores zero by construction and is not failed for it — that gap is
+    /// the reason a Hinglish model exists.
+    static let hinglishLoanwordFloor = 18
+
     /// How many of the English words in a code-switched sentence survived as
     /// English.
     ///

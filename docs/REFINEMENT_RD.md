@@ -1048,6 +1048,77 @@ Before it ships: measure per-candidate latency honestly, tune the margin on
 real recordings rather than synthetic fixtures, and widen the candidate rules,
 since they are now the binding constraint.
 
+## 8.8 Sweeping the settings
+
+The 0.05 margin in 8.7 was a guess, and the setting that decides whether this
+is safe to ship should not be guessed. `ZENVOICE_REFINE_SWEEP=1` decodes every
+clip once and replays the scorer over those fixed transcripts, so a dozen
+configurations cost one transcription pass.
+
+The rule applied throughout: **any setting that changes even one clean-speech
+clip is disqualified regardless of its gain.** Silently deleting a word someone
+meant is worse than leaving an "um" in.
+
+```
+Qwen 0.5B, radius 8          Qwen 1.5B, radius 8
+margin  gain  damaged        margin  gain  damaged
+ -0.50  +3.1        3         -0.50  +3.1        3
+ -0.30  +3.1        3         -0.30  +3.1        1
+ -0.20  +3.1        0         -0.20  +3.1        0
+  0.00  +3.1        0          0.00  +3.1        0
+  0.30  +3.1        0          0.30  +3.1        0
+  0.90  +3.1        0          0.90  +3.1        0
+  1.00  +0.0        0          1.00  +0.0        0
+```
+
+Three findings.
+
+**The safe band is wide.** Damage begins below −0.2; the gain disappears at
+1.0. Anywhere between is +3.1 points with nothing damaged, so the setting is
+not balanced on a knife edge. **0.4** sits in the middle, furthest from both
+failure modes.
+
+**The window radius matters, and 8 is enough.** Radius 4 damages three clean
+clips even at a safe margin — too little context to judge. Radius 16 is
+identical to 8, so the extra context buys nothing and costs time.
+
+**0.5B equals 1.5B.** Identical on every row inside the safe band, and
+identical in latency at ~20 ms per call. That settles the download question
+raised in 8.6.2: the catalogue's smaller entry at **491 MB rather than
+1.1 GB** is sufficient, because scoring fluency does not need the parameters
+that instruction-following did.
+
+That the two models and every safe margin all produce exactly +3.1 with
+exactly 0 damage is itself a caution: it means a small number of candidates
+are decided emphatically, not that the threshold is well characterised across
+varied speech. The plateau is encouraging, not conclusive. Real recordings
+remain the outstanding dependency.
+
+### 8.8.1 Where the remaining time goes
+
+0.5B is no faster than 1.5B per call, which locates the cost outside the model:
+both share a ~152k vocabulary, and normalizing a position sweeps all of it.
+The forward pass is not the bottleneck — the softmax is.
+
+The reduction available: the two texts being compared share a prefix, and
+identical prefixes contribute identically, so only positions from the edit
+onward need scoring at all. That is roughly 3× on typical windows and does not
+touch accuracy.
+
+### 8.8.2 The configuration that works
+
+| setting | value | why |
+| --- | --- | --- |
+| model | Qwen 2.5 **0.5B** | equals 1.5B on every measure, half the download |
+| window radius | **8** words | 4 damages clean speech, 16 buys nothing |
+| margin | **0.4** | centre of the −0.2 … 0.9 safe band |
+| candidate source | deterministic rules | precision is the model's job, recall is theirs |
+| guard | protected tokens, 40% ceiling | bounds what a wrong judgement can cost |
+
+Measured: **+3.1 points** on disfluent speech, equal to the oracle ceiling;
+**zero** clean-speech clips changed; **zero** semantic violations; latency
+linear in dictation length.
+
 ## 9. Suggested sequence
 
 Revised after the section 6–8 research. The ordering changed in two places:
