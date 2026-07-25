@@ -845,8 +845,16 @@ for choice in HoldKeyChoice.allCases {
 
 print("ZenVoiceCoreChecks: private and hold controls passed")
 
-let verifiedModels = VerifiedModelCatalog.models
-guard verifiedModels.count == 10,
+// Metadata is checked across offered *and* retired models, because a retired
+// entry is still resolved and verified for anyone who already installed it.
+let verifiedModels = VerifiedModelCatalog.allModels
+guard VerifiedModelCatalog.models.count == 9,
+      verifiedModels.count == 10,
+      // Whisper Medium English-only is retired: 2.9% word error rate against
+      // the multilingual build's 2.7%, same size, same speed, English only.
+      // Retired rather than deleted so an existing install still resolves.
+      VerifiedModelCatalog.models.allSatisfy { $0.id != "whisper-medium-en" },
+      VerifiedModelCatalog.model(id: "whisper-medium-en") != nil,
       Set(verifiedModels.map(\.id)).count == verifiedModels.count,
       Set(verifiedModels.map(\.filename)).count == verifiedModels.count,
       Set(verifiedModels.map(\.tier))

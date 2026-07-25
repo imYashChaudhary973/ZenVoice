@@ -215,16 +215,6 @@ public enum VerifiedModelCatalog {
             size: 874_188_075
         ),
         model(
-            id: "whisper-medium-en",
-            name: "Whisper Medium",
-            filename: "ggml-medium.en.bin",
-            tier: .highAccuracy,
-            language: .english,
-            sha256:
-                "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356",
-            size: 1_533_774_781
-        ),
-        model(
             id: "whisper-medium-multilingual",
             name: "Whisper Medium",
             filename: "ggml-medium.bin",
@@ -236,8 +226,38 @@ public enum VerifiedModelCatalog {
         )
     ]
 
+    /// Models no longer offered, but still resolvable.
+    ///
+    /// Whisper Medium English-only measured 2.9% word error rate against the
+    /// multilingual build's 2.7% — the same 1.5 GB, the same speed, slightly
+    /// worse, and unable to decode anything but English. There is no case for
+    /// offering it.
+    ///
+    /// It is retired rather than deleted because deleting it would strand
+    /// anyone who already installed it: selection is stored by identifier and
+    /// resolved through this catalogue, so a missing entry turns a working
+    /// 1.5 GB model into "no model installed". Retired entries stay
+    /// resolvable and verifiable, and simply stop being offered.
+    public static let retiredModels: [VerifiedModel] = [
+        model(
+            id: "whisper-medium-en",
+            name: "Whisper Medium",
+            filename: "ggml-medium.en.bin",
+            tier: .highAccuracy,
+            language: .english,
+            sha256:
+                "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356",
+            size: 1_533_774_781
+        )
+    ]
+
+    /// Everything the app can resolve, offered or not.
+    public static var allModels: [VerifiedModel] {
+        models + retiredModels
+    }
+
     public static func model(id: String) -> VerifiedModel? {
-        models.first { $0.id == id }
+        allModels.first { $0.id == id }
     }
 
     public static func model(filename: String) -> VerifiedModel? {
