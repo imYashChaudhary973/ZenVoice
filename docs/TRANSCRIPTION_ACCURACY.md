@@ -149,10 +149,15 @@ is now the way to make it.
 
 ## Open
 
-- **Hinglish is unmeasured here.** LibriSpeech is read English. The
-  Hindi/Hinglish path has no equivalent real-speech baseline, and given that
-  refinement measured 15.9 points for English against 0.5 for Hindi before it
-  was fixed, assuming parity would be unwise.
+- **Hinglish needs its own metric before it has a number.** Word error rate
+  against a code-switched reference measures script convention as much as
+  hearing, so the loudest figure in this document — 52.6% — is not an accuracy
+  result. The loanword-preservation scoring already in the harness is the
+  right instrument; it has not yet been run against this corpus.
+- **Hallucination loops are undefended.** `tiny` produced a hundred repeats of
+  the same phrase on one clip. Nothing in ZenVoice detects or truncates that,
+  and it costs both accuracy and minutes of decode. `Scoring.repetitionRate`
+  already exists to spot it in the harness; the app has no equivalent.
 - **Read speech is not dictation.** LibriSpeech speakers are reading prepared
   prose, so they are fluent, evenly paced and well recorded. Real dictation is
   hesitant and often noisy. These numbers are a floor.
