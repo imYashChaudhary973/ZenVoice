@@ -545,9 +545,66 @@ new token sequences and skips prefill for the matching portion"*
 
 In-process the fix is to hold one context open for the app's lifetime, prefill
 the system prompt once, and reuse that KV prefix per dictation — the same
-mechanism, without the server. Combined with warming the model at launch
-instead of inside the first user-visible refinement, most of the 540 ms is
-recoverable before any model change.
+mechanism, without the server.
+
+**This was implemented, and the hypothesis was wrong.** Tracing the refiner
+per call:
+
+```
+prefix 72  tail 18  generated 17  prefill 109ms  total 1036ms   ← first call
+prefix 72  tail 16  generated 15  prefill   1ms  total  855ms
+prefix 72  tail 39  generated 38  prefill   1ms  total  747ms
+prefix 72  tail 39  generated 38  prefill   1ms  total 1424ms
+```
+
+Prefix reuse works — prefill drops to 1 ms — but prefill was never the cost.
+The instruction block is 72 tokens and cost ~109 ms *once*. Generation is
+essentially all of the time, at **25–40 ms per token**. The ceiling on any
+prefill optimization is therefore about 110 ms once per session, not 540 ms
+per dictation.
+
+Note also the last two rows: identical tail length, identical generated count,
+747 ms against 1424 ms. Wall-clock on a working laptop carries ~2× variance on
+identical work, so single-run A/B comparisons at this granularity cannot
+resolve anything smaller than a factor of two. Latency claims in this document
+need repeated runs and medians, and the earlier "540 ms" figure should be read
+as an order of magnitude rather than a measurement.
+
+### 6.4.1 The real latency constraint: the transcript is regenerated
+
+The trace exposes something more important than the failed optimization.
+Generated tokens track tail tokens almost exactly — 18→17, 39→38 — because the
+design has the model **re-emit the entire transcript** inside a JSON envelope.
+Latency is therefore linear in dictation length, at roughly 30 ms per token:
+
+| dictation | ~tokens | ~generation |
+| --- | --- | --- |
+| 20 words | 27 | 0.8 s |
+| 60 words | 80 | 2.4 s |
+| 150 words | 200 | 6.0 s |
+| 300 words | 400 | 12.0 s |
+
+The five-second deadline lands at roughly 120 words. Past that the model is
+killed mid-generation and the result silently falls back to Clean — which is
+indistinguishable, from the user's side, from refinement doing nothing. The
+2048-token context sets a second ceiling in the same region.
+
+Two consequences:
+
+1. **Apple Foundation Models does not fix this.** At ~30 tokens/second it is
+   the same order of speed. It removes the download and the catalogue burden
+   (6.5), but a full-transcript rewrite is just as slow there.
+2. **Track C stops being a reliability preference and becomes a requirement.**
+   Any design where the model re-emits the transcript is latency-bound by
+   transcript length and cannot serve long dictation. The model must emit an
+   *edit script* — tags, spans, or operations — whose length tracks the number
+   of corrections rather than the length of the text. A transcript needing
+   three fixes should cost three edits' worth of tokens whether it is twenty
+   words or three hundred.
+
+This reorders the plan: the tagging formulation is now the load-bearing piece,
+and the N-best lattice work (6.2) should be designed to produce edits rather
+than a rewritten string.
 
 ### 6.5 Apple Foundation Models may delete the problem outright
 
@@ -619,6 +676,45 @@ Revised starting points: ~250 ms floor, 400–600 ms sentence boundary, and a
 paragraph break at a multiple of the speaker's own running median gap rather
 than a constant.
 
+## 8.1 The harness is not yet a reliable instrument
+
+Two runs of the *same binary* over the *same cached fixtures*:
+
+| | run 1 | run 2 |
+| --- | --- | --- |
+| disfluent raw WER | 24.6% | 27.7% |
+| clean raw WER | 5.4% | 4.0% |
+| local model, disfluent | 8717 ms | 2967 ms |
+| local model, clean | 13298 ms | 10372 ms |
+
+Neither the accuracy nor the latency numbers are reproducible. Latency varies
+by up to 3× and word error rate by more than a point, which is larger than most
+of the effects this document is trying to measure.
+
+Causes, in order of confidence:
+
+- **Latency** — ordinary machine load. Confirmed within a single process: two
+  calls with identical tail and generated-token counts took 747 ms and 1424 ms.
+- **Accuracy** — `ggml-base.en` is under `beamSearchSizeCeilingBytes`, so it
+  decodes with beam search, and `whisper_full_default_params` enables
+  temperature fallback, which samples when a segment trips the entropy or
+  logprob thresholds. Thread count also tracks `activeProcessorCount`, and
+  multi-threaded float reductions do not have to associate identically run to
+  run.
+
+Consequences for everything above: single-run comparisons can only support
+conclusions about large effects. The Clean improvement in 0.2 (7.7 → 13.8
+points) is large enough to survive this, and is independently pinned by
+deterministic text-level checks in `ZenVoiceCoreChecks` — which is the stronger
+evidence and the reason those checks exist. Any *smaller* claim in this
+document, including anything about the local model's contribution, needs
+repeated runs and medians before it is trusted.
+
+Fixing the instrument is now a prerequisite rather than a chore: pin the decode
+temperature and thread count for harness runs, report medians over N runs, and
+separate the accuracy measurement from the latency measurement so a busy
+machine cannot move a correctness number.
+
 ## 9. Suggested sequence
 
 Revised after the section 6–8 research. The ordering changed in two places:
@@ -629,13 +725,23 @@ validate it.
 1. **Done** — Track I: cohort split, widened fixtures, semantic safety,
    rejection and latency reporting, the missing assertion.
 2. **Done** — the two measured Clean gaps (0.2).
-3. **Context reuse and launch warming** (6.4). Recovers most of the 540 ms with
-   no model change, no guard change, and no new download. Cheapest real win
-   available.
-4. **Apple Foundation Models spike** (6.5). One question decides a lot of
-   downstream work: does it support constrained decoding? If yes, much of the
-   llama.cpp path becomes redundant on macOS 26. Answer before investing
-   further in the current runtime.
+3. **Done, and it did not pay off** — context reuse and launch warming (6.4).
+   Implemented and correct: prefill is now 1 ms. But prefill was never the
+   cost, so the win is ~110 ms once per session rather than 540 ms per
+   dictation. Kept because it is correct and removes per-call context
+   allocation, not because it moved the number.
+4. **Make the harness reproducible** (8.1). Now blocking. The instrument
+   currently has 3× latency variance and >1 point of WER variance between
+   identical runs, which is larger than most remaining effects. Nothing after
+   this step can be evaluated until it is fixed.
+5. **Redesign the refiner to emit edits, not text** (6.4.1). Promoted to the
+   top of the model work. Regenerating the transcript makes latency linear in
+   dictation length and puts anything past ~120 words beyond the deadline, so
+   no choice of model or runtime rescues the current shape.
+6. **Apple Foundation Models spike** (6.5). Still worth answering for the
+   download and catalogue burden, but demoted: at ~30 tokens/second it does
+   not solve 6.4.1, so it is no longer a potential shortcut past the
+   architectural work.
 5. **Real recordings** into `ZENVOICE_ACCURACY_CORPUS`. Now a blocking
    dependency rather than a nice-to-have — per 0.1, synthetic speech cannot
    produce a realistic repetition, so Track A cannot be validated without it.

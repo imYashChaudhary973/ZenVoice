@@ -13,6 +13,22 @@ public final class LocalRefinementCoordinator: @unchecked Sendable {
         }
     }
 
+    /// Loads the model and prefills the instruction block before the user asks
+    /// for anything.
+    ///
+    /// Without this the first dictation of a session pays the model load
+    /// inside the path it is waiting on. Failures are deliberately ignored:
+    /// this is an optimization, and every caller of `refine` already falls
+    /// back to deterministic Clean when the model is unavailable.
+    ///
+    /// Blocks the calling thread, so call it off the main queue.
+    public func warmUp() {
+        guard let refiner = lock.withLock({ refiner }) else {
+            return
+        }
+        try? refiner.warmUp()
+    }
+
     public func refine(
         _ transcript: String,
         mode: InstantRefineMode,

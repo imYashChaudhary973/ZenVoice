@@ -268,6 +268,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             coordinator.update(modelURL: url)
+            // Already off the main queue, and already past verification, so
+            // the load and prefill happen before the first dictation rather
+            // than inside it.
+            coordinator.warmUp()
         }
     }
 

@@ -37,18 +37,51 @@ public final class LocalTextRefiner: @unchecked Sendable {
         llama_backend_init()
     }()
 
+    /// Tokens per generation, and the context they share with the prompt.
+    private static let contextSize: UInt32 = 2_048
+
     private let modelURL: URL
     private let lock = NSLock()
     private var model: OpaquePointer?
     private var vocab: OpaquePointer?
+    /// Held open for the refiner's lifetime rather than rebuilt per call.
+    ///
+    /// Creating and freeing a context per dictation discarded the KV cache for
+    /// the instruction block, which is identical every time — measured at
+    /// roughly half a second of the user-visible path, spent recomputing a
+    /// constant.
+    private var context: OpaquePointer?
+    /// The prefix currently resident in the KV cache, so a changed context
+    /// string can be detected and re-prefilled rather than silently reused.
+    private var cachedPrefixTokens: [llama_token] = []
 
     public init(modelURL: URL) {
         self.modelURL = modelURL
     }
 
     deinit {
+        if let context {
+            llama_free(context)
+        }
         if let model {
             llama_model_free(model)
+        }
+    }
+
+    /// Loads the model and prefills the instruction block without generating.
+    ///
+    /// Called at launch so the first dictation of a session does not pay the
+    /// model load inside the path the user is waiting on.
+    public func warmUp(context: String = "") throws {
+        try lock.withLock {
+            _ = Self.backendInitialized
+            let (_, vocab) = try loadedModel()
+            let llamaContext = try activeContext()
+            try primePrefix(
+                LocalRefinementPrompt.systemPrefix(context: context),
+                context: llamaContext,
+                vocab: vocab
+            )
         }
     }
 
@@ -60,17 +93,119 @@ public final class LocalTextRefiner: @unchecked Sendable {
     ) throws -> String {
         try lock.withLock {
             _ = Self.backendInitialized
-            let (model, vocab) = try loadedModel()
+            let (_, vocab) = try loadedModel()
+            let llamaContext = try activeContext()
+            let prefixLength = try primePrefix(
+                LocalRefinementPrompt.systemPrefix(context: context),
+                context: llamaContext,
+                vocab: vocab
+            )
             return try generate(
-                prompt: LocalRefinementPrompt.make(
-                    transcript: transcript,
-                    context: context
-                ),
-                model: model,
+                tail: LocalRefinementPrompt.tail(transcript: transcript),
+                prefixLength: prefixLength,
+                context: llamaContext,
                 vocab: vocab,
                 timeLimit: timeLimit,
                 maximumOutputTokens: maximumOutputTokens
             )
+        }
+    }
+
+    private func activeContext() throws -> OpaquePointer {
+        if let context {
+            return context
+        }
+        guard let model else {
+            throw RefinementError.modelLoadFailed
+        }
+        let threads = Int32(
+            max(1, min(8, ProcessInfo.processInfo.processorCount - 2))
+        )
+        var parameters = llama_context_default_params()
+        parameters.n_ctx = Self.contextSize
+        parameters.n_batch = Self.contextSize
+        parameters.n_threads = threads
+        parameters.n_threads_batch = threads
+        parameters.no_perf = true
+        guard let created = llama_init_from_model(model, parameters) else {
+            throw RefinementError.contextCreationFailed
+        }
+        context = created
+        cachedPrefixTokens = []
+        return created
+    }
+
+    /// Ensures the instruction block is resident in the KV cache and returns
+    /// its length in tokens.
+    ///
+    /// When the prefix is unchanged — the ordinary case — this decodes nothing
+    /// and only trims whatever the previous generation left behind it.
+    @discardableResult
+    private func primePrefix(
+        _ prefix: String,
+        context: OpaquePointer,
+        vocab: OpaquePointer
+    ) throws -> Int {
+        let prefixTokens = try tokenize(
+            prefix,
+            vocab: vocab,
+            addSpecial: true
+        )
+        let memory = llama_get_memory(context)
+
+        if prefixTokens == cachedPrefixTokens {
+            // Drop the previous transcript and its generated reply, keeping
+            // the instruction block resident.
+            //
+            // A partial removal is allowed to fail. If it does, the cache
+            // still holds the last dictation and reusing it would splice two
+            // transcripts together, so fall through to a full rebuild rather
+            // than generating from corrupt state.
+            if llama_memory_seq_rm(
+                memory,
+                0,
+                Int32(prefixTokens.count),
+                -1
+            ) {
+                return prefixTokens.count
+            }
+        }
+
+        llama_memory_clear(memory, true)
+        cachedPrefixTokens = []
+        try decode(
+            prefixTokens,
+            startingAt: 0,
+            context: context,
+            wantsLogitsOnLast: false
+        )
+        cachedPrefixTokens = prefixTokens
+        return prefixTokens.count
+    }
+
+    /// Feeds a run of tokens through the model in one batch.
+    private func decode(
+        _ tokens: [llama_token],
+        startingAt position: Int,
+        context: OpaquePointer,
+        wantsLogitsOnLast: Bool
+    ) throws {
+        guard !tokens.isEmpty else { return }
+        var batch = llama_batch_init(Int32(tokens.count), 0, 1)
+        defer { llama_batch_free(batch) }
+        batch.n_tokens = Int32(tokens.count)
+        for (index, token) in tokens.enumerated() {
+            batch.token[index] = token
+            batch.pos[index] = Int32(position + index)
+            batch.n_seq_id[index] = 1
+            batch.seq_id[index]?[0] = 0
+            batch.logits[index] = 0
+        }
+        if wantsLogitsOnLast {
+            batch.logits[tokens.count - 1] = 1
+        }
+        guard llama_decode(context, batch) == 0 else {
+            throw RefinementError.decodeFailed
         }
     }
 
@@ -95,36 +230,23 @@ public final class LocalTextRefiner: @unchecked Sendable {
     }
 
     private func generate(
-        prompt: String,
-        model: OpaquePointer,
+        tail: String,
+        prefixLength: Int,
+        context: OpaquePointer,
         vocab: OpaquePointer,
         timeLimit: TimeInterval,
         maximumOutputTokens: Int32
     ) throws -> String {
-        let promptTokens = try tokenize(prompt, vocab: vocab)
-        let contextSize: UInt32 = 2_048
-        guard promptTokens.count
-                + Int(maximumOutputTokens) < Int(contextSize) else {
-            throw RefinementError.promptTooLong
-        }
-
-        let threads = Int32(
-            max(1, min(8, ProcessInfo.processInfo.processorCount - 2))
+        // The prefix carries the only BOS, so the tail must not add another.
+        let tailTokens = try tokenize(
+            tail,
+            vocab: vocab,
+            addSpecial: false
         )
-        var contextParameters = llama_context_default_params()
-        contextParameters.n_ctx = contextSize
-        contextParameters.n_batch = contextSize
-        contextParameters.n_threads = threads
-        contextParameters.n_threads_batch = threads
-        contextParameters.no_perf = true
-        guard let context = llama_init_from_model(
-            model,
-            contextParameters
-        ) else {
-            throw RefinementError.contextCreationFailed
-        }
-        defer {
-            llama_free(context)
+        let promptLength = prefixLength + tailTokens.count
+        guard promptLength
+                + Int(maximumOutputTokens) < Int(Self.contextSize) else {
+            throw RefinementError.promptTooLong
         }
 
         var samplerParameters =
@@ -156,30 +278,23 @@ public final class LocalTextRefiner: @unchecked Sendable {
             llama_sampler_free(sampler)
         }
 
-        var batch = llama_batch_init(
-            Int32(promptTokens.count),
-            0,
-            1
+        // Only the transcript is decoded here. The instruction block is
+        // already resident in the KV cache from primePrefix.
+        let startedAt = Date()
+        try decode(
+            tailTokens,
+            startingAt: prefixLength,
+            context: context,
+            wantsLogitsOnLast: true
         )
+        let prefillSeconds = Date().timeIntervalSince(startedAt)
+        guard prefillSeconds <= timeLimit else {
+            throw RefinementError.timedOut
+        }
+
+        var batch = llama_batch_init(1, 0, 1)
         defer {
             llama_batch_free(batch)
-        }
-        batch.n_tokens = Int32(promptTokens.count)
-        for (index, token) in promptTokens.enumerated() {
-            batch.token[index] = token
-            batch.pos[index] = Int32(index)
-            batch.n_seq_id[index] = 1
-            batch.seq_id[index]?[0] = 0
-            batch.logits[index] = 0
-        }
-        batch.logits[promptTokens.count - 1] = 1
-
-        let startedAt = Date()
-        guard llama_decode(context, batch) == 0 else {
-            throw RefinementError.decodeFailed
-        }
-        guard Date().timeIntervalSince(startedAt) <= timeLimit else {
-            throw RefinementError.timedOut
         }
 
         var output = ""
@@ -215,7 +330,7 @@ public final class LocalTextRefiner: @unchecked Sendable {
             batch.n_tokens = 1
             batch.token[0] = token
             batch.pos[0] =
-                Int32(promptTokens.count) + generatedCount
+                Int32(promptLength) + generatedCount
             batch.n_seq_id[0] = 1
             batch.seq_id[0]?[0] = 0
             batch.logits[0] = 1
@@ -223,6 +338,23 @@ public final class LocalTextRefiner: @unchecked Sendable {
                 throw RefinementError.decodeFailed
             }
             generatedCount += 1
+        }
+
+        if ProcessInfo.processInfo.environment["ZENVOICE_REFINE_TRACE"] == "1" {
+            FileHandle.standardError.write(
+                Data(
+                    String(
+                        format:
+                            "  trace: prefix %d tail %d generated %d "
+                            + "prefill %.0fms total %.0fms\n",
+                        prefixLength,
+                        tailTokens.count,
+                        Int(generatedCount),
+                        prefillSeconds * 1_000,
+                        Date().timeIntervalSince(startedAt) * 1_000
+                    ).utf8
+                )
+            )
         }
 
         let result = output.trimmingCharacters(
@@ -236,7 +368,8 @@ public final class LocalTextRefiner: @unchecked Sendable {
 
     private func tokenize(
         _ text: String,
-        vocab: OpaquePointer
+        vocab: OpaquePointer,
+        addSpecial: Bool
     ) throws -> [llama_token] {
         let byteCount = text.utf8.count
         var tokens = [llama_token](
@@ -249,7 +382,7 @@ public final class LocalTextRefiner: @unchecked Sendable {
             Int32(byteCount),
             &tokens,
             Int32(tokens.count),
-            true,
+            addSpecial,
             true
         )
         guard count > 0 else {

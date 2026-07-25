@@ -187,10 +187,18 @@ public enum RefinementModelSelectionPreferences {
 }
 
 public enum LocalRefinementPrompt {
-    public static func make(
-        transcript: String,
-        context: String = ""
-    ) -> String {
+    /// The instruction block, which is identical for every dictation that
+    /// shares a context string.
+    ///
+    /// Split out from the transcript so the runtime can prefill it once and
+    /// reuse its KV cache. It is the definition of a stable prefix — byte for
+    /// byte the same on every call when no next-dictation context is set — and
+    /// recomputing it per dictation was most of the measured refinement
+    /// latency.
+    ///
+    /// Ends with a special-token boundary, so tokenizing prefix and tail
+    /// separately cannot merge tokens across the join.
+    public static func systemPrefix(context: String = "") -> String {
         let safeContext = NextDictationContext.sanitized(context)
         let contextLine = safeContext.isEmpty
             ? "No additional context."
@@ -198,10 +206,24 @@ public enum LocalRefinementPrompt {
         return """
         <|im_start|>system
         You clean speech transcripts. Keep the original language and meaning. Do not add, replace, translate, or invent words. You may remove filler words and immediate repetitions, fix capitalization and punctuation, and format explicit line-break commands. \(contextLine) Return exactly one JSON object with one string field named text. No markdown or explanation.<|im_end|>
+
+        """
+    }
+
+    /// The per-dictation half: the transcript and the assistant handoff.
+    public static func tail(transcript: String) -> String {
+        """
         <|im_start|>user
         \(transcript)<|im_end|>
         <|im_start|>assistant
         """
+    }
+
+    public static func make(
+        transcript: String,
+        context: String = ""
+    ) -> String {
+        systemPrefix(context: context) + tail(transcript: transcript)
     }
 }
 
