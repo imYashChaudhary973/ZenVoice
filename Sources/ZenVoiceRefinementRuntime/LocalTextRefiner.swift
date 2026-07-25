@@ -114,6 +114,129 @@ public final class LocalTextRefiner: @unchecked Sendable {
         }
     }
 
+    /// Average log-probability per token — how natural the model finds this
+    /// text.
+    ///
+    /// Uses the model as a judge of fluency rather than as a writer. That is
+    /// what a language model is underneath; generation is bolted on top, and
+    /// it is the bolted-on part small models are bad at. Scoring needs no
+    /// instruction-following, produces no text to hallucinate, and costs one
+    /// forward pass — reading measured at ~1 ms against 25-40 ms per generated
+    /// token.
+    ///
+    /// Higher is more natural. Averaged per token so texts of different
+    /// lengths compare.
+    public func logLikelihood(of text: String) throws -> Double {
+        try lock.withLock {
+            _ = Self.backendInitialized
+            let (_, vocab) = try loadedModel()
+            let context = try activeContext()
+            let tokens = try tokenize(text, vocab: vocab, addSpecial: true)
+            guard tokens.count > 1 else {
+                return 0
+            }
+            // Scoring shares the context with refinement, so the cached
+            // instruction prefix has to go — it would condition the score.
+            llama_memory_clear(llama_get_memory(context), true)
+            cachedPrefixTokens = []
+
+            var batch = llama_batch_init(Int32(tokens.count), 0, 1)
+            defer { llama_batch_free(batch) }
+            batch.n_tokens = Int32(tokens.count)
+            for (index, token) in tokens.enumerated() {
+                batch.token[index] = token
+                batch.pos[index] = Int32(index)
+                batch.n_seq_id[index] = 1
+                batch.seq_id[index]?[0] = 0
+                // Every position, because every position predicts the next
+                // token and all of those predictions are the score.
+                batch.logits[index] = 1
+            }
+            guard llama_decode(context, batch) == 0 else {
+                throw RefinementError.decodeFailed
+            }
+
+            let vocabSize = Int(llama_vocab_n_tokens(vocab))
+            var total = 0.0
+            for index in 0..<(tokens.count - 1) {
+                guard let logits = llama_get_logits_ith(
+                    context,
+                    Int32(index)
+                ) else {
+                    continue
+                }
+                // Log-sum-exp with the max subtracted, so exponentiating a
+                // large logit cannot overflow.
+                var maximum = -Float.greatestFiniteMagnitude
+                for value in 0..<vocabSize {
+                    maximum = max(maximum, logits[value])
+                }
+                var sumExp = 0.0
+                for value in 0..<vocabSize {
+                    sumExp += exp(Double(logits[value] - maximum))
+                }
+                let target = Int(tokens[index + 1])
+                total += Double(logits[target] - maximum) - log(sumExp)
+            }
+            return total / Double(tokens.count - 1)
+        }
+    }
+
+    /// Which of two single-token answers the model prefers, as a probability
+    /// for the first.
+    ///
+    /// One forward pass, no generation: the answer is read straight out of the
+    /// logits at the final position. A binary question with a fixed pair of
+    /// answers is the easiest shape of question there is, which is the point —
+    /// it asks a small model for judgement without also asking it for format
+    /// discipline or arithmetic.
+    public func choiceProbability(
+        prompt: String,
+        preferred: String,
+        alternative: String
+    ) throws -> Double {
+        try lock.withLock {
+            _ = Self.backendInitialized
+            let (_, vocab) = try loadedModel()
+            let context = try activeContext()
+            let tokens = try tokenize(prompt, vocab: vocab, addSpecial: true)
+            guard !tokens.isEmpty,
+                  let preferredToken = try tokenize(
+                    preferred,
+                    vocab: vocab,
+                    addSpecial: false
+                  ).first,
+                  let alternativeToken = try tokenize(
+                    alternative,
+                    vocab: vocab,
+                    addSpecial: false
+                  ).first else {
+                throw RefinementError.tokenizationFailed
+            }
+            llama_memory_clear(llama_get_memory(context), true)
+            cachedPrefixTokens = []
+
+            try decode(
+                tokens,
+                startingAt: 0,
+                context: context,
+                wantsLogitsOnLast: true
+            )
+            guard let logits = llama_get_logits_ith(context, -1) else {
+                throw RefinementError.decodeFailed
+            }
+            // Only the two answers compete, so this is their softmax rather
+            // than the whole vocabulary's. What matters is which the model
+            // leans towards and by how much, not their absolute likelihood.
+            let preferredLogit = Double(logits[Int(preferredToken)])
+            let alternativeLogit = Double(logits[Int(alternativeToken)])
+            let maximum = max(preferredLogit, alternativeLogit)
+            let preferredExp = exp(preferredLogit - maximum)
+            let alternativeExp = exp(alternativeLogit - maximum)
+            return preferredExp / (preferredExp + alternativeExp)
+        }
+    }
+
     private func activeContext() throws -> OpaquePointer {
         if let context {
             return context

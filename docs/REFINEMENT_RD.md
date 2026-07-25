@@ -902,6 +902,99 @@ The remaining options are all about the model, not the plumbing:
 Option 3 deserves genuine consideration rather than being the fallback. The
 measured case for the download is currently zero.
 
+## 8.7 Three ways of using the model, measured
+
+The premise of 8.6 was that Qwen 1.5B is too small for this job. That was the
+wrong conclusion. It was being asked the wrong kind of question.
+
+Every design so far made the model *find* the disfluencies and *emit* the
+edits — open-ended judgement, position arithmetic and format discipline at
+once. Three alternatives keep only the judgement. Deterministic rules propose
+candidate deletions, deliberately over-eagerly, and the model decides which
+proposals are right. It never chooses what to look at.
+
+- **1 scorer** — for each candidate, ask which reads more naturally, the text
+  with the span or without it. Two forward passes, no generation, no
+  instructions.
+- **2 verifier** — ask a yes/no question per candidate, answered by reading two
+  logits. One forward pass, no generation.
+- **3 oracle** — accept a candidate only if it genuinely lowers word error rate
+  against the reference. Cheating, and unshippable: it is the ceiling, and
+  exists to answer whether a better model is worth chasing at all.
+
+```
+disfluent speech (refinement must help)
+raw transcript                27.7%
+after clean                   12.3%   -15.4 pts       1 ms/clip
+after local model             12.3%   -15.4 pts     476 ms/clip
+after 1 scorer                 9.2%   -18.5 pts       1 ms/clip
+after 2 verifier              12.3%   -15.4 pts       1 ms/clip
+after 3 oracle (ceiling)       9.2%   -18.5 pts       1 ms/clip
+
+clean speech (refinement must not meddle)
+raw transcript                 4.0%
+after clean                    4.0%    +0.0 pts   0 changed
+after local model              4.0%    +0.0 pts   0 changed   33% rejected
+after 1 scorer                 4.0%    +0.0 pts   0 changed
+after 2 verifier               7.1%    +3.0 pts   3 changed
+after 3 oracle (ceiling)       4.0%    +0.0 pts   0 changed
+```
+
+Semantic violations: zero for all six.
+
+### 8.7.1 The scorer reaches the ceiling
+
+**Idea 1 scores identically to the oracle — 9.2% against 9.2%.** Given the same
+candidates, a flawless judge cannot beat it. It contributes **+3.1 points over
+Clean**, the first time anything model-based has contributed more than zero,
+and it does so without touching clean speech: 0 clips changed, +0.0 points,
+zero violations.
+
+It also solved `dis-selfcorrect` — "Send the invoice on Tuesday actually
+Wednesday" — the exact case that defeated the full rewrite, the drop indices
+and the quoted spans. That case needs a judgement no regex can make, and
+fluency scoring makes it correctly.
+
+The consequence for planning is larger than the three points: since the scorer
+already equals the oracle, **the limit is now the candidate rules, not the
+model.** A better or fine-tuned model cannot improve this without a wider
+candidate set to judge, which settles whether Track H's fine-tuning is worth
+starting. It is not, yet.
+
+### 8.7.2 The verifier is actively harmful
+
+Idea 2 gained nothing on disfluent speech and cost **+3.0 points on clean
+speech**, changing 3 of 12 clips that needed no change. It deleted meaningful
+words — "just", "so", "well" — that the candidate rules proposed and the model
+waved through.
+
+The contrast with the scorer is the whole lesson. Both saw identical
+candidates. Asked *"is this filler? yes or no"*, the model said yes too
+readily. Asked *"which of these two sentences reads better"*, it judged
+correctly every time. Same model, same information, opposite outcomes —
+because one question relies on instruction-following and the other on the
+thing a language model actually is.
+
+### 8.7.3 Latency
+
+The scorer's median is 1–2 ms per clip, against 476–580 ms for the generation
+design. That figure needs a caveat: most clips produce no candidates at all, so
+the scorer returns without calling the model and the median reflects those.
+Cost scales with candidate count and the true per-candidate cost is not
+isolated by this measurement — it should be before shipping. Even so, the
+design does no generation whatsoever, which is where 25–40 ms per token went.
+
+### 8.7.4 What this changes
+
+Withholding the mode (8.6) was right on the evidence available, and the
+evidence has now changed. The path back is not a bigger model — it is this
+strategy, which is faster, safer and measurably better than the one that was
+withheld, using the same weights already on disk.
+
+Before it ships: measure per-candidate latency honestly, tune the margin on
+real recordings rather than synthetic fixtures, and widen the candidate rules,
+since they are now the binding constraint.
+
 ## 9. Suggested sequence
 
 Revised after the section 6–8 research. The ordering changed in two places:

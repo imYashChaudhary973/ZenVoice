@@ -285,13 +285,73 @@ private func measure() -> Bool {
             ?? installedRefinementModel
         coordinator.update(modelURL: localModelURL)
 
-        let stages: [(String, InstantRefineMode)] = localModelURL == nil
-            ? [("clean", .clean), ("agent prompt", .agentPrompt)]
-            : [
-                ("clean", .clean),
-                ("agent prompt", .agentPrompt),
-                ("local model", .localModel)
-            ]
+        // Stages are closures rather than modes, so the lab strategies can be
+        // measured beside the shipping ones on identical transcripts.
+        // (transcript, reference) -> refined
+        typealias Stage = (String, String) -> (text: String, rejected: Bool)
+        func mode(_ mode: InstantRefineMode) -> Stage {
+            { transcript, _ in
+                let result = coordinator.refine(
+                    transcript,
+                    mode: mode,
+                    languageCode: "en"
+                )
+                return (result.text, result.wasRejected)
+            }
+        }
+
+        var stages: [(String, Stage)] = [
+            ("clean", mode(.clean)),
+            ("agent prompt", mode(.agentPrompt))
+        ]
+        if localModelURL != nil {
+            stages.append(("local model", mode(.localModel)))
+        }
+
+        // The three ideas, measured against each other. Off by default because
+        // the scorer runs one forward pass per candidate and the comparison is
+        // a research question, not a regression check.
+        if flag("ZENVOICE_REFINE_LAB"), let localModelURL {
+            let labRefiner = LocalTextRefiner(modelURL: localModelURL)
+            let scorerMargin = Double(
+                environment["ZENVOICE_LAB_MARGIN"] ?? ""
+            ) ?? 0.05
+            let verifierThreshold = Double(
+                environment["ZENVOICE_LAB_THRESHOLD"] ?? ""
+            ) ?? 0.5
+            stages.append(
+                ("1 scorer", { transcript, _ in
+                    (RefineLab.scorer(
+                        InstantRefineEngine().refine(
+                            transcript, mode: .clean
+                        ).text,
+                        refiner: labRefiner,
+                        margin: scorerMargin
+                    ), false)
+                })
+            )
+            stages.append(
+                ("2 verifier", { transcript, _ in
+                    (RefineLab.verifier(
+                        InstantRefineEngine().refine(
+                            transcript, mode: .clean
+                        ).text,
+                        refiner: labRefiner,
+                        threshold: verifierThreshold
+                    ), false)
+                })
+            )
+            stages.append(
+                ("3 oracle (ceiling)", { transcript, reference in
+                    (RefineLab.oracle(
+                        InstantRefineEngine().refine(
+                            transcript, mode: .clean
+                        ).text,
+                        reference: reference
+                    ), false)
+                })
+            )
+        }
 
         // Two cohorts, scored separately.
         //
@@ -358,21 +418,20 @@ private func measure() -> Bool {
                     reference: clip.sentence.text,
                     hypothesis: raw
                 )
-                for (name, mode) in stages {
+                for (name, stage) in stages {
                     var outcome = outcomes[name] ?? StageOutcome()
                     // Repeat and take the median. A single sample was moving
                     // by 3x between identical runs, which is larger than any
                     // effect worth measuring; the transcript is fixed by this
                     // point, so the repeats differ only in machine load.
                     var samples: [TimeInterval] = []
-                    var result = InstantRefineResult(text: raw, correctionCount: 0)
+                    var refined = raw
+                    var wasRejected = false
                     for _ in 0..<max(1, latencyRepeats) {
                         let attemptStart = Date()
-                        result = coordinator.refine(
-                            raw,
-                            mode: mode,
-                            languageCode: "en"
-                        )
+                        let output = stage(raw, clip.sentence.text)
+                        refined = output.text
+                        wasRejected = output.rejected
                         samples.append(
                             Date().timeIntervalSince(attemptStart)
                         )
@@ -380,8 +439,7 @@ private func measure() -> Bool {
                     outcome.durations.append(
                         samples.sorted()[samples.count / 2]
                     )
-                    let refined = result.text
-                    if result.wasRejected { outcome.rejections += 1 }
+                    if wasRejected { outcome.rejections += 1 }
                     if refined != raw {
                         outcome.changed += 1
                         clipChanged = true
@@ -703,6 +761,49 @@ private func measure() -> Bool {
     // actually makes Hinglish unusable. This asks the question that can be
     // answered without a canonical spelling: did the English words come back as
     // English?
+    // ---- language routing probe ----
+    //
+    // Answers one question: could ZenVoice send English dictation to a Whisper
+    // model and Hinglish dictation to a Hinglish model, automatically? That
+    // only works if Whisper's own language detector can tell the two apart.
+    // Hinglish is roughly half English content words, so it is genuinely
+    // unclear which way it lands — and a Hinglish clip misrouted to Whisper
+    // gets the `kampyutara` failure the routing was meant to avoid.
+    //
+    // Opt-in: ZENVOICE_PROBE_ROUTING=1.
+    if flag("ZENVOICE_PROBE_ROUTING"), Fixtures.isHindiVoiceInstalled() {
+        report("  language routing probe (can English and Hinglish be told apart?)")
+        report("  " + String(repeating: "-", count: 60))
+        let englishClips = clips.prefix(4)
+        let hinglishClips =
+            (try? Fixtures.renderHinglish(into: fixtureDirectory)) ?? []
+        for (label, group) in [
+            ("english", Array(englishClips)),
+            ("hinglish", hinglishClips)
+        ] {
+            for clip in group {
+                let samples = Fixtures.degraded(
+                    (try? Fixtures.samples(at: clip.url)) ?? [],
+                    gain: gain,
+                    noise: noise
+                )
+                guard !samples.isEmpty,
+                      let detected = try? transcriber.detectedLanguage(
+                        samples: samples
+                      ) else { continue }
+                report(
+                    "  "
+                        + "\(label)/\(clip.name)".padding(
+                            toLength: 34, withPad: " ", startingAt: 0
+                        )
+                        + detected.code.leftPadded(to: 6)
+                        + String(format: "  %.2f", detected.probability)
+                )
+            }
+        }
+        report()
+    }
+
     // A metric that always returned zero would produce exactly the baseline
     // reported below, so it has to demonstrate it can tell the two apart before
     // its verdict on real audio means anything.
@@ -792,6 +893,26 @@ private func measure() -> Bool {
     if hinglishShouldRun, hinglishLoanwords.total == 0 {
         hindiFailures.append(
             "Hinglish loanword coverage produced no measurements"
+        )
+    }
+
+    // The floor only applies to a model that claims Hinglish. A general
+    // multilingual model scores zero here by construction — it writes English
+    // words in Devanagari and the romanizer cannot recover them — and that is
+    // the defect a Hinglish model exists to fix, not a regression to fail on.
+    //
+    // Whisper-Hindi2Hinglish-Apex measures 21/26. The floor sits at 18 so a
+    // single clip of drift does not fail a run, while a collapse back towards
+    // the 0/26 baseline — the failure this whole metric was built to catch —
+    // does.
+    if configuration.modelLanguageCapability == .hinglish,
+       hinglishLoanwords.total > 0,
+       hinglishLoanwords.preserved < Scoring.hinglishLoanwordFloor {
+        hindiFailures.append(
+            "Hinglish loanword preservation fell to "
+                + "\(hinglishLoanwords.preserved)/\(hinglishLoanwords.total), "
+                + "below the floor of \(Scoring.hinglishLoanwordFloor) "
+                + "(lost: \(hinglishLoanwords.lost.joined(separator: ", ")))"
         )
     }
 
