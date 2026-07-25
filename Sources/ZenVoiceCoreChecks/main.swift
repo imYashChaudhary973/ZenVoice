@@ -333,148 +333,6 @@ guard InstantRefinePreferences.load(defaults: refineDefaults)
     )
     exit(1)
 }
-// Local Model is withheld, so a preference still holding it — saved before
-// the mode was withdrawn — migrates to Clean rather than leaving the user on
-// a mode the app no longer offers. Clean is what it fell back to anyway, so
-// their results are unchanged and only their latency moves, downward.
-InstantRefinePreferences.save(.localModel, defaults: refineDefaults)
-guard InstantRefinePreferences.load(defaults: refineDefaults) == .clean,
-      !InstantRefineMode.userSelectable.contains(.localModel),
-      InstantRefineMode.userSelectable == [.off, .clean, .agentPrompt] else {
-    FileHandle.standardError.write(
-        Data("FAIL: withheld local model mode was not migrated\n".utf8)
-    )
-    exit(1)
-}
-
-let refinementModels = VerifiedRefinementModelCatalog.models
-guard refinementModels.count == 2,
-      Set(refinementModels.map(\.tier)) == [.fast, .balanced],
-      refinementModels.allSatisfy({
-          $0.publisher == "Qwen"
-              && $0.license == "Apache-2.0"
-              && $0.downloadURL.scheme == "https"
-              && $0.downloadURL.host == "huggingface.co"
-              && $0.sourceRevision.count == 40
-              && $0.sha256.count == 64
-              && $0.fileSizeBytes > 0
-      }),
-      !refinementModels.contains(where: {
-          $0.id.contains("3b")
-      }) else {
-    FileHandle.standardError.write(
-        Data("FAIL: refinement allowlist is not legally pinned\n".utf8)
-    )
-    exit(1)
-}
-
-// The local model now returns the indices of words to delete rather than a
-// rewritten transcript, so the guard checks a drop list. Invention,
-// substitution and reordering are no longer things it has to detect — they
-// are unreachable, because the output is always a subsequence of the input.
-let dropWords = LocalRefinementPrompt.words(in: "Um, create the local app.")
-guard LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[1]}"#,
-        words: dropWords
-      ) == [0],
-      LocalRefinementGuard.applying(drops: [0], to: dropWords)
-        == "create the local app.",
-      // An empty list is a valid answer: nothing needed removing.
-      LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[]}"#,
-        words: dropWords
-      ) == [],
-      // Out of range, in both directions.
-      LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[99]}"#,
-        words: dropWords
-      ) == nil,
-      LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[0]}"#,
-        words: dropWords
-      ) == nil,
-      // Malformed, and fenced markdown.
-      LocalRefinementGuard.validatedDrops(
-        output: "not json",
-        words: dropWords
-      ) == nil,
-      LocalRefinementGuard.validatedDrops(
-        output: "```json\n{\"drop\":[1]}\n```",
-        words: dropWords
-      ) == nil,
-      // A multi-word drop, which is how a self-correction is removed.
-      LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[4,5]}"#,
-        words: LocalRefinementPrompt.words(
-            in: "Send it on Tuesday actually Wednesday"
-        )
-      ) == [3, 4],
-      LocalRefinementPrompt.make(transcript: "Hola mundo")
-        .contains("1 Hola 2 mundo") else {
-    FileHandle.standardError.write(
-        Data("FAIL: local refinement drop guard is unsafe\n".utf8)
-    )
-    exit(1)
-}
-
-// The rule that protects meaning rather than tidiness. A dropped negation
-// leaves a sentence that reads perfectly and means the opposite, which a user
-// proof-reading their own dictation will not catch.
-guard LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[2]}"#,
-        words: LocalRefinementPrompt.words(in: "Do not share this file.")
-      ) == nil,
-      LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[5]}"#,
-        words: LocalRefinementPrompt.words(
-            in: "Increase the timeout to thirty seconds."
-        )
-      ) == nil,
-      LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[5]}"#,
-        words: LocalRefinementPrompt.words(
-            in: "Increase the timeout to 30 seconds."
-        )
-      ) == nil,
-      // Dropping most of the sentence is a misunderstanding, not an unusually
-      // messy one, so the whole edit is refused.
-      LocalRefinementGuard.validatedDrops(
-        output: #"{"drop":[1,2,3]}"#,
-        words: LocalRefinementPrompt.words(in: "Keep every word here")
-      ) == nil else {
-    FileHandle.standardError.write(
-        Data("FAIL: drop guard permitted a meaning-changing deletion\n".utf8)
-    )
-    exit(1)
-}
-
-let refinementSuite =
-    "ZenVoiceCoreChecks.RefinementModel.\(UUID().uuidString)"
-guard let refinementDefaults =
-    UserDefaults(suiteName: refinementSuite),
-      let fastRefinementModel = refinementModels.first else {
-    FileHandle.standardError.write(
-        Data("FAIL: could not create refinement model fixture\n".utf8)
-    )
-    exit(1)
-}
-defer {
-    refinementDefaults.removePersistentDomain(
-        forName: refinementSuite
-    )
-}
-RefinementModelSelectionPreferences.save(
-    fastRefinementModel,
-    defaults: refinementDefaults
-)
-guard RefinementModelSelectionPreferences.load(
-    defaults: refinementDefaults
-) == fastRefinementModel else {
-    FileHandle.standardError.write(
-        Data("FAIL: refinement model selection did not persist\n".utf8)
-    )
-    exit(1)
-}
 
 print("ZenVoiceCoreChecks: Instant Refine passed")
 
@@ -499,7 +357,7 @@ let mailProfile = ApplicationProfile(
         inputLanguageCode: "es",
         outputMode: .spokenLanguage
     ),
-    refinementMode: .localModel,
+    refinementMode: .agentPrompt,
     voiceCommandsEnabled: true
 )
 ApplicationProfilePreferences.save(
@@ -790,26 +648,23 @@ for choice in HoldKeyChoice.allCases {
 print("ZenVoiceCoreChecks: private and hold controls passed")
 
 let verifiedModels = VerifiedModelCatalog.models
-guard verifiedModels.count == 9,
+guard verifiedModels.count == 10,
       Set(verifiedModels.map(\.id)).count == verifiedModels.count,
       Set(verifiedModels.map(\.filename)).count == verifiedModels.count,
       Set(verifiedModels.map(\.tier))
         == Set(ModelPerformanceTier.allCases),
-      // `.hinglish` deliberately has no catalogue entry yet: the converted
-      // Apex weights measure well (20/26 loanwords against a 0/26 baseline)
-      // but still need a pinned download location before they can ship.
-      // Listing the capabilities explicitly keeps this a decision rather than
-      // a gap that `allCases` would quietly absorb.
-      // See docs/hinglish/05-update-2026-07.md.
       Set(verifiedModels.map(\.languageCapability))
-        == [.english, .multilingual],
+        == Set(ModelLanguageCapability.allCases),
       verifiedModels.allSatisfy({
           $0.downloadURL.scheme == "https"
               && $0.downloadURL.host == "huggingface.co"
               && $0.downloadURL.path.contains($0.sourceRevision)
               && $0.sha256.count == 64
               && $0.fileSizeBytes > 0
-              && $0.license == "MIT"
+              // Apache-2.0 joins MIT for the Hinglish weights. Both permit
+              // redistribution with attribution, which `attribution` carries.
+              && ["MIT", "Apache-2.0"].contains($0.license)
+              && !$0.attribution.isEmpty
               && URL(string: $0.licenseURL)?.scheme == "https"
               && URL(string: $0.upstreamRepository)?.host == "github.com"
       }) else {

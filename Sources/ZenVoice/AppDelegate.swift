@@ -3,7 +3,6 @@ import AVFoundation
 import Combine
 import Foundation
 import ZenVoiceCore
-import ZenVoiceRefinementRuntime
 import ZenVoiceRuntime
 import ZenVoiceStorage
 
@@ -127,16 +126,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
-    private var refinementModelManagerViewModel:
-        RefinementModelManagerViewModel!
     private var applicationProfileViewModel:
         ApplicationProfileViewModel!
     private let onboardingViewModel = OnboardingViewModel(
         showAtLaunch: OnboardingPreferences.shouldPresent()
     )
     private var settingsWindowController: SettingsWindowController!
-    private let refinementCoordinator =
-        LocalRefinementCoordinator()
     private let historyPreferences = HistoryPreferences()
     private let learningPreferences = LocalLearningPreferences()
     private var dictationVault: DictationVault?
@@ -166,7 +161,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         configureTranscriber()
-        configureRefiner()
         configureMenuBar()
         configureZenBar()
         configureHistoryStorage()
@@ -245,35 +239,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func configureRefiner() {
-        refinementCoordinator.update(modelURL: nil)
-        guard let model =
-            RefinementModelSelectionPreferences.load(),
-              let url =
-                try? VerifiedRefinementModelCatalog.installedURL(
-                    for: model
-                ) else {
-            return
-        }
-        let coordinator = refinementCoordinator
-        DispatchQueue.global(qos: .utility).async {
-            let isVerified =
-                (try? VerifiedRefinementModelCatalog.verify(
-                    url,
-                    for: model
-                )) == true
-            guard isVerified,
-                  RefinementModelSelectionPreferences.load()?.id
-                    == model.id else {
-                return
-            }
-            coordinator.update(modelURL: url)
-            // Already off the main queue, and already past verification, so
-            // the load and prefill happen before the first dictation rather
-            // than inside it.
-            coordinator.warmUp()
-        }
-    }
 
     private func configureHistoryStorage() {
         do {
@@ -529,10 +494,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.configureTranscriber()
             self?.settingsViewModel?.refreshSystemStatus()
         }
-        refinementModelManagerViewModel =
-            RefinementModelManagerViewModel { [weak self] in
-                self?.configureRefiner()
-            }
         applicationProfileViewModel = ApplicationProfileViewModel()
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
@@ -644,8 +605,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             insightsViewModel: insightsViewModel,
             voiceProfileViewModel: voiceProfileViewModel,
             modelManagerViewModel: modelManagerViewModel,
-            refinementModelManagerViewModel:
-                refinementModelManagerViewModel,
             applicationProfileViewModel:
                 applicationProfileViewModel,
             onboardingViewModel: onboardingViewModel,
@@ -997,20 +956,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             return nil
         }
-        // A per-application profile saved before Local Model was withheld
-        // still holds it, and would otherwise keep paying its cost for a
-        // result identical to Clean. InstantRefinePreferences.load() already
-        // migrates the global setting; this is the same migration for the
-        // per-application override.
-        let profileMode = (profile?.refinementMode).map { mode in
-            InstantRefineMode.userSelectable.contains(mode)
-                ? mode
-                : InstantRefineMode.clean
-        }
         return ActiveDictationBehavior(
             languageProfile: languageProfile,
             refinementMode:
-                profileMode
+                profile?.refinementMode
                 ?? InstantRefinePreferences.load(),
             voiceCommandsEnabled:
                 profile?.voiceCommandsEnabled
@@ -1178,13 +1127,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     initialPrompt: behavior.context
                 )
                 let refinement =
-                    self?.refinementCoordinator.refine(
+                    TranscriptRefinement.refine(
                         result.finalTranscript,
                         mode: behavior.refinementMode,
                         languageCode:
                             behavior.languageProfile
                                 .inputLanguageCode,
-                        context: behavior.context,
+                        
                         voiceCommandsEnabled:
                             behavior.voiceCommandsEnabled
                     ) ?? InstantRefineEngine().refine(
@@ -1271,11 +1220,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) else {
             return nil
         }
-        let refinement = refinementCoordinator.refine(
+        let refinement = TranscriptRefinement.refine(
             result.finalTranscript,
             mode: behavior.refinementMode,
             languageCode: behavior.languageProfile.inputLanguageCode,
-            context: behavior.context,
+            
             voiceCommandsEnabled: behavior.voiceCommandsEnabled
         )
         return ProcessedTranscription(
@@ -1310,11 +1259,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     languageProfile: behavior.languageProfile,
                     initialPrompt: behavior.context
                 )
-                let refinement = refinementCoordinator.refine(
+                let refinement = TranscriptRefinement.refine(
                     result.finalTranscript,
                     mode: behavior.refinementMode,
                     languageCode: behavior.languageProfile.inputLanguageCode,
-                    context: behavior.context,
+                    
                     voiceCommandsEnabled: behavior.voiceCommandsEnabled
                 )
                 processed = ProcessedTranscription(
@@ -1474,13 +1423,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     initialPrompt: behavior.context
                 )
                 let refinement =
-                    self?.refinementCoordinator.refine(
+                    TranscriptRefinement.refine(
                         result.finalTranscript,
                         mode: behavior.refinementMode,
                         languageCode:
                             behavior.languageProfile
                                 .inputLanguageCode,
-                        context: behavior.context,
+                        
                         voiceCommandsEnabled:
                             behavior.voiceCommandsEnabled
                     ) ?? InstantRefineEngine().refine(
@@ -2031,7 +1980,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 let result = try transcriber.transcribe(audioURL: audioURL)
                 let refinement =
-                    self?.refinementCoordinator.refine(
+                    TranscriptRefinement.refine(
                         result.finalTranscript,
                         mode: instantRefineMode
                     ) ?? InstantRefineEngine().refine(

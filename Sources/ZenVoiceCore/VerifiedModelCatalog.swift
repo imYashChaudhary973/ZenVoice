@@ -18,14 +18,33 @@ public enum ModelPerformanceTier: String, Codable, CaseIterable, Sendable {
 public enum ModelLanguageCapability: String, Codable, CaseIterable, Sendable {
     case english
     case multilingual
+    /// Fine-tuned for Hindi-English code-switching and writes its output in
+    /// Latin script directly.
+    ///
+    /// Not a subset of `multilingual`: the training is Hindi-dominant and the
+    /// model has no claim to the other 98 languages Whisper covers, so pairing
+    /// it with a French profile would produce confident nonsense. It is
+    /// selectable only under the Hinglish profile.
+    case hinglish
 
     public var displayName: String {
         switch self {
         case .english: "English"
         case .multilingual: "Multilingual"
+        case .hinglish: "Hinglish"
         }
     }
 
+    /// Whether the model already writes Latin script.
+    ///
+    /// Everything else reaches Hinglish by transcribing Devanagari and
+    /// romanizing it afterwards, which destroys English loanwords —
+    /// `computer → कंप्यूटर → kampyutara`. A Hinglish-native model skips both
+    /// steps, so running the romanizer over its output would corrupt text that
+    /// is already correct.
+    public var emitsLatinScriptNatively: Bool {
+        self == .hinglish
+    }
 }
 
 public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
@@ -175,6 +194,26 @@ public enum VerifiedModelCatalog {
                 "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
             size: 574_041_195
         ),
+        // Hindi-English code-switching, written in Latin script directly.
+        //
+        // Every other model reaches Hinglish by transcribing Devanagari and
+        // romanizing it, which destroys the English half of the sentence:
+        // `computer` becomes `कंप्यूटर` becomes `kampyutara`. Measured on the
+        // accuracy harness, that path preserves 0 of 26 English words. This
+        // model preserves 21.
+        //
+        // It is a specialist and is offered only for the Hinglish profile.
+        // On English dictation it scores 16.8% word error rate against Whisper
+        // Medium's 2.0%, because 700 hours of Hindi fine-tuning cost it the
+        // technical English vocabulary it started with.
+        hinglishModel(
+            id: "hindi2hinglish-apex",
+            name: "Hinglish Apex",
+            filename: "ggml-hindi2hinglish-apex-q8_0.bin",
+            sha256:
+                "0b4324d2c1ad64f20883ee7fcd5d2bb0a8466287dc70d74bc47066200c28c719",
+            size: 874_188_075
+        ),
         model(
             id: "whisper-medium-en",
             name: "Whisper Medium",
@@ -255,6 +294,57 @@ public enum VerifiedModelCatalog {
             return false
         }
         return try sha256Hex(of: fileURL) == model.sha256
+    }
+
+    /// Weights ZenVoice converted itself, pinned by commit.
+    ///
+    /// Oriserve publish Apex as HuggingFace safetensors and whisper.cpp needs
+    /// GGML, so somebody has to convert it. Rather than depend on a stranger's
+    /// conversion, ZenVoice runs it and republishes the result — which means
+    /// the checksum below is pinned against a file this project produced and
+    /// measured, not one it merely found.
+    ///
+    /// A commit hash rather than a branch or tag, for the same reason the
+    /// stock models use one: a tag can be moved to point at different bytes,
+    /// a commit cannot.
+    public static let convertedModelRevision =
+        "0c540ce8945ef96b2880f2d2c0d05ba419621171"
+    public static let convertedModelRepository =
+        "https://huggingface.co/imYChaudhary22/zenvoice-hinglish-apex-ggml"
+
+    private static func hinglishModel(
+        id: String,
+        name: String,
+        filename: String,
+        sha256: String,
+        size: Int64
+    ) -> VerifiedModel {
+        VerifiedModel(
+            id: id,
+            displayName: name,
+            filename: filename,
+            tier: .highAccuracy,
+            languageCapability: .hinglish,
+            // Who produced *this file*, matching how the stock entries name
+            // ggml-org rather than OpenAI. Oriserve trained the weights and
+            // are credited for them in `attribution` and `upstreamRepository`,
+            // but they never published a GGML — this conversion is ours, and
+            // the checksum below is pinned against it.
+            publisher: "ZenVoice",
+            sourceRepository: convertedModelRepository,
+            upstreamRepository:
+                "https://github.com/OriserveAI/Whisper-Hindi2Hinglish",
+            sourceRevision: convertedModelRevision,
+            sha256: sha256,
+            fileSizeBytes: size,
+            format: "whisper.cpp GGML",
+            license: "Apache-2.0",
+            licenseURL: "https://www.apache.org/licenses/LICENSE-2.0",
+            attribution:
+                "Whisper-Hindi2Hinglish-Apex by Oriserve, fine-tuned from "
+                + "OpenAI Whisper large-v3-turbo. Converted to whisper.cpp "
+                + "GGML and quantized to q8_0 for ZenVoice."
+        )
     }
 
     private static func model(

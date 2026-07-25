@@ -73,8 +73,6 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
-    @ObservedObject var refinementModelManagerViewModel:
-        RefinementModelManagerViewModel
     @ObservedObject var applicationProfileViewModel:
         ApplicationProfileViewModel
     @ObservedObject var onboardingViewModel:
@@ -307,7 +305,6 @@ struct ZenVoiceSettingsView: View {
         case .refine:
             InstantRefineScreen(
                 viewModel: viewModel,
-                modelViewModel: refinementModelManagerViewModel
             )
         case .history:
             HistoryScreen(viewModel: historyViewModel)
@@ -331,8 +328,6 @@ struct ZenVoiceSettingsView: View {
                     voiceProfileViewModel,
                 modelManagerViewModel:
                     modelManagerViewModel,
-                refinementModelManagerViewModel:
-                    refinementModelManagerViewModel
             )
         case .help:
             HelpScreen(
@@ -1802,10 +1797,6 @@ private struct ModelsScreen: View {
 
 private struct InstantRefineScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
-    @ObservedObject var modelViewModel:
-        RefinementModelManagerViewModel
-    @State private var modelPendingRemoval:
-        VerifiedRefinementModel?
 
     var body: some View {
         ZenScreen(
@@ -1814,38 +1805,9 @@ private struct InstantRefineScreen: View {
                 "Cleanup happens after transcription, entirely on-device. Your meaning is never changed — and never invented."
         ) {
             modeSection
-            // The refinement-model download and its guarantees panel are
-            // hidden with the mode. Both described a feature that measured no
-            // benefit, and a download offered for its own sake is worse than
-            // no download at all.
-            if viewModel.instantRefineMode == .localModel {
-                guaranteesSection
-                refinementModelsSection
-            }
-            if modelViewModel.installedModelIDs.isEmpty == false {
-                installedRefinementModelCleanupSection
-            }
             liveDictationSection
             contextSection
             voiceCommandsSection
-        }
-        .alert(
-            "Remove refinement model?",
-            isPresented: Binding(
-                get: { modelPendingRemoval != nil },
-                set: { if !$0 { modelPendingRemoval = nil } }
-            ),
-            presenting: modelPendingRemoval
-        ) { model in
-            Button("Cancel", role: .cancel) {}
-            Button("Remove", role: .destructive) {
-                modelViewModel.remove(model)
-                modelPendingRemoval = nil
-            }
-        } message: { model in
-            Text(
-                "\(model.displayName) will be removed from this Mac. Clean refinement remains available."
-            )
         }
     }
 
@@ -1913,276 +1875,10 @@ private struct InstantRefineScreen: View {
             return "“um, create the the local app with Swift” → “Create the local app with Swift.”"
         case .agentPrompt:
             return "“fix the login bug” → structured, ready-to-paste prompt"
-        case .localModel:
-            return "“um, create the the local app with Swift” → “Create the local app with Swift.”"
         }
     }
 
     // MARK: guarantees (local model)
-
-    private var guaranteesSection: some View {
-        ZenSection(title: "Local Model guarantees") {
-            ZenPanel {
-                ZenRow(
-                    icon: "clock",
-                    title: "Five-second deadline",
-                    subtitle:
-                        "If refinement takes longer, the Clean result is inserted instead — deterministically."
-                )
-                ZenPanelDivider()
-                ZenRow(
-                    icon: "checkmark.shield",
-                    title: "No-invention guard",
-                    subtitle:
-                        "Output is grammar-constrained JSON, rejected if it removes too much of the transcript or invents new semantic words."
-                )
-            }
-        }
-    }
-
-    // MARK: refinement models
-
-    /// Lets someone who downloaded a refinement model before the mode was
-    /// withheld get the disk space back.
-    ///
-    /// Only appears when there is something to remove. Retiring the feature
-    /// without offering this would leave a gigabyte stranded on the user's
-    /// Mac with nothing in the interface admitting it exists.
-    private var installedRefinementModelCleanupSection: some View {
-        ZenSection(title: "Downloaded refinement models") {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                ZenPanel {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(
-                            "Local Model refinement is not currently offered."
-                        )
-                        .font(ZenDesign.Typography.bodyStrong)
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        Text(
-                            "Measured against Clean it changed accuracy by nothing, so it is no longer worth its download or its wait. Clean handles fillers, repeated words, and spoken restarts instantly. These files can be removed safely."
-                        )
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(ZenDesign.Spacing.md)
-                }
-                ForEach(
-                    VerifiedRefinementModelCatalog.models.filter {
-                        modelViewModel.installedModelIDs.contains($0.id)
-                    }
-                ) { model in
-                    ZenPanel {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(model.displayName)
-                                    .font(ZenDesign.Typography.bodyStrong)
-                                    .foregroundStyle(
-                                        ZenDesign.Semantic.textPrimary
-                                    )
-                                Text(model.formattedFileSize)
-                                    .font(ZenDesign.Typography.caption)
-                                    .foregroundStyle(
-                                        ZenDesign.Semantic.textSecondary
-                                    )
-                            }
-                            Spacer()
-                            Button("Remove") {
-                                modelPendingRemoval = model
-                            }
-                        }
-                        .padding(ZenDesign.Spacing.md)
-                    }
-                }
-            }
-        }
-    }
-
-    private var refinementModelsSection: some View {
-        ZenSection(
-            title: "Refinement models",
-            caption: modelViewModel.hardwareProfile.summary
-        ) {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                if modelViewModel.isVerifying {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Verifying refinement models…")
-                            .font(ZenDesign.Typography.caption)
-                            .foregroundStyle(
-                                ZenDesign.Semantic.textSecondary
-                            )
-                    }
-                }
-
-                if let error = modelViewModel.errorMessage {
-                    ZenBanner(
-                        kind: .danger,
-                        icon: "exclamationmark.triangle",
-                        text: error
-                    )
-                }
-
-                if !modelViewModel.hasSelectedInstalledModel {
-                    ZenBanner(
-                        kind: .warn,
-                        icon: "info.circle",
-                        text:
-                            "No verified refinement model is selected. ZenVoice will safely fall back to Clean."
-                    )
-                }
-
-                ZenPanel {
-                    ForEach(modelViewModel.models) { model in
-                        if model.id != modelViewModel.models.first?.id {
-                            ZenPanelDivider()
-                        }
-                        refinementModelRow(model)
-                    }
-                }
-            }
-        }
-    }
-
-    private func refinementModelRow(
-        _ model: VerifiedRefinementModel
-    ) -> some View {
-        let isInstalled = modelViewModel.isInstalled(model)
-        let isSelected = modelViewModel.isSelected(model)
-        let isDownloading =
-            modelViewModel.downloadingModelID == model.id
-        let recommendation = modelViewModel.recommendation(for: model)
-
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: ZenDesign.Spacing.sm) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .frame(width: 32, height: 32)
-                    .background {
-                        RoundedRectangle(
-                            cornerRadius: 9, style: .continuous
-                        )
-                        .fill(ZenDesign.Semantic.surfaceRaised)
-                    }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 7) {
-                        Text(model.displayName)
-                            .font(ZenDesign.Typography.bodyStrong)
-                            .foregroundStyle(
-                                ZenDesign.Semantic.textPrimary
-                            )
-                        if isSelected {
-                            ZenBadge(
-                                text: "In use", kind: .success,
-                                systemImage: "checkmark"
-                            )
-                        }
-                    }
-                    Text(
-                        "\(recommendation.title) — \(recommendation.rationale)"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: ZenDesign.Spacing.sm)
-
-                refinementTrailing(
-                    model,
-                    isInstalled: isInstalled,
-                    isSelected: isSelected,
-                    isDownloading: isDownloading
-                )
-            }
-
-            HStack(spacing: 6) {
-                ZenModelMeta(parts: [
-                    model.languageSummary,
-                    model.formattedFileSize,
-                    "rev \(model.sourceRevision.prefix(9))",
-                    "sha256 \(model.sha256.prefix(8))…"
-                ])
-                if let url = URL(string: model.licenseURL) {
-                    Link(model.license, destination: url)
-                        .font(ZenDesign.Typography.monoSmall)
-                        .foregroundStyle(ZenDesign.Semantic.accent)
-                } else {
-                    Text(model.license)
-                        .font(ZenDesign.Typography.monoSmall)
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textTertiary
-                        )
-                }
-            }
-            .padding(.leading, 44)
-        }
-        .padding(.horizontal, ZenDesign.Spacing.md)
-        .padding(.vertical, ZenDesign.Spacing.sm)
-    }
-
-    @ViewBuilder
-    private func refinementTrailing(
-        _ model: VerifiedRefinementModel,
-        isInstalled: Bool,
-        isSelected: Bool,
-        isDownloading: Bool
-    ) -> some View {
-        if isDownloading {
-            VStack(alignment: .trailing, spacing: 5) {
-                ProgressView(
-                    value: modelViewModel.downloadProgress ?? 0
-                )
-                .progressViewStyle(.linear)
-                .tint(ZenDesign.Semantic.accent)
-                .frame(width: 120)
-                HStack(spacing: 6) {
-                    Text(
-                        modelViewModel.isVerifyingDownload
-                            ? "Verifying checksum…"
-                            : "\(Int(((modelViewModel.downloadProgress ?? 0) * 100).rounded()))% of \(model.formattedFileSize)"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                    Button(
-                        "Cancel",
-                        action: modelViewModel.cancelDownload
-                    )
-                    .buttonStyle(.plain)
-                    .font(ZenDesign.Typography.captionStrong)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                }
-            }
-        } else if isInstalled {
-            HStack(spacing: 6) {
-                if !isSelected {
-                    Button("Use") {
-                        modelViewModel.select(model)
-                    }
-                    .buttonStyle(ZenPrimaryButtonStyle(minWidth: 60))
-                }
-                ZenIconButton(
-                    systemImage: "trash",
-                    label: "Remove \(model.displayName)",
-                    isDanger: true
-                ) {
-                    modelPendingRemoval = model
-                }
-            }
-        } else {
-            Button {
-                modelViewModel.download(model)
-            } label: {
-                Label("Download", systemImage: "arrow.down.circle")
-            }
-            .buttonStyle(ZenSecondaryButtonStyle())
-        }
-    }
-
-    // MARK: live dictation
 
     private var liveDictationSection: some View {
         ZenSection(title: "Live dictation") {
@@ -3795,8 +3491,6 @@ private struct PrivacyScreen: View {
         VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel:
         ModelManagerViewModel
-    @ObservedObject var refinementModelManagerViewModel:
-        RefinementModelManagerViewModel
     @State private var confirmsDeleteRecoveryAudio = false
     @State private var confirmsDeleteTranscripts = false
     @State private var confirmsDeleteRules = false
@@ -3822,8 +3516,7 @@ private struct PrivacyScreen: View {
             historyViewModel.refresh()
             voiceProfileViewModel.refresh()
             modelManagerViewModel.refresh()
-            refinementModelManagerViewModel.refresh()
-        }
+            }
         .alert(
             "Delete all retained recovery audio?",
             isPresented: $confirmsDeleteRecoveryAudio
@@ -3997,7 +3690,7 @@ private struct PrivacyScreen: View {
                     icon: "cpu",
                     title: "Local models",
                     subtitle:
-                        "\(modelManagerViewModel.installedModelIDs.count) speech · \(refinementModelManagerViewModel.installedModelIDs.count) refinement — verified weights, removable in Models and Instant Refine"
+                        "\(modelManagerViewModel.installedModelIDs.count) speech — verified weights, removable in Models"
                 )
             }
         }
@@ -4787,16 +4480,7 @@ private struct AppProfilesScreen: View {
                 Picker(
                     "Refinement",
                     selection: Binding(
-                        // A profile saved before Local Model was withheld
-                        // shows as Clean, which is what it now resolves to
-                        // anyway. Without this the picker would render blank,
-                        // its selection matching none of its options.
-                        get: {
-                            InstantRefineMode.userSelectable
-                                .contains(profile.refinementMode)
-                                ? profile.refinementMode
-                                : .clean
-                        },
+                        get: { profile.refinementMode },
                         set: {
                             applicationProfileViewModel
                                 .setRefinementMode(
@@ -4807,7 +4491,7 @@ private struct AppProfilesScreen: View {
                     )
                 ) {
                     ForEach(
-                        InstantRefineMode.userSelectable,
+                        InstantRefineMode.allCases,
                         id: \.self
                     ) { mode in
                         Text(mode.displayName).tag(mode)

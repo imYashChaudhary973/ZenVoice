@@ -9,8 +9,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let insightsViewModel: InsightsViewModel
     private let voiceProfileViewModel: VoiceProfileViewModel
     private let modelManagerViewModel: ModelManagerViewModel
-    private let refinementModelManagerViewModel:
-        RefinementModelManagerViewModel
     private let applicationProfileViewModel:
         ApplicationProfileViewModel
     private let onboardingViewModel: OnboardingViewModel
@@ -22,8 +20,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         insightsViewModel: InsightsViewModel,
         voiceProfileViewModel: VoiceProfileViewModel,
         modelManagerViewModel: ModelManagerViewModel,
-        refinementModelManagerViewModel:
-            RefinementModelManagerViewModel,
         applicationProfileViewModel:
             ApplicationProfileViewModel,
         onboardingViewModel: OnboardingViewModel,
@@ -34,8 +30,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.insightsViewModel = insightsViewModel
         self.voiceProfileViewModel = voiceProfileViewModel
         self.modelManagerViewModel = modelManagerViewModel
-        self.refinementModelManagerViewModel =
-            refinementModelManagerViewModel
         self.applicationProfileViewModel =
             applicationProfileViewModel
         self.onboardingViewModel = onboardingViewModel
@@ -71,8 +65,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 insightsViewModel: insightsViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
-                refinementModelManagerViewModel:
-                    refinementModelManagerViewModel,
                 applicationProfileViewModel:
                     applicationProfileViewModel,
                 onboardingViewModel: onboardingViewModel,
@@ -87,7 +79,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         insightsViewModel.refresh()
         voiceProfileViewModel.refresh()
         modelManagerViewModel.refresh()
-        refinementModelManagerViewModel.refresh()
         applicationProfileViewModel.refresh()
         // Accessory apps can't enter native full screen; become a regular
         // app while the window is open so the green button works.

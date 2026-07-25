@@ -80,25 +80,6 @@ struct VerifiedModelDownloader {
         )
     }
 
-    func download(
-        _ model: VerifiedRefinementModel,
-        progress:
-            AsyncStream<VerifiedModelDownloadPhase>.Continuation
-    ) async throws -> URL {
-        let directory =
-            try VerifiedRefinementModelCatalog.modelsDirectory(
-                fileManager: fileManager
-            )
-        return try await download(
-            sourceURL: model.downloadURL,
-            sourceRevision: model.sourceRevision,
-            filename: model.filename,
-            expectedSize: model.fileSizeBytes,
-            expectedSHA256: model.sha256,
-            destinationDirectory: directory,
-            progress: progress
-        )
-    }
 
     private func download(
         sourceURL: URL,

@@ -13,7 +13,7 @@ public struct ZenVoiceConfiguration {
     }
 
     public var language: String {
-        languageProfile.whisperLanguageArgument
+        languageProfile.whisperLanguageArgument(for: modelLanguageCapability)
     }
 
     public var shouldTranslateToEnglish: Bool {
@@ -53,12 +53,20 @@ public struct ZenVoiceConfiguration {
     }
 
     public var modelLanguageCapability: ModelLanguageCapability {
-        VerifiedModelCatalog.model(
+        if let model = VerifiedModelCatalog.model(
             filename: modelURL.lastPathComponent
-        )?.languageCapability
-            ?? (modelURL.lastPathComponent.contains(".en.")
-                ? .english
-                : .multilingual)
+        ) {
+            return model.languageCapability
+        }
+        // Fallback for a model supplied by path rather than chosen from the
+        // catalogue. Getting this wrong on a Hinglish model is not cosmetic:
+        // it would decode under the Hindi token and then romanize output that
+        // is already Latin, which is the exact failure the model exists to fix.
+        let filename = modelURL.lastPathComponent.lowercased()
+        if filename.contains("hinglish") {
+            return .hinglish
+        }
+        return filename.contains(".en.") ? .english : .multilingual
     }
 
     public static func discover(

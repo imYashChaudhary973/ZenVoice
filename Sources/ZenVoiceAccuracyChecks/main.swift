@@ -1,6 +1,5 @@
 import Foundation
 import ZenVoiceCore
-import ZenVoiceRefinementRuntime
 import ZenVoiceRuntime
 
 // ZenVoiceAccuracyChecks — measures transcription accuracy instead of guessing
@@ -98,255 +97,19 @@ private extension String {
 /// Runs the measurement in its own scope so the Whisper context is released
 /// before the process exits. Leaving it alive trips a Metal teardown assertion
 /// inside ggml during static destruction.
-/// Measures how the scorer's cost grows with dictation length.
-///
-/// Separate from `measure()` and text-only, because the curve is a property of
-/// the scorer rather than of transcription — waiting on Whisper to answer it
-/// would cost minutes for no extra information.
-private func probeScorerLatency() -> Bool {
-    let installed = VerifiedRefinementModelCatalog.models
-        .compactMap { model -> URL? in
-            guard let url = try? VerifiedRefinementModelCatalog
-                .installedURL(for: model),
-                FileManager.default.fileExists(atPath: url.path) else {
-                return nil
-            }
-            return url
-        }
-        .first
-    guard let modelURL = environment["ZENVOICE_REFINEMENT_MODEL_PATH"]
-        .map({ URL(fileURLWithPath: $0) }) ?? installed else {
-        print("scorer latency probe skipped — no refinement model installed")
-        return true
-    }
-    let refiner = LocalTextRefiner(modelURL: modelURL)
-    // Warm the model so the first row does not carry the load time.
-    _ = try? refiner.logLikelihood(of: "warm up the model")
-
-    let margin = Double(environment["ZENVOICE_LAB_MARGIN"] ?? "") ?? 0.05
-    report()
-    report("scorer latency — how cost grows with dictation length")
-    report("  " + String(repeating: "-", count: 62))
-    report("  words  candidates  calls        total     per call   per word")
-    var previous: (words: Int, milliseconds: Double)?
-    for row in RefineLab.latencyProbe(refiner: refiner, margin: margin) {
-        let perCall = row.calls == 0
-            ? 0
-            : row.milliseconds / Double(row.calls)
-        let perWord = row.words == 0
-            ? 0
-            : row.milliseconds / Double(row.words)
-        report(
-            String(
-                format: "  %5d  %10d  %5d  %9.0f ms  %8.1f ms  %7.2f ms",
-                row.words,
-                row.candidates,
-                row.calls,
-                row.milliseconds,
-                perCall,
-                perWord
-            )
-        )
-        previous = (row.words, row.milliseconds)
-        _ = previous
-    }
-    report()
-    report(
-        "  Reading it: if per-word stays flat the cost is linear and fine. If"
-    )
-    report(
-        "  per-word climbs with length the cost is quadratic, which is the"
-    )
-    report(
-        "  failure the edit-script redesign removed, returning in disguise."
-    )
-    report()
-    return true
-}
-
-/// Sweeps the scorer's settings against the fixtures.
-///
-/// Decodes every clip once and then replays the scorer over those fixed
-/// transcripts, so a dozen configurations cost one transcription pass instead
-/// of a dozen. The threshold is the setting that decides whether this is safe
-/// to ship, and guessing it — as 8.7 did at 0.05 — is not good enough.
-///
-/// The rule applied when reading the table: any setting that changes even one
-/// clean-speech clip is disqualified regardless of what it gains, because
-/// silently deleting a word someone meant is worse than leaving an "um" in.
-private func sweepScorer() -> Bool {
-    let configuration: ZenVoiceConfiguration
-    do {
-        configuration = try ZenVoiceConfiguration.discover(
-            languageProfile: .english
-        )
-    } catch {
-        skip("no speech model available for the sweep.")
-    }
-
-    let fixtureDirectory = environment["ZENVOICE_ACCURACY_FIXTURES"]
-        .map { URL(fileURLWithPath: $0) }
-        ?? FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "zenvoice-accuracy-fixtures",
-                isDirectory: true
-            )
-    guard let cleanClips = try? Fixtures.render(into: fixtureDirectory),
-          let disfluentClips = try? Fixtures.renderDisfluent(
-            into: fixtureDirectory
-          ) else {
-        skip("fixtures could not be rendered.")
-    }
-
-    let installed = VerifiedRefinementModelCatalog.models
-        .compactMap { model -> URL? in
-            guard let url = try? VerifiedRefinementModelCatalog
-                .installedURL(for: model),
-                FileManager.default.fileExists(atPath: url.path) else {
-                return nil
-            }
-            return url
-        }
-        .first
-    guard let modelURL = environment["ZENVOICE_REFINEMENT_MODEL_PATH"]
-        .map({ URL(fileURLWithPath: $0) }) ?? installed else {
-        skip("no refinement model installed.")
-    }
-
-    let transcriber = WhisperTranscriber(
-        configuration: configuration,
-        isReproducible: true
-    )
-    let gain = value("ZENVOICE_ACCURACY_GAIN", default: 0.35)
-    let noise = value("ZENVOICE_ACCURACY_NOISE", default: 0.004)
-
-    // (transcript after deterministic Clean, reference, is disfluent)
-    var items: [(text: String, reference: String, disfluent: Bool)] = []
-    for (clips, disfluent) in [(disfluentClips, true), (cleanClips, false)] {
-        for clip in clips {
-            let samples = Fixtures.degraded(
-                (try? Fixtures.samples(at: clip.url)) ?? [],
-                gain: gain,
-                noise: noise
-            )
-            guard !samples.isEmpty,
-                  let decoded = try? transcriber.transcribe(
-                    samples: samples,
-                    languageProfile: .english
-                  ) else {
-                continue
-            }
-            items.append(
-                (
-                    InstantRefineEngine().refine(
-                        decoded.finalTranscript,
-                        mode: .clean
-                    ).text,
-                    clip.sentence.text,
-                    disfluent
-                )
-            )
-        }
-    }
-
-    let refiner = LocalTextRefiner(modelURL: modelURL)
-    _ = try? refiner.logLikelihood(of: "warm up the model")
-
-    // Baselines, so every row can be read as a delta rather than an absolute.
-    var cleanBaseline = Scoring.Result.zero
-    var disfluentBaseline = Scoring.Result.zero
-    for item in items {
-        let score = Scoring.wordErrorRate(
-            reference: item.reference,
-            hypothesis: item.text
-        )
-        if item.disfluent {
-            disfluentBaseline = disfluentBaseline + score
-        } else {
-            cleanBaseline = cleanBaseline + score
-        }
-    }
-
-    let margins = (environment["ZENVOICE_LAB_MARGINS"]
-        ?? "0.0,0.02,0.05,0.1,0.2,0.4")
-        .split(separator: ",")
-        .compactMap { Double($0) }
-    let radii = (environment["ZENVOICE_LAB_RADII"] ?? "8")
-        .split(separator: ",")
-        .compactMap { Int($0) }
-
-    report()
-    report("scorer sweep — model \(modelURL.lastPathComponent)")
-    report(
-        "  baseline after clean: disfluent "
-            + disfluentBaseline.percentage
-            + ", clean " + cleanBaseline.percentage
-    )
-    report("  " + String(repeating: "-", count: 66))
-    report(
-        "  radius  margin   disfluent   gain    clean   damaged   verdict"
-    )
-    for radius in radii {
-        RefineLab.windowRadius = radius
-        for margin in margins {
-            var disfluent = Scoring.Result.zero
-            var cleanScore = Scoring.Result.zero
-            var damaged = 0
-            for item in items {
-                let refined = RefineLab.scorer(
-                    item.text,
-                    refiner: refiner,
-                    margin: margin
-                )
-                let score = Scoring.wordErrorRate(
-                    reference: item.reference,
-                    hypothesis: refined
-                )
-                if item.disfluent {
-                    disfluent = disfluent + score
-                } else {
-                    cleanScore = cleanScore + score
-                    if refined != item.text { damaged += 1 }
-                }
-            }
-            let gainPoints =
-                (disfluentBaseline.rate - disfluent.rate) * 100
-            // Damage disqualifies regardless of gain.
-            let verdict = damaged > 0
-                ? "rejected"
-                : (gainPoints >= 0.5 ? "PASSES BAR" : "no gain")
-            report(
-                String(
-                    format:
-                        "  %6d  %6.2f   %8.1f%%  %+5.1f  %7.1f%%  %7d   %@",
-                    radius,
-                    margin,
-                    disfluent.rate * 100,
-                    gainPoints,
-                    cleanScore.rate * 100,
-                    damaged,
-                    verdict
-                )
-            )
-        }
-    }
-    report()
-    return true
-}
-
 /// Scores refinement against human-annotated disfluent/fluent pairs.
 ///
-/// The eight synthetic fixtures could not settle whether the scorer
-/// generalises — its entire measured gain came from one of them. Refinement is
-/// a text stage, so validating it needs no audio at all, only pairs of what was
-/// said and what was meant. A published corpus supplies thousands, annotated by
-/// people rather than by a text-to-speech voice.
+/// Synthetic fixtures could not settle whether refinement generalises — the
+/// whole apparent gain of one approach came from a single one of them.
+/// Refinement is a text stage, so validating it needs no audio at all, only
+/// pairs of what was said and what was meant. A published corpus supplies
+/// thousands, annotated by people rather than by a text-to-speech voice.
 ///
 /// Format: one pair per line, disfluent and fluent separated by a tab.
 ///
-/// Two cohorts fall out of the same file for free. The disfluent side is where
-/// refinement must help; the fluent side is text that needs no change at all,
-/// so any edit there is damage.
+/// Two cohorts fall out of the same file. The disfluent side is where
+/// refinement must help; the fluent side needs no change at all, so any edit
+/// there that alters words is damage.
 private func evaluateTextCorpus(path: String) -> Bool {
     guard let contents = try? String(contentsOfFile: path, encoding: .utf8)
     else {
@@ -365,100 +128,47 @@ private func evaluateTextCorpus(path: String) -> Bool {
         fail("no usable pairs in \(path)")
     }
 
-    let installed = VerifiedRefinementModelCatalog.models
-        .compactMap { model -> URL? in
-            guard let url = try? VerifiedRefinementModelCatalog
-                .installedURL(for: model),
-                FileManager.default.fileExists(atPath: url.path) else {
-                return nil
-            }
-            return url
-        }
-        .first
-    let modelURL = environment["ZENVOICE_REFINEMENT_MODEL_PATH"]
-        .map { URL(fileURLWithPath: $0) } ?? installed
-    let refiner = modelURL.map(LocalTextRefiner.init(modelURL:))
-    _ = try? refiner?.logLikelihood(of: "warm up the model")
-    let margin = Double(environment["ZENVOICE_LAB_MARGIN"] ?? "") ?? 0.4
-    RefineLab.windowRadius = Int(
-        environment["ZENVOICE_LAB_RADIUS"] ?? ""
-    ) ?? 8
-
-    func clean(_ text: String) -> String {
-        InstantRefineEngine().refine(text, mode: .clean).text
-    }
-    func scored(_ text: String) -> String {
-        guard let refiner else { return clean(text) }
-        return RefineLab.scorer(
-            clean(text),
-            refiner: refiner,
-            margin: margin
-        )
-    }
+    let mode = environment["ZENVOICE_TEXTEVAL_MODE"] == "agentPrompt"
+        ? InstantRefineMode.agentPrompt
+        : .clean
 
     var rawTotal = Scoring.Result.zero
-    var cleanTotal = Scoring.Result.zero
-    var scorerTotal = Scoring.Result.zero
-    var oracleTotal = Scoring.Result.zero
-    var cleanDamage = 0
-    var scorerDamage = 0
-    // Word-preserving edits — recapitalization, spacing — counted apart from
-    // damage, because they are the feature working.
-    var cleanCosmetic = 0
-    var cleanExamples: [String] = []
-    var scorerExamples: [String] = []
-    var scorerSeconds: TimeInterval = 0
+    var refinedTotal = Scoring.Result.zero
+    var damaged = 0
+    var cosmetic = 0
+    var examples: [String] = []
 
     for pair in pairs {
         rawTotal = rawTotal + Scoring.wordErrorRate(
             reference: pair.fluent,
             hypothesis: pair.disfluent
         )
-        let cleaned = clean(pair.disfluent)
-        cleanTotal = cleanTotal + Scoring.wordErrorRate(
+        let refined = InstantRefineEngine().refine(
+            pair.disfluent,
+            mode: mode
+        ).text
+        refinedTotal = refinedTotal + Scoring.wordErrorRate(
             reference: pair.fluent,
-            hypothesis: cleaned
+            hypothesis: refined
         )
-        let started = Date()
-        let scoredText = scored(pair.disfluent)
-        scorerSeconds += Date().timeIntervalSince(started)
-        scorerTotal = scorerTotal + Scoring.wordErrorRate(
-            reference: pair.fluent,
-            hypothesis: scoredText
-        )
-        oracleTotal = oracleTotal + Scoring.wordErrorRate(
-            reference: pair.fluent,
-            hypothesis: RefineLab.oracle(
-                clean(pair.disfluent),
-                reference: pair.fluent
-            )
-        )
-        // The fluent side needs no editing, so any change to it is damage —
-        // but only if it changed the words. Recapitalizing a corpus sentence
-        // that happens to start lowercase is the feature working, not damage,
-        // and counting it as damage would condemn correct behaviour.
-        let cleanedFluent = clean(pair.fluent)
-        if cleanedFluent != pair.fluent {
-            if Scoring.normalize(cleanedFluent)
-                == Scoring.normalize(pair.fluent) {
-                cleanCosmetic += 1
+
+        // Already-fluent text needs no editing, so a change there is damage —
+        // unless it only recased or respaced, which is the feature working.
+        let touched = InstantRefineEngine().refine(
+            pair.fluent,
+            mode: mode
+        ).text
+        if touched != pair.fluent {
+            if Scoring.normalize(touched) == Scoring.normalize(pair.fluent) {
+                cosmetic += 1
             } else {
-                cleanDamage += 1
-                if cleanExamples.count < 8 {
-                    cleanExamples.append(
-                        "    “\(pair.fluent)”\n      → “\(cleanedFluent)”"
+                damaged += 1
+                if examples.count < 8 {
+                    examples.append(
+                        "    \u{201C}\(pair.fluent)\u{201D}\n"
+                            + "      \u{2192} \u{201C}\(touched)\u{201D}"
                     )
                 }
-            }
-        }
-        let scoredFluent = scored(pair.fluent)
-        if scoredFluent != pair.fluent,
-           Scoring.normalize(scoredFluent) != Scoring.normalize(pair.fluent) {
-            scorerDamage += 1
-            if scorerExamples.count < 8 {
-                scorerExamples.append(
-                    "    “\(pair.fluent)”\n      → “\(scoredFluent)”"
-                )
             }
         }
     }
@@ -468,45 +178,35 @@ private func evaluateTextCorpus(path: String) -> Bool {
         "text corpus — \(URL(fileURLWithPath: path).lastPathComponent)"
             + " (\(pairs.count) human-annotated pairs)"
     )
-    report("  margin \(margin), radius \(RefineLab.windowRadius)")
-    report("  " + String(repeating: "-", count: 66))
-    func row(_ name: String, _ score: Scoring.Result, _ damage: Int?) {
-        let delta = (score.rate - rawTotal.rate) * 100
-        report(
-            "  "
-                + name.padding(toLength: 22, withPad: " ", startingAt: 0)
-                + score.percentage.leftPadded(to: 7)
-                + String(format: "%+9.1f pts", delta)
-                + (damage.map {
-                    String(format: "   %4d damaged", $0)
-                } ?? "              —")
-        )
-    }
-    row("disfluent input", rawTotal, nil)
-    row("after clean", cleanTotal, cleanDamage)
-    row("after clean + scorer", scorerTotal, scorerDamage)
-    row("oracle (ceiling)", oracleTotal, nil)
+    report("  " + String(repeating: "-", count: 62))
+    report(
+        "  "
+            + "disfluent input".padding(
+                toLength: 24, withPad: " ", startingAt: 0
+            )
+            + rawTotal.percentage.leftPadded(to: 7)
+    )
+    report(
+        "  "
+            + "after \(mode.displayName.lowercased())".padding(
+                toLength: 24, withPad: " ", startingAt: 0
+            )
+            + refinedTotal.percentage.leftPadded(to: 7)
+            + String(
+                format: "%+9.1f pts   %4d damaged",
+                (refinedTotal.rate - rawTotal.rate) * 100,
+                damaged
+            )
+    )
     report()
     report(
-        String(
-            format: "  scorer cost %.0f ms total, %.1f ms per sentence",
-            scorerSeconds * 1_000,
-            scorerSeconds * 1_000 / Double(pairs.count)
-        )
-    )
-    report(
-        "  \(cleanCosmetic) fluent sentences recased or respaced only"
+        "  \(cosmetic) fluent sentences recased or respaced only"
             + " (not damage)"
     )
-    if !cleanExamples.isEmpty {
+    if !examples.isEmpty {
         report()
-        report("  clean altered words in already-fluent text:")
-        cleanExamples.forEach { report($0) }
-    }
-    if !scorerExamples.isEmpty {
-        report()
-        report("  scorer altered words in already-fluent text:")
-        scorerExamples.forEach { report($0) }
+        report("  refinement altered words in already-fluent text:")
+        examples.forEach { report($0) }
     }
     report()
     return true
@@ -681,23 +381,6 @@ private func measure() -> Bool {
     // content creeps in, so each stage is scored against the same reference the
     // raw transcript is.
     if !flag("ZENVOICE_ACCURACY_SKIP_REFINE") {
-        let coordinator = LocalRefinementCoordinator()
-        // Prefer an explicit path, otherwise use whichever verified refinement
-        // model is actually installed.
-        let installedRefinementModel = VerifiedRefinementModelCatalog.models
-            .compactMap { model -> URL? in
-                guard let url = try? VerifiedRefinementModelCatalog
-                    .installedURL(for: model),
-                    FileManager.default.fileExists(atPath: url.path) else {
-                    return nil
-                }
-                return url
-            }
-            .first
-        let localModelURL = environment["ZENVOICE_REFINEMENT_MODEL_PATH"]
-            .map { URL(fileURLWithPath: $0) }
-            ?? installedRefinementModel
-        coordinator.update(modelURL: localModelURL)
 
         // Stages are closures rather than modes, so the lab strategies can be
         // measured beside the shipping ones on identical transcripts.
@@ -705,7 +388,7 @@ private func measure() -> Bool {
         typealias Stage = (String, String) -> (text: String, rejected: Bool)
         func mode(_ mode: InstantRefineMode) -> Stage {
             { transcript, _ in
-                let result = coordinator.refine(
+                let result = TranscriptRefinement.refine(
                     transcript,
                     mode: mode,
                     languageCode: "en"
@@ -718,54 +401,7 @@ private func measure() -> Bool {
             ("clean", mode(.clean)),
             ("agent prompt", mode(.agentPrompt))
         ]
-        if localModelURL != nil {
-            stages.append(("local model", mode(.localModel)))
-        }
 
-        // The three ideas, measured against each other. Off by default because
-        // the scorer runs one forward pass per candidate and the comparison is
-        // a research question, not a regression check.
-        if flag("ZENVOICE_REFINE_LAB"), let localModelURL {
-            let labRefiner = LocalTextRefiner(modelURL: localModelURL)
-            let scorerMargin = Double(
-                environment["ZENVOICE_LAB_MARGIN"] ?? ""
-            ) ?? 0.05
-            let verifierThreshold = Double(
-                environment["ZENVOICE_LAB_THRESHOLD"] ?? ""
-            ) ?? 0.5
-            stages.append(
-                ("1 scorer", { transcript, _ in
-                    (RefineLab.scorer(
-                        InstantRefineEngine().refine(
-                            transcript, mode: .clean
-                        ).text,
-                        refiner: labRefiner,
-                        margin: scorerMargin
-                    ), false)
-                })
-            )
-            stages.append(
-                ("2 verifier", { transcript, _ in
-                    (RefineLab.verifier(
-                        InstantRefineEngine().refine(
-                            transcript, mode: .clean
-                        ).text,
-                        refiner: labRefiner,
-                        threshold: verifierThreshold
-                    ), false)
-                })
-            )
-            stages.append(
-                ("3 oracle (ceiling)", { transcript, reference in
-                    (RefineLab.oracle(
-                        InstantRefineEngine().refine(
-                            transcript, mode: .clean
-                        ).text,
-                        reference: reference
-                    ), false)
-                })
-            )
-        }
 
         // Two cohorts, scored separately.
         //
@@ -804,9 +440,6 @@ private func measure() -> Bool {
             )
         }
 
-        if localModelURL == nil {
-            report("  local model stage skipped — no refinement model installed")
-        }
 
         var cohortRaw: [String: Scoring.Result] = [:]
         var cohortStages: [String: [String: StageOutcome]] = [:]
@@ -1473,11 +1106,7 @@ private func measure() -> Bool {
 // ZENVOICE_REFINE_PROBE=1 answers the scaling question on its own, in seconds
 // rather than the minutes a full transcription pass costs.
 let outcome: Bool
-if flag("ZENVOICE_REFINE_PROBE") {
-    outcome = probeScorerLatency()
-} else if flag("ZENVOICE_REFINE_SWEEP") {
-    outcome = sweepScorer()
-} else if let corpus = environment["ZENVOICE_REFINE_TEXTEVAL"] {
+if let corpus = environment["ZENVOICE_REFINE_TEXTEVAL"] {
     outcome = evaluateTextCorpus(path: corpus)
 } else {
     outcome = measure()

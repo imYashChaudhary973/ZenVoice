@@ -7,7 +7,7 @@ send audio, transcripts, clipboard contents, or usage analytics over the
 network.
 
 The Privacy screen shows live local counts for encrypted transcripts, retained
-recovery audio, correction rules, and installed speech/refinement models.
+recovery audio, correction rules, and installed speech models.
 These counts are derived in-process and are not telemetry.
 
 ## Data lifecycle
@@ -115,8 +115,7 @@ These counts are derived in-process and are not telemetry.
 - Instant Refine processes the completed transcript in memory after local
   Whisper transcription and before storage or paste.
 - Off, Clean, and Agent Prompt modes use deterministic application code.
-- Local Model mode uses only the selected SHA-256-verified GGUF file through
-  the in-process `llama.cpp` runtime. No transcript is sent to an API,
+- Refinement is deterministic and local. No transcript is sent to an API,
   analytics endpoint, or cloud service.
 - Deterministic Clean runs before the downloadable local model. Its meaning
   guard then rejects any normalized-word deletion, duplication, or reordering,

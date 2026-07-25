@@ -55,7 +55,7 @@ analytics, or cloud transcription services in the current application.
   insertion.
 - Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
   private local timing samples.
-- Local Instant Refine with Off, Clean, Agent Prompt, and verified Local Model
+- Local Instant Refine with Off, Clean, and Agent Prompt modes
   modes.
 - Fast and Balanced Qwen refinement downloads with immutable revisions,
   Apache-2.0 licence links, exact size, and SHA-256 verification.
@@ -111,7 +111,6 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 - Apple Silicon Mac
 - Swift 5.10 or newer
 - Internet access on the first build for the pinned `whisper.cpp` and
-  `llama.cpp` frameworks
 - A verified model downloaded from ZenVoice's Models screen
 
 ## Quick start

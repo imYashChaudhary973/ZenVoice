@@ -153,7 +153,6 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 ### `ZenVoiceRefinementRuntime`
 
 - `LocalTextRefiner` loads an exact verified GGUF through the pinned
-  `llama.cpp` XCFramework in process.
 - The model stays loaded across dictations; each generation uses a fresh local
   context and one serialized call through `LocalRefinementCoordinator`.
 - A GBNF grammar restricts output to one JSON object. Generation is greedy,
@@ -250,7 +249,7 @@ When history is enabled, a record moves through `recording`, `transcribing`,
 moves to `failed` and can retain its local audio for retry.
 
 The completed Whisper text passes through Instant Refine and then encrypted
-personal correction rules. Local Model mode can use the selected verified
+personal correction rules.
 Qwen model, but only a grammar-valid, meaning-guarded result is accepted. The
 resulting text is what history and insertion receive; the raw Whisper
 transcript remains available in the encrypted record for local recovery and

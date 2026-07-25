@@ -93,6 +93,18 @@ public struct LanguageProfile:
         inputLanguageCode
     }
 
+    /// The language token to decode with, which depends on the model.
+    ///
+    /// A Hinglish-native model is trained to emit Latin script under the
+    /// **English** token — that is how Oriserve run it, and it is what makes
+    /// the output Hinglish rather than Devanagari. Handing it `hi` instead puts
+    /// it straight back into the script the profile exists to avoid.
+    public func whisperLanguageArgument(
+        for capability: ModelLanguageCapability
+    ) -> String {
+        capability.emitsLatinScriptNatively ? "en" : inputLanguageCode
+    }
+
     public var shouldTranslateToEnglish: Bool {
         outputMode == .englishTranslation
     }
@@ -146,7 +158,18 @@ public struct LanguageProfile:
     }
 
     public func isCompatible(with capability: ModelLanguageCapability) -> Bool {
-        capability == .multilingual || !requiresMultilingualModel
+        switch capability {
+        case .english:
+            return !requiresMultilingualModel
+        case .multilingual:
+            return true
+        case .hinglish:
+            // A Hinglish model is a specialist, not a better multilingual one.
+            // General multilingual models stay selectable for Hinglish — that
+            // is the existing behaviour and it still works, just badly — but
+            // the reverse is not true.
+            return self == .hinglish
+        }
     }
 }
 

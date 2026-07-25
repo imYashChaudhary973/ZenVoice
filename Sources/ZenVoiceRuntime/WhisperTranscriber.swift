@@ -190,6 +190,46 @@ public final class WhisperTranscriber: @unchecked Sendable {
         )
     }
 
+    /// The language Whisper hears, and how sure it is.
+    ///
+    /// Costs one encoder pass over the first window — the expensive half of a
+    /// decode — so this is only worth running when its answer changes which
+    /// model gets used.
+    public func detectedLanguage(
+        samples: [Float]
+    ) throws -> (code: String, probability: Float) {
+        guard !samples.isEmpty else {
+            throw TranscriptionError.invalidAudio
+        }
+        let context = try loadedContext()
+        let padded = WhisperDecoding.withLeadInSilence(samples)
+        let threads = Int32(
+            max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
+        )
+        let melStatus = padded.withUnsafeBufferPointer { buffer in
+            whisper_pcm_to_mel(
+                context,
+                buffer.baseAddress,
+                Int32(buffer.count),
+                threads
+            )
+        }
+        guard melStatus == 0 else {
+            throw TranscriptionError.runtimeFailed
+        }
+        var probabilities = [Float](
+            repeating: 0,
+            count: Int(whisper_lang_max_id()) + 1
+        )
+        let identifier = probabilities.withUnsafeMutableBufferPointer { buffer in
+            whisper_lang_auto_detect(context, 0, threads, buffer.baseAddress)
+        }
+        guard identifier >= 0, let name = whisper_lang_str(identifier) else {
+            throw TranscriptionError.runtimeFailed
+        }
+        return (String(cString: name), probabilities[Int(identifier)])
+    }
+
     private func loadedContext() throws -> OpaquePointer {
         if let context {
             return context

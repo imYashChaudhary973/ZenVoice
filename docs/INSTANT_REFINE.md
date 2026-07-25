@@ -27,26 +27,15 @@ Local audio
   filler at all, so “err on the side of caution” keeps its verb.
 - **Agent Prompt:** includes Clean behavior and honors the explicit spoken
   commands “new line” and “new paragraph.”
-- **Local Model:** *withheld — not currently offered.*
+There is no language-model mode. There used to be, and it was removed rather
+than kept for later: measured against 400 human-annotated disfluent/fluent
+pairs, the deterministic rules cut word error rate from 23.2% to 7.2%, and the
+model added **0.0** on top of that. An oracle allowed to read the reference
+would have added 0.1. There was no work left for a model to do, so the
+download, the wait and the `llama.cpp` dependency were all buying nothing.
 
-  It asked for a 1.1 GB download and, measured against Clean on the accuracy
-  harness, improved the transcript by 0.0 points on every configuration tried.
-  A model too small to tell a filler word from a meaningful one cannot be
-  fixed by better plumbing, and charging a user a gigabyte and a wait for text
-  identical to what Clean produces instantly is not a trade worth offering.
-
-  The runtime, the drop guard and the harness stage all remain, because the
-  architecture is sound and independent of which model runs it. A candidate
-  earns the mode back by clearing the bar in `ZenVoiceAccuracyChecks` with
-  `ZENVOICE_REFINE_STRICT=1`: beat Clean by at least half a point on disfluent
-  speech, leave clean speech untouched, and never alter a negation or a
-  quantity. That is a command to run rather than a judgement to make.
-
-  Anyone who already downloaded a refinement model is offered its removal in
-  Instant Refine settings. A stored preference or application profile still
-  naming this mode resolves to Clean, which is what it fell back to anyway.
-
-  Background and measurements: [Refinement R&D](REFINEMENT_RD.md) section 8.6.
+The full investigation, including the five architectures tried and why each
+failed, is in [Refinement R&D](REFINEMENT_RD.md).
 
 Clean is the default. The selected mode is stored in local user defaults.
 Instant Refine runs after recording stops and before text is saved or pasted.
