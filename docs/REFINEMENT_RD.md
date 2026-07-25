@@ -69,16 +69,70 @@ its "um" the same way and what remains is a transcription error ("timeout" →
 
 This matters more than the fixture bug it exposes. Whisper's decoder has a
 language model and it normalizes away doubled words and hesitations on its own.
-So a meaningful part of the value Clean appears to be chasing is **already
-delivered upstream**, and the true headroom for a refinement layer on clean
-English dictation is smaller than section 1 assumes. It also means fixtures
-must be built from transcripts that demonstrably *retain* their disfluencies,
-or they measure nothing — and it sharpens the case for real recordings, where
-hesitation is messier and less normalizable than anything `say` produces.
+So some of the value Clean appears to be chasing is **already delivered
+upstream**, and fixtures must be built from transcripts that demonstrably
+*retain* their disfluencies or they measure nothing.
+
+**Correction, from the literature.** The first draft of this section concluded
+the headroom was broadly thin. That overstates it. Whisper's implicit
+disfluency removal is a documented artifact of its training-data normalization,
+but the specific finding is that it *"removes the ums and uhs"* while
+*"transcrib[ing] most of the other disfluencies"*
+([Cortico](https://cortico.ai/news/insights/evaluating-openai-s-whisper-on-community-conversations/),
+[CrisperWhisper](https://arxiv.org/abs/2408.16589)). Repetitions and false
+starts are supposed to survive — and ours did not.
+
+The likely reason is the fixture medium, not the model. `say` renders "the the"
+as two acoustically **identical** tokens, which is precisely the input a decoder
+language model collapses; a human saying it produces two different durations
+and pitches that survive decoding. So the three "already handled upstream"
+clips are probably an artifact of synthesized speech, and the real headroom for
+repetition and restart handling is larger than the measurement suggested.
+
+That does not rescue those fixtures — it condemns them further. It also makes
+real recordings the blocking dependency for Track A, since no synthetic fixture
+can produce a realistic repetition, and it puts CrisperWhisper (section 7) on
+the table as a way to get verbatim fixtures at all.
 
 Corollary for Track H: if the headroom on word-level cleanup is thin, the
 argument for a downloadable language model rests almost entirely on the
 structure and formatting work (Tracks D and E), not on disfluency removal.
+
+### 0.2 The two real gaps, fixed and re-measured
+
+Both misses above were one-line rule gaps, so they were fixed directly rather
+than deferred to Track A: `ah` and `hm` added to the filler stems, and
+comma-bracketed `you know` / `like` / `sort of` / `kind of` removed. Removing a
+sentence-opening filler left the next word lowercased, so Clean now
+recapitalizes after a sentence break too.
+
+```
+                       before          after
+disfluent raw          24.6%           24.6%
+after clean            16.9%  -7.7     10.8%  -13.8 pts
+clips changed          2 of 8          4 of 8
+insertions             7               3
+unhandled clips        5               3
+clean-speech delta     +0.0            +0.0
+semantic violations    0               0
+```
+
+The improvement refinement delivers on disfluent speech **roughly doubled**,
+from 7.7 to 13.8 points, with no movement on clean speech and no semantic
+violations. The three still-unhandled clips are exactly the three identified
+above as not being refinement's problem — Whisper had already removed the
+disfluency, or the residue is a transcription error.
+
+Guarded in `ZenVoiceCoreChecks` by text-level cases rather than audio ones,
+which is the right instrument: the TTS-to-Whisper round trip destroys the
+disfluencies under test, which is what 0.1 is about. The negative cases are
+pinned alongside the positive ones — "I like the way you know the answer" must
+survive intact, and "err on the side of caution" must keep its verb, which is
+why `er` is not a filler stem.
+
+**Not fixed:** the local model still contributes 0.0 points and still costs
+~540 ms per dictation, rejecting 67% of its own output on clean speech. No
+rule change reaches that; it is the guard, and it is Track A.
 
 The harness **passed** this run. Its only refinement assertion is
 `delta > 2.0` — it fails when refinement makes the transcript worse and
@@ -411,13 +465,189 @@ The argument of this document is not that the guards are wrong in spirit. It is
 that a binary token-equality check is too blunt an instrument to express them,
 and it currently costs the feature its entire reason to exist.
 
-## 5. Suggested sequence
+## 6. Solving the local-model problem
 
-1. Track I step 0 — instrument rejection rate and latency. Confirms 1.1.
-2. Track D — prosodic structure. Independent of the guard work, immediately
-   visible, low risk.
-3. Track I — build the eval set.
-4. Track B spike — input-derived grammar. If it works it simplifies Track A.
-5. Track A — alignment guard, per-sentence rejection, tiered budgets.
-6. Tracks E, F, G — the product-visible layer, once the guard can support them.
-7. Track H — model and runtime, guided by the harness.
+The measured facts: 0.0 points contributed, ~540 ms per dictation, 67%
+rejection on clean speech. Three separate defects are tangled together here,
+and each has a different fix.
+
+### 6.1 The literature agrees with the guard, and with why it fails
+
+Generative error correction — handing an LLM an ASR transcript and asking for a
+better one — has a documented failure mode that is exactly the one ZenVoice's
+guard was built to prevent: *"a critical flaw in GEC is the hallucination issue
+due to the complete rewriting of transcriptions, where entity phrases that are
+not spoken can be mistakenly added."* The canonical example is a user saying
+"I like algorithms" and the model, primed with a contact list, confidently
+emitting *"I like Al Gore"*
+([arXiv 2505.17410](https://arxiv.org/pdf/2505.17410)).
+
+So the instinct behind the guard is correct and should not be softened on
+vibes. What the literature also says is that binary equality is not how the
+field solves it: *"unconstrained generation can hallucinate or over-correct;
+constrained or closest-mapping approaches (e.g. mapping generation back to an
+actual hypothesis via edit distance) balance creativity and fidelity"*, with
+*"constrained decoding approaches based on the N-best list or an ASR lattice"*
+as the mitigation. That is the alignment guard of Track A, arrived at
+independently, plus one idea this document had missed.
+
+### 6.2 The missed idea: constrain to the ASR lattice, not to the 1-best
+
+The current design hands the refiner Whisper's single best hypothesis and then
+forbids it from changing any word. That is why it cannot fix "timeout" → "time
+up": the correct word is not in its input, and inventing it is exactly what the
+guard exists to stop. Both constraints are individually right and jointly
+useless.
+
+Whisper produces an **N-best list as a byproduct of beam search** — alternative
+sequences the acoustic model genuinely considered. Feeding those alternatives
+to the refiner, and constraining its output to tokens drawn from *any* of them,
+changes the shape of the problem:
+
+- the model gains the power to fix misrecognitions, because the right word is
+  now in its input;
+- it gains no power to invent, because every token it may emit was something
+  the acoustic model actually heard;
+- the safety property strengthens rather than weakens — "did the acoustic model
+  consider this?" is a better test than "is this the top hypothesis?"
+
+This is the single highest-value change available, and it makes the difference
+between a refiner that can only reformat and one that can genuinely repair.
+
+Cost: `WhisperTranscriber` currently reads only `whisper_full_get_segment_text`
+and discards everything else. N-best requires plumbing beam candidates out of
+whisper.cpp, which is a real piece of work and should be spiked before being
+committed to.
+
+### 6.3 Input-derived grammar is mechanically supported
+
+Track B assumed llama.cpp could constrain generation to the input's own tokens.
+It can: GBNF *"can match specific tokenizer tokens directly, bypassing
+character-level decoding"*, supports matching token IDs, and supports negation
+([llama.cpp GBNF](https://deepwiki.com/qualcomm/llama.cpp/8.1-gbnf-grammars)).
+So a grammar built at request time from the transcript's — or the lattice's —
+token set is implementable rather than aspirational.
+
+With that in place the decoder *physically cannot* emit an unspoken word, and
+the post-hoc guard relaxes to checking edit budgets and protected tokens rather
+than enforcing equality. Grammar construction is per-request work, so it should
+be measured against the 540 ms budget below rather than assumed free.
+
+### 6.4 The 540 ms is self-inflicted
+
+`LocalTextRefiner.generate` calls `llama_init_from_model` and `llama_free` on
+every refinement, so the KV cache — including the system prompt, which is
+identical every single time — is built and thrown away per dictation. The
+system prompt is the definition of a stable prefix, and llama.cpp's own server
+exists to avoid exactly this: it *"checks the common prefix between the old and
+new token sequences and skips prefill for the matching portion"*
+([discussion #20574](https://github.com/ggml-org/llama.cpp/discussions/20574)).
+
+In-process the fix is to hold one context open for the app's lifetime, prefill
+the system prompt once, and reuse that KV prefix per dictation — the same
+mechanism, without the server. Combined with warming the model at launch
+instead of inside the first user-visible refinement, most of the 540 ms is
+recoverable before any model change.
+
+### 6.5 Apple Foundation Models may delete the problem outright
+
+macOS 26 ships an on-device model of roughly 3B parameters behind the
+Foundation Models framework, generating around 30 tokens/second, with
+`session.prewarm()` cutting time-to-first-token by up to 40%
+([Apple](https://machinelearning.apple.com/research/introducing-apple-foundation-models),
+[Apple 2025 updates](https://machinelearning.apple.com/research/apple-foundation-models-2025-updates)).
+
+Against the current path that is: no 1.1 GB download, no catalogue entry, no
+checksum and licence review, no llama.cpp lifecycle, a model roughly 2–6× the
+parameter count of the Qwen entries, and a supported prewarm API. The package
+targets macOS 14, so this is an availability-gated fast path rather than a
+replacement — but on macOS 26 it plausibly makes the entire download flow
+unnecessary, and it should be spiked before more effort goes into the
+llama.cpp path.
+
+The open question a spike must answer is whether it supports constrained
+decoding equivalent to GBNF. Without that, 6.2 and 6.3 do not transfer, and it
+becomes a formatting engine only — which, per section 0.2, may still be where
+the value is.
+
+## 7. Verbatim transcription as an enabler
+
+`CrisperWhisper` is a Whisper variant fine-tuned for verbatim output that
+*"captures disfluencies, fillers, stutters, and false starts that the original
+Whisper omits"*, using dynamic time warping over decoder cross-attention to
+produce *"accurate timestamps even around disfluencies and pauses"*, at 6.66%
+average WER across nine benchmarks
+([arXiv 2408.16589](https://arxiv.org/abs/2408.16589),
+[GitHub](https://github.com/nyrahealth/CrisperWhisper)).
+
+It is interesting here for two reasons at once, both of which are current
+blockers:
+
+1. It gives refinement something to refine. Per 0.1, standard Whisper is
+   quietly doing part of the job and hiding the rest of it.
+2. Its timestamps are accurate *around pauses* specifically, which is precisely
+   what Track D's prosodic structure depends on and what ordinary Whisper
+   segment timestamps are worst at.
+
+Against: it is large-v3 derived, so it is a heavier download than anything in
+the current catalogue, and its licence and provenance need the same review
+every catalogue entry gets before it goes anywhere near users. Worth evaluating
+as a **harness-side reference decoder** first — where none of that applies —
+to find out how much disfluency ordinary Whisper is actually hiding.
+
+## 8. Revised pause thresholds for Track D
+
+Track D proposed 700 ms for a sentence boundary and 1.5 s for a paragraph,
+which the literature suggests is too conservative:
+
+- 400–600 ms is a common line-break threshold, and one study used 575 ms for
+  topic boundaries ([arXiv cs/0105037](https://arxiv.org/pdf/cs/0105037));
+- pauses under ~250 ms are articulatory rather than intended, so that is the
+  floor rather than the target;
+- pause duration is *"an excellent criterion for segmentation, giving
+  comparable or better performance than standard sentence boundaries"*
+  ([arXiv cs/0006036](https://arxiv.org/pdf/cs/0006036)) — so this is a
+  well-supported approach, not a heuristic hack.
+
+The more useful finding is that modern work argues against fixed thresholds
+entirely, in favour of adapting to the speaker. ZenVoice already has the right
+shape for this: `SpeechActivity`'s noise floor drops instantly and rises slowly
+to track the room. The same treatment applied to inter-segment gaps would adapt
+to a fast talker versus a deliberate one, which a fixed 700 ms cannot.
+
+Revised starting points: ~250 ms floor, 400–600 ms sentence boundary, and a
+paragraph break at a multiple of the speaker's own running median gap rather
+than a constant.
+
+## 9. Suggested sequence
+
+Revised after the section 6–8 research. The ordering changed in two places:
+latency work moved up because it turned out to be cheap, and the guard rework
+moved behind real recordings because 0.1 showed synthetic fixtures cannot
+validate it.
+
+1. **Done** — Track I: cohort split, widened fixtures, semantic safety,
+   rejection and latency reporting, the missing assertion.
+2. **Done** — the two measured Clean gaps (0.2).
+3. **Context reuse and launch warming** (6.4). Recovers most of the 540 ms with
+   no model change, no guard change, and no new download. Cheapest real win
+   available.
+4. **Apple Foundation Models spike** (6.5). One question decides a lot of
+   downstream work: does it support constrained decoding? If yes, much of the
+   llama.cpp path becomes redundant on macOS 26. Answer before investing
+   further in the current runtime.
+5. **Real recordings** into `ZENVOICE_ACCURACY_CORPUS`. Now a blocking
+   dependency rather than a nice-to-have — per 0.1, synthetic speech cannot
+   produce a realistic repetition, so Track A cannot be validated without it.
+   CrisperWhisper as a harness-side reference decoder (section 7) to quantify
+   how much ordinary Whisper is hiding.
+6. **Track D** — prosodic structure, with the revised adaptive thresholds from
+   section 8. Still independent of the guard, still low risk, and now the
+   likeliest home of the local model's justification.
+7. **N-best lattice spike** (6.2). The highest-value change to what refinement
+   can actually do, and the one that turns the model from a reformatter into a
+   repairer. Gated on plumbing beam candidates out of whisper.cpp.
+8. **Track A** — alignment guard, per-sentence rejection, tiered budgets,
+   constrained to the lattice from step 7. Enabling
+   `ZENVOICE_REFINE_STRICT=1` is the definition of done.
+9. **Tracks E, F, G** — the product-visible layer, once the guard supports them.
