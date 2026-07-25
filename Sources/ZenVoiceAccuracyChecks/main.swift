@@ -70,6 +70,15 @@ private struct StageOutcome {
     var changed = 0
     var clipCount = 0
     var seconds: TimeInterval = 0
+    /// Per-clip median refine time, so the reported figure is a typical
+    /// dictation rather than a sum that a single slow sample can dominate.
+    var durations: [TimeInterval] = []
+
+    /// Median across clips, in milliseconds.
+    var medianMilliseconds: Double {
+        guard !durations.isEmpty else { return 0 }
+        return durations.sorted()[durations.count / 2] * 1_000
+    }
     /// Protected tokens altered, as "clip: token before→after".
     var violations: [String] = []
 
@@ -125,7 +134,20 @@ private func measure() -> Bool {
     let gain = isClean ? 1 : value("ZENVOICE_ACCURACY_GAIN", default: 0.35)
     let noise = isClean ? 0 : value("ZENVOICE_ACCURACY_NOISE", default: 0.004)
 
-    let transcriber = WhisperTranscriber(configuration: configuration)
+    // Pinned decode by default. The harness exists to detect changes, and it
+    // cannot do that while its own output moves by more than a point of word
+    // error rate between identical runs. Set ZENVOICE_ACCURACY_SAMPLED=1 to
+    // measure the shipping configuration, temperature fallback included.
+    let isReproducible = !flag("ZENVOICE_ACCURACY_SAMPLED")
+    // Refine repeats per clip, for the latency median. Three is enough to
+    // discard a single scheduling stall without tripling a full run.
+    let latencyRepeats = Int(
+        environment["ZENVOICE_REFINE_REPEATS"].flatMap(Int.init) ?? 3
+    )
+    let transcriber = WhisperTranscriber(
+        configuration: configuration,
+        isReproducible: isReproducible
+    )
 
     func decode(_ samples: [Float]) -> String {
         (
@@ -338,13 +360,26 @@ private func measure() -> Bool {
                 )
                 for (name, mode) in stages {
                     var outcome = outcomes[name] ?? StageOutcome()
-                    let started = Date()
-                    let result = coordinator.refine(
-                        raw,
-                        mode: mode,
-                        languageCode: "en"
+                    // Repeat and take the median. A single sample was moving
+                    // by 3x between identical runs, which is larger than any
+                    // effect worth measuring; the transcript is fixed by this
+                    // point, so the repeats differ only in machine load.
+                    var samples: [TimeInterval] = []
+                    var result = InstantRefineResult(text: raw, correctionCount: 0)
+                    for _ in 0..<max(1, latencyRepeats) {
+                        let attemptStart = Date()
+                        result = coordinator.refine(
+                            raw,
+                            mode: mode,
+                            languageCode: "en"
+                        )
+                        samples.append(
+                            Date().timeIntervalSince(attemptStart)
+                        )
+                    }
+                    outcome.durations.append(
+                        samples.sorted()[samples.count / 2]
                     )
-                    outcome.seconds += Date().timeIntervalSince(started)
                     let refined = result.text
                     if result.wasRejected { outcome.rejections += 1 }
                     if refined != raw {
@@ -416,7 +451,10 @@ private func measure() -> Bool {
                             outcome.rejections,
                             outcome.rejectionRate * 100
                         )
-                        + String(format: "%7.0f ms", outcome.seconds * 1_000)
+                        + String(
+                            format: "%6.0f ms/clip",
+                            outcome.medianMilliseconds
+                        )
                 )
             }
             report()
@@ -686,7 +724,10 @@ private func measure() -> Bool {
     }
 
     var hinglishLoanwords = Scoring.LoanwordResult.zero
-    let hinglishShouldRun = configuration.modelLanguageCapability == .multilingual
+    // A Hinglish-native model is not `.multilingual`, and it is the one model
+    // this section most needs to run against.
+    let hinglishShouldRun = [.multilingual, .hinglish]
+        .contains(configuration.modelLanguageCapability)
         && Fixtures.isHindiVoiceInstalled()
     if hinglishShouldRun,
        let hinglishClips = try? Fixtures.renderHinglish(into: fixtureDirectory),

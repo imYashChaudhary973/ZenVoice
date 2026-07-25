@@ -715,6 +715,52 @@ temperature and thread count for harness runs, report medians over N runs, and
 separate the accuracy measurement from the latency measurement so a busy
 machine cannot move a correctness number.
 
+### 8.2 Fixed
+
+`WhisperTranscriber` gained an `isReproducible` option — off everywhere in the
+app, on by default in the harness — which sets `temperature_inc = 0` to disable
+the sampled re-decode and pins `n_threads` to 4. The harness now refines each
+clip three times and reports the per-clip **median** rather than a sum, so one
+scheduling stall cannot dominate. `ZENVOICE_ACCURACY_SAMPLED=1` measures the
+shipping configuration instead; `ZENVOICE_REFINE_REPEATS` tunes the repeats.
+
+Two consecutive runs now agree exactly:
+
+| | run 1 | run 2 |
+| --- | --- | --- |
+| disfluent raw WER | 27.7% | 27.7% |
+| after clean | 15.4% | 15.4% |
+| clean raw WER | 4.0% | 4.0% |
+| local model, disfluent | 262 ms/clip | 244 ms/clip |
+| local model, clean | 539 ms/clip | 531 ms/clip |
+
+Every accuracy figure is identical; latency varies by ~7% rather than 3×. The
+median also vindicates the original estimate — 539 ms per clip on clean speech,
+262 ms on the shorter disfluent clips, which is exactly the length-linear
+behaviour 6.4.1 predicts.
+
+### 8.3 What the deterministic decode revealed
+
+Pinning the decode changed one entry in the unhandled list, and it reverses
+part of 0.1:
+
+```
+before:  We should probably revert the change before the release.
+after:   We should we should probably revert the change before the release.
+```
+
+The doubled phrase **survives** under the pinned decode. So "Whisper already
+removed it" was partly an artifact of temperature fallback resampling that
+segment, not a reliable property of the decoder. Phrase-level repetition is a
+genuine refinement gap after all: Clean's repetition regex is single-token
+(`\b(word)\b (word)+`) and cannot see a repeated *phrase*.
+
+This is the first real gap the harness has surfaced under conditions where its
+answer can be trusted, and it is directly actionable. Single-word repetition
+("the the") is still collapsed by the decoder, and `dis-quantity` remains a
+transcription error rather than a refinement problem — so of the three
+originally dismissed, one comes back as a true defect.
+
 ## 9. Suggested sequence
 
 Revised after the section 6–8 research. The ordering changed in two places:

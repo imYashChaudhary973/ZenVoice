@@ -47,8 +47,26 @@ public final class WhisperTranscriber: @unchecked Sendable {
         configuration.modelLanguageCapability
     }
 
-    public init(configuration: ZenVoiceConfiguration) {
+    /// Makes decoding repeatable, for measurement rather than for dictation.
+    ///
+    /// Whisper's default temperature fallback re-decodes a segment with
+    /// sampling when it trips the entropy or logprob thresholds, and the
+    /// thread count follows the machine. Both are the right defaults for a
+    /// user — fallback rescues genuinely hard audio — and both make the
+    /// output differ run to run, which was measured at more than a point of
+    /// word error rate between identical harness runs.
+    ///
+    /// A measurement instrument that moves under its own subject cannot
+    /// support fine-grained conclusions, so the harness pins them. Nothing in
+    /// the app path sets this.
+    private let isReproducible: Bool
+
+    public init(
+        configuration: ZenVoiceConfiguration,
+        isReproducible: Bool = false
+    ) {
         self.configuration = configuration
+        self.isReproducible = isReproducible
         usesBeamSearch = configuration.usesBeamSearchDecoding
         whisper_log_set({ _, _, _ in }, nil)
     }
@@ -86,6 +104,10 @@ public final class WhisperTranscriber: @unchecked Sendable {
             initialPrompt ?? ""
         )
         let processingStartedAt = Date()
+        // Push-to-talk starts the buffer on the first syllable; without a
+        // moment of lead-in some models drop the opening word. See
+        // ``WhisperDecoding/leadInSilenceSeconds``.
+        let paddedSamples = WhisperDecoding.withLeadInSilence(samples)
         let context = try loadedContext()
         var parameters = whisper_full_default_params(
             usesBeamSearch
@@ -95,9 +117,17 @@ public final class WhisperTranscriber: @unchecked Sendable {
         if usesBeamSearch {
             parameters.beam_search.beam_size = WhisperDecoding.beamSize
         }
-        parameters.n_threads = Int32(
-            max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
-        )
+        parameters.n_threads = isReproducible
+            ? 4
+            : Int32(
+                max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
+            )
+        if isReproducible {
+            // Disables the sampled re-decode. With no increment there is no
+            // second temperature to fall back to, so a hard segment stays on
+            // the greedy or beam result rather than being resampled.
+            parameters.temperature_inc = 0
+        }
         parameters.no_timestamps = true
         parameters.print_special = false
         parameters.print_progress = false
@@ -105,14 +135,15 @@ public final class WhisperTranscriber: @unchecked Sendable {
         parameters.print_timestamps = false
         parameters.translate = activeProfile.shouldTranslateToEnglish
 
-        let status = activeProfile.whisperLanguageArgument.withCString {
-            language in
+        let status = activeProfile.whisperLanguageArgument(
+            for: languageCapability
+        ).withCString { language in
             parameters.language = language
             return contextPrompt.withCString { prompt in
                 if !contextPrompt.isEmpty {
                     parameters.initial_prompt = prompt
                 }
-                return samples.withUnsafeBufferPointer { buffer in
+                return paddedSamples.withUnsafeBufferPointer { buffer in
                     whisper_full(
                         context,
                         parameters,
@@ -135,7 +166,11 @@ public final class WhisperTranscriber: @unchecked Sendable {
             rawTranscript += String(cString: text)
         }
         let cleanedTranscript = cleaner.clean(rawTranscript)
-        let finalTranscript = activeProfile.shouldTransliterateToLatin
+        // A Hinglish-native model has already written Latin script, and
+        // romanizing it again would only damage text that is correct.
+        let needsTransliteration = activeProfile.shouldTransliterateToLatin
+            && !languageCapability.emitsLatinScriptNatively
+        let finalTranscript = needsTransliteration
             ? LocalTransliterator.latinScript(cleanedTranscript)
             : cleanedTranscript
 
