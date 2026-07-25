@@ -31,6 +31,28 @@ public enum InstantRefineMode: String, Codable, CaseIterable, Sendable {
             "Use the selected verified local model with automatic safe fallback."
         }
     }
+
+    /// The modes a user can actually choose.
+    ///
+    /// `localModel` is withheld. Measured against the deterministic modes it
+    /// improved accuracy by 0.0 points on every configuration tried, while
+    /// asking for a 1.1 GB download and adding time to each dictation — the
+    /// model is too small to tell a filler word from a meaningful one, which
+    /// no amount of plumbing fixes. Offering it would be charging the user a
+    /// gigabyte and a wait for text identical to what Clean produces instantly.
+    ///
+    /// The runtime, guard and harness stage are all still here, because the
+    /// architecture is sound and model-independent. What is missing is a model
+    /// good enough to use it. A candidate earns this back by clearing the bar
+    /// in `ZenVoiceAccuracyChecks` under `ZENVOICE_REFINE_STRICT=1`: beat Clean
+    /// by at least half a point on disfluent speech, leave clean speech
+    /// untouched, and never alter a negation or a quantity. That is a command
+    /// to run, not a judgement to make.
+    ///
+    /// See docs/REFINEMENT_RD.md section 8.6.
+    public static var userSelectable: [InstantRefineMode] {
+        allCases.filter { $0 != .localModel }
+    }
 }
 
 public enum InstantRefinePreferences {
@@ -41,6 +63,14 @@ public enum InstantRefinePreferences {
     ) -> InstantRefineMode {
         guard let rawValue = defaults.string(forKey: preferenceKey),
               let mode = InstantRefineMode(rawValue: rawValue) else {
+            return .clean
+        }
+        // Someone who chose the local model before it was withheld should not
+        // be left on a mode the app no longer offers, silently paying its cost
+        // for no measured benefit. Clean is what it was falling back to
+        // anyway, so this changes their results not at all — only their
+        // latency, downward.
+        guard InstantRefineMode.userSelectable.contains(mode) else {
             return .clean
         }
         return mode

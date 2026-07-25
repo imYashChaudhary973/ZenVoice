@@ -997,10 +997,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             return nil
         }
+        // A per-application profile saved before Local Model was withheld
+        // still holds it, and would otherwise keep paying its cost for a
+        // result identical to Clean. InstantRefinePreferences.load() already
+        // migrates the global setting; this is the same migration for the
+        // per-application override.
+        let profileMode = (profile?.refinementMode).map { mode in
+            InstantRefineMode.userSelectable.contains(mode)
+                ? mode
+                : InstantRefineMode.clean
+        }
         return ActiveDictationBehavior(
             languageProfile: languageProfile,
             refinementMode:
-                profile?.refinementMode
+                profileMode
                 ?? InstantRefinePreferences.load(),
             voiceCommandsEnabled:
                 profile?.voiceCommandsEnabled

@@ -1657,9 +1657,13 @@ private struct ModelsScreen: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: ZenDesign.Spacing.sm) {
                 Image(
-                    systemName:
-                        model.languageCapability == .multilingual
-                            ? "globe" : "character.book.closed"
+                    systemName: {
+                        switch model.languageCapability {
+                        case .multilingual: "globe"
+                        case .hinglish: "character.bubble"
+                        case .english: "character.book.closed"
+                        }
+                    }()
                 )
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -1810,9 +1814,16 @@ private struct InstantRefineScreen: View {
                 "Cleanup happens after transcription, entirely on-device. Your meaning is never changed — and never invented."
         ) {
             modeSection
+            // The refinement-model download and its guarantees panel are
+            // hidden with the mode. Both described a feature that measured no
+            // benefit, and a download offered for its own sake is worse than
+            // no download at all.
             if viewModel.instantRefineMode == .localModel {
                 guaranteesSection
                 refinementModelsSection
+            }
+            if modelViewModel.installedModelIDs.isEmpty == false {
+                installedRefinementModelCleanupSection
             }
             liveDictationSection
             contextSection
@@ -1849,9 +1860,11 @@ private struct InstantRefineScreen: View {
                     modeCard(
                         .agentPrompt, detail: "Speech → structured prompt"
                     )
-                    modeCard(
-                        .localModel, detail: "Verified on-device polish"
-                    )
+                    // Local Model is withheld — see
+                    // InstantRefineMode.userSelectable. It measured 0.0 points
+                    // of improvement over Clean while asking for a 1.1 GB
+                    // download, so offering it would charge the user a
+                    // gigabyte and a wait for identical text.
                 }
 
                 ZenPanel {
@@ -1928,6 +1941,62 @@ private struct InstantRefineScreen: View {
     }
 
     // MARK: refinement models
+
+    /// Lets someone who downloaded a refinement model before the mode was
+    /// withheld get the disk space back.
+    ///
+    /// Only appears when there is something to remove. Retiring the feature
+    /// without offering this would leave a gigabyte stranded on the user's
+    /// Mac with nothing in the interface admitting it exists.
+    private var installedRefinementModelCleanupSection: some View {
+        ZenSection(title: "Downloaded refinement models") {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                ZenPanel {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(
+                            "Local Model refinement is not currently offered."
+                        )
+                        .font(ZenDesign.Typography.bodyStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text(
+                            "Measured against Clean it changed accuracy by nothing, so it is no longer worth its download or its wait. Clean handles fillers, repeated words, and spoken restarts instantly. These files can be removed safely."
+                        )
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(ZenDesign.Spacing.md)
+                }
+                ForEach(
+                    VerifiedRefinementModelCatalog.models.filter {
+                        modelViewModel.installedModelIDs.contains($0.id)
+                    }
+                ) { model in
+                    ZenPanel {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(model.displayName)
+                                    .font(ZenDesign.Typography.bodyStrong)
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                Text(model.formattedFileSize)
+                                    .font(ZenDesign.Typography.caption)
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                            }
+                            Spacer()
+                            Button("Remove") {
+                                modelPendingRemoval = model
+                            }
+                        }
+                        .padding(ZenDesign.Spacing.md)
+                    }
+                }
+            }
+        }
+    }
 
     private var refinementModelsSection: some View {
         ZenSection(
@@ -4718,7 +4787,16 @@ private struct AppProfilesScreen: View {
                 Picker(
                     "Refinement",
                     selection: Binding(
-                        get: { profile.refinementMode },
+                        // A profile saved before Local Model was withheld
+                        // shows as Clean, which is what it now resolves to
+                        // anyway. Without this the picker would render blank,
+                        // its selection matching none of its options.
+                        get: {
+                            InstantRefineMode.userSelectable
+                                .contains(profile.refinementMode)
+                                ? profile.refinementMode
+                                : .clean
+                        },
                         set: {
                             applicationProfileViewModel
                                 .setRefinementMode(
@@ -4729,7 +4807,7 @@ private struct AppProfilesScreen: View {
                     )
                 ) {
                     ForEach(
-                        InstantRefineMode.allCases,
+                        InstantRefineMode.userSelectable,
                         id: \.self
                     ) { mode in
                         Text(mode.displayName).tag(mode)

@@ -333,11 +333,16 @@ guard InstantRefinePreferences.load(defaults: refineDefaults)
     )
     exit(1)
 }
+// Local Model is withheld, so a preference still holding it — saved before
+// the mode was withdrawn — migrates to Clean rather than leaving the user on
+// a mode the app no longer offers. Clean is what it fell back to anyway, so
+// their results are unchanged and only their latency moves, downward.
 InstantRefinePreferences.save(.localModel, defaults: refineDefaults)
-guard InstantRefinePreferences.load(defaults: refineDefaults)
-        == .localModel else {
+guard InstantRefinePreferences.load(defaults: refineDefaults) == .clean,
+      !InstantRefineMode.userSelectable.contains(.localModel),
+      InstantRefineMode.userSelectable == [.off, .clean, .agentPrompt] else {
     FileHandle.standardError.write(
-        Data("FAIL: local model mode did not persist\n".utf8)
+        Data("FAIL: withheld local model mode was not migrated\n".utf8)
     )
     exit(1)
 }
