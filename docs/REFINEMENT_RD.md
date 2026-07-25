@@ -12,24 +12,73 @@ Section 0 is measured; sections 1–5 are analysis and proposals.
 (3 disfluent + 12 clean) through each mode:
 
 ```
-raw transcript                 7.2%
-after clean                    5.6%     -1.6 pts    5 ins    2 changed, 0 rejected
-after agent prompt             5.6%     -1.6 pts    5 ins    2 changed, 0 rejected
-after local model              5.6%     -1.6 pts    5 ins    2 changed, 9 rejected
+refinement — disfluent speech (8 clips, refinement must help)
+raw transcript                24.6%
+after clean                   16.9%   -7.7 pts   2 changed, 0 rejected ( 0%)     8 ms
+after agent prompt            16.9%   -7.7 pts   2 changed, 0 rejected ( 0%)     8 ms
+after local model             16.9%   -7.7 pts   3 changed, 1 rejected (12%)  5044 ms
+
+refinement — clean speech (12 clips, refinement must not meddle)
+raw transcript                 5.4%
+after clean                    5.4%   +0.0 pts   0 changed, 0 rejected ( 0%)    13 ms
+after agent prompt             5.4%   +0.0 pts   0 changed, 0 rejected ( 0%)    12 ms
+after local model              5.4%   +0.0 pts   0 changed, 8 rejected (67%)  6458 ms
 ```
 
 Readings:
 
-- **The local model contributes nothing.** Identical word error rate to Clean.
-  The guard rejected 9 of 15 candidates; the 6 it accepted were token-identical
-  to their input by construction, so they could differ only in punctuation and
-  case. The 2 changed clips are the same 2 Clean already handled alone.
-- Clean recorded 0 rejections, so all 9 are genuine `tokenMismatch` rejections
-  of model output. The model is producing real rewrites and the guard is
-  discarding them — this is not a malformed-output or fallback problem.
-- **Clean changed only 2 of 15 clips**, consistent with 1.3: the restart
-  regexes require comma pivots that Whisper does not reliably emit.
-- 5 insertion errors survive every stage untouched.
+- **The local model contributes nothing.** Identical word error rate to Clean
+  in both cohorts. On clean speech the guard rejects 67% of its candidates and
+  the accepted third changes nothing measurable — acceptance requires exact
+  token equality, so by construction those could differ only in punctuation
+  and case.
+- **It costs roughly half a second per dictation to do so.** 6458 ms across 12
+  clips is ~540 ms each in steady state, against ~1 ms for the regex modes.
+  (The disfluent cohort's 5044 ms runs first and absorbs the one-time model
+  load.) That is a user-visible stall on every dictation, buying 0.0 points.
+- **Semantic safety is clean today: zero violations across all modes.** That is
+  the baseline Track A must not regress — the current design buys its
+  uselessness honestly, and a more permissive guard has to keep this at zero.
+
+### 0.1 Whisper already removes much of what Clean is aimed at
+
+The unhandled-disfluency list is the most useful thing the run produced, and it
+partly refutes the fixtures that produced it:
+
+```
+dis-doubled:        Please review the migration script before the release.
+dis-discourse:      The API, you know, returns a cached response, like, when the token is valid.
+dis-phrase-restart: We should probably revert the change before the release.
+dis-negation:       Do not merge the branch. Ah, until the tests pass.
+dis-quantity:       Increase the request time up to 30 seconds.
+```
+
+Five disfluent clips passed through every mode unchanged — but only **two** are
+genuine refinement gaps:
+
+- `dis-discourse` — "you know" and "like" survive. Clean's filler list is only
+  `um|uh|erm`. A real miss, and the commonest fillers in English.
+- `dis-negation` — Whisper wrote "Ah," which is not in that list either. A real
+  miss, and a one-word fix.
+
+The other three are not refinement failures at all. Whisper **already** deleted
+the disfluency: "the the migration" came back as "the migration", and "We
+should we should" as "We should", with no help from Clean. `dis-quantity` lost
+its "um" the same way and what remains is a transcription error ("timeout" →
+"time up"), which is not refinement's problem.
+
+This matters more than the fixture bug it exposes. Whisper's decoder has a
+language model and it normalizes away doubled words and hesitations on its own.
+So a meaningful part of the value Clean appears to be chasing is **already
+delivered upstream**, and the true headroom for a refinement layer on clean
+English dictation is smaller than section 1 assumes. It also means fixtures
+must be built from transcripts that demonstrably *retain* their disfluencies,
+or they measure nothing — and it sharpens the case for real recordings, where
+hesitation is messier and less normalizable than anything `say` produces.
+
+Corollary for Track H: if the headroom on word-level cleanup is thin, the
+argument for a downloadable language model rests almost entirely on the
+structure and formatting work (Tracks D and E), not on disfluency removal.
 
 The harness **passed** this run. Its only refinement assertion is
 `delta > 2.0` — it fails when refinement makes the transcript worse and
