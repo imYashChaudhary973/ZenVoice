@@ -417,9 +417,8 @@ print("ZenVoiceCoreChecks: Instant Refine passed")
 // A Hinglish user must be recommended the specialist, whatever their hardware.
 //
 // Recommending on hardware alone sent them to Whisper Turbo, which preserves
-// none of the English half of a code-switched sentence and, measured on real
-// recordings, does not terminate on it at all — 73 seconds of audio ran for
-// fifteen minutes before being abandoned.
+// none of the English half of a code-switched sentence: measured on real
+// recordings it kept 0 of 5 English words on a clip the specialist handles.
 let capableMac = HardwareProfile(
     physicalMemoryBytes: 32 * 1_073_741_824,
     logicalCoreCount: 12,
@@ -1198,8 +1197,7 @@ guard LanguagePreferences.load(defaults: languageDefaults) == .hinglish,
       // A general multilingual model is no longer offered for Hinglish. It
       // used to be, on the theory that it worked badly rather than not at
       // all; measured on 30 real code-switched recordings it preserves 0 of
-      // 31 English words and does not terminate — 73 seconds of audio ran for
-      // fifteen minutes under Whisper Turbo before being abandoned.
+      // 31 English words against the specialist's 82 of 96.
       !LanguageProfile.hinglish.isCompatible(with: .multilingual),
       // A Hinglish model is a specialist. It serves the Hinglish profile and
       // nothing else — measured at 20.9% word error rate on English dictation
@@ -1431,3 +1429,50 @@ guard !ZenBarPreferences.showsAtAllTimes(defaults: zenBarDefaults) else {
 }
 
 print("ZenVoiceCoreChecks: ZenVoice bar preference passed")
+
+// Runaway repetition — Whisper's failure on audio it cannot handle. Measured:
+// one clip made Whisper Tiny emit "We are in India," about a hundred times.
+let runaway = TranscriptRepetition.collapsingRunaway(
+    "We are in India, India, India, India, India, India, India."
+)
+guard runaway == "We are in India," else {
+    FileHandle.standardError.write(
+        Data("FAIL: runaway repetition was not collapsed: \(runaway)\n".utf8)
+    )
+    exit(1)
+}
+
+// A repeated phrase, not just a repeated word.
+let phraseLoop = TranscriptRepetition.collapsingRunaway(
+    "Open the file open the file open the file open the file and save it"
+)
+guard phraseLoop == "Open the file and save it" else {
+    FileHandle.standardError.write(
+        Data("FAIL: phrase loop was not collapsed: \(phraseLoop)\n".utf8)
+    )
+    exit(1)
+}
+
+// Ordinary speech must survive. Three repeats is emphasis; the threshold is
+// four, so this is left exactly as spoken.
+let emphasis = TranscriptRepetition.collapsingRunaway(
+    "It was very very good and I said no no no"
+)
+guard emphasis == "It was very very good and I said no no no" else {
+    FileHandle.standardError.write(
+        Data("FAIL: ordinary emphasis was collapsed: \(emphasis)\n".utf8)
+    )
+    exit(1)
+}
+
+// The decode deadline scales with the recording but never drops below its
+// floor, so a two-second utterance still has room for model load.
+guard WhisperDecoding.decodeDeadline(audioSeconds: 2) == 15,
+      WhisperDecoding.decodeDeadline(audioSeconds: 60) == 120 else {
+    FileHandle.standardError.write(
+        Data("FAIL: decode deadline is wrong\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: runaway repetition defence passed")

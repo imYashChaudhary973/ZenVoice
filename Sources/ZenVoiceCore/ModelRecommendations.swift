@@ -111,10 +111,9 @@ public enum ModelRecommendationEngine {
     ) -> String {
         // Hinglish is decided by the language, not the hardware. Every general
         // model reaches it by transcribing Devanagari and romanizing, which
-        // destroys the English half of the sentence — measured at 0 of 31
-        // English words preserved, against 82 of 96 for the specialist — and
-        // it does so 30x slower, because general models fail to terminate on
-        // code-switched speech.
+        // destroys the English half of the sentence: Turbo and Medium both
+        // preserved 0 of the English words in the corpus, against 82 of 96
+        // for the specialist. `document` comes back as डोक्यूमेंट.
         //
         // Recommending on hardware alone sent every Hinglish user to a model
         // that cannot do the one thing they chose the app for.

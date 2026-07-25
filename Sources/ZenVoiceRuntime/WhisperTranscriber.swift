@@ -9,6 +9,7 @@ public final class WhisperTranscriber: @unchecked Sendable {
         case modelLoadFailed
         case runtimeFailed
         case noSpeech
+        case timedOut
 
         public var errorDescription: String? {
             switch self {
@@ -20,6 +21,10 @@ public final class WhisperTranscriber: @unchecked Sendable {
                 return "Local transcription failed."
             case .noSpeech:
                 return "No speech detected."
+            case .timedOut:
+                return
+                    "Transcription took too long and was stopped. "
+                    + "Try a model suited to this language."
             }
         }
     }
@@ -140,6 +145,25 @@ public final class WhisperTranscriber: @unchecked Sendable {
         parameters.print_timestamps = false
         parameters.translate = activeProfile.shouldTranslateToEnglish
 
+        // A deadline, because a stuck decode is otherwise indistinguishable
+        // from a slow one and the app simply appears frozen. ggml calls this
+        // before each computation; returning true unwinds the decode.
+        //
+        // The C callback cannot capture, so the deadline travels through
+        // user_data as a raw pointer.
+        let deadline = UnsafeMutablePointer<Double>.allocate(capacity: 1)
+        defer { deadline.deallocate() }
+        deadline.pointee = Date().timeIntervalSinceReferenceDate
+            + WhisperDecoding.decodeDeadline(
+                audioSeconds: Double(samples.count) / 16_000
+            )
+        parameters.abort_callback = { data in
+            guard let data else { return false }
+            return Date().timeIntervalSinceReferenceDate
+                > data.assumingMemoryBound(to: Double.self).pointee
+        }
+        parameters.abort_callback_user_data = UnsafeMutableRawPointer(deadline)
+
         let status = activeProfile.whisperLanguageArgument(
             for: languageCapability
         ).withCString { language in
@@ -159,7 +183,11 @@ public final class WhisperTranscriber: @unchecked Sendable {
             }
         }
         guard status == 0 else {
-            throw TranscriptionError.runtimeFailed
+            // An aborted decode and a genuine failure both return non-zero,
+            // so the deadline is what distinguishes them.
+            throw Date().timeIntervalSinceReferenceDate > deadline.pointee
+                ? TranscriptionError.timedOut
+                : TranscriptionError.runtimeFailed
         }
 
         var rawTranscript = ""
@@ -202,9 +230,13 @@ public final class WhisperTranscriber: @unchecked Sendable {
                 from: segments,
                 silences: SpokenStructure.silences(in: samples)
             )
+        // A runaway loop is collapsed before anything else looks at the text.
+        // Instant Refine would catch some of it, but refinement is a user
+        // preference that can be switched off, and a transcript repeating
+        // itself a hundred times is broken rather than untidy.
         let cleanedTranscript = structured
             .components(separatedBy: "\n\n")
-            .map { cleaner.clean($0) }
+            .map { cleaner.clean(TranscriptRepetition.collapsingRunaway($0)) }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
         // A Hinglish-native model has already written Latin script, and

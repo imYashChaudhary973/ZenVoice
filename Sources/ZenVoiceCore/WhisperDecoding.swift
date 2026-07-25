@@ -37,6 +37,33 @@ public enum WhisperDecoding {
             && modelFileSizeBytes < beamSearchSizeCeilingBytes
     }
 
+    /// How long decoding may run, as a multiple of the recording's own length.
+    ///
+    /// Decoding is normally far faster than real time — Whisper Turbo runs at
+    /// about nine times, Tiny at a hundred — so a decode that takes twice the
+    /// audio's duration is not slow, it is stuck. Measured: seventy-three
+    /// seconds of code-switched Hindi ran for fifteen minutes under Turbo
+    /// before being abandoned, because the decoder loops and runs to its token
+    /// limit on every window.
+    ///
+    /// Set high enough that an unaccelerated Intel Mac running a large model
+    /// never trips it, and low enough that the user is not left staring at a
+    /// frozen app.
+    public static let decodeTimeoutMultiple: Double = 2
+
+    /// Floor for the deadline, so a two-second utterance still gets a workable
+    /// budget including model load.
+    public static let minimumDecodeTimeoutSeconds: TimeInterval = 15
+
+    public static func decodeDeadline(
+        audioSeconds: TimeInterval
+    ) -> TimeInterval {
+        max(
+            minimumDecodeTimeoutSeconds,
+            audioSeconds * decodeTimeoutMultiple
+        )
+    }
+
     /// Silence prepended to every recording before decoding.
     ///
     /// Push-to-talk gives Whisper no lead-in: the user presses the key and

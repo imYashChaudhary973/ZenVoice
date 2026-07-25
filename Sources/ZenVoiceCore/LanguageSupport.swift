@@ -170,12 +170,13 @@ public struct LanguageProfile:
             // English word phonetically rewritten in a script the reader did
             // not ask for. The specialist preserves 82 of 96.
             //
-            // It is also 30x slower on that audio, because general models fail
-            // to *terminate* on code-switched speech: one clip made Whisper
-            // Tiny emit "We are in India" about a hundred times, and the
-            // decoder then runs to its token limit on every window. Thirty
-            // clips took the specialist 29 seconds and Medium over fifteen
-            // minutes.
+            // Some of them are also far slower, because general models can
+            // fail to *terminate* on code-switched speech: one clip made
+            // Whisper Tiny emit "We are in India" about a hundred times, and
+            // Medium ran past fifteen minutes on thirty clips the specialist
+            // finished in twenty-nine seconds. Turbo does terminate normally
+            // on the same audio — it simply produces unusable output — so the
+            // block rests on the loanwords, not on the speed.
             //
             // See docs/TRANSCRIPTION_ACCURACY.md.
             return self != .hinglish
