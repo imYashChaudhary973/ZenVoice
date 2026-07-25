@@ -139,6 +139,94 @@ guard semanticNoWait.text == "There is no wait time.",
     exit(1)
 }
 
+// Discourse markers, measured escaping Clean by the accuracy harness. The
+// reference is what the speaker meant, so both the markers and the commas
+// bracketing them have to go.
+let discourseRefinement = instantRefiner.refine(
+    "The API, you know, returns a cached response, like, "
+        + "when the token is valid.",
+    mode: .clean
+)
+guard discourseRefinement.text
+        == "The API returns a cached response when the token is valid.",
+      !discourseRefinement.wasRejected else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: discourse markers survived Clean: "
+                + "\(discourseRefinement.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// "like" and "you know" are ordinary words when the speaker did not pause
+// around them. Deleting them unconditionally would eat real content, so this
+// pins the distinction the comma bracketing is carrying.
+let meaningfulLike = instantRefiner.refine(
+    "I like the way you know the answer.",
+    mode: .clean
+)
+guard meaningfulLike.text == "I like the way you know the answer.",
+      meaningfulLike.correctionCount == 0 else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: meaningful “like”/“you know” was removed: "
+                + "\(meaningfulLike.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// "ah" as a filler stem, and the recapitalization that removing a
+// sentence-opening filler requires.
+let ahRefinement = instantRefiner.refine(
+    "Do not merge the branch. Ah, until the tests pass.",
+    mode: .clean
+)
+guard ahRefinement.text
+        == "Do not merge the branch. Until the tests pass.",
+      !ahRefinement.wasRejected else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: sentence-opening filler was not cleaned: "
+                + "\(ahRefinement.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// "err" is a verb, not a filler stem. Its near-miss with "er" is why "er" is
+// not in the stem list at all.
+let errRefinement = instantRefiner.refine(
+    "Err on the side of caution.",
+    mode: .clean
+)
+guard errRefinement.text == "Err on the side of caution.",
+      errRefinement.correctionCount == 0 else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: “err” was treated as a filler: "
+                + "\(errRefinement.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// Sentence capitalization must not fire inside a decimal.
+let decimalRefinement = instantRefiner.refine(
+    "Set the timeout to 3.5 seconds.",
+    mode: .clean
+)
+guard decimalRefinement.text == "Set the timeout to 3.5 seconds." else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: decimal was treated as a sentence break: "
+                + "\(decimalRefinement.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
 let disabledRefinement = instantRefiner.refine(
     "um keep this",
     mode: .off
