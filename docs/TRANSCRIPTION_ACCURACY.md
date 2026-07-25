@@ -115,37 +115,51 @@ which matters because only the multilingual builds can do Hindi at all.
 [MUCS 2021](https://www.openslr.org/104/) Hindi-English test set — genuine
 Hinglish, 16 kHz, human transcribed.
 
-**The headline number is not reportable, and the reason matters more than the
-number.** Scored as word error rate against the corpus reference, `medium`
-reaches 52.6% on a clip it essentially heard correctly:
+**Word error rate is the wrong instrument here and its numbers should be
+ignored.** A code-switched reference writes Hindi in Devanagari and English in
+Latin. A model that romanizes the Hindi scores catastrophically while having
+heard every word correctly, and one that writes the English phonetically in
+Devanagari scores similarly while producing something no Hinglish user wants.
+Both come out near 100% and the figure distinguishes nothing.
+
+What can be judged is whether the English words came back **as English**:
+
+| model | loanwords kept | decode | 30-clip corpus |
+| --- | --- | --- | --- |
+| `hindi2hinglish-apex` | **82/96 (85%)** | 9x real time | 29 s |
+| `medium` (multilingual) | **0/31 (0%)** | 4x real time | over 15 min, abandoned |
 
 ```
-reference  लिबर ऑफिस impress में एक प्रस्तुति document बनाना और बुनियादी formatting …
-medium     लिबर आफिस इमप्रेस में एक प्रस्तुती डोक्यूमेंट बनाना और बुन्यादी फॉर्मेटिंग …
+reference  लिबर ऑफिस impress में एक प्रस्तुति document बनाना … formatting … spoken tutorial
+Apex       ,Labor office impress mein ek prastuti document banaana … formatting … spoken tutorial
+medium     लिबर आफिस इमप्रेस में एक प्रस्तुती डोक्यूमेंट बनाना … फॉर्मेटिंग … सपोकेन टिटूटूरल
 ```
 
-The words are right. Whisper writes the English ones phonetically in
-Devanagari; the reference writes them in Latin. Most of that 52.6% is a
-disagreement about **writing convention**, not about what was said — which is
-exactly why the harness scores Hinglish on loanword preservation rather than
-on script.
+Apex keeps every English word in Latin and romanizes the Hindi around it,
+which is what Hinglish looks like. Medium turns `document` into डोक्यूमेंट and
+`tutorial` into टिटूटूरल — every English word phonetically respelled in a
+script its reader did not want, and not one preserved across the corpus.
 
-Two findings do survive:
+**The specialist is also dramatically faster**, which was not expected. Apex
+decoded the whole corpus in 29 seconds; `medium` was abandoned after fifteen
+minutes on the same audio, and `tiny` produced hallucination loops — one clip
+emitted "We are in India" roughly a hundred times. General multilingual models
+do not merely transcribe code-switched speech badly, they fail to terminate on
+it, and the decoder then runs to its token limit on every window.
 
-- **`tiny` is unusable for Hinglish.** It produces romanized approximations
-  ("Libar office in impressed me, a prostitute document banaana") and falls
-  into hallucination loops — one clip emitted "We are in India," roughly a
-  hundred times, scoring 411%. The loops are also pathologically slow, because
-  the decoder runs to its token limit on every window instead of stopping. A
-  five-minute corpus took over fifty minutes.
-- **`medium` hears code-switched speech well.** The content is close to
-  correct; what it gets wrong is which alphabet to use for the English words.
+So there is no Hinglish accuracy problem to solve: the shipped specialist
+already handles it, at 85% loanword preservation and 9x real time. The
+remaining 15% is the measurable target, and this corpus is how to work on it.
 
-That reframes the Hinglish problem. It is not primarily an accuracy problem to
-be solved with a bigger model — it is a **script convention** problem, which is
-what `LanguageProfile.hinglish` and `LocalTransliterator` already exist to
-handle. Whether they handle it well is a separate measurement, and this corpus
-is now the way to make it.
+### A correction
+
+An earlier draft of this section concluded that Hinglish was "a script
+convention problem" that `LocalTransliterator` would need to solve. That was
+measured on `tiny` and `medium` — the general multilingual models — without
+checking that the catalogue already ships a specialist for exactly this case.
+It does, it was installed on the machine throughout, and it emits Latin script
+natively. The conclusion was drawn from the wrong models and the transliterator
+is not on the critical path for this at all.
 
 ## Open
 

@@ -339,11 +339,16 @@ private func measure() -> Bool {
     // Hinglish baseline — and .en models cannot do it at all, so the model has
     // to be multilingual too.
     let corpusProfile = environment["ZENVOICE_ACCURACY_CORPUS_LANGUAGE"]
-        .map {
-            LanguageProfile(
-                inputLanguageCode: $0,
-                outputMode: .spokenLanguage
-            )
+        .map { code -> LanguageProfile in
+            // "hinglish" is a profile rather than a language code: Hindi in,
+            // Latin script out. A specialist model emits that natively, so
+            // asking for it is the only way to measure one honestly.
+            code == "hinglish"
+                ? .hinglish
+                : LanguageProfile(
+                    inputLanguageCode: code,
+                    outputMode: .spokenLanguage
+                )
         } ?? .english
 
     func decodeCorpus(_ samples: [Float]) -> String {
@@ -1064,6 +1069,8 @@ private func measure() -> Bool {
             var corpusSegmented = Scoring.Result.zero
             var corpusSeconds: TimeInterval = 0
             var corpusAudioSeconds: TimeInterval = 0
+            var corpusLoanwords = 0
+            var corpusLoanwordsKept = 0
             for clip in corpus {
                 // Real recordings arrive at whatever level they were captured
                 // at, so the synthetic degradation is deliberately not applied.
@@ -1104,6 +1111,25 @@ private func measure() -> Bool {
                         )
                         + "  \(segments.count) seg"
                 )
+                // Loanword preservation, for code-switched references.
+                //
+                // Word error rate is the wrong instrument for Hinglish: a
+                // reference writes Hindi in Devanagari and English in Latin,
+                // and a model that romanizes the Hindi scores terribly while
+                // having heard every word correctly. What can be judged is
+                // whether the English words came back as English — "document"
+                // rather than डोक्यूमेंट — which is the difference between
+                // usable Hinglish and a phonetic transliteration of it.
+                let loanwords = Scoring.normalize(clip.sentence.text)
+                    .filter { word in
+                        word.count >= 3
+                            && word.allSatisfy { $0.isASCII && $0.isLetter }
+                    }
+                if !loanwords.isEmpty {
+                    let heard = Set(Scoring.normalize(whole))
+                    corpusLoanwords += loanwords.count
+                    corpusLoanwordsKept += loanwords.filter(heard.contains).count
+                }
                 if isVerbose {
                     report("      whole:    \(whole)")
                     report("      segments: \(segmented)")
@@ -1121,6 +1147,18 @@ private func measure() -> Bool {
                         (corpusSegmented.rate - corpusWhole.rate) * 100
                     )
             )
+            if corpusLoanwords > 0 {
+                report(
+                    String(
+                        format:
+                            "  loanwords kept as English: %d/%d (%.0f%%)",
+                        corpusLoanwordsKept,
+                        corpusLoanwords,
+                        100 * Double(corpusLoanwordsKept)
+                            / Double(corpusLoanwords)
+                    )
+                )
+            }
             // Reported as a multiple of the audio's own duration, because
             // that is what decides whether a model is usable: a dictation
             // finishes in its length divided by this.
