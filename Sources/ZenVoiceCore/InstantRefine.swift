@@ -132,6 +132,25 @@ public struct InstantRefineEngine: Sendable {
             pattern: #"(?i)\s*,\s*like\s*,\s*"#,
             template: " "
         )
+        // Phrase-level restarts — "we should we should probably revert".
+        //
+        // A speaker who loses the thread repeats the run-up, not just the last
+        // word, and the single-word rule below cannot see that: in "we should
+        // we should" no two *adjacent* words are equal. Whisper only appeared
+        // to clean these up on its own; with the decode pinned they survive to
+        // here, which is how the gap was found.
+        //
+        // Bounded at two to four words, and the separator is spaces and tabs
+        // rather than \s so a repeat cannot be matched across a line break.
+        // Punctuation between the halves also blocks it, which is what keeps
+        // deliberate repeats like "New York, New York" and "come on, come on"
+        // intact — the comma is the speaker marking it as intentional.
+        correctionCount += replace(
+            in: &candidate,
+            pattern:
+                #"(?i)\b((?:[\p{L}\p{N}_'-]+[ \t]+){2,4})(?:\1)+"#,
+            template: "$1"
+        )
         correctionCount += replace(
             in: &candidate,
             pattern:

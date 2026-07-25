@@ -195,6 +195,76 @@ guard ahRefinement.text
     exit(1)
 }
 
+// Phrase-level restart. Found by the accuracy harness once the decode was
+// pinned: the speaker says "we should" twice, and the single-word repetition
+// rule cannot see it because no two adjacent words are equal.
+let phraseRestart = instantRefiner.refine(
+    "We should we should probably revert the change before the release.",
+    mode: .clean
+)
+guard phraseRestart.text
+        == "We should probably revert the change before the release.",
+      !phraseRestart.wasRejected else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: repeated phrase survived Clean: "
+                + "\(phraseRestart.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// Three repeats collapse to one, not to two. A restart is often stuttered
+// more than once, and a rule that halves it leaves the transcript still wrong.
+let tripledRestart = instantRefiner.refine(
+    "I want to I want to I want to add dark mode.",
+    mode: .clean
+)
+guard tripledRestart.text == "I want to add dark mode.",
+      !tripledRestart.wasRejected else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: tripled phrase was not fully collapsed: "
+                + "\(tripledRestart.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// A phrase that recurs without being adjacent is ordinary English, not a
+// restart, and must survive untouched.
+let recurringPhrase = instantRefiner.refine(
+    "The more you test the more you learn.",
+    mode: .clean
+)
+guard recurringPhrase.text == "The more you test the more you learn.",
+      recurringPhrase.correctionCount == 0 else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: a non-adjacent recurring phrase was collapsed: "
+                + "\(recurringPhrase.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// Punctuation between the halves is the speaker marking the repeat as
+// deliberate, so it is left alone.
+let deliberateRepeat = instantRefiner.refine(
+    "Come on, come on, the build is nearly done.",
+    mode: .clean
+)
+guard deliberateRepeat.text
+        == "Come on, come on, the build is nearly done." else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: a deliberate punctuated repeat was collapsed: "
+                + "\(deliberateRepeat.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
 // "err" is a verb, not a filler stem. Its near-miss with "er" is why "er" is
 // not in the stem list at all.
 let errRefinement = instantRefiner.refine(
@@ -678,8 +748,14 @@ guard verifiedModels.count == 9,
       Set(verifiedModels.map(\.filename)).count == verifiedModels.count,
       Set(verifiedModels.map(\.tier))
         == Set(ModelPerformanceTier.allCases),
+      // `.hinglish` deliberately has no catalogue entry yet: the converted
+      // Apex weights measure well (20/26 loanwords against a 0/26 baseline)
+      // but still need a pinned download location before they can ship.
+      // Listing the capabilities explicitly keeps this a decision rather than
+      // a gap that `allCases` would quietly absorb.
+      // See docs/hinglish/05-update-2026-07.md.
       Set(verifiedModels.map(\.languageCapability))
-        == Set(ModelLanguageCapability.allCases),
+        == [.english, .multilingual],
       verifiedModels.allSatisfy({
           $0.downloadURL.scheme == "https"
               && $0.downloadURL.host == "huggingface.co"
@@ -1018,7 +1094,20 @@ LanguagePreferences.save(.hinglish, defaults: languageDefaults)
 guard LanguagePreferences.load(defaults: languageDefaults) == .hinglish,
       LanguageProfile.english.isCompatible(with: .english),
       !LanguageProfile.hinglish.isCompatible(with: .english),
-      LanguageProfile.hinglish.isCompatible(with: .multilingual) else {
+      LanguageProfile.hinglish.isCompatible(with: .multilingual),
+      // A Hinglish model is a specialist. It serves the Hinglish profile and
+      // nothing else — measured at 20.9% word error rate on English dictation
+      // against Whisper Medium's 2.0%, so letting it near another profile
+      // would be a tenfold regression.
+      LanguageProfile.hinglish.isCompatible(with: .hinglish),
+      !LanguageProfile.english.isCompatible(with: .hinglish),
+      !LanguageProfile(inputLanguageCode: "fr", outputMode: .spokenLanguage)
+        .isCompatible(with: .hinglish),
+      // The language token is part of the contract: Oriserve's model reaches
+      // Latin script under `en`, and asking it for `hi` undoes the feature.
+      LanguageProfile.hinglish.whisperLanguageArgument(for: .hinglish) == "en",
+      LanguageProfile.hinglish.whisperLanguageArgument(for: .multilingual)
+        == "hi" else {
     FileHandle.standardError.write(
         Data("FAIL: language profile persistence or compatibility failed\n".utf8)
     )
