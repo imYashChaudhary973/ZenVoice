@@ -1545,7 +1545,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     processed.result.finalTranscript,
                     to: liveInsertedStableTranscript
                 )
-        case .copiedOnly:
+        case .copiedOnly, .blockedBySecureInput:
             livePendingStableTranscript =
                 StableTranscriptComposer.appending(
                     processed.result.finalTranscript,
@@ -1736,6 +1736,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
                 self.showError("Copied—enable Accessibility to auto-paste.")
+            case .blockedBySecureInput:
+                if let historyID, shouldPersist, historySaveError == nil {
+                    try? self.resolvedVault().markInsertion(
+                        id: historyID,
+                        outcome: .copiedOnly
+                    )
+                }
+                // Naming the cause matters: nothing the user can change in
+                // ZenVoice fixes this, and without an explanation the app
+                // simply looks broken in one app and fine in the next.
+                self.showError(
+                    "Copied—\(self.secureInputAdvice())"
+                )
             }
 
             if let historySaveError {
@@ -1848,7 +1861,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             scheduleIdleReset(after: 1.5)
         case .copiedOnly:
             showError("Copied—enable Accessibility to auto-paste.")
+        case .blockedBySecureInput:
+            showError("Copied—\(secureInputAdvice())")
         }
+    }
+
+    /// Names the app holding secure input open, when it can be identified.
+    ///
+    /// Secure input is process-wide and system-enforced: while it is on, macOS
+    /// refuses to deliver synthetic keystrokes to anyone. The usual culprits
+    /// are Chromium-based browsers and Electron apps, which switch it on
+    /// around password fields and often leave it on afterwards. Telling the
+    /// user which app to click away from is the only actionable advice there
+    /// is.
+    private func secureInputAdvice() -> String {
+        let frontmost = NSWorkspace.shared.frontmostApplication?
+            .localizedName
+        guard let frontmost else {
+            return "another app has secure input on, blocking auto-paste."
+        }
+        return "\(frontmost) has secure input on, blocking auto-paste. "
+            + "Click another app and back, or reopen it."
     }
 
     private func holdToDictatePressed() {

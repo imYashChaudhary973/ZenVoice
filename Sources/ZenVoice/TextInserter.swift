@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import ApplicationServices
 import Foundation
 
@@ -6,6 +7,10 @@ final class TextInserter {
     enum InsertResult {
         case pasted
         case copiedOnly
+        /// Another application has secure input switched on, so macOS refuses
+        /// to deliver the synthetic paste and the accessibility fallback found
+        /// nothing writable. The transcript is on the pasteboard.
+        case blockedBySecureInput
     }
 
     enum ReplaceResult {
@@ -105,6 +110,51 @@ final class TextInserter {
         return .replaced
     }
 
+    /// Whether some application has switched on secure input.
+    ///
+    /// While it is on, macOS blocks synthetic keyboard events system-wide, so
+    /// the Command-V below is swallowed and nothing arrives. Chromium-based
+    /// browsers and Electron apps are the usual cause — they enable it around
+    /// password fields and frequently leave it on — which is why dictation
+    /// appears to stop working in exactly those apps while the recorder, the
+    /// hotkey and the transcript all behave normally.
+    ///
+    /// The hotkey keeps working throughout because it is a Carbon hot key
+    /// rather than an event tap, which is why the failure looks like "the text
+    /// vanished" rather than "the app is dead".
+    static var isSecureInputEnabled: Bool {
+        IsSecureEventInputEnabled()
+    }
+
+    /// Writes text into the focused control through the accessibility API.
+    ///
+    /// The escape hatch from secure input: it blocks *synthetic events*, not
+    /// accessibility writes, so this still lands when Command-V cannot. Not
+    /// the default path because plenty of controls — Chromium's own text
+    /// areas among them — expose no writable selected-text attribute, and
+    /// pasting is what works everywhere else.
+    private func insertViaAccessibility(_ text: String) -> Bool {
+        guard AXIsProcessTrusted() else { return false }
+        var focusedValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            AXUIElementCreateSystemWide(),
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        ) == .success,
+        CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
+            return false
+        }
+        // swiftlint:disable:next force_cast
+        let element = focusedValue as! AXUIElement
+        // Writing the selected text replaces the selection, or inserts at the
+        // caret when the selection is empty — the same thing a paste does.
+        return AXUIElementSetAttributeValue(
+            element,
+            kAXSelectedTextAttribute as CFString,
+            text as CFTypeRef
+        ) == .success
+    }
+
     func insert(_ text: String) -> InsertResult {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -113,6 +163,15 @@ final class TextInserter {
         guard AXIsProcessTrusted() else {
             requestAccessibilityPermission()
             return .copiedOnly
+        }
+
+        // Secure input swallows the paste silently, so try accessibility
+        // first rather than posting an event that cannot arrive. Reporting
+        // `.pasted` here was the actual defect: the transcript was on the
+        // pasteboard, nothing reached the app, and ZenVoice said it had
+        // worked.
+        if Self.isSecureInputEnabled {
+            return insertViaAccessibility(text) ? .pasted : .blockedBySecureInput
         }
 
         let source = CGEventSource(stateID: .hidSystemState)
