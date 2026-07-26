@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 import ZenVoiceCore
-import ZenVoiceRefinementRuntime
 import ZenVoiceRuntime
 
 private func makeSilentFixture() throws -> URL {
@@ -55,59 +54,15 @@ private func runPass(
 }
 
 do {
-    let missingRefiner = LocalTextRefiner(
-        modelURL: FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "missing-refinement-\(UUID().uuidString).gguf"
-            )
+    let environment = ProcessInfo.processInfo.environment
+    let languageProfile: LanguageProfile =
+        environment["ZENVOICE_RUNTIME_LANGUAGE"] == "hinglish"
+        ? .hinglish
+        : .english
+    let configuration = try ZenVoiceConfiguration.discover(
+        languageProfile: languageProfile,
+        environment: environment
     )
-    do {
-        _ = try missingRefiner.refine("Keep this local.")
-        throw NSError(
-            domain: "ZenVoiceRuntimeChecks",
-            code: 3,
-            userInfo: [
-                NSLocalizedDescriptionKey:
-                    "Missing refinement model unexpectedly loaded."
-            ]
-        )
-    } catch LocalTextRefiner.RefinementError.modelLoadFailed {
-        // The linked llama.cpp runtime rejected the missing model.
-    }
-
-    if let refinementPath =
-        ProcessInfo.processInfo.environment[
-            "ZENVOICE_REFINEMENT_MODEL_PATH"
-        ] {
-        let original =
-            "Um, create the the local app with Swift."
-        let safeBaseline = InstantRefineEngine().refine(
-            original,
-            mode: .clean
-        ).text
-        let localOutput = try LocalTextRefiner(
-            modelURL: URL(fileURLWithPath: refinementPath)
-        ).refine(
-            safeBaseline,
-            timeLimit: 5
-        )
-        guard LocalRefinementGuard.validatedCandidate(
-            output: localOutput,
-            original: safeBaseline
-        ) != nil else {
-            throw NSError(
-                domain: "ZenVoiceRuntimeChecks",
-                code: 4,
-                userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "The real refinement model failed the meaning guard: \(localOutput)"
-                ]
-            )
-        }
-        print("ZenVoice local refinement runtime passed.")
-    }
-
-    let configuration = try ZenVoiceConfiguration.discover()
     let audioURL = try makeSilentFixture()
     defer {
         try? FileManager.default.removeItem(at: audioURL)
@@ -118,7 +73,7 @@ do {
     do {
         _ = try transcriber.transcribe(
             samples: Array(repeating: 0, count: 16_000),
-            languageProfile: .english,
+            languageProfile: languageProfile,
             initialPrompt: "ZenVoice SwiftUI"
         )
     } catch WhisperTranscriber.TranscriptionError.noSpeech {

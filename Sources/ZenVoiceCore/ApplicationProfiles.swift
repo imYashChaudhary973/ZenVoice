@@ -125,6 +125,7 @@ public enum LocalVoiceCommandPreferences {
 
 public enum NextDictationContext {
     public static let maximumCharacterCount = 500
+    private static let maximumVocabularyCharacterCount = 240
 
     public static func sanitized(_ value: String) -> String {
         let withoutControlTokens = value
@@ -141,6 +142,40 @@ public enum NextDictationContext {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
         return String(normalized.prefix(Self.maximumCharacterCount))
+    }
+
+    public static func combined(
+        context: String,
+        preferredVocabulary: [String]
+    ) -> String {
+        var seen = Set<String>()
+        let terms = preferredVocabulary.compactMap { value -> String? in
+            let term = sanitized(value)
+            guard !term.isEmpty,
+                  seen.insert(term.lowercased()).inserted else {
+                return nil
+            }
+            return term
+        }
+        var vocabulary = ""
+        for term in terms {
+            let candidate = vocabulary.isEmpty
+                ? term
+                : vocabulary + ", " + term
+            guard candidate.count <= maximumVocabularyCharacterCount else {
+                break
+            }
+            vocabulary = candidate
+        }
+        let cleanContext = sanitized(context)
+        guard !vocabulary.isEmpty else {
+            return cleanContext
+        }
+        let prefix = "Preferred vocabulary: \(vocabulary)."
+        guard !cleanContext.isEmpty else {
+            return prefix
+        }
+        return sanitized("\(prefix) Context: \(cleanContext)")
     }
 }
 

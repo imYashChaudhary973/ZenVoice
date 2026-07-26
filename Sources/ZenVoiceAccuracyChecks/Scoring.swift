@@ -53,7 +53,54 @@ enum Scoring {
         }
         return String(folded)
             .split(separator: " ")
-            .map(String.init)
+            .flatMap { spelled(String($0)) }
+    }
+
+    /// Expands a number into the words for it, so digits and spelling compare
+    /// equal.
+    ///
+    /// Reference transcripts spell numbers out and Whisper writes digits, and
+    /// scoring one against the other counts a correct transcription as wrong.
+    /// It was the single largest source of apparent error in the real-speech
+    /// corpus: "CHAPTER THIRTY THREE A CONFIDANT" came back as "Chapter 33, A
+    /// Confidant" — word-perfect — and scored 40%.
+    ///
+    /// Only up to 9999, which covers chapter numbers, years and quantities in
+    /// dictation. Anything larger is left as digits, where at least both sides
+    /// are consistent.
+    static func spelled(_ token: String) -> [String] {
+        guard let value = Int(token), value >= 0, value <= 9_999 else {
+            return [token]
+        }
+        return words(for: value)
+    }
+
+    private static let units = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven",
+        "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+        "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"
+    ]
+    private static let tens = [
+        "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy",
+        "eighty", "ninety"
+    ]
+
+    private static func words(for value: Int) -> [String] {
+        if value < 20 { return [units[value]] }
+        if value < 100 {
+            let remainder = value % 10
+            return remainder == 0
+                ? [tens[value / 10]]
+                : [tens[value / 10], units[remainder]]
+        }
+        if value < 1_000 {
+            let remainder = value % 100
+            let head = [units[value / 100], "hundred"]
+            return remainder == 0 ? head : head + words(for: remainder)
+        }
+        let remainder = value % 1_000
+        let head = words(for: value / 1_000) + ["thousand"]
+        return remainder == 0 ? head : head + words(for: remainder)
     }
 
     static func wordErrorRate(
@@ -67,6 +114,13 @@ enum Scoring {
                 distance: hypothesis.count,
                 referenceWords: 0,
                 insertions: hypothesis.count
+            )
+        }
+        guard !hypothesis.isEmpty else {
+            return Result(
+                distance: reference.count,
+                referenceWords: reference.count,
+                deletions: reference.count
             )
         }
 
@@ -144,6 +198,14 @@ enum Scoring {
 
         static let zero = LoanwordResult(preserved: 0, total: 0, lost: [])
     }
+
+    /// Fewest loanwords a Hinglish-capable model may preserve before the run
+    /// fails, out of the 26 the fixtures contain.
+    ///
+    /// Applies only to a model that claims `.hinglish`. A general multilingual
+    /// model scores zero by construction and is not failed for it — that gap is
+    /// the reason a Hinglish model exists.
+    static let hinglishLoanwordFloor = 18
 
     /// How many of the English words in a code-switched sentence survived as
     /// English.

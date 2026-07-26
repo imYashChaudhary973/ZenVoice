@@ -156,6 +156,33 @@ push. Semgrep Community Edition runs independently on an Ubuntu runner. The
 Semgrep job uses the public rule registry, does not require an account token,
 and has read-only repository permission.
 
+## Deterministic audio E2E
+
+Debug builds can feed a known local audio file through the real recording,
+transcription, refinement, history, and insertion flow. This avoids the
+unreliable speaker-to-microphone loop used by acoustic tests.
+
+```bash
+ZENVOICE_E2E_AUDIO_FILE=/absolute/path/to/fixture.wav \
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
+swift run ZenVoice
+```
+
+Start and stop dictation normally. Each recording uses the fixture instead of
+the microphone, while every step after capture remains unchanged. The fixture
+must be readable by AVFoundation, 16 kHz mono, referenced by an absolute local
+path, and limited to 100 MB and 10 minutes. For example, normalize an existing
+recording before launch:
+
+```bash
+afconvert input.wav /tmp/zenvoice-e2e.wav -f WAVE -d LEF32@16000 -c 1
+```
+
+The override is compiled only into Debug builds. Release and packaged builds
+ignore `ZENVOICE_E2E_AUDIO_FILE` and always use the selected microphone. Test
+in Private Dictation when the transcript should not be retained, and use only
+non-sensitive fixture speech because normal history settings still apply.
+
 ## Release readiness
 
 Development packaging is intentionally different from public distribution.
@@ -226,16 +253,12 @@ distributable artifact.
 31. Start a model download and confirm percentage progress appears. Cancel,
     immediately start another download, and confirm the cancelled task does not
     clear the new progress state.
-32. Open **Instant Refine**, download the Fast refinement model, and confirm
-    progress changes to a separate verification state before the model becomes
-    selectable.
-33. Select **Local Model**, dictate one English, Spanish, and Hinglish example,
-    and confirm output keeps the spoken language and introduces no new content
-    words.
-34. Remove the selected refinement model and confirm Local Model mode visibly
-    falls back to Clean without blocking dictation.
-35. For a real runtime gate, set `ZENVOICE_REFINEMENT_MODEL_PATH` to the
-    verified Qwen GGUF and run `swift run ZenVoiceRuntimeChecks`.
+32. Retry an English, Hindi, and Hinglish recovery item and confirm each keeps
+    its recorded language and current voice-command preference.
+33. Focus a password field, start dictation, and confirm ZenVoice copies the
+    transcript instead of writing through the secure-input fallback.
+34. Enter and leave a native full-screen space, then start dictation and
+    confirm ZenBar follows the active space.
 
 Also test:
 

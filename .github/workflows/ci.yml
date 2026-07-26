@@ -33,10 +33,9 @@ jobs:
       - name: Run runtime checks
         run: swift run ZenVoiceRuntimeChecks
 
-      # Skips itself when no verified model is installed, which is the norm on
-      # a clean runner. It earns its place locally and on any machine that has
-      # one, where it turns transcription regressions into build failures.
-      - name: Run accuracy checks
+      - name: Run deterministic accuracy scoring checks
+        env:
+          ZENVOICE_SCORING_ONLY: "1"
         run: swift run ZenVoiceAccuracyChecks
 
       - name: Build debug target

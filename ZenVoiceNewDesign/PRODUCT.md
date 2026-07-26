@@ -24,9 +24,9 @@ Every claim is specific ("Processing stays local", "SHA-256 verified"), never va
 ## Non-negotiable feature inventory (nothing may be dropped)
 1. Global dictation shortcut (default ⌃⌥Space), paste-last (⌃⌥V), private dictation (⌃⌥P)
 2. Hold-to-dictate with modifier choice
-3. ZenBar HUD: ready / listening / processing / success / error + live waveform,
-   cancel & finish controls, stable phrase preview, optional status message,
-   Reduce Motion aware
+3. ZenBar HUD: ready / listening / processing / inserting / success / error.
+   Listening shows only the live dot, waveform, Cancel, and Finish controls;
+   success shows inserted word count and WPM. Reduce Motion aware.
 4. Encrypted local history: search, copy, retry, delete, partial transcripts
 5. Recovery Inbox for failed / partial dictations
 6. Highlight cards: preview, Save, macOS Share
@@ -40,10 +40,9 @@ Every claim is specific ("Processing stays local", "SHA-256 verified"), never va
     (Latin script) + native-script + local English-translation modes
 11. Audio: follow system default or pin a mic, safe disconnect, 3-second
     on-device Audio Doctor (signal + format)
-12. Instant Refine: Off / Clean / Agent Prompt / Local Model; Fast & Balanced
-    Qwen downloads (Apache-2.0, revision, size, SHA-256); grammar-constrained
-    JSON, 5-second deadline, no-invention guard, deterministic Clean fallback;
-    guarded commit-on-pause (opt-in, locked to origin app)
+12. Instant Refine: Off / Clean / Agent Prompt, with guarded commit-on-pause
+    (opt-in, locked to the origin app). Downloadable language-model refinement
+    is not a user-facing option.
 13. Per-application profiles: language, refinement, voice-command overrides
 14. One-shot context box (memory-only, clears on next recording)
 15. Voice layout & punctuation commands, English + Hindi/Spanish/French/

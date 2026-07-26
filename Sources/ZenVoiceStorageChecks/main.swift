@@ -346,6 +346,80 @@ private func checkDeleteAllRotatesVault() throws {
     )
 }
 
+private func checkScopedHistoryDeletion() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let savedID = UUID()
+    let savedAudioURL = fixture.vault.recoveryAudioURL(for: savedID)
+    try Data("saved audio".utf8).write(to: savedAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: savedID,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: "Notes",
+            recoveryAudioURL: savedAudioURL
+        )
+    )
+    try fixture.vault.storeTranscript(
+        id: savedID,
+        rawTranscript: "saved dictation",
+        finalTranscript: "Saved dictation."
+    )
+    try fixture.vault.markInsertion(id: savedID, outcome: .inserted)
+
+    let recoveryID = UUID()
+    let recoveryAudioURL = fixture.vault.recoveryAudioURL(for: recoveryID)
+    try Data("recovery audio".utf8).write(to: recoveryAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: recoveryID,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: "Mail",
+            recoveryAudioURL: recoveryAudioURL
+        )
+    )
+    try fixture.vault.markFailed(
+        id: recoveryID,
+        message: "Interrupted",
+        retainAudio: true
+    )
+
+    try require(
+        try fixture.vault.deleteRecords(ids: [savedID]) == 1,
+        "scoped deletion did not remove the saved dictation"
+    )
+    try require(
+        try fixture.vault.record(id: savedID) == nil,
+        "scoped deletion retained the saved dictation"
+    )
+    try require(
+        try fixture.vault.record(id: recoveryID) != nil,
+        "saved-dictation deletion removed Recovery Inbox data"
+    )
+    try require(
+        FileManager.default.fileExists(atPath: recoveryAudioURL.path),
+        "saved-dictation deletion removed recovery audio"
+    )
+
+    try require(
+        try fixture.vault.deleteRecords(ids: [recoveryID]) == 1,
+        "scoped deletion did not remove the Recovery Inbox item"
+    )
+    try require(
+        try fixture.vault.record(id: recoveryID) == nil,
+        "scoped deletion retained the Recovery Inbox item"
+    )
+    try require(
+        !FileManager.default.fileExists(atPath: recoveryAudioURL.path),
+        "Recovery Inbox deletion retained recovery audio"
+    )
+}
+
 private func checkHistoryPreferencesDefaults() throws {
     let suiteName = "ZenVoiceStorageChecks.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -448,6 +522,57 @@ private func checkVersionTwoMigration() throws {
     try require(
         try vault.recoverInterrupted(retainAudio: true) == 1,
         "version-two vault did not migrate privacy suppression"
+    )
+    try vault.addCorrectionRule(
+        source: "bild",
+        replacement: "build",
+        languageScope: .hinglish
+    )
+    try require(
+        try vault.correctionRules().first?.languageScope == .hinglish,
+        "version-two vault did not migrate correction scope"
+    )
+}
+
+private func checkVersionFourCorrectionMigration() throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let recoveryURL = directoryURL
+        .appendingPathComponent("Recovery", isDirectory: true)
+    let databaseURL = directoryURL.appendingPathComponent("version4.sqlite")
+    try FileManager.default.createDirectory(
+        at: recoveryURL,
+        withIntermediateDirectories: true
+    )
+    defer {
+        try? FileManager.default.removeItem(at: directoryURL)
+    }
+    try executeSQL(
+        """
+        CREATE TABLE correction_rules (
+            id TEXT PRIMARY KEY NOT NULL,
+            source_text BLOB NOT NULL,
+            replacement_text BLOB NOT NULL,
+            usage_count INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL
+        );
+        PRAGMA user_version = 4;
+        """,
+        databaseURL: databaseURL
+    )
+    let vault = try DictationVault(
+        databaseURL: databaseURL,
+        recoveryDirectoryURL: recoveryURL,
+        keyProvider: StaticKeyProvider()
+    )
+    try vault.addCorrectionRule(
+        source: "bild",
+        replacement: "build",
+        languageScope: .hinglish
+    )
+    try require(
+        try vault.correctionRules().first?.languageScope == .hinglish,
+        "version-four correction scope migration failed"
     )
 }
 
@@ -668,20 +793,49 @@ private func checkCategoryCorrection() throws {
 private func checkCorrectionEngine() throws {
     let firstID = UUID()
     let secondID = UUID()
+    let scopedID = UUID()
+    let fuzzyID = UUID()
+    let commonID = UUID()
+    let suggestionID = UUID()
+    let rules = [
+        CorrectionRule(
+            id: firstID,
+            source: "zen pens",
+            replacement: "ZenPense"
+        ),
+        CorrectionRule(
+            id: secondID,
+            source: "git hub",
+            replacement: "GitHub"
+        ),
+        CorrectionRule(
+            id: scopedID,
+            source: "bild",
+            replacement: "build",
+            languageScope: .hinglish
+        ),
+        CorrectionRule(
+            id: fuzzyID,
+            source: "servr",
+            replacement: "server",
+            languageScope: .hinglish
+        ),
+        CorrectionRule(
+            id: commonID,
+            source: "muje",
+            replacement: "mujhe",
+            languageScope: .hinglish
+        ),
+        CorrectionRule(
+            id: suggestionID,
+            source: "Chowdhury",
+            replacement: "Chaudhary",
+            languageScope: .hinglish
+        )
+    ]
     let application = TranscriptCorrectionEngine.apply(
         "Use zen pens with git hub, not a zen pencil.",
-        rules: [
-            CorrectionRule(
-                id: firstID,
-                source: "zen pens",
-                replacement: "ZenPense"
-            ),
-            CorrectionRule(
-                id: secondID,
-                source: "git hub",
-                replacement: "GitHub"
-            )
-        ]
+        rules: rules
     )
     try require(
         application.text
@@ -692,6 +846,104 @@ private func checkCorrectionEngine() throws {
     try require(
         Set(application.usages.map(\.ruleID)) == [firstID, secondID],
         "correction rule usage"
+    )
+
+    let hinglish = TranscriptCorrectionEngine.apply(
+        "kal bild deploy karo aur serer check karo",
+        rules: rules,
+        activeScope: .hinglish
+    )
+    try require(
+        hinglish.text == "kal build deploy karo aur server check karo",
+        "scoped exact or conservative fuzzy correction"
+    )
+    try require(
+        Set(hinglish.usages.map(\.ruleID)) == [scopedID, fuzzyID],
+        "scoped correction usage"
+    )
+    let nonHinglish = TranscriptCorrectionEngine.apply(
+        "bild guild servr",
+        rules: rules,
+        activeScope: .all
+    )
+    try require(
+        nonHinglish.text == "bild guild servr",
+        "Hinglish rule leaked into another language"
+    )
+    let controls = TranscriptCorrectionEngine.apply(
+        "the severe guild server remains unchanged",
+        rules: rules,
+        activeScope: .hinglish
+    )
+    try require(
+        controls.text == "the severe guild server remains unchanged",
+        "fuzzy correction changed an unrelated word"
+    )
+    let commonExact = TranscriptCorrectionEngine.apply(
+        "muje",
+        rules: rules,
+        activeScope: .hinglish
+    )
+    try require(
+        commonExact.text == "mujhe",
+        "approved common-word rules should still apply exactly"
+    )
+    let commonFuzzyControl = TranscriptCorrectionEngine.apply(
+        "mujha",
+        rules: rules,
+        activeScope: .hinglish
+    )
+    try require(
+        commonFuzzyControl.text == "mujha",
+        "common Romanized Hindi words must not be fuzzy-corrected"
+    )
+    let suggestions = TranscriptCorrectionEngine.suggestions(
+        in: "Ask Choudhary before release",
+        rules: rules,
+        activeScope: .hinglish
+    )
+    try require(
+        suggestions == [
+            CorrectionSuggestion(
+                ruleID: suggestionID,
+                source: "Choudhary",
+                replacement: "Chaudhary",
+                languageScope: .hinglish
+            )
+        ],
+        "uncertain spelling suggestion was not surfaced"
+    )
+
+    var correctionLatencies: [Double] = []
+    correctionLatencies.reserveCapacity(500)
+    for _ in 0..<500 {
+        let startedAt = DispatchTime.now().uptimeNanoseconds
+        _ = TranscriptCorrectionEngine.apply(
+            "kal bild deploy karo aur serer check karo",
+            rules: rules,
+            activeScope: .hinglish
+        )
+        let elapsed = DispatchTime.now().uptimeNanoseconds - startedAt
+        correctionLatencies.append(Double(elapsed) / 1_000_000)
+    }
+    correctionLatencies.sort()
+    let p50 = correctionLatencies[
+        Int(Double(correctionLatencies.count - 1) * 0.50)
+    ]
+    let p95 = correctionLatencies[
+        Int(Double(correctionLatencies.count - 1) * 0.95)
+    ]
+    try require(
+        p95 < 10,
+        "personal correction p95 exceeded 10 ms: \(p95) ms"
+    )
+    print(
+        String(
+            format:
+                "ZenVoiceStorageChecks: personal corrections p50 %.3f ms, p95 %.3f ms",
+            p50,
+            p95
+        )
     )
 }
 
@@ -706,6 +958,12 @@ private func checkEncryptedVoiceProfile() throws {
         id: ruleID,
         createdAt: Date(timeIntervalSince1970: 1_000)
     )
+    try fixture.vault.addCorrectionRule(
+        source: "bild",
+        replacement: "build",
+        languageScope: .hinglish,
+        createdAt: Date(timeIntervalSince1970: 1_001)
+    )
 
     let application = try fixture.vault.applyCorrections(
         to: "zen pens and zen pens"
@@ -718,6 +976,34 @@ private func checkEncryptedVoiceProfile() throws {
     try require(
         try fixture.vault.correctionRules().first?.usageCount == 2,
         "correction usage was not recorded"
+    )
+    try require(
+        try fixture.vault.applyCorrections(
+            to: "bild",
+            activeScope: .all
+        ).text == "bild",
+        "vault ignored correction language scope"
+    )
+    try require(
+        try fixture.vault.applyCorrections(
+            to: "bild",
+            activeScope: .hinglish
+        ).text == "build",
+        "vault did not apply Hinglish correction"
+    )
+    let allVocabulary = try fixture.vault.preferredVocabulary(
+        activeScope: .all
+    )
+    let hinglishVocabulary = try fixture.vault.preferredVocabulary(
+        activeScope: .hinglish
+    )
+    try require(
+        allVocabulary == ["ZenPense"],
+        "global vocabulary included a scoped term"
+    )
+    try require(
+        Set(hinglishVocabulary) == ["ZenPense", "build"],
+        "Hinglish vocabulary omitted an approved term"
     )
 
     for (offset, transcript) in [
@@ -784,7 +1070,9 @@ private func checkEncryptedVoiceProfile() throws {
             as: UTF8.self
         )
         try require(
-            !text.contains("zen pens") && !text.contains("ZenPense"),
+            !text.contains("zen pens")
+                && !text.contains("ZenPense")
+                && !text.contains("bild"),
             "correction rule leaked into plaintext database\(suffix)"
         )
     }
@@ -889,8 +1177,10 @@ do {
     try checkRecoveryExpiry()
     try checkDiscard()
     try checkDeleteAllRotatesVault()
+    try checkScopedHistoryDeletion()
     try checkHistoryPreferencesDefaults()
     try checkVersionTwoMigration()
+    try checkVersionFourCorrectionMigration()
     try checkPartialAndCipherBinding()
     try checkRecoveryPathConfinement()
     try checkPrivacySuppressionAndRecoveryCleanup()
@@ -900,7 +1190,7 @@ do {
     try checkEncryptedVoiceProfile()
     try checkLocalLearningPreferences()
     try checkLivePartialRecovery()
-    print("ZenVoiceStorageChecks: 15 checks passed")
+    print("ZenVoiceStorageChecks: 17 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

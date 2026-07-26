@@ -29,12 +29,19 @@ A correction rule has a heard phrase and a replacement phrase. Both fields:
 - are encrypted with field-bound AES-GCM in the local vault;
 - never leave the Mac through ZenVoice.
 
-Matching is case-insensitive and requires Unicode word boundaries around the
-entire heard phrase. For example, `zen pens` can become `ZenPense`, while
-`zen pencil` remains unchanged. All matches are found before replacement so a
-replacement cannot cascade into another rule during the same transcript.
+Exact matching is case-insensitive and requires Unicode word boundaries around
+the entire heard phrase. For example, `zen pens` can become `ZenPense`, while
+`zen pencil` remains unchanged. Single Latin words of at least five characters
+may also use a uniquely close approved spelling; short words, multiword rules,
+ambiguous candidates, and unrelated words remain exact-only. Uncertain matches
+are suggestions that require explicit acceptance.
 
 Usage counts are committed only after the corrected transcript is saved to
 history. Private Dictation can use the rules without producing a transcript or
 usage event. ZenVoice does not monitor changes made later in the destination
 application, so those edits are never represented as ZenVoice corrections.
+
+Rules may apply to all languages or only to Hinglish. Hinglish-only rules also
+bias Whisper with approved replacement vocabulary before decoding. See
+[Hinglish spelling personalization](HINGLISH_SPELLING.md) for the review and
+private-corpus workflow.

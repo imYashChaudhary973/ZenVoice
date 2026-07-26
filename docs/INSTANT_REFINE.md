@@ -3,6 +3,8 @@
 Instant Refine is the local text-processing stage between Whisper
 transcription and personal correction rules.
 
+Paragraph breaks come before any of this, from the speaker's own pauses.
+
 ```text
 Local audio
   → selected local Whisper model
@@ -25,12 +27,26 @@ Local audio
   them in commas, because `like` and `you know` are ordinary words elsewhere —
   “I like the way you know the answer” is left alone. `er` is not treated as a
   filler at all, so “err on the side of caution” keeps its verb.
+
+  Hindi is covered by the same rules. The repetition patterns are script
+  neutral, but only after their character classes were widened to admit
+  combining marks — a Devanagari vowel sign is a mark rather than a letter, so
+  the classes used to break a word in half and no Hindi repeat could ever
+  match. Hindi hesitation sounds (उम्म, अम्म, अअअ) and the stalling phrase
+  “वो क्या कहते हैं” are removed alongside their English counterparts. Measured
+  on 400 human-annotated Hindi pairs, this took refinement from 0.5 points of
+  improvement to 8.2.
 - **Agent Prompt:** includes Clean behavior and honors the explicit spoken
   commands “new line” and “new paragraph.”
-- **Local Model:** runs the selected verified Qwen model through the bundled
-  local `llama.cpp` runtime, then accepts its JSON result only if the meaning
-  guard passes. Any unavailable, malformed, unsafe, or timed-out result falls
-  back to Clean.
+There is no language-model mode. There used to be, and it was removed rather
+than kept for later: measured against 400 human-annotated disfluent/fluent
+pairs, the deterministic rules cut word error rate from 23.2% to 7.2%, and the
+model added **0.0** on top of that. An oracle allowed to read the reference
+would have added 0.1. There was no work left for a model to do, so the
+download, the wait and the `llama.cpp` dependency were all buying nothing.
+
+The full investigation, including the five architectures tried and why each
+failed, is in [Refinement R&D](REFINEMENT_RD.md).
 
 Clean is the default. The selected mode is stored in local user defaults.
 Instant Refine runs after recording stops and before text is saved or pasted.
@@ -104,3 +120,32 @@ hardware requirements, and language claims are recorded in
 ZenVoice will not continuously replace text inside another application until
 focus changes, cursor movement, undo behavior, and application compatibility
 have reliable tests.
+
+## Paragraph structure
+
+A minute of dictation used to arrive as one unbroken block. Breaks now come
+from the speaker's pauses, which is a fact about the recording rather than a
+judgement about the words — no model is involved.
+
+Two obstacles had to be cleared, both invisible until measured:
+
+- `no_timestamps` was on, so Whisper returned the whole recording as a single
+  segment spanning its full window. There was nothing to align text against.
+- With timestamps on, Whisper's segments *abut*: `t1` of one equals `t0` of
+  the next, so every gap computes as zero even across a pause of a second and
+  a half. The segment times align text to the recording but do not contain the
+  silence.
+
+So the pauses are measured from the audio, using the same adaptive noise floor
+as live dictation, and matched against the segment boundaries. The threshold
+adapts to the speaker — 2.5× their median silence, clamped to between 0.9 s
+and 3.0 s — because the research consensus is against fixed thresholds and a
+deliberate talker means something different by a one-second pause than a fast
+one does.
+
+A break is only taken where the previous segment ended on a full stop. A pause
+mid-sentence is someone hesitating, not starting a new thought.
+
+Still to calibrate: the thresholds are set from literature and synthetic
+fixtures whose 1.4 s pauses were chosen for a different purpose. Real
+recordings should set them.

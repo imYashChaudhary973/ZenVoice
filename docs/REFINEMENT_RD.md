@@ -545,9 +545,66 @@ new token sequences and skips prefill for the matching portion"*
 
 In-process the fix is to hold one context open for the app's lifetime, prefill
 the system prompt once, and reuse that KV prefix per dictation — the same
-mechanism, without the server. Combined with warming the model at launch
-instead of inside the first user-visible refinement, most of the 540 ms is
-recoverable before any model change.
+mechanism, without the server.
+
+**This was implemented, and the hypothesis was wrong.** Tracing the refiner
+per call:
+
+```
+prefix 72  tail 18  generated 17  prefill 109ms  total 1036ms   ← first call
+prefix 72  tail 16  generated 15  prefill   1ms  total  855ms
+prefix 72  tail 39  generated 38  prefill   1ms  total  747ms
+prefix 72  tail 39  generated 38  prefill   1ms  total 1424ms
+```
+
+Prefix reuse works — prefill drops to 1 ms — but prefill was never the cost.
+The instruction block is 72 tokens and cost ~109 ms *once*. Generation is
+essentially all of the time, at **25–40 ms per token**. The ceiling on any
+prefill optimization is therefore about 110 ms once per session, not 540 ms
+per dictation.
+
+Note also the last two rows: identical tail length, identical generated count,
+747 ms against 1424 ms. Wall-clock on a working laptop carries ~2× variance on
+identical work, so single-run A/B comparisons at this granularity cannot
+resolve anything smaller than a factor of two. Latency claims in this document
+need repeated runs and medians, and the earlier "540 ms" figure should be read
+as an order of magnitude rather than a measurement.
+
+### 6.4.1 The real latency constraint: the transcript is regenerated
+
+The trace exposes something more important than the failed optimization.
+Generated tokens track tail tokens almost exactly — 18→17, 39→38 — because the
+design has the model **re-emit the entire transcript** inside a JSON envelope.
+Latency is therefore linear in dictation length, at roughly 30 ms per token:
+
+| dictation | ~tokens | ~generation |
+| --- | --- | --- |
+| 20 words | 27 | 0.8 s |
+| 60 words | 80 | 2.4 s |
+| 150 words | 200 | 6.0 s |
+| 300 words | 400 | 12.0 s |
+
+The five-second deadline lands at roughly 120 words. Past that the model is
+killed mid-generation and the result silently falls back to Clean — which is
+indistinguishable, from the user's side, from refinement doing nothing. The
+2048-token context sets a second ceiling in the same region.
+
+Two consequences:
+
+1. **Apple Foundation Models does not fix this.** At ~30 tokens/second it is
+   the same order of speed. It removes the download and the catalogue burden
+   (6.5), but a full-transcript rewrite is just as slow there.
+2. **Track C stops being a reliability preference and becomes a requirement.**
+   Any design where the model re-emits the transcript is latency-bound by
+   transcript length and cannot serve long dictation. The model must emit an
+   *edit script* — tags, spans, or operations — whose length tracks the number
+   of corrections rather than the length of the text. A transcript needing
+   three fixes should cost three edits' worth of tokens whether it is twenty
+   words or three hundred.
+
+This reorders the plan: the tagging formulation is now the load-bearing piece,
+and the N-best lattice work (6.2) should be designed to produce edits rather
+than a rewritten string.
 
 ### 6.5 Apple Foundation Models may delete the problem outright
 
@@ -619,6 +676,523 @@ Revised starting points: ~250 ms floor, 400–600 ms sentence boundary, and a
 paragraph break at a multiple of the speaker's own running median gap rather
 than a constant.
 
+## 8.1 The harness is not yet a reliable instrument
+
+Two runs of the *same binary* over the *same cached fixtures*:
+
+| | run 1 | run 2 |
+| --- | --- | --- |
+| disfluent raw WER | 24.6% | 27.7% |
+| clean raw WER | 5.4% | 4.0% |
+| local model, disfluent | 8717 ms | 2967 ms |
+| local model, clean | 13298 ms | 10372 ms |
+
+Neither the accuracy nor the latency numbers are reproducible. Latency varies
+by up to 3× and word error rate by more than a point, which is larger than most
+of the effects this document is trying to measure.
+
+Causes, in order of confidence:
+
+- **Latency** — ordinary machine load. Confirmed within a single process: two
+  calls with identical tail and generated-token counts took 747 ms and 1424 ms.
+- **Accuracy** — `ggml-base.en` is under `beamSearchSizeCeilingBytes`, so it
+  decodes with beam search, and `whisper_full_default_params` enables
+  temperature fallback, which samples when a segment trips the entropy or
+  logprob thresholds. Thread count also tracks `activeProcessorCount`, and
+  multi-threaded float reductions do not have to associate identically run to
+  run.
+
+Consequences for everything above: single-run comparisons can only support
+conclusions about large effects. The Clean improvement in 0.2 (7.7 → 13.8
+points) is large enough to survive this, and is independently pinned by
+deterministic text-level checks in `ZenVoiceCoreChecks` — which is the stronger
+evidence and the reason those checks exist. Any *smaller* claim in this
+document, including anything about the local model's contribution, needs
+repeated runs and medians before it is trusted.
+
+Fixing the instrument is now a prerequisite rather than a chore: pin the decode
+temperature and thread count for harness runs, report medians over N runs, and
+separate the accuracy measurement from the latency measurement so a busy
+machine cannot move a correctness number.
+
+### 8.2 Fixed
+
+`WhisperTranscriber` gained an `isReproducible` option — off everywhere in the
+app, on by default in the harness — which sets `temperature_inc = 0` to disable
+the sampled re-decode and pins `n_threads` to 4. The harness now refines each
+clip three times and reports the per-clip **median** rather than a sum, so one
+scheduling stall cannot dominate. `ZENVOICE_ACCURACY_SAMPLED=1` measures the
+shipping configuration instead; `ZENVOICE_REFINE_REPEATS` tunes the repeats.
+
+Two consecutive runs now agree exactly:
+
+| | run 1 | run 2 |
+| --- | --- | --- |
+| disfluent raw WER | 27.7% | 27.7% |
+| after clean | 15.4% | 15.4% |
+| clean raw WER | 4.0% | 4.0% |
+| local model, disfluent | 262 ms/clip | 244 ms/clip |
+| local model, clean | 539 ms/clip | 531 ms/clip |
+
+Every accuracy figure is identical; latency varies by ~7% rather than 3×. The
+median also vindicates the original estimate — 539 ms per clip on clean speech,
+262 ms on the shorter disfluent clips, which is exactly the length-linear
+behaviour 6.4.1 predicts.
+
+### 8.3 What the deterministic decode revealed
+
+Pinning the decode changed one entry in the unhandled list, and it reverses
+part of 0.1. Both lines are the **raw transcript** of the same fixture — the
+input to refinement, not its output — under the two decode configurations:
+
+```
+spoken by the fixture:  "We should we should probably revert the change …"
+
+sampled decode:  We should we should → We should probably revert the change …
+pinned decode:   We should we should probably revert the change …
+```
+
+This is not a regression. The pinned decode is the *more faithful*
+transcription: the speaker really did say it twice, and now Whisper reports
+that. Refinement's behaviour is unchanged — what changed is that the
+disfluency now reaches it, and Clean fails to remove it.
+
+So "Whisper already removed it" was an artifact of temperature fallback
+resampling that segment, not a reliable property of the decoder. Phrase-level
+repetition is a genuine refinement gap after all: Clean's repetition regex is
+single-token (`\b(word)\b (word)+`) and cannot see a repeated *phrase*.
+
+The disfluent cohort's raw word error rate rising from 24.6% to 27.7% is the
+same effect and equally not a degradation. Raw transcripts in that cohort are
+scored against the *cleaned* reference, so a more verbatim transcript
+necessarily scores worse. That number measures how much work is left for
+refinement, not how well the model heard.
+
+### 8.4 Phrase-level restarts, fixed
+
+The gap 8.3 exposed, closed. Clean now collapses a repeated *phrase* — bounded
+at two to four words, blocked by a line break or by punctuation between the
+halves, so "New York, New York" and "come on, come on" survive as the
+deliberate repeats they are.
+
+```
+                       before          after
+disfluent raw          27.7%           27.7%
+after clean            15.4%  -12.3     12.3%  -15.4 pts
+clips changed          4 of 8          5 of 8
+insertions             6               4
+unhandled clips        3               2
+clean-speech delta     +0.0            +0.0
+semantic violations    0               0
+```
+
+Pinned by four text-level checks, which matter more than the harness number:
+the restart collapses, a *tripled* restart collapses to one rather than two,
+a non-adjacent recurrence ("the more you test the more you learn") survives,
+and a punctuated deliberate repeat survives.
+
+### 8.5 The instrument caught its first real change
+
+Re-running after the fix reproduced every figure exactly — OVERALL, long-form,
+and both refinement cohorts — confirming 8.2 holds across the whole harness
+rather than only the section originally compared.
+
+That reproducibility immediately paid for itself. Between two runs the
+transcription section moved (whole 5.4% → 4.7%, segmentation cost
+0.0 → +2.4 pts) with no committed change to transcription. Because the harness
+is now deterministic, that shift had to have a cause, and it did: parallel work
+in the tree added `WhisperDecoding.leadInSilenceSeconds` and made
+`WhisperTranscriber` pad every recording with half a second of silence.
+
+Worth flagging to whoever owns that change: the padding improves
+whole-recording word error rate but moves segmented decoding the other way,
+turning a 0.0-point segmentation cost into +2.4. The release path decodes
+whole, so this is not urgent, but live preview does not.
+
+Under the old sampled decode this would have been invisible — indistinguishable
+from the ±1 point the harness produced on its own.
+
+This is the first real gap the harness has surfaced under conditions where its
+answer can be trusted, and it is directly actionable. Single-word repetition
+("the the") is still collapsed by the decoder, and `dis-quantity` remains a
+transcription error rather than a refinement problem — so of the three
+originally dismissed, one comes back as a true defect.
+
+## 8.6 The edit-script redesign: architecture solved, model not
+
+6.4.1 argued the refiner must emit an edit script rather than the transcript.
+Implemented: the model now receives numbered words and replies with the
+indices to delete, under a grammar that admits only `{"drop":[…]}` with
+integers. It is structurally incapable of emitting a word, so invention,
+substitution and reordering are unreachable rather than caught afterwards.
+
+| | full rewrite | drop list |
+| --- | --- | --- |
+| latency, disfluent clips | 235 ms/clip | 194 ms/clip |
+| latency, clean clips (longer) | 539 ms/clip | 194 ms/clip |
+| length coupling | 2.3× | **1.0×** |
+| rejection rate, clean speech | 67% | 33% |
+| clean-speech damage | +0.0 | +0.0 |
+| semantic violations | 0 | 0 |
+| contribution over Clean | 0.0 pts | **0.0 pts** |
+
+Latency is now flat: identical on both cohorts despite clean clips being
+substantially longer. That was the point of 6.4.1 and it worked — the
+five-second deadline no longer lands at ~120 words, because output length
+tracks the number of corrections rather than the text. Rejections halved
+because a malformed reply is now unrepresentable.
+
+**The model still contributes nothing.** Two prompt iterations did not move it:
+
+- Without worked examples, Qwen 1.5B answered `{"drop":[1,2,3,4,5,6]}` for a
+  sentence needing no edits — delete everything. The guard caught it.
+- With five worked examples including a near-verbatim demonstration of the
+  self-correction case, it still failed to find "Tuesday actually Wednesday".
+
+### 8.6.1 Quoting spans was tried, and was worse
+
+If the model cannot map "Tuesday" to its index, the obvious fix is to let it
+quote the phrase instead — copying rather than counting, which small models do
+far better. Implemented and measured, and it must not ship:
+
+| | drop indices | quoted spans |
+| --- | --- | --- |
+| clean speech WER | 4.0% (+0.0) | **4.4% (+0.3)** |
+| clean clips changed | 0 | 1 |
+| rejection rate, clean | 33% | 58% |
+| contribution over Clean | 0.0 pts | 0.0 pts |
+
+Quoting made the model more capable and more dangerous at once. It began
+removing meaningful text from clean speech — the exact failure the "must not
+meddle" cohort exists to catch — while still not finding the self-correction.
+The guard could not stop it: a span quoted verbatim from the transcript,
+containing no negation and no number, is indistinguishable from filler by any
+rule that does not already understand the sentence.
+
+That is the crux, and it generalises past this experiment: **the guard can
+bound how much the model deletes, never whether it should.** Only the model can
+judge that, and Qwen 2.5 1.5B cannot. Reverted to indices, which are strictly
+safer — they cannot express a deletion the guard cannot bound.
+
+### 8.6.2 Where this leaves the local model
+
+Honestly stated: the architectural objections are answered, and the capability
+objection is now the whole problem.
+
+- Latency is flat and 2.8× better on longer dictation.
+- Rejection halved; safety is structural rather than inspected.
+- Contribution remains 0.0 points, on every configuration tried.
+
+The remaining options are all about the model, not the plumbing:
+
+1. **A more capable local model.** Qwen 3 1.7B, Gemma 3 1B, or a LoRA
+   fine-tuned on exactly this drop task. A small model trained on the task
+   will beat a general model several times its size, and generating that
+   training data is tractable.
+2. **Apple Foundation Models** at roughly 3B (6.5). Now more interesting than
+   6.5 concluded, because the edit-script design removed the latency objection
+   that demoted it — its ~30 tokens/second no longer matters when the output
+   is five tokens long. The open question is still whether it supports
+   constrained decoding.
+3. **Retire the mode.** Everything users currently get from refinement comes
+   from the deterministic path, which improved from 7.7 to 15.4 points this
+   session. A 1.1 GB download contributing 0.0 points is difficult to justify
+   in a product that promises local-only simplicity.
+
+Option 3 deserves genuine consideration rather than being the fallback. The
+measured case for the download is currently zero.
+
+## 8.7 Three ways of using the model, measured
+
+The premise of 8.6 was that Qwen 1.5B is too small for this job. That was the
+wrong conclusion. It was being asked the wrong kind of question.
+
+Every design so far made the model *find* the disfluencies and *emit* the
+edits — open-ended judgement, position arithmetic and format discipline at
+once. Three alternatives keep only the judgement. Deterministic rules propose
+candidate deletions, deliberately over-eagerly, and the model decides which
+proposals are right. It never chooses what to look at.
+
+- **1 scorer** — for each candidate, ask which reads more naturally, the text
+  with the span or without it. Two forward passes, no generation, no
+  instructions.
+- **2 verifier** — ask a yes/no question per candidate, answered by reading two
+  logits. One forward pass, no generation.
+- **3 oracle** — accept a candidate only if it genuinely lowers word error rate
+  against the reference. Cheating, and unshippable: it is the ceiling, and
+  exists to answer whether a better model is worth chasing at all.
+
+```
+disfluent speech (refinement must help)
+raw transcript                27.7%
+after clean                   12.3%   -15.4 pts       1 ms/clip
+after local model             12.3%   -15.4 pts     476 ms/clip
+after 1 scorer                 9.2%   -18.5 pts       1 ms/clip
+after 2 verifier              12.3%   -15.4 pts       1 ms/clip
+after 3 oracle (ceiling)       9.2%   -18.5 pts       1 ms/clip
+
+clean speech (refinement must not meddle)
+raw transcript                 4.0%
+after clean                    4.0%    +0.0 pts   0 changed
+after local model              4.0%    +0.0 pts   0 changed   33% rejected
+after 1 scorer                 4.0%    +0.0 pts   0 changed
+after 2 verifier               7.1%    +3.0 pts   3 changed
+after 3 oracle (ceiling)       4.0%    +0.0 pts   0 changed
+```
+
+Semantic violations: zero for all six.
+
+### 8.7.1 The scorer reaches the ceiling
+
+**Idea 1 scores identically to the oracle — 9.2% against 9.2%.** Given the same
+candidates, a flawless judge cannot beat it. It contributes **+3.1 points over
+Clean**, the first time anything model-based has contributed more than zero,
+and it does so without touching clean speech: 0 clips changed, +0.0 points,
+zero violations.
+
+It also solved `dis-selfcorrect` — "Send the invoice on Tuesday actually
+Wednesday" — the exact case that defeated the full rewrite, the drop indices
+and the quoted spans. That case needs a judgement no regex can make, and
+fluency scoring makes it correctly.
+
+The consequence for planning is larger than the three points: since the scorer
+already equals the oracle, **the limit is now the candidate rules, not the
+model.** A better or fine-tuned model cannot improve this without a wider
+candidate set to judge, which settles whether Track H's fine-tuning is worth
+starting. It is not, yet.
+
+### 8.7.2 The verifier is actively harmful
+
+Idea 2 gained nothing on disfluent speech and cost **+3.0 points on clean
+speech**, changing 3 of 12 clips that needed no change. It deleted meaningful
+words — "just", "so", "well" — that the candidate rules proposed and the model
+waved through.
+
+The contrast with the scorer is the whole lesson. Both saw identical
+candidates. Asked *"is this filler? yes or no"*, the model said yes too
+readily. Asked *"which of these two sentences reads better"*, it judged
+correctly every time. Same model, same information, opposite outcomes —
+because one question relies on instruction-following and the other on the
+thing a language model actually is.
+
+### 8.7.3 Latency, and the flaw the median was hiding
+
+The scorer's median of 1–2 ms per clip was worthless as a measurement. Most
+clips produce no candidates at all, so the scorer returned without calling the
+model, and the median described only the clips where nothing happened.
+
+Probing it properly — text only, no audio, `ZENVOICE_REFINE_PROBE=1` — found
+something worse than an optimistic number:
+
+```
+words  candidates  calls        total     per call   per word
+   17           4      5       1441 ms     288.2 ms    84.77 ms
+   34           8      9       5499 ms     611.0 ms   161.73 ms
+   68          16     17      21469 ms    1262.9 ms   315.73 ms
+  136          32     33      85069 ms    2577.8 ms   625.51 ms
+  272          64     65     341439 ms    5252.9 ms  1255.29 ms
+```
+
+Per-word cost doubles as length doubles: **quadratic**. A 272-word dictation
+took 5.7 minutes, and even 17 words cost 1.4 s — worse than the 476 ms
+generation design it was meant to replace. This is the same failure 6.4.1
+removed, returning in a new disguise, because both the number of candidates
+and the cost of each scoring pass grow with length.
+
+Two fixes:
+
+1. **Score a window, not the transcript.** Whether "Tuesday actually" is a
+   correction is settled by the words either side of it; a sentence three
+   paragraphs later has no bearing. Bounding the context to eight words each
+   side makes every check a fixed cost, so the total grows with the number of
+   candidates rather than with length × candidates.
+2. **Vectorize the normalization.** Each scored position exponentiates all
+   ~152k of the model's logits. In scalar Swift that measured 44 ms per call
+   and dwarfed the model's own forward pass — the bottleneck was arithmetic,
+   not inference. Accelerate does it across SIMD lanes.
+
+```
+words  candidates  calls        total     per call   per word
+   17           4      8        159 ms      19.9 ms     9.38 ms
+   34           8     16        324 ms      20.2 ms     9.52 ms
+   68          16     32        651 ms      20.3 ms     9.58 ms
+  136          32     64       1306 ms      20.4 ms     9.61 ms
+  272          64    128       2620 ms      20.5 ms     9.63 ms
+```
+
+Per-word is flat, so the cost is now **linear**. At 272 words that is 341 s
+down to 2.6 s, about 130× — and accuracy is unchanged: still 9.2%, still equal
+to the oracle, still zero clips changed on clean speech. The window costs
+nothing in quality.
+
+Release and debug builds measure the same, which locates the remaining 20 ms
+per call in the model's forward pass rather than in Swift: asking for logits at
+every position forces the full vocabulary projection for each one.
+
+**Still open.** The probe is deliberately candidate-dense — one candidate per
+four words, where most real clips produce none — so 2.6 s is a stress-test
+figure rather than a typical one. But the constant factor is not yet good
+enough for a long dictation, and two known reductions remain: request logits
+only for positions at or after the edit, since the shared prefix is identical
+in both texts (~2×), and stop emitting three width-variants per correction cue
+(~2–3× fewer calls).
+
+### 8.7.4 What this changes
+
+Withholding the mode (8.6) was right on the evidence available, and the
+evidence has now changed. The path back is not a bigger model — it is this
+strategy, which is faster, safer and measurably better than the one that was
+withheld, using the same weights already on disk.
+
+Before it ships: measure per-candidate latency honestly, tune the margin on
+real recordings rather than synthetic fixtures, and widen the candidate rules,
+since they are now the binding constraint.
+
+## 8.8 Sweeping the settings
+
+The 0.05 margin in 8.7 was a guess, and the setting that decides whether this
+is safe to ship should not be guessed. `ZENVOICE_REFINE_SWEEP=1` decodes every
+clip once and replays the scorer over those fixed transcripts, so a dozen
+configurations cost one transcription pass.
+
+The rule applied throughout: **any setting that changes even one clean-speech
+clip is disqualified regardless of its gain.** Silently deleting a word someone
+meant is worse than leaving an "um" in.
+
+```
+Qwen 0.5B, radius 8          Qwen 1.5B, radius 8
+margin  gain  damaged        margin  gain  damaged
+ -0.50  +3.1        3         -0.50  +3.1        3
+ -0.30  +3.1        3         -0.30  +3.1        1
+ -0.20  +3.1        0         -0.20  +3.1        0
+  0.00  +3.1        0          0.00  +3.1        0
+  0.30  +3.1        0          0.30  +3.1        0
+  0.90  +3.1        0          0.90  +3.1        0
+  1.00  +0.0        0          1.00  +0.0        0
+```
+
+Three findings.
+
+**The safe band is wide.** Damage begins below −0.2; the gain disappears at
+1.0. Anywhere between is +3.1 points with nothing damaged, so the setting is
+not balanced on a knife edge. **0.4** sits in the middle, furthest from both
+failure modes.
+
+**The window radius matters, and 8 is enough.** Radius 4 damages three clean
+clips even at a safe margin — too little context to judge. Radius 16 is
+identical to 8, so the extra context buys nothing and costs time.
+
+**0.5B equals 1.5B.** Identical on every row inside the safe band, and
+identical in latency at ~20 ms per call. That settles the download question
+raised in 8.6.2: the catalogue's smaller entry at **491 MB rather than
+1.1 GB** is sufficient, because scoring fluency does not need the parameters
+that instruction-following did.
+
+That the two models and every safe margin all produce exactly +3.1 with
+exactly 0 damage is itself a caution: it means a small number of candidates
+are decided emphatically, not that the threshold is well characterised across
+varied speech. The plateau is encouraging, not conclusive. Real recordings
+remain the outstanding dependency.
+
+### 8.8.1 Where the remaining time goes
+
+0.5B is no faster than 1.5B per call, which locates the cost outside the model:
+both share a ~152k vocabulary, and normalizing a position sweeps all of it.
+The forward pass is not the bottleneck — the softmax is.
+
+The reduction available: the two texts being compared share a prefix, and
+identical prefixes contribute identically, so only positions from the edit
+onward need scoring at all. That is roughly 3× on typical windows and does not
+touch accuracy.
+
+### 8.8.2 The configuration that works
+
+| setting | value | why |
+| --- | --- | --- |
+| model | Qwen 2.5 **0.5B** | equals 1.5B on every measure, half the download |
+| window radius | **8** words | 4 damages clean speech, 16 buys nothing |
+| margin | **0.4** | centre of the −0.2 … 0.9 safe band |
+| candidate source | deterministic rules | precision is the model's job, recall is theirs |
+| guard | protected tokens, 40% ceiling | bounds what a wrong judgement can cost |
+
+Measured: **+3.1 points** on disfluent speech, equal to the oracle ceiling;
+**zero** clean-speech clips changed; **zero** semantic violations; latency
+linear in dictation length.
+
+## 8.9 Validated against a real corpus, and the answer changes
+
+Eight synthetic fixtures could not settle whether the scorer generalises,
+because its entire +3.1 came from **one** of them. Refinement is a text stage,
+so validating it needs no audio — only pairs of what was said and what was
+meant.
+
+[DISCO](https://github.com/vineet2104/DISCO) supplies exactly that: human
+annotated disfluent/fluent pairs across English, Hindi, German and French,
+released with the paper. 400 pairs per language, sampled to those where the two
+sides differ. `ZENVOICE_REFINE_TEXTEVAL=<tsv>` scores them.
+
+```
+English, 400 human-annotated pairs
+disfluent input         23.2%    +0.0 pts
+after clean              7.2%   -15.9 pts    0 damaged
+after clean + scorer     7.2%   -15.9 pts    0 damaged
+oracle (ceiling)         7.2%   -16.0 pts
+
+Hindi, 400 human-annotated pairs
+disfluent input         27.2%    +0.0 pts
+after clean             26.7%    -0.5 pts    0 damaged
+after clean + scorer    26.7%    -0.5 pts    0 damaged
+oracle (ceiling)        26.7%    -0.5 pts
+```
+
+### 8.9.1 Clean generalises. The model does not.
+
+**Clean holds up on real data** — 15.9 points on 400 human-annotated English
+pairs, against 15.4 on the synthetic fixtures. Zero sentences damaged: 57
+already-fluent sentences were altered, but every one only in capitalization or
+spacing, which is the feature working rather than damage.
+
+**The scorer contributes 0.0 points**, and the oracle ceiling sits **0.1 points**
+above Clean. That is the decisive number. A flawless judge — one that reads the
+answer key — would add a tenth of a point to real English dictation once the
+deterministic rules have run. There is no headroom for a model to compete for.
+
+The +3.1 in 8.7 was one synthetic fixture, exactly as 8.8 warned. Fifty times
+more evidence reverses the conclusion.
+
+So the final call on the local model is not "withheld until a better model
+arrives" but **withheld because there is nothing left for one to do.** The
+scorer remains the best architecture found — it just has no work.
+
+### 8.9.2 Hindi is nearly untouched, and that is the real opportunity
+
+Clean improves Hindi by **0.5 points against 15.9 for English**. Roughly 26.7
+points of Hindi disfluency pass straight through.
+
+That is not a subtle gap, and for a product whose differentiator is Hinglish it
+is the most valuable finding here. The cause is plain: every rule in
+`InstantRefineEngine` is English — the filler stems are `um|uh|erm|ah|hm`, the
+discourse markers are "you know" and "like", the correction cues are "no wait"
+and "actually". None of them fire on Hindi.
+
+The Hindi oracle ceiling of 0.5 does **not** mean Hindi is unimprovable. It
+means `RefineLab`'s candidate rules are English too, so a perfect judge is
+being offered nothing worth judging. The achievable gain is closer to the 26.7
+points sitting between the disfluent and fluent sides.
+
+**This is deterministic rule work, not model work** — the same kind that took
+English from 7.7 to 15.4 this session, applied to Hindi fillers, repetitions
+and correction cues.
+
+### 8.9.3 Caveat on the corpus
+
+DISCO's disfluent side is human transcription, so it retains fillers Whisper
+strips before refinement ever sees them. Clean's 15.9 points is therefore
+flattering relative to in-product conditions, where the input arrives partly
+cleaned. It does not change the comparison between stages, which all saw the
+same input, and it makes the near-zero remaining headroom finding stronger
+rather than weaker: on genuinely Whisper-cleaned text there is even less left.
+
 ## 9. Suggested sequence
 
 Revised after the section 6–8 research. The ordering changed in two places:
@@ -629,13 +1203,23 @@ validate it.
 1. **Done** — Track I: cohort split, widened fixtures, semantic safety,
    rejection and latency reporting, the missing assertion.
 2. **Done** — the two measured Clean gaps (0.2).
-3. **Context reuse and launch warming** (6.4). Recovers most of the 540 ms with
-   no model change, no guard change, and no new download. Cheapest real win
-   available.
-4. **Apple Foundation Models spike** (6.5). One question decides a lot of
-   downstream work: does it support constrained decoding? If yes, much of the
-   llama.cpp path becomes redundant on macOS 26. Answer before investing
-   further in the current runtime.
+3. **Done, and it did not pay off** — context reuse and launch warming (6.4).
+   Implemented and correct: prefill is now 1 ms. But prefill was never the
+   cost, so the win is ~110 ms once per session rather than 540 ms per
+   dictation. Kept because it is correct and removes per-call context
+   allocation, not because it moved the number.
+4. **Make the harness reproducible** (8.1). Now blocking. The instrument
+   currently has 3× latency variance and >1 point of WER variance between
+   identical runs, which is larger than most remaining effects. Nothing after
+   this step can be evaluated until it is fixed.
+5. **Redesign the refiner to emit edits, not text** (6.4.1). Promoted to the
+   top of the model work. Regenerating the transcript makes latency linear in
+   dictation length and puts anything past ~120 words beyond the deadline, so
+   no choice of model or runtime rescues the current shape.
+6. **Apple Foundation Models spike** (6.5). Still worth answering for the
+   download and catalogue burden, but demoted: at ~30 tokens/second it does
+   not solve 6.4.1, so it is no longer a potential shortcut past the
+   architectural work.
 5. **Real recordings** into `ZENVOICE_ACCURACY_CORPUS`. Now a blocking
    dependency rather than a nice-to-have — per 0.1, synthetic speech cannot
    produce a realistic repetition, so Track A cannot be validated without it.

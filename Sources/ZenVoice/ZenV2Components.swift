@@ -5,8 +5,41 @@ import SwiftUI
 // (ZenVoiceNewDesign/css/base.css). Every redesigned screen is composed
 // from these pieces so the vocabulary stays identical across the app.
 
-/// Screen scaffold: 20px bold title, secondary subtitle, 780pt content
-/// column, prototype paddings, canvas background.
+struct ZenBrandMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        if let logo = BrandAssets.zenLogo {
+            Image(nsImage: logo)
+                .resizable()
+                .scaledToFit()
+                .padding(max(2, size * 0.08))
+                .frame(width: size, height: size)
+                .background(Color.black)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: min(4, size * 0.16),
+                        style: .continuous
+                    )
+                )
+        } else {
+            Image(systemName: "waveform")
+                .font(.system(size: size * 0.65, weight: .semibold))
+                .foregroundStyle(ZenDesign.Semantic.accent)
+                .frame(width: size, height: size)
+                .background {
+                    RoundedRectangle(
+                        cornerRadius: min(4, size * 0.16),
+                        style: .continuous
+                    )
+                    .fill(ZenDesign.Semantic.accentMuted)
+                }
+        }
+    }
+}
+
+/// Ledger screen scaffold: editorial header rule and a responsive content
+/// column that stays compact in a normal window and uses a full-screen canvas.
 struct ZenScreen<Content: View>: View {
     let title: String
     let subtitle: String
@@ -14,19 +47,17 @@ struct ZenScreen<Content: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            // Fluid column: ~80% of the window's content width, so full
-            // screen fills the space instead of leaving fixed margins.
-            // Clamped for readability on very large displays.
             let available = max(
-                0, proxy.size.width - 2 * ZenDesign.Spacing.xl
+                0, proxy.size.width - 80
             )
-            let column = min(min(max(available * 0.8, 612), 1240), available)
+            let column = min(1_200, available)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+                VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(title)
                             .font(ZenDesign.Typography.pageTitle)
+                            .tracking(-0.1)
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         Text(subtitle)
                             .font(ZenDesign.Typography.body)
@@ -34,11 +65,19 @@ struct ZenScreen<Content: View>: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    content
+                    Rectangle()
+                        .fill(ZenDesign.Semantic.textPrimary)
+                        .frame(height: 2)
+                        .padding(.top, 14)
+
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+                        content
+                    }
+                    .padding(.top, 26)
                 }
                 .frame(maxWidth: column, alignment: .leading)
-                .padding(.horizontal, ZenDesign.Spacing.xl)
-                .padding(.top, ZenDesign.Spacing.lg + 4)
+                .padding(.horizontal, 40)
+                .padding(.top, 30)
                 .padding(.bottom, ZenDesign.Spacing.xxl)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -47,7 +86,7 @@ struct ZenScreen<Content: View>: View {
     }
 }
 
-/// Section: 15px heading, optional trailing caption, content below.
+/// Ledger section label: compact uppercase tracking above the content.
 struct ZenSection<Content: View>: View {
     let title: String
     var caption: String?
@@ -56,9 +95,10 @@ struct ZenSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title)
+                Text(title.uppercased())
                     .font(ZenDesign.Typography.sectionTitle)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .tracking(1.7)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
                 Spacer()
                 if let caption {
                     Text(caption)
@@ -68,11 +108,11 @@ struct ZenSection<Content: View>: View {
             }
             content
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// Panel: surface, 1px border, 12pt radius. Rows inside are separated
-/// with `ZenPanelDivider`.
+/// Tonal panel. Rows inside are separated with `ZenPanelDivider`.
 struct ZenPanel<Content: View>: View {
     @ViewBuilder let content: Content
 
@@ -80,6 +120,7 @@ struct ZenPanel<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             content
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(ZenDesign.Semantic.surface)
         .clipShape(
             RoundedRectangle(
@@ -92,7 +133,7 @@ struct ZenPanel<Content: View>: View {
                 cornerRadius: ZenDesign.Radius.medium,
                 style: .continuous
             )
-            .strokeBorder(ZenDesign.Semantic.border)
+            .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
         }
     }
 }
@@ -122,7 +163,7 @@ struct ZenRow<Trailing: View>: View {
                     )
                     .frame(width: 28, height: 28)
                     .background {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .fill(
                                 iconBackground
                                     ?? ZenDesign.Semantic.surfaceRaised
@@ -184,7 +225,7 @@ struct ZenKbd: View {
             .frame(minWidth: 22, minHeight: 22)
             .background {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(ZenDesign.Semantic.surface)
+                    .fill(ZenDesign.Semantic.surfaceRaised)
                     .overlay {
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
                             .strokeBorder(ZenDesign.Semantic.borderStrong)
@@ -251,13 +292,19 @@ struct ZenBadge: View {
                 Image(systemName: systemImage)
                     .font(.system(size: 9, weight: .bold))
             }
-            Text(text)
+            Text(text.uppercased())
+                .lineLimit(1)
         }
-        .font(ZenDesign.Typography.captionStrong)
+        .font(.system(size: 9.5, weight: .semibold))
+        .tracking(0.7)
         .foregroundStyle(foreground)
-        .padding(.horizontal, 8)
-        .frame(height: 20)
-        .background { Capsule().fill(background) }
+        .padding(.horizontal, 7)
+        .frame(height: 18)
+        .background {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(background)
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var foreground: Color {
@@ -361,7 +408,12 @@ struct ZenStatTile: View {
             }
         }
         .padding(ZenDesign.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: 92,
+            maxHeight: 92,
+            alignment: .topLeading
+        )
         .background(ZenDesign.Semantic.surface)
         .clipShape(
             RoundedRectangle(
@@ -552,8 +604,17 @@ struct ZenChoiceCard: View {
                             )
                     }
                     Text(title)
-                        .font(ZenDesign.Typography.bodyStrong)
+                        .font(
+                            .system(
+                                size: 14.5,
+                                weight: .semibold,
+                                design: .serif
+                            )
+                        )
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .layoutPriority(1)
                     if let badge {
                         ZenBadge(text: badge, kind: .neutral)
                     }
@@ -565,13 +626,18 @@ struct ZenChoiceCard: View {
                     }
                 }
                 Text(detail)
-                    .font(ZenDesign.Typography.caption)
+                    .font(.system(size: 11))
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
             }
             .padding(ZenDesign.Spacing.sm + 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: 92,
+                alignment: .topLeading
+            )
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.medium,

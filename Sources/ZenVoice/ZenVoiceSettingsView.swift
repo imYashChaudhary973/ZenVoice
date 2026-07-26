@@ -73,15 +73,14 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
-    @ObservedObject var refinementModelManagerViewModel:
-        RefinementModelManagerViewModel
     @ObservedObject var applicationProfileViewModel:
         ApplicationProfileViewModel
     @ObservedObject var onboardingViewModel:
         OnboardingViewModel
     @ObservedObject var appState: AppState
+    let toggleRecording: () -> Void
     @State private var selection: Section = .home
-    @AppStorage("zenvoice.appearance") private var appearance = "dark"
+    @AppStorage("zenvoice.appearance") private var appearance = "light"
 
     private var prefersDarkAppearance: Bool {
         appearance != "light"
@@ -98,9 +97,12 @@ struct ZenVoiceSettingsView: View {
                     modelManagerViewModel: modelManagerViewModel
                 )
             } else {
-                HStack(spacing: 0) {
-                    sidebar
-                    content
+                VStack(spacing: 0) {
+                    ledgerTitleBar
+                    HStack(spacing: 0) {
+                        sidebar
+                        content
+                    }
                 }
             }
         }
@@ -114,89 +116,114 @@ struct ZenVoiceSettingsView: View {
         }
     }
 
+    private var ledgerTitleBar: some View {
+        ZStack {
+            Text("ZenVoice")
+                .font(.system(size: 13.5, weight: .semibold, design: .serif))
+                .italic()
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .background(ZenDesign.Semantic.canvas)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ZenDesign.Semantic.border)
+                .frame(height: 1)
+        }
+        .accessibilityHidden(true)
+    }
+
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                brandLogo(size: 30)
+                ZenBrandMark(size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("ZenVoice")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold, design: .serif))
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                     Text("Local voice, refined")
-                        .font(.system(size: 10.5))
+                        .font(.system(size: 10.5, design: .serif))
+                        .italic()
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.bottom, 16)
+            .padding(.top, 4)
+            .padding(.bottom, 14)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(ZenDesign.Semantic.border)
+                    .frame(height: 1)
+            }
+            .padding(.bottom, 6)
 
-            ForEach(
-                Array(Section.groups.enumerated()),
-                id: \.offset
-            ) { index, group in
-                if let title = group.title {
-                    Text(title.uppercased())
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                        .padding(.horizontal, 8)
-                        .padding(.top, index == 0 ? 0 : 16)
-                        .padding(.bottom, 6)
-                        .accessibilityAddTraits(.isHeader)
-                }
-                ForEach(group.sections) { section in
-                    sidebarItem(section)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(
+                        Array(Section.groups.enumerated()),
+                        id: \.offset
+                    ) { index, group in
+                        if let title = group.title {
+                            Text(title.uppercased())
+                                .font(.system(size: 10, weight: .semibold))
+                                .tracking(0.8)
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                                .padding(.horizontal, 8)
+                                .padding(.top, index == 0 ? 0 : 16)
+                                .padding(.bottom, 6)
+                                .accessibilityAddTraits(.isHeader)
+                        }
+                        ForEach(group.sections) { section in
+                            sidebarItem(section)
+                        }
+                    }
                 }
             }
+            .scrollIndicators(.hidden)
+            .padding(.bottom, 10)
 
-            Spacer(minLength: 16)
+            Rectangle()
+                .fill(ZenDesign.Semantic.border)
+                .frame(height: 1)
+                .padding(.horizontal, -2)
+                .padding(.bottom, 10)
 
-            Button {
-                appearance = prefersDarkAppearance ? "light" : "dark"
-            } label: {
-                HStack(spacing: 9) {
-                    Image(
-                        systemName: prefersDarkAppearance
-                            ? "sun.max.fill" : "moon.fill"
+            HStack(spacing: 2) {
+                appearanceButton(
+                    title: "Light",
+                    systemImage: "sun.max",
+                    value: "light"
+                )
+                appearanceButton(
+                    title: "Dark",
+                    systemImage: "moon",
+                    value: "dark"
+                )
+            }
+            .padding(2)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(ZenDesign.Semantic.surfaceRaised)
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
                     )
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 15)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                    Text(prefersDarkAppearance ? "Light mode" : "Dark mode")
-                        .font(ZenDesign.Typography.bodyStrong)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    Spacer()
+                    .strokeBorder(ZenDesign.Semantic.border)
                 }
-                .padding(.horizontal, 8)
-                .frame(height: 30)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                prefersDarkAppearance
-                    ? "Switch to Light mode"
-                    : "Switch to Dark mode"
-            )
 
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(ZenDesign.Semantic.success)
-                    .frame(width: 6, height: 6)
-                    .shadow(
-                        color: ZenDesign.Semantic.success.opacity(0.55),
-                        radius: 4
-                    )
-                Text("Processing stays local")
-                    .font(ZenDesign.Typography.captionStrong)
-                    .foregroundStyle(ZenDesign.Semantic.success)
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 10)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 16)
-        .padding(.bottom, 16)
+        .padding(.horizontal, 10)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
         .frame(width: 224)
         .background(ZenDesign.Semantic.sidebar)
         .overlay(alignment: .trailing) {
@@ -227,7 +254,7 @@ struct ZenVoiceSettingsView: View {
                     )
                     .foregroundStyle(
                         selection == section
-                            ? ZenDesign.Semantic.textPrimary
+                            ? ZenDesign.Semantic.accentStrong
                             : ZenDesign.Semantic.textSecondary
                     )
                 Spacer()
@@ -235,11 +262,16 @@ struct ZenVoiceSettingsView: View {
                    historyViewModel.recoveryCount > 0 {
                     Text("\(historyViewModel.recoveryCount)")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(ZenDesign.Semantic.warn)
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textOnAccent
+                        )
                         .padding(.horizontal, 6)
                         .frame(height: 16)
                         .background {
-                            Capsule().fill(ZenDesign.Semantic.warnMuted)
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(
+                                    ZenDesign.Semantic.accent
+                                )
                         }
                         .accessibilityLabel(
                             "\(historyViewModel.recoveryCount) items in Recovery Inbox"
@@ -269,6 +301,47 @@ struct ZenVoiceSettingsView: View {
         )
     }
 
+    private func appearanceButton(
+        title: String,
+        systemImage: String,
+        value: String
+    ) -> some View {
+        let selected = appearance == value
+        return Button {
+            appearance = value
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .medium))
+                Text(title)
+                    .font(ZenDesign.Typography.captionStrong)
+            }
+            .foregroundStyle(
+                selected
+                    ? ZenDesign.Semantic.textPrimary
+                    : ZenDesign.Semantic.textSecondary
+            )
+            .frame(maxWidth: .infinity, minHeight: 25)
+            .background {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(
+                        selected
+                            ? ZenDesign.Semantic.surface
+                            : Color.clear
+                    )
+                    .shadow(
+                        color: selected ? Color.black.opacity(0.10) : .clear,
+                        radius: 2,
+                        y: 1
+                    )
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title) appearance")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
     @ViewBuilder
     private var content: some View {
         switch selection {
@@ -279,6 +352,8 @@ struct ZenVoiceSettingsView: View {
                 modelManagerViewModel: modelManagerViewModel,
                 historyViewModel: historyViewModel,
                 insightsViewModel: insightsViewModel,
+                startDictation: toggleRecording,
+                replaySetup: onboardingViewModel.show,
                 navigate: { destination in
                     switch destination {
                     case .audio:
@@ -307,7 +382,6 @@ struct ZenVoiceSettingsView: View {
         case .refine:
             InstantRefineScreen(
                 viewModel: viewModel,
-                modelViewModel: refinementModelManagerViewModel
             )
         case .history:
             HistoryScreen(viewModel: historyViewModel)
@@ -331,8 +405,6 @@ struct ZenVoiceSettingsView: View {
                     voiceProfileViewModel,
                 modelManagerViewModel:
                     modelManagerViewModel,
-                refinementModelManagerViewModel:
-                    refinementModelManagerViewModel
             )
         case .help:
             HelpScreen(
@@ -343,36 +415,6 @@ struct ZenVoiceSettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private func brandLogo(size: CGFloat) -> some View {
-        if let logo = BrandAssets.zenLogo {
-            Image(nsImage: logo)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: size * 0.25,
-                        style: .continuous
-                    )
-                )
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: size * 0.25,
-                        style: .continuous
-                    )
-                    .strokeBorder(
-                        ZenDesign.Semantic.accent.opacity(0.28),
-                        lineWidth: 1
-                    )
-                }
-        } else {
-            Image(systemName: "waveform.circle.fill")
-                .resizable()
-                .foregroundStyle(ZenDesign.Semantic.accent)
-                .frame(width: size, height: size)
-        }
-    }
 }
 
 private struct OnboardingScreen: View {
@@ -506,9 +548,7 @@ private struct OnboardingScreen: View {
 
     private var brand: some View {
         HStack(spacing: 10) {
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 22))
-                .foregroundStyle(ZenDesign.Semantic.accent)
+            ZenBrandMark(size: 28)
             Text("ZenVoice")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(
@@ -650,7 +690,7 @@ private struct OnboardingScreen: View {
                 )
             }
             Text(
-                "64 more languages live in Languages. Hinglish and auto-detect use the Multilingual model — the next step recommends the right download."
+                "64 more languages live in Languages. Hinglish uses Hinglish Apex; auto-detect uses a multilingual model. The next step recommends the right download."
             )
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(
@@ -1061,8 +1101,7 @@ private struct AudioScreen: View {
     var body: some View {
         ZenScreen(
             title: "Audio",
-            subtitle:
-                "Pick which microphone ZenVoice listens to, and test it without leaving this screen."
+            subtitle: "Pick the microphone ZenVoice listens to."
         ) {
             inputSection
             doctorSection
@@ -1097,7 +1136,7 @@ private struct AudioScreen: View {
                         "Follow the current macOS input automatically — switches when macOS does.",
                     selected: viewModel.selectedMicrophoneUID == nil,
                     isDefault: false,
-                    enabled: viewModel.audioDoctorState != .running
+                    enabled: !viewModel.isAudioDoctorActive
                 )
 
                 if viewModel.microphones.isEmpty {
@@ -1122,7 +1161,7 @@ private struct AudioScreen: View {
                                     == microphone.id,
                             isDefault: microphone.isDefault,
                             enabled: microphone.isConnected
-                                && viewModel.audioDoctorState != .running
+                                && !viewModel.isAudioDoctorActive
                         )
                     }
                 }
@@ -1227,25 +1266,60 @@ private struct AudioScreen: View {
                                 .foregroundStyle(audioDoctorTint)
                         }
                         Spacer()
-                        Button(
-                            viewModel.audioDoctorState == .running
-                                ? "Listening…"
-                                : "Run check",
-                            action: viewModel.runAudioDoctor
-                        )
+                        Button(audioDoctorButtonTitle) {
+                            switch viewModel.audioDoctorState {
+                            case .running, .paused:
+                                viewModel.toggleAudioDoctorPause()
+                            case .idle, .passed, .quiet, .failed:
+                                viewModel.runAudioDoctor()
+                            case .analyzing:
+                                break
+                            }
+                        }
                         .buttonStyle(ZenSecondaryButtonStyle())
                         .disabled(
-                            viewModel.audioDoctorState == .running
+                            viewModel.audioDoctorState == .analyzing
                         )
                     }
 
-                    ProgressView(value: viewModel.audioDoctorLevel)
-                        .progressViewStyle(.linear)
-                        .tint(audioDoctorTint)
-                        .accessibilityLabel("Microphone signal level")
-                        .accessibilityValue(
-                            "\(Int((viewModel.audioDoctorLevel * 100).rounded())) percent"
+                    VStack(alignment: .leading, spacing: 8) {
+                        AudioDoctorWaveform(
+                            samples: viewModel.audioDoctorSamples,
+                            tint: audioDoctorTint
                         )
+                        .frame(height: 44)
+
+                        HStack {
+                            Text(audioDoctorTimingLabel)
+                            Spacer()
+                            Text("16 kHz · mono · local")
+                        }
+                        .font(ZenDesign.Typography.monoSmall)
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textTertiary
+                        )
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.small,
+                            style: .continuous
+                        )
+                        .fill(ZenDesign.Semantic.surfaceSunken)
+                        .overlay {
+                            RoundedRectangle(
+                                cornerRadius: ZenDesign.Radius.small,
+                                style: .continuous
+                            )
+                            .strokeBorder(ZenDesign.Semantic.border)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Microphone waveform")
+                    .accessibilityValue(
+                        "\(Int((viewModel.audioDoctorLevel * 100).rounded())) percent"
+                    )
 
                     Text(
                         "Records three seconds locally, measures loudness, confirms the sample format, then deletes the clip. No test audio leaves this Mac."
@@ -1265,9 +1339,89 @@ private struct AudioScreen: View {
             return ZenDesign.Semantic.success
         case .quiet, .failed:
             return ZenDesign.Semantic.danger
-        case .idle, .running:
+        case .idle, .running, .paused, .analyzing:
             return ZenDesign.Semantic.accent
         }
+    }
+
+    private var audioDoctorButtonTitle: String {
+        switch viewModel.audioDoctorState {
+        case .running:
+            return "Pause"
+        case .paused:
+            return "Resume"
+        case .analyzing:
+            return "Checking…"
+        case .idle, .passed, .quiet, .failed:
+            return "Run check"
+        }
+    }
+
+    private var audioDoctorTimingLabel: String {
+        switch viewModel.audioDoctorState {
+        case .running, .paused:
+            return String(
+                format: "%.1f s remaining",
+                viewModel.audioDoctorRemainingSeconds
+            )
+        case .analyzing:
+            return "Capture complete · validating"
+        case .idle:
+            return "Ready · 3.0 s check"
+        case .passed:
+            return "Signal and format passed"
+        case .quiet:
+            return "Format passed · signal is quiet"
+        case .failed:
+            return "Check could not complete"
+        }
+    }
+}
+
+private struct AudioDoctorWaveform: View {
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
+    let samples: [Double]
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            let spacing: CGFloat = 3
+            let count = max(1, samples.count)
+            let barWidth = max(
+                2,
+                (proxy.size.width - spacing * CGFloat(count - 1))
+                    / CGFloat(count)
+            )
+            HStack(alignment: .center, spacing: spacing) {
+                ForEach(
+                    Array(samples.enumerated()),
+                    id: \.offset
+                ) { _, sample in
+                    Capsule()
+                        .fill(
+                            tint.opacity(sample > 0.03 ? 0.95 : 0.24)
+                        )
+                        .frame(
+                            width: barWidth,
+                            height: max(
+                                3,
+                                proxy.size.height
+                                    * max(0.06, min(1, sample))
+                            )
+                        )
+                }
+            }
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: .center
+            )
+        }
+        .animation(
+            reduceMotion ? nil : .linear(duration: 0.06),
+            value: samples
+        )
     }
 }
 
@@ -1297,8 +1451,7 @@ private struct LanguagesScreen: View {
     var body: some View {
         ZenScreen(
             title: "Languages",
-            subtitle:
-                "Profiles are explicit — ZenVoice never silently switches what it writes. Set a different profile per app in App Profiles."
+            subtitle: "What you speak, and how it should be written."
         ) {
             if let error = viewModel.languageError {
                 ZenBanner(
@@ -1333,7 +1486,7 @@ private struct LanguagesScreen: View {
     // MARK: quick profiles
 
     private var profileSection: some View {
-        ZenSection(title: "Active profile") {
+        ZenSection(title: "English · Multilingual · Auto-Detect") {
             HStack(spacing: ZenDesign.Spacing.xs) {
                 ZenChoiceCard(
                     title: "English",
@@ -1343,13 +1496,13 @@ private struct LanguagesScreen: View {
                 )
                 ZenChoiceCard(
                     title: "Hinglish",
-                    badge: "Multilingual model",
+                    badge: "Multilingual",
                     detail: "Hindi–English the way you actually speak it",
                     selected: viewModel.languageProfile == .hinglish,
                     action: viewModel.useHinglishProfile
                 )
                 ZenChoiceCard(
-                    title: "Auto-detect",
+                    title: "Auto-Detect",
                     badge: "Multilingual model",
                     detail: "Detects the spoken language per dictation",
                     selected: isAutomatic,
@@ -1363,36 +1516,24 @@ private struct LanguagesScreen: View {
 
     private var outputSection: some View {
         ZenSection(
-            title: "Output",
+            title: "Output mode",
             caption: viewModel.languageProfile.displayName
         ) {
-            ZenPanel {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker(
-                        "Output mode",
-                        selection: Binding(
-                            get: {
-                                viewModel.languageProfile.outputMode
-                            },
-                            set: viewModel.setOutputMode
-                        )
-                    ) {
-                        ForEach(
-                            TranscriptionOutputMode.allCases
-                        ) { mode in
-                            Text(mode.displayName).tag(mode)
+            HStack(spacing: ZenDesign.Spacing.xs) {
+                ForEach(TranscriptionOutputMode.allCases) { mode in
+                    ZenChoiceCard(
+                        title: mode.displayName,
+                        detail: mode.detail,
+                        selected:
+                            viewModel.languageProfile.outputMode == mode,
+                        action: {
+                            viewModel.setOutputMode(mode)
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel("Transcription output mode")
-
-                    Text(viewModel.languageProfile.outputMode.detail)
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    )
                 }
-                .padding(ZenDesign.Spacing.md)
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Transcription output mode")
         }
     }
 
@@ -1522,7 +1663,8 @@ private struct ModelsScreen: View {
 
     private var recommendedTier: ModelPerformanceTier {
         ModelRecommendationEngine.recommendedTier(
-            for: viewModel.hardwareProfile
+            for: viewModel.hardwareProfile,
+            language: LanguagePreferences.load()
         )
     }
 
@@ -1544,7 +1686,7 @@ private struct ModelsScreen: View {
         ZenScreen(
             title: "Models",
             subtitle:
-                "Every download is pinned to an exact revision and verified with SHA-256 before it can run. Weights live only on this Mac."
+                "Speech models run entirely on this Mac. Verified before first use."
         ) {
             ZenSection(
                 title: "What matters most?",
@@ -1591,6 +1733,27 @@ private struct ModelsScreen: View {
                             icon: "exclamationmark.triangle",
                             text: error
                         )
+                    }
+
+                    if let legacy = viewModel.selectedLegacyModel {
+                        VStack(alignment: .leading, spacing: 7) {
+                            HStack {
+                                Text("Legacy model")
+                                    .font(ZenDesign.Typography.captionStrong)
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                                Spacer()
+                                Text("Still verified and usable")
+                                    .font(ZenDesign.Typography.caption)
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textTertiary
+                                    )
+                            }
+                            ZenPanel {
+                                modelRow(legacy, isLegacy: true)
+                            }
+                        }
                     }
 
                     ZenPanel {
@@ -1647,19 +1810,27 @@ private struct ModelsScreen: View {
         }
     }
 
-    private func modelRow(_ model: VerifiedModel) -> some View {
+    private func modelRow(
+        _ model: VerifiedModel,
+        isLegacy: Bool = false
+    ) -> some View {
         let isInstalled = viewModel.isInstalled(model)
         let isSelected = viewModel.isSelected(model)
         let isCompatible = viewModel.isLanguageCompatible(model)
+        let selectionProfile = viewModel.selectionProfile(for: model)
         let isDownloading = viewModel.downloadingModelID == model.id
         let recommendation = viewModel.recommendation(for: model)
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: ZenDesign.Spacing.sm) {
                 Image(
-                    systemName:
-                        model.languageCapability == .multilingual
-                            ? "globe" : "character.book.closed"
+                    systemName: {
+                        switch model.languageCapability {
+                        case .multilingual: "globe"
+                        case .hinglish: "character.bubble"
+                        case .english: "character.book.closed"
+                        }
+                    }()
                 )
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -1678,20 +1849,33 @@ private struct ModelsScreen: View {
                             )
                         if isSelected {
                             ZenBadge(
-                                text: "In use", kind: .success,
+                                text: isLegacy ? "In use · Legacy" : "In use",
+                                kind: isLegacy ? .neutral : .success,
                                 systemImage: "checkmark"
                             )
+                        } else if let badge =
+                                    ModelProfileTransition
+                                        .incompatibilityBadge(
+                                            model: model,
+                                            currentProfile:
+                                                LanguagePreferences.load()
+                                        ) {
+                            ZenBadge(text: badge, kind: .neutral)
                         } else if model.tier == recommendedTier,
                                   recommendation.level == .recommended {
                             ZenBadge(
                                 text: "Recommended for this Mac",
                                 kind: .accent
                             )
-                        } else if !isCompatible {
-                            ZenBadge(text: "English only", kind: .neutral)
                         }
                     }
-                    Text(rowNote(model, recommendation: recommendation))
+                    Text(
+                        rowNote(
+                            model,
+                            recommendation: recommendation,
+                            isLegacy: isLegacy
+                        )
+                    )
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
                         .lineLimit(2)
@@ -1705,6 +1889,8 @@ private struct ModelsScreen: View {
                     isInstalled: isInstalled,
                     isSelected: isSelected,
                     isCompatible: isCompatible,
+                    selectionProfile: selectionProfile,
+                    isLegacy: isLegacy,
                     isDownloading: isDownloading,
                     recommendation: recommendation
                 )
@@ -1725,8 +1911,14 @@ private struct ModelsScreen: View {
 
     private func rowNote(
         _ model: VerifiedModel,
-        recommendation: ModelRecommendation
+        recommendation: ModelRecommendation,
+        isLegacy: Bool
     ) -> String {
+        if isLegacy {
+            return
+                "This model remains available for existing installations "
+                + "but is no longer recommended. Switch when you are ready."
+        }
         if let benchmark = viewModel.benchmarkSummary(for: model) {
             let factor = benchmark.averageRealtimeFactor.formatted(
                 .number.precision(.fractionLength(2))
@@ -1744,6 +1936,8 @@ private struct ModelsScreen: View {
         isInstalled: Bool,
         isSelected: Bool,
         isCompatible: Bool,
+        selectionProfile: LanguageProfile?,
+        isLegacy: Bool,
         isDownloading: Bool,
         recommendation: ModelRecommendation
     ) -> some View {
@@ -1769,12 +1963,21 @@ private struct ModelsScreen: View {
             }
         } else if isInstalled {
             HStack(spacing: 6) {
-                if !isSelected {
-                    Button("Use") {
+                if isSelected,
+                   isLegacy,
+                   viewModel.recommendedInstalledModel != nil {
+                    Button("Use recommended") {
+                        viewModel.switchFromLegacyModel()
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle())
+                } else if !isSelected {
+                    Button(
+                        isCompatible ? "Use" : "Switch & use"
+                    ) {
                         viewModel.select(model)
                     }
                     .buttonStyle(ZenPrimaryButtonStyle(minWidth: 60))
-                    .disabled(!isCompatible)
+                    .disabled(selectionProfile == nil)
                 }
                 ZenIconButton(
                     systemImage: "trash",
@@ -1798,43 +2001,16 @@ private struct ModelsScreen: View {
 
 private struct InstantRefineScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
-    @ObservedObject var modelViewModel:
-        RefinementModelManagerViewModel
-    @State private var modelPendingRemoval:
-        VerifiedRefinementModel?
 
     var body: some View {
         ZenScreen(
             title: "Instant Refine",
-            subtitle:
-                "Cleanup happens after transcription, entirely on-device. Your meaning is never changed — and never invented."
+            subtitle: "How ZenVoice shapes your words after it hears them."
         ) {
             modeSection
-            if viewModel.instantRefineMode == .localModel {
-                guaranteesSection
-                refinementModelsSection
-            }
             liveDictationSection
             contextSection
             voiceCommandsSection
-        }
-        .alert(
-            "Remove refinement model?",
-            isPresented: Binding(
-                get: { modelPendingRemoval != nil },
-                set: { if !$0 { modelPendingRemoval = nil } }
-            ),
-            presenting: modelPendingRemoval
-        ) { model in
-            Button("Cancel", role: .cancel) {}
-            Button("Remove", role: .destructive) {
-                modelViewModel.remove(model)
-                modelPendingRemoval = nil
-            }
-        } message: { model in
-            Text(
-                "\(model.displayName) will be removed from this Mac. Clean refinement remains available."
-            )
         }
     }
 
@@ -1843,15 +2019,24 @@ private struct InstantRefineScreen: View {
     private var modeSection: some View {
         ZenSection(title: "Refinement mode") {
             VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                HStack(spacing: ZenDesign.Spacing.xs) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 10),
+                        GridItem(.flexible(), spacing: 10),
+                        GridItem(.flexible(), spacing: 10)
+                    ],
+                    spacing: 10
+                ) {
                     modeCard(.off, detail: "Raw transcript")
                     modeCard(.clean, detail: "Fillers & restarts out")
                     modeCard(
                         .agentPrompt, detail: "Speech → structured prompt"
                     )
-                    modeCard(
-                        .localModel, detail: "Verified on-device polish"
-                    )
+                    // Local Model is withheld — see
+                    // InstantRefineMode.userSelectable. It measured 0.0 points
+                    // of improvement over Clean while asking for a 1.1 GB
+                    // download, so offering it would charge the user a
+                    // gigabyte and a wait for identical text.
                 }
 
                 ZenPanel {
@@ -1900,216 +2085,6 @@ private struct InstantRefineScreen: View {
             return "“um, create the the local app with Swift” → “Create the local app with Swift.”"
         case .agentPrompt:
             return "“fix the login bug” → structured, ready-to-paste prompt"
-        case .localModel:
-            return "“um, create the the local app with Swift” → “Create the local app with Swift.”"
-        }
-    }
-
-    // MARK: guarantees (local model)
-
-    private var guaranteesSection: some View {
-        ZenSection(title: "Local Model guarantees") {
-            ZenPanel {
-                ZenRow(
-                    icon: "clock",
-                    title: "Five-second deadline",
-                    subtitle:
-                        "If refinement takes longer, the Clean result is inserted instead — deterministically."
-                )
-                ZenPanelDivider()
-                ZenRow(
-                    icon: "checkmark.shield",
-                    title: "No-invention guard",
-                    subtitle:
-                        "Output is grammar-constrained JSON, rejected if it removes too much of the transcript or invents new semantic words."
-                )
-            }
-        }
-    }
-
-    // MARK: refinement models
-
-    private var refinementModelsSection: some View {
-        ZenSection(
-            title: "Refinement models",
-            caption: modelViewModel.hardwareProfile.summary
-        ) {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                if modelViewModel.isVerifying {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Verifying refinement models…")
-                            .font(ZenDesign.Typography.caption)
-                            .foregroundStyle(
-                                ZenDesign.Semantic.textSecondary
-                            )
-                    }
-                }
-
-                if let error = modelViewModel.errorMessage {
-                    ZenBanner(
-                        kind: .danger,
-                        icon: "exclamationmark.triangle",
-                        text: error
-                    )
-                }
-
-                if !modelViewModel.hasSelectedInstalledModel {
-                    ZenBanner(
-                        kind: .warn,
-                        icon: "info.circle",
-                        text:
-                            "No verified refinement model is selected. ZenVoice will safely fall back to Clean."
-                    )
-                }
-
-                ZenPanel {
-                    ForEach(modelViewModel.models) { model in
-                        if model.id != modelViewModel.models.first?.id {
-                            ZenPanelDivider()
-                        }
-                        refinementModelRow(model)
-                    }
-                }
-            }
-        }
-    }
-
-    private func refinementModelRow(
-        _ model: VerifiedRefinementModel
-    ) -> some View {
-        let isInstalled = modelViewModel.isInstalled(model)
-        let isSelected = modelViewModel.isSelected(model)
-        let isDownloading =
-            modelViewModel.downloadingModelID == model.id
-        let recommendation = modelViewModel.recommendation(for: model)
-
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: ZenDesign.Spacing.sm) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .frame(width: 32, height: 32)
-                    .background {
-                        RoundedRectangle(
-                            cornerRadius: 9, style: .continuous
-                        )
-                        .fill(ZenDesign.Semantic.surfaceRaised)
-                    }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 7) {
-                        Text(model.displayName)
-                            .font(ZenDesign.Typography.bodyStrong)
-                            .foregroundStyle(
-                                ZenDesign.Semantic.textPrimary
-                            )
-                        if isSelected {
-                            ZenBadge(
-                                text: "In use", kind: .success,
-                                systemImage: "checkmark"
-                            )
-                        }
-                    }
-                    Text(
-                        "\(recommendation.title) — \(recommendation.rationale)"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: ZenDesign.Spacing.sm)
-
-                refinementTrailing(
-                    model,
-                    isInstalled: isInstalled,
-                    isSelected: isSelected,
-                    isDownloading: isDownloading
-                )
-            }
-
-            HStack(spacing: 6) {
-                ZenModelMeta(parts: [
-                    model.languageSummary,
-                    model.formattedFileSize,
-                    "rev \(model.sourceRevision.prefix(9))",
-                    "sha256 \(model.sha256.prefix(8))…"
-                ])
-                if let url = URL(string: model.licenseURL) {
-                    Link(model.license, destination: url)
-                        .font(ZenDesign.Typography.monoSmall)
-                        .foregroundStyle(ZenDesign.Semantic.accent)
-                } else {
-                    Text(model.license)
-                        .font(ZenDesign.Typography.monoSmall)
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textTertiary
-                        )
-                }
-            }
-            .padding(.leading, 44)
-        }
-        .padding(.horizontal, ZenDesign.Spacing.md)
-        .padding(.vertical, ZenDesign.Spacing.sm)
-    }
-
-    @ViewBuilder
-    private func refinementTrailing(
-        _ model: VerifiedRefinementModel,
-        isInstalled: Bool,
-        isSelected: Bool,
-        isDownloading: Bool
-    ) -> some View {
-        if isDownloading {
-            VStack(alignment: .trailing, spacing: 5) {
-                ProgressView(
-                    value: modelViewModel.downloadProgress ?? 0
-                )
-                .progressViewStyle(.linear)
-                .tint(ZenDesign.Semantic.accent)
-                .frame(width: 120)
-                HStack(spacing: 6) {
-                    Text(
-                        modelViewModel.isVerifyingDownload
-                            ? "Verifying checksum…"
-                            : "\(Int(((modelViewModel.downloadProgress ?? 0) * 100).rounded()))% of \(model.formattedFileSize)"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                    Button(
-                        "Cancel",
-                        action: modelViewModel.cancelDownload
-                    )
-                    .buttonStyle(.plain)
-                    .font(ZenDesign.Typography.captionStrong)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                }
-            }
-        } else if isInstalled {
-            HStack(spacing: 6) {
-                if !isSelected {
-                    Button("Use") {
-                        modelViewModel.select(model)
-                    }
-                    .buttonStyle(ZenPrimaryButtonStyle(minWidth: 60))
-                }
-                ZenIconButton(
-                    systemImage: "trash",
-                    label: "Remove \(model.displayName)",
-                    isDanger: true
-                ) {
-                    modelPendingRemoval = model
-                }
-            }
-        } else {
-            Button {
-                modelViewModel.download(model)
-            } label: {
-                Label("Download", systemImage: "arrow.down.circle")
-            }
-            .buttonStyle(ZenSecondaryButtonStyle())
         }
     }
 
@@ -2119,16 +2094,16 @@ private struct InstantRefineScreen: View {
         ZenSection(title: "Live dictation") {
             ZenPanel {
                 ZenRow(
-                    title: "Stable phrase preview in ZenBar",
+                    title: "Detect stable phrases",
                     subtitle:
-                        "Transcribe locally after a natural pause and show the stable phrase — the preview never rewrites itself mid-phrase."
+                        "Detect natural pauses for commit-on-pause. While listening, ZenBar stays focused on the live waveform and controls."
                 ) {
                     ZenSwitch(
                         isOn: Binding(
                             get: { viewModel.livePreviewEnabled },
                             set: viewModel.setLivePreviewEnabled
                         ),
-                        label: "Stable phrase preview"
+                        label: "Stable phrase detection"
                     )
                 }
                 ZenPanelDivider()
@@ -2304,23 +2279,289 @@ private struct OverviewScreen: View {
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
+    let startDictation: () -> Void
+    let replaySetup: () -> Void
     let navigate: (OverviewDestination) -> Void
 
     var body: some View {
         ZenScreen(
             title: "Home",
-            subtitle: subtitleText
+            subtitle:
+                "Everything runs on this Mac. Nothing to sign into, nothing to sync."
         ) {
-            statusPanel
-            dictateAnywhere
-            activitySection
-            recentDictations
+            homeGrid
         }
         .onAppear {
             viewModel.refreshSystemStatus()
             historyViewModel.refresh()
             insightsViewModel.refresh()
         }
+    }
+
+    private var homeGrid: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 16) {
+                readyPanel(
+                    minHeight: historyViewModel.recoveryCount > 0
+                        ? 312
+                        : nil
+                )
+                    .frame(minWidth: 430, maxWidth: .infinity)
+                homeSideColumn
+                    .frame(width: 278)
+            }
+
+            VStack(spacing: 16) {
+                readyPanel()
+                homeSideColumn
+            }
+        }
+    }
+
+    private var homeSideColumn: some View {
+        VStack(spacing: 12) {
+            permissionsPanel
+            recentActivityPanel
+            if historyViewModel.recoveryCount > 0 {
+                recoveryNote
+            }
+        }
+    }
+
+    private func readyPanel(minHeight: CGFloat? = nil) -> some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(ZenDesign.Semantic.success)
+                        .frame(width: 8, height: 8)
+                    Text("Ready to dictate")
+                        .font(.system(size: 24, weight: .semibold, design: .serif))
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                }
+
+                VStack(spacing: 0) {
+                    readyFact(
+                        "Shortcut",
+                        value: viewModel.currentShortcut.displayName,
+                        usesKeycap: true
+                    )
+                    readyFact("Microphone", value: microphoneDisplayName)
+                    readyFact(
+                        "Language",
+                        value: appState.languageProfile.displayName
+                    )
+                    readyFact("Model", value: modelDisplayName)
+                }
+                .padding(.top, 12)
+
+                HStack(spacing: 10) {
+                    Button(action: startDictation) {
+                        Label("Start dictating", systemImage: "mic")
+                            .fixedSize()
+                    }
+                    .buttonStyle(ZenPrimaryButtonStyle())
+
+                    Button("Replay setup guide", action: replaySetup)
+                        .buttonStyle(ZenSecondaryButtonStyle())
+                }
+                .padding(.top, 18)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 22)
+            .frame(minHeight: minHeight, alignment: .topLeading)
+        }
+    }
+
+    private func readyFact(
+        _ label: String,
+        value: String,
+        usesKeycap: Bool = false
+    ) -> some View {
+        HStack {
+            Text(label)
+                .font(ZenDesign.Typography.body)
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+            Spacer()
+            if usesKeycap {
+                ZenKbdGroup(combo: value)
+            } else {
+                Text(value)
+                    .font(ZenDesign.Typography.bodyStrong)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 9)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(ZenDesign.Semantic.border)
+                .frame(height: 1)
+        }
+    }
+
+    private var permissionsPanel: some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: 0) {
+                miniTitle("Permissions")
+                permissionRow(
+                    icon: "mic",
+                    title: "Microphone",
+                    granted: viewModel.microphoneStatus == .allowed
+                )
+                permissionRow(
+                    icon: "gearshape",
+                    title: "Accessibility",
+                    granted: viewModel.accessibilityStatus == .allowed
+                )
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    private func permissionRow(
+        icon: String,
+        title: String,
+        granted: Bool
+    ) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                .frame(width: 16)
+            Text(title)
+                .font(ZenDesign.Typography.body)
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            Spacer()
+            ZenBadge(
+                text: granted ? "Granted" : "Needs access",
+                kind: granted ? .success : .warn,
+                systemImage: granted ? "checkmark" : nil
+            )
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 34)
+    }
+
+    private var recentActivityPanel: some View {
+        let recent = Array(historyViewModel.records.prefix(3))
+        return ZenPanel {
+            VStack(alignment: .leading, spacing: 0) {
+                miniTitle("Recent activity")
+                if recent.isEmpty {
+                    Text("Your latest dictations will appear here.")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 12)
+                } else {
+                    ForEach(recent) { record in
+                        Button {
+                            navigate(.history)
+                        } label: {
+                            HStack(spacing: 9) {
+                                Image(systemName: "text.bubble")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                                    .frame(width: 24, height: 24)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(
+                                                ZenDesign.Semantic
+                                                    .surfaceRaised
+                                            )
+                                    }
+                                Text(record.targetAppName ?? "Unknown app")
+                                    .font(ZenDesign.Typography.body)
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textPrimary
+                                    )
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(
+                                    record.startedAt.formatted(
+                                        .relative(presentation: .named)
+                                    )
+                                )
+                                .font(
+                                    .system(
+                                        size: 11,
+                                        design: .serif
+                                    )
+                                )
+                                .italic()
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                                .lineLimit(1)
+                            }
+                            .padding(.horizontal, 14)
+                            .frame(height: 34)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    private func miniTitle(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 9.5, weight: .semibold))
+            .tracking(1.5)
+            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 7)
+    }
+
+    private var recoveryNote: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 12, weight: .medium))
+            Text("\(historyViewModel.recoveryCount) items waiting in Recovery")
+                .font(ZenDesign.Typography.captionStrong)
+                .lineLimit(1)
+            Spacer()
+            Button("Review") {
+                navigate(.history)
+            }
+            .buttonStyle(.plain)
+            .font(ZenDesign.Typography.captionStrong)
+        }
+        .foregroundStyle(ZenDesign.Semantic.accentStrong)
+        .padding(.horizontal, 14)
+        .frame(height: 42)
+        .background {
+            RoundedRectangle(cornerRadius: ZenDesign.Radius.medium)
+                .fill(ZenDesign.Semantic.accentMuted)
+                .overlay {
+                    RoundedRectangle(cornerRadius: ZenDesign.Radius.medium)
+                        .strokeBorder(
+                            ZenDesign.Semantic.accent.opacity(0.18)
+                        )
+                }
+        }
+    }
+
+    private var microphoneDisplayName: String {
+        viewModel.selectedMicrophoneName
+    }
+
+    private var modelDisplayName: String {
+        guard let selectedModelID = modelManagerViewModel.selectedModelID,
+              let model = modelManagerViewModel.models.first(
+                where: { $0.id == selectedModelID }
+              ) else {
+            return viewModel.isLocalModelReady
+                ? "Verified local model"
+                : "Not installed"
+        }
+        return model.displayName
     }
 
     private var subtitleText: String {
@@ -2600,12 +2841,12 @@ private struct OverviewScreen: View {
 private struct HistoryScreen: View {
     @ObservedObject var viewModel: HistoryViewModel
     @State private var confirmsDeleteAll = false
+    @State private var spellingRecord: DictationRecord?
 
     var body: some View {
         ZenScreen(
             title: "History",
-            subtitle:
-                "Stored encrypted on this Mac. Pause or clear it anytime from Privacy."
+            subtitle: "Every dictation, kept on this Mac."
         ) {
             if !viewModel.hasMadeHistoryChoice {
                 consentCard
@@ -2627,18 +2868,12 @@ private struct HistoryScreen: View {
                             placeholder: "Search transcripts or apps…",
                             text: $viewModel.searchText
                         )
-                        ZenBadge(
-                            text: viewModel.historyEnabled
-                                ? "Saving" : "Paused",
-                            kind: viewModel.historyEnabled
-                                ? .success : .warn,
-                            showsDot: true
-                        )
+                        .frame(maxWidth: .infinity)
                         Button("Delete All") {
                             confirmsDeleteAll = true
                         }
                         .buttonStyle(ZenDestructiveButtonStyle())
-                        .disabled(viewModel.records.isEmpty)
+                        .disabled(viewModel.scopedRecords.isEmpty)
                     }
 
                     if let error = viewModel.errorMessage {
@@ -2667,17 +2902,56 @@ private struct HistoryScreen: View {
             }
         }
         .alert(
-            "Delete all history?",
+            deleteConfirmationTitle,
             isPresented: $confirmsDeleteAll
         ) {
             Button("Cancel", role: .cancel) {}
             Button("Delete All", role: .destructive) {
-                viewModel.deleteAll()
+                viewModel.deleteAll(in: viewModel.scope)
             }
         } message: {
-            Text(
-                "This removes every saved transcript and recovery recording from this Mac."
+            Text(deleteConfirmationMessage)
+        }
+        .sheet(item: $spellingRecord) { record in
+            SpellingCorrectionSheet(
+                record: record,
+                scope: viewModel.correctionScope(for: record),
+                suggestions: viewModel.spellingSuggestions(for: record),
+                save: { source, replacement in
+                    let saved = viewModel.addSpellingCorrection(
+                        source: source,
+                        replacement: replacement,
+                        for: record
+                    )
+                    if saved {
+                        spellingRecord = nil
+                    }
+                    return saved
+                },
+                cancel: {
+                    spellingRecord = nil
+                }
             )
+        }
+    }
+
+    private var deleteConfirmationTitle: String {
+        switch viewModel.scope {
+        case .all:
+            return "Delete all dictations?"
+        case .recovery:
+            return "Delete the Recovery Inbox?"
+        }
+    }
+
+    private var deleteConfirmationMessage: String {
+        switch viewModel.scope {
+        case .all:
+            return
+                "This permanently deletes \(viewModel.standardRecords.count) saved dictations. Recovery Inbox items are kept."
+        case .recovery:
+            return
+                "This permanently deletes \(viewModel.recoveryRecords.count) Recovery Inbox items and any retained recovery audio. Saved dictations are kept."
         }
     }
 
@@ -2696,6 +2970,9 @@ private struct HistoryScreen: View {
                             record: record,
                             copy: { viewModel.copy(record) },
                             retry: { viewModel.retry(record) },
+                            correctSpelling: {
+                                spellingRecord = record
+                            },
                             setCategory: {
                                 viewModel.setCategory($0, for: record)
                             },
@@ -2830,6 +3107,156 @@ private struct HistoryScreen: View {
     }
 }
 
+private struct SpellingCorrectionSheet: View {
+    let record: DictationRecord
+    let scope: CorrectionLanguageScope
+    let suggestions: [CorrectionSuggestion]
+    let save: (String, String) -> Bool
+    let cancel: () -> Void
+
+    @State private var source = ""
+    @State private var replacement = ""
+    @State private var dismissedSuggestionIDs = Set<String>()
+    @State private var showsSaveError = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Correct spelling")
+                        .font(ZenDesign.Typography.pageTitle)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Text(
+                        "Approve only the spelling you want ZenVoice to remember."
+                    )
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                }
+                Spacer()
+                ZenBadge(
+                    text: scope.displayName,
+                    kind: scope == .hinglish ? .accent : .neutral
+                )
+            }
+
+            ZenPanel {
+                Text(record.finalTranscript ?? "")
+                    .font(ZenDesign.Typography.body)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .textSelection(.enabled)
+                    .lineLimit(6)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(ZenDesign.Spacing.md)
+            }
+
+            if !visibleSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Possible matches")
+                        .font(ZenDesign.Typography.captionStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    ForEach(visibleSuggestions) { suggestion in
+                        HStack(spacing: 8) {
+                            Text("“\(suggestion.source)”")
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            Image(systemName: "arrow.right")
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textTertiary
+                                )
+                            Text(suggestion.replacement)
+                                .font(ZenDesign.Typography.bodyStrong)
+                            Spacer()
+                            Button("Accept") {
+                                showsSaveError = !save(
+                                    suggestion.source,
+                                    suggestion.replacement
+                                )
+                            }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+                            ZenIconButton(
+                                systemImage: "xmark",
+                                label:
+                                    "Dismiss suggestion \(suggestion.source)"
+                            ) {
+                                dismissedSuggestionIDs.insert(
+                                    suggestion.id
+                                )
+                            }
+                        }
+                        .font(ZenDesign.Typography.body)
+                    }
+                }
+            }
+
+            HStack(alignment: .bottom, spacing: 8) {
+                spellingField(
+                    title: "Incorrect spelling",
+                    placeholder: "bild",
+                    text: $source
+                )
+                Image(systemName: "arrow.right")
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .padding(.bottom, 9)
+                spellingField(
+                    title: "Preferred spelling",
+                    placeholder: "build",
+                    text: $replacement
+                )
+            }
+
+            if showsSaveError {
+                Text(
+                    "This rule could not be saved. Check that the incorrect spelling appears in the transcript and does not already have a rule."
+                )
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.danger)
+            }
+
+            HStack {
+                Button("Cancel", action: cancel)
+                    .buttonStyle(ZenSecondaryButtonStyle())
+                Spacer()
+                Button("Save correction") {
+                    showsSaveError = !save(source, replacement)
+                }
+                .buttonStyle(ZenPrimaryButtonStyle())
+                .disabled(
+                    source.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty
+                        || replacement.trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        ).isEmpty
+                )
+            }
+        }
+        .padding(ZenDesign.Spacing.lg)
+        .frame(width: 560)
+    }
+
+    private var visibleSuggestions: [CorrectionSuggestion] {
+        suggestions.filter {
+            !dismissedSuggestionIDs.contains($0.id)
+        }
+    }
+
+    private func spellingField(
+        title: String,
+        placeholder: String,
+        text: Binding<String>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity)
+        }
+    }
+}
+
 private struct InsightsScreen: View {
     @ObservedObject var viewModel: InsightsViewModel
     @State private var showsShareCard = false
@@ -2838,7 +3265,7 @@ private struct InsightsScreen: View {
         ZenScreen(
             title: "Insights",
             subtitle:
-                "Computed on this Mac from your encrypted history. Pause collection anytime from Privacy — nothing is ever uploaded."
+                "How you dictate, computed on this Mac. Never uploaded."
         ) {
             if let error = viewModel.errorMessage {
                 ZenBanner(
@@ -2859,7 +3286,7 @@ private struct InsightsScreen: View {
                     categoriesSection
                 }
 
-                HStack(alignment: .center, spacing: ZenDesign.Spacing.sm) {
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
                     ZenBanner(
                         kind: .info,
                         icon: "lock",
@@ -2874,7 +3301,7 @@ private struct InsightsScreen: View {
                             systemImage: "square.and.arrow.up"
                         )
                     }
-                    .buttonStyle(ZenSecondaryButtonStyle())
+                    .buttonStyle(ZenSecondaryButtonStyle(height: 60))
                 }
             }
         }
@@ -3074,13 +3501,15 @@ private struct VoiceProfileScreen: View {
     @ObservedObject var viewModel: VoiceProfileViewModel
     @State private var heardPhrase = ""
     @State private var replacementPhrase = ""
+    @State private var correctionScope: CorrectionLanguageScope =
+        LanguagePreferences.load() == .hinglish ? .hinglish : .all
     @State private var confirmsDeleteAllRules = false
 
     var body: some View {
         ZenScreen(
             title: "Voice Profile",
             subtitle:
-                "ZenVoice learns how you speak — locally, and never silently. Recurring phrases improve recognition; correction rules fix words it keeps getting wrong."
+                "ZenVoice learns the words you correct — nothing else."
         ) {
             if let error = viewModel.errorMessage {
                 ZenBanner(
@@ -3214,6 +3643,11 @@ private struct VoiceProfileScreen: View {
                                 .foregroundStyle(
                                     ZenDesign.Semantic.textPrimary
                                 )
+                            ZenBadge(
+                                text: rule.languageScope.displayName,
+                                kind: rule.languageScope == .hinglish
+                                    ? .accent : .neutral
+                            )
                             Spacer()
                             Text(
                                 "used \(rule.usageCount)×"
@@ -3270,7 +3704,8 @@ private struct VoiceProfileScreen: View {
                     Button("Add rule") {
                         if viewModel.addRule(
                             source: heardPhrase,
-                            replacement: replacementPhrase
+                            replacement: replacementPhrase,
+                            languageScope: correctionScope
                         ) {
                             heardPhrase = ""
                             replacementPhrase = ""
@@ -3285,6 +3720,14 @@ private struct VoiceProfileScreen: View {
                                 in: .whitespacesAndNewlines
                             ).isEmpty
                     )
+                    Picker("Language scope", selection: $correctionScope) {
+                        ForEach(CorrectionLanguageScope.allCases) { scope in
+                            Text(scope.displayName).tag(scope)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 125)
                     Spacer()
                     Button("Delete All") {
                         confirmsDeleteAllRules = true
@@ -3336,7 +3779,7 @@ private struct VoiceProfileScreen: View {
                     } else {
                         LazyVGrid(
                             columns: [
-                                GridItem(.adaptive(minimum: 70), spacing: 8)
+                                GridItem(.adaptive(minimum: 104), spacing: 8)
                             ],
                             alignment: .leading,
                             spacing: 8
@@ -3345,7 +3788,9 @@ private struct VoiceProfileScreen: View {
                                 viewModel.snapshot.topWords
                             ) { item in
                                 HStack(spacing: 6) {
-                                    Text(item.text).lineLimit(1)
+                                    Text(item.text)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.9)
                                     Text("\(item.count)")
                                         .foregroundStyle(
                                             ZenDesign.Semantic.accent
@@ -3367,7 +3812,11 @@ private struct VoiceProfileScreen: View {
                     }
                 }
                 .padding(ZenDesign.Spacing.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: 168,
+                    alignment: .topLeading
+                )
             }
         }
     }
@@ -3409,7 +3858,11 @@ private struct VoiceProfileScreen: View {
                     }
                 }
                 .padding(ZenDesign.Spacing.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: 168,
+                    alignment: .topLeading
+                )
             }
         }
     }
@@ -3442,10 +3895,9 @@ private struct ShortcutsScreen: View {
         ZenScreen(
             title: "Shortcuts",
             subtitle:
-                "Global shortcuts work in every app. ZenVoice checks new combinations against system shortcuts before saving."
+                "Global shortcuts work in any app. Change them anytime."
         ) {
             dictationSection
-            holdSection
             zenBarSection
 
             ZenBanner(
@@ -3545,34 +3997,20 @@ private struct ShortcutsScreen: View {
                             viewModel.resetPasteLastShortcut()
                         }
                     }
-                }
-
-                if let error = viewModel.shortcutError {
-                    ZenBanner(
-                        kind: .danger,
-                        icon: "exclamationmark.triangle",
-                        text: error
-                    )
-                }
-            }
-        }
-    }
-
-    // MARK: hold to dictate
-
-    private var holdSection: some View {
-        ZenSection(title: "Hold to dictate") {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                ZenPanel {
+                    ZenPanelDivider()
                     ZenRow(
                         icon: "hand.tap",
-                        title: "Hold a modifier key instead",
-                        subtitle: "Hold, speak, release — the text is inserted when you let go"
+                        title: "Hold to dictate",
+                        subtitle:
+                            "Hold a modifier, speak, then release to insert"
                     ) {
                         ZenSwitch(
                             isOn: Binding(
-                                get: { viewModel.holdToDictateEnabled },
-                                set: viewModel.setHoldToDictateEnabled
+                                get: {
+                                    viewModel.holdToDictateEnabled
+                                },
+                                set:
+                                    viewModel.setHoldToDictateEnabled
                             ),
                             label: "Hold to dictate"
                         )
@@ -3581,23 +4019,28 @@ private struct ShortcutsScreen: View {
                         ZenPanelDivider()
                         ZenRow(
                             title: "Hold key",
-                            subtitle: "Reserved while ZenVoice is running"
+                            subtitle:
+                                "Select Change, then press the modifier you want to hold"
                         ) {
-                            Picker(
-                                "Hold key",
-                                selection: Binding(
-                                    get: { viewModel.holdKey },
-                                    set: viewModel.setHoldKey
-                                )
-                            ) {
-                                ForEach(
-                                    HoldKeyChoice.allCases, id: \.self
-                                ) { choice in
-                                    Text(choice.displayName).tag(choice)
+                            ShortcutCaptureButton(
+                                displayName:
+                                    viewModel.holdKey.displayName,
+                                isCapturing:
+                                    viewModel.isCapturingHoldKey,
+                                action: {
+                                    if viewModel.isCapturingHoldKey {
+                                        viewModel.cancelShortcutCapture()
+                                    } else {
+                                        viewModel.beginHoldKeyCapture()
+                                    }
                                 }
+                            )
+                            ZenIconButton(
+                                systemImage: "arrow.counterclockwise",
+                                label: "Reset hold key"
+                            ) {
+                                viewModel.resetHoldKey()
                             }
-                            .labelsHidden()
-                            .frame(width: 150)
                         }
                     }
                 }
@@ -3608,13 +4051,22 @@ private struct ShortcutsScreen: View {
                         ZenBanner(
                             kind: .danger,
                             icon: "exclamationmark.shield",
-                            text: "Allow Accessibility so the hold key works in every app."
+                            text:
+                                "Allow Accessibility so the hold key works in every app."
                         )
                         Button("Allow Access") {
                             viewModel.requestAccessibilityAccess()
                         }
                         .buttonStyle(ZenSecondaryButtonStyle())
                     }
+                }
+
+                if let error = viewModel.shortcutError {
+                    ZenBanner(
+                        kind: .danger,
+                        icon: "exclamationmark.triangle",
+                        text: error
+                    )
                 }
             }
         }
@@ -3726,8 +4178,6 @@ private struct PrivacyScreen: View {
         VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel:
         ModelManagerViewModel
-    @ObservedObject var refinementModelManagerViewModel:
-        RefinementModelManagerViewModel
     @State private var confirmsDeleteRecoveryAudio = false
     @State private var confirmsDeleteTranscripts = false
     @State private var confirmsDeleteRules = false
@@ -3735,8 +4185,7 @@ private struct PrivacyScreen: View {
     var body: some View {
         ZenScreen(
             title: "Privacy",
-            subtitle:
-                "Everything ZenVoice stores, in one place — and the switch to turn each piece off. No accounts, no analytics, no cloud transcription."
+            subtitle: "What ZenVoice keeps, and where."
         ) {
             dictationPrivacy
             inventory
@@ -3753,8 +4202,7 @@ private struct PrivacyScreen: View {
             historyViewModel.refresh()
             voiceProfileViewModel.refresh()
             modelManagerViewModel.refresh()
-            refinementModelManagerViewModel.refresh()
-        }
+            }
         .alert(
             "Delete all retained recovery audio?",
             isPresented: $confirmsDeleteRecoveryAudio
@@ -3928,7 +4376,7 @@ private struct PrivacyScreen: View {
                     icon: "cpu",
                     title: "Local models",
                     subtitle:
-                        "\(modelManagerViewModel.installedModelIDs.count) speech · \(refinementModelManagerViewModel.installedModelIDs.count) refinement — verified weights, removable in Models and Instant Refine"
+                        "\(modelManagerViewModel.installedModelIDs.count) speech — verified weights, removable in Models"
                 )
             }
         }
@@ -3970,6 +4418,7 @@ private struct HistoryRecordRow: View {
     let record: ZenVoiceStorage.DictationRecord
     let copy: () -> Void
     let retry: () -> Void
+    let correctSpelling: () -> Void
     let setCategory: (DictationCategory) -> Void
     let delete: () -> Void
 
@@ -4044,6 +4493,14 @@ private struct HistoryRecordRow: View {
                 }
 
                 Menu {
+                    if record.finalTranscript != nil {
+                        Button(
+                            "Correct spelling…",
+                            systemImage: "textformat.abc"
+                        ) {
+                            correctSpelling()
+                        }
+                    }
                     Menu("Category") {
                         ForEach(DictationCategory.allCases) { category in
                             Button {
@@ -4450,14 +4907,15 @@ private struct PrivacyFact: View {
 
 struct ZenSecondaryButtonStyle: ButtonStyle {
     var minWidth: CGFloat? = nil
+    var height: CGFloat = 30
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(ZenDesign.Typography.button)
+            .font(.system(size: 12.5, weight: .medium))
             .foregroundStyle(ZenDesign.Semantic.textPrimary)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 13)
             .frame(minWidth: minWidth)
-            .frame(height: 44)
+            .frame(height: height)
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,
@@ -4487,11 +4945,11 @@ struct ZenPrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(ZenDesign.Typography.button)
+            .font(.system(size: 12.5, weight: .medium))
             .foregroundStyle(ZenDesign.Semantic.textOnAccent)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 13)
             .frame(minWidth: minWidth)
-            .frame(height: 44)
+            .frame(height: 30)
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,
@@ -4511,11 +4969,11 @@ struct ZenDestructiveButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(ZenDesign.Typography.button)
+            .font(.system(size: 12.5, weight: .medium))
             .foregroundStyle(ZenDesign.Semantic.textOnAccent)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 13)
             .frame(minWidth: minWidth)
-            .frame(height: 44)
+            .frame(height: 30)
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,
@@ -4539,7 +4997,7 @@ private struct AppProfilesScreen: View {
         ZenScreen(
             title: "App Profiles",
             subtitle:
-                "Give each app its own language, refinement, and voice-command behavior. Anything not set here uses your global settings."
+                "Different apps, different behavior. Overrides apply only where you set them."
         ) {
             applicationProfilesCard
 
@@ -4830,15 +5288,15 @@ private struct HelpScreen: View {
             id: 6,
             question: "How does Hinglish mode work?",
             answer:
-                "With a Multilingual model installed, the Hinglish profile writes Hindi-English speech in Latin script the way you'd type it. You can also choose native Devanagari output or local English translation.",
-            tags: "hinglish hindi language multilingual devanagari"
+                "With the verified Hinglish Apex model installed, the Hinglish profile writes Hindi-English speech in Latin script the way you'd type it. Other multilingual models are not offered for Hinglish because they lose code-switched English words.",
+            tags: "hinglish hindi language apex latin"
         ),
         ZenFAQ(
             id: 7,
             question: "What does Instant Refine actually change?",
             answer:
-                "Clean removes fillers, repeated words, and spoken restarts — never meaning. Agent Prompt formats your speech as a structured prompt. Local Model uses a verified on-device model with a 5-second deadline, a no-invention guard, and automatic fallback to Clean.",
-            tags: "refine clean agent model rewrite grammar"
+                "Clean removes fillers, repeated words, and spoken restarts — never meaning. Agent Prompt formats your speech as a structured prompt. Both options run entirely on this Mac.",
+            tags: "refine clean agent rewrite grammar"
         ),
         ZenFAQ(
             id: 8,
@@ -4878,8 +5336,7 @@ private struct HelpScreen: View {
     var body: some View {
         ZenScreen(
             title: "Help & FAQ",
-            subtitle:
-                "Answers first, setup second. Everything here works offline."
+            subtitle: "Short answers, no tickets."
         ) {
             quickActions
             cheatSheet
@@ -5096,9 +5553,7 @@ private struct HelpScreen: View {
     private var aboutCard: some View {
         ZenCard {
             HStack(spacing: 12) {
-                Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(ZenDesign.Semantic.accent)
+                ZenBrandMark(size: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("ZenVoice")
                         .font(ZenDesign.Typography.bodyStrong)

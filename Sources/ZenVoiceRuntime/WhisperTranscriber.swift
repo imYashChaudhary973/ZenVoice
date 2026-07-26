@@ -9,6 +9,7 @@ public final class WhisperTranscriber: @unchecked Sendable {
         case modelLoadFailed
         case runtimeFailed
         case noSpeech
+        case timedOut
 
         public var errorDescription: String? {
             switch self {
@@ -20,6 +21,10 @@ public final class WhisperTranscriber: @unchecked Sendable {
                 return "Local transcription failed."
             case .noSpeech:
                 return "No speech detected."
+            case .timedOut:
+                return
+                    "Transcription took too long and was stopped. "
+                    + "Try a model suited to this language."
             }
         }
     }
@@ -47,8 +52,26 @@ public final class WhisperTranscriber: @unchecked Sendable {
         configuration.modelLanguageCapability
     }
 
-    public init(configuration: ZenVoiceConfiguration) {
+    /// Makes decoding repeatable, for measurement rather than for dictation.
+    ///
+    /// Whisper's default temperature fallback re-decodes a segment with
+    /// sampling when it trips the entropy or logprob thresholds, and the
+    /// thread count follows the machine. Both are the right defaults for a
+    /// user — fallback rescues genuinely hard audio — and both make the
+    /// output differ run to run, which was measured at more than a point of
+    /// word error rate between identical harness runs.
+    ///
+    /// A measurement instrument that moves under its own subject cannot
+    /// support fine-grained conclusions, so the harness pins them. Nothing in
+    /// the app path sets this.
+    private let isReproducible: Bool
+
+    public init(
+        configuration: ZenVoiceConfiguration,
+        isReproducible: Bool = false
+    ) {
         self.configuration = configuration
+        self.isReproducible = isReproducible
         usesBeamSearch = configuration.usesBeamSearchDecoding
         whisper_log_set({ _, _, _ in }, nil)
     }
@@ -86,6 +109,10 @@ public final class WhisperTranscriber: @unchecked Sendable {
             initialPrompt ?? ""
         )
         let processingStartedAt = Date()
+        // Push-to-talk starts the buffer on the first syllable; without a
+        // moment of lead-in some models drop the opening word. See
+        // ``WhisperDecoding/leadInSilenceSeconds``.
+        let paddedSamples = WhisperDecoding.withLeadInSilence(samples)
         let context = try loadedContext()
         var parameters = whisper_full_default_params(
             usesBeamSearch
@@ -95,24 +122,57 @@ public final class WhisperTranscriber: @unchecked Sendable {
         if usesBeamSearch {
             parameters.beam_search.beam_size = WhisperDecoding.beamSize
         }
-        parameters.n_threads = Int32(
-            max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
-        )
-        parameters.no_timestamps = true
+        parameters.n_threads = isReproducible
+            ? 4
+            : Int32(
+                max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
+            )
+        if isReproducible {
+            // Disables the sampled re-decode. With no increment there is no
+            // second temperature to fall back to, so a hard segment stays on
+            // the greedy or beam result rather than being resampled.
+            parameters.temperature_inc = 0
+        }
+        // Timestamps must stay on. With them suppressed whisper returns the
+        // whole recording as a single segment spanning the full window, so
+        // there is nothing to derive paragraph structure from — the pauses
+        // exist in the audio but never reach us. print_timestamps keeps them
+        // out of the text.
+        parameters.no_timestamps = false
         parameters.print_special = false
         parameters.print_progress = false
         parameters.print_realtime = false
         parameters.print_timestamps = false
         parameters.translate = activeProfile.shouldTranslateToEnglish
 
-        let status = activeProfile.whisperLanguageArgument.withCString {
-            language in
+        // A deadline, because a stuck decode is otherwise indistinguishable
+        // from a slow one and the app simply appears frozen. ggml calls this
+        // before each computation; returning true unwinds the decode.
+        //
+        // The C callback cannot capture, so the deadline travels through
+        // user_data as a raw pointer.
+        let deadline = UnsafeMutablePointer<Double>.allocate(capacity: 1)
+        defer { deadline.deallocate() }
+        deadline.pointee = Date().timeIntervalSinceReferenceDate
+            + WhisperDecoding.decodeDeadline(
+                audioSeconds: Double(samples.count) / 16_000
+            )
+        parameters.abort_callback = { data in
+            guard let data else { return false }
+            return Date().timeIntervalSinceReferenceDate
+                > data.assumingMemoryBound(to: Double.self).pointee
+        }
+        parameters.abort_callback_user_data = UnsafeMutableRawPointer(deadline)
+
+        let status = activeProfile.whisperLanguageArgument(
+            for: languageCapability
+        ).withCString { language in
             parameters.language = language
             return contextPrompt.withCString { prompt in
                 if !contextPrompt.isEmpty {
                     parameters.initial_prompt = prompt
                 }
-                return samples.withUnsafeBufferPointer { buffer in
+                return paddedSamples.withUnsafeBufferPointer { buffer in
                     whisper_full(
                         context,
                         parameters,
@@ -123,19 +183,67 @@ public final class WhisperTranscriber: @unchecked Sendable {
             }
         }
         guard status == 0 else {
-            throw TranscriptionError.runtimeFailed
+            // An aborted decode and a genuine failure both return non-zero,
+            // so the deadline is what distinguishes them.
+            throw Date().timeIntervalSinceReferenceDate > deadline.pointee
+                ? TranscriptionError.timedOut
+                : TranscriptionError.runtimeFailed
         }
 
         var rawTranscript = ""
+        var segments: [TranscriptSegment] = []
         let segmentCount = whisper_full_n_segments(context)
         for index in 0..<segmentCount {
             guard let text = whisper_full_get_segment_text(context, index) else {
                 continue
             }
-            rawTranscript += String(cString: text)
+            let piece = String(cString: text)
+            rawTranscript += piece
+            // whisper reports segment times in centiseconds, measured
+            // against the padded buffer it was given. Subtracting the lead-in
+            // puts them back on the caller's own timeline, which is what the
+            // silence detection is measured against — leaving the offset in
+            // skews every boundary by half a second and pauses stop lining up
+            // with the segments they belong to.
+            let start =
+                Double(whisper_full_get_segment_t0(context, index)) / 100
+                - WhisperDecoding.leadInSilenceSeconds
+            let end =
+                Double(whisper_full_get_segment_t1(context, index)) / 100
+                - WhisperDecoding.leadInSilenceSeconds
+            segments.append(
+                TranscriptSegment(
+                    text: piece,
+                    startSeconds: max(0, start),
+                    endSeconds: max(0, end)
+                )
+            )
         }
-        let cleanedTranscript = cleaner.clean(rawTranscript)
-        let finalTranscript = activeProfile.shouldTransliterateToLatin
+        // Paragraph structure comes from the speaker's own pauses, measured
+        // from the audio because whisper's segment bounds abut and contain no
+        // silence. Cleaning runs per paragraph: TranscriptCleaner collapses
+        // all whitespace, so cleaning the joined text would erase the breaks
+        // it was just given.
+        let structured = segments.isEmpty
+            ? rawTranscript
+            : SpokenStructure.text(
+                from: segments,
+                silences: SpokenStructure.silences(in: samples)
+            )
+        // A runaway loop is collapsed before anything else looks at the text.
+        // Instant Refine would catch some of it, but refinement is a user
+        // preference that can be switched off, and a transcript repeating
+        // itself a hundred times is broken rather than untidy.
+        let cleanedTranscript = structured
+            .components(separatedBy: "\n\n")
+            .map { cleaner.clean(TranscriptRepetition.collapsingRunaway($0)) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        // A Hinglish-native model has already written Latin script, and
+        // romanizing it again would only damage text that is correct.
+        let needsTransliteration = activeProfile.shouldTransliterateToLatin
+            && !languageCapability.emitsLatinScriptNatively
+        let finalTranscript = needsTransliteration
             ? LocalTransliterator.latinScript(cleanedTranscript)
             : cleanedTranscript
 
@@ -151,8 +259,49 @@ public final class WhisperTranscriber: @unchecked Sendable {
             isPartial: false,
             modelID: configuration.modelID,
             processingDurationSeconds:
-                Date().timeIntervalSince(processingStartedAt)
+                Date().timeIntervalSince(processingStartedAt),
+            segments: segments
         )
+    }
+
+    /// The language Whisper hears, and how sure it is.
+    ///
+    /// Costs one encoder pass over the first window — the expensive half of a
+    /// decode — so this is only worth running when its answer changes which
+    /// model gets used.
+    public func detectedLanguage(
+        samples: [Float]
+    ) throws -> (code: String, probability: Float) {
+        guard !samples.isEmpty else {
+            throw TranscriptionError.invalidAudio
+        }
+        let context = try loadedContext()
+        let padded = WhisperDecoding.withLeadInSilence(samples)
+        let threads = Int32(
+            max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
+        )
+        let melStatus = padded.withUnsafeBufferPointer { buffer in
+            whisper_pcm_to_mel(
+                context,
+                buffer.baseAddress,
+                Int32(buffer.count),
+                threads
+            )
+        }
+        guard melStatus == 0 else {
+            throw TranscriptionError.runtimeFailed
+        }
+        var probabilities = [Float](
+            repeating: 0,
+            count: Int(whisper_lang_max_id()) + 1
+        )
+        let identifier = probabilities.withUnsafeMutableBufferPointer { buffer in
+            whisper_lang_auto_detect(context, 0, threads, buffer.baseAddress)
+        }
+        guard identifier >= 0, let name = whisper_lang_str(identifier) else {
+            throw TranscriptionError.runtimeFailed
+        }
+        return (String(cString: name), probabilities[Int(identifier)])
     }
 
     private func loadedContext() throws -> OpaquePointer {

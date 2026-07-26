@@ -5,9 +5,9 @@ catalogue entry is accepted only after its publisher, source, pinned revision,
 file size, format, language coverage, licence, attribution, and SHA-256 have
 been reviewed.
 
-## Approved source
+## Approved sources
 
-- Converted models:
+- Stock converted models:
   [`ggerganov/whisper.cpp`](https://huggingface.co/ggerganov/whisper.cpp)
 - Pinned revision: `5359861c739e955e79d9a303bcbc70fb988958b1`
 - Upstream model:
@@ -15,12 +15,18 @@ been reviewed.
 - Runtime and conversion licence:
   [MIT](https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE)
 - Format: `whisper.cpp` GGML
+- Hinglish specialist:
+  [`imYChaudhary22/zenvoice-hinglish-apex-ggml`](https://huggingface.co/imYChaudhary22/zenvoice-hinglish-apex-ggml)
+- Pinned revision: `0c540ce8945ef96b2880f2d2c0d05ba419621171`
+- Upstream model:
+  [`Oriserve/Whisper-Hindi2Hinglish-Apex`](https://huggingface.co/Oriserve/Whisper-Hindi2Hinglish-Apex)
+- Specialist licence: Apache-2.0
 
 The application constructs revision-pinned HTTPS URLs itself. It does not
 accept a user-supplied download URL, execute model-repository code, deserialize
 Python objects, or install repository scripts.
 
-## M3 catalogue
+## Speech model catalogue
 
 | Tier | Capability | File | Size | SHA-256 |
 | --- | --- | --- | ---: | --- |
@@ -31,11 +37,15 @@ Python objects, or install repository scripts.
 | Balanced | English | `ggml-small.en.bin` | 487,614,201 B | `c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d` |
 | Balanced | Multilingual | `ggml-small.bin` | 487,601,967 B | `1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b` |
 | High Accuracy | Multilingual | `ggml-large-v3-turbo-q5_0.bin` | 574,041,195 B | `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2` |
-| High Accuracy | English | `ggml-medium.en.bin` | 1,533,774,781 B | `cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356` |
+| High Accuracy | Hinglish | `ggml-hindi2hinglish-apex-q8_0.bin` | 874,188,075 B | `0b4324d2c1ad64f20883ee7fcd5d2bb0a8466287dc70d74bc47066200c28c719` |
 | High Accuracy | Multilingual | `ggml-medium.bin` | 1,533,763,059 B | `6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208` |
 
+Whisper Medium English-only is retired from new downloads. Existing verified
+installs remain resolvable so an upgrade does not silently disable a working
+selection.
+
 The catalogue metadata was verified against the official Hugging Face API on
-2026-07-25 at the pinned revision. Any model revision or file replacement
+2026-07-26 at the pinned revision. Any model revision or file replacement
 requires a new review and new checksum; existing entries must not silently
 follow a moving branch.
 
@@ -44,9 +54,10 @@ follow a moving branch.
 `ModelRecommendationEngine.recommendedModelID(for:)` names exactly one model per
 Mac, and only that model carries the "Recommended" badge.
 
-| Mac | Recommendation | Why |
+| Condition | Recommendation | Why |
 | --- | --- | --- |
-| Apple Silicon, ≥ 8 GB | Whisper Turbo | Matches Whisper Medium's accuracy at about a third of the download, and is multilingual |
+| Hinglish profile | Hinglish Apex | Preserves code-switched English words in Latin script |
+| Apple Silicon, ≥ 8 GB | Whisper Turbo | Best measured accuracy/size trade-off on the GPU and multilingual |
 | Apple Silicon, < 8 GB | Whisper Small (multilingual) | Keeps memory pressure down without falling back to Base |
 | Intel, ≥ 16 GB | Whisper Small (multilingual) | No Metal path, so size turns directly into waiting |
 | Intel, < 16 GB | Whisper Tiny (multilingual) | Responsiveness has to win |
@@ -58,30 +69,8 @@ can transcribe quickly; the presence of a Metal path does. See
 [ACCURACY_HARNESS.md](ACCURACY_HARNESS.md) for how the underlying numbers are
 produced.
 
-## M14 refinement catalogue
-
-Text refinement has a separate allowlist in
-`VerifiedRefinementModelCatalog`. ZenVoice offers only Qwen-published,
-Apache-2.0 GGUF artifacts:
-
-| Tier | Model | File | Size | Minimum memory | SHA-256 |
-| --- | --- | --- | ---: | ---: | --- |
-| Fast | Qwen2.5 0.5B Instruct | `qwen2.5-0.5b-instruct-q4_k_m.gguf` | 491,400,032 B | 8 GB | `74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db` |
-| Balanced | Qwen2.5 1.5B Instruct | `qwen2.5-1.5b-instruct-q4_k_m.gguf` | 1,117,320,736 B | 16 GB | `6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e` |
-
-Pinned revisions:
-
-- Fast: `9217f5db79a29953eb74d5343926648285ec7e67`
-- Balanced: `91cad51170dc346986eccefdc2dd33a9da36ead9`
-
-Qwen documents the Qwen2.5 family as supporting more than 29 languages,
-including English, Chinese, French, Spanish, Portuguese, German, Italian,
-Russian, Japanese, Korean, Vietnamese, Thai, and Arabic. Language support is
-not a promise of equal quality; ZenVoice still needs per-language evaluation.
-
-The Qwen 3B repository was not admitted because its published licence marker
-differs from the Apache-2.0 entries above. A model is never included merely
-because it is technically compatible.
+Text refinement is deterministic. The former Qwen/llama.cpp path was removed
+after human-annotated evaluation found no accuracy gain beyond the rule engine.
 
 ## Installation contract
 
@@ -117,6 +106,10 @@ does not duplicate the transcript or audio. The Models screen reports weighted
 real-time factor from up to 50 recent samples so recommendations can be judged
 against evidence from the user's own Mac.
 
+The reproducible M5 comparison across seven installed models, eight languages,
+multiple voices, speaking rates, memory, and real Hinglish is recorded in
+[LANGUAGE_MODEL_BENCHMARK_2026-07-26.md](LANGUAGE_MODEL_BENCHMARK_2026-07-26.md).
+
 ## Bundled runtime
 
 ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
@@ -133,18 +126,3 @@ Swift Package Manager verifies that checksum before exposing the binary target.
 The packaged app embeds and signs `whisper.framework`. ZenVoice calls its C API
 in-process and retains one model context until the selected model changes or
 the application exits.
-
-The local refinement runtime uses the official `llama.cpp` b9637 XCFramework:
-
-- Source: [`ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp)
-- Release: `b9637`
-- Source commit: `aedb2a5e9ca3d4064148bbb919e0ddc0c1b70ab3`
-- Artifact: `llama-b9637-xcframework.zip`
-- SHA-256:
-  `46c7dad871f804d82399ddcfeb54d23b6469888801fc35124d7e33e543a9bef7`
-- Licence: MIT
-
-This version is newer than the fix boundary for the
-[2025 GGUF vocabulary buffer-overflow advisory](https://github.com/ggml-org/llama.cpp/security/advisories/GHSA-8wwf-w4qm-gpqr).
-ZenVoice still accepts only exact catalogue files with verified size and
-checksum. The packaged app embeds and signs `llama.framework`.

@@ -1,3 +1,4 @@
+import ApplicationServices
 import Foundation
 import ZenVoiceCore
 
@@ -195,6 +196,154 @@ guard ahRefinement.text
     exit(1)
 }
 
+// Phrase-level restart. Found by the accuracy harness once the decode was
+// pinned: the speaker says "we should" twice, and the single-word repetition
+// rule cannot see it because no two adjacent words are equal.
+let phraseRestart = instantRefiner.refine(
+    "We should we should probably revert the change before the release.",
+    mode: .clean
+)
+guard phraseRestart.text
+        == "We should probably revert the change before the release.",
+      !phraseRestart.wasRejected else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: repeated phrase survived Clean: "
+                + "\(phraseRestart.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// Three repeats collapse to one, not to two. A restart is often stuttered
+// more than once, and a rule that halves it leaves the transcript still wrong.
+let tripledRestart = instantRefiner.refine(
+    "I want to I want to I want to add dark mode.",
+    mode: .clean
+)
+guard tripledRestart.text == "I want to add dark mode.",
+      !tripledRestart.wasRejected else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: tripled phrase was not fully collapsed: "
+                + "\(tripledRestart.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// A phrase that recurs without being adjacent is ordinary English, not a
+// restart, and must survive untouched.
+let recurringPhrase = instantRefiner.refine(
+    "The more you test the more you learn.",
+    mode: .clean
+)
+guard recurringPhrase.text == "The more you test the more you learn.",
+      recurringPhrase.correctionCount == 0 else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: a non-adjacent recurring phrase was collapsed: "
+                + "\(recurringPhrase.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// Punctuation between the halves is the speaker marking the repeat as
+// deliberate, so it is left alone.
+let deliberateRepeat = instantRefiner.refine(
+    "Come on, come on, the build is nearly done.",
+    mode: .clean
+)
+guard deliberateRepeat.text
+        == "Come on, come on, the build is nearly done." else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: a deliberate punctuated repeat was collapsed: "
+                + "\(deliberateRepeat.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// Devanagari repetition. This did not work at all until the character classes
+// admitted combining marks: a Hindi vowel sign is a mark, not a letter, so
+// [\p{L}\p{N}] broke "गूगल" after its first consonant and no repeat could
+// ever match. The rules looked script-neutral and silently were not.
+let devanagariRepeat = instantRefiner.refine(
+    "गूगल गूगल फिट पर 100 पुशअप जोड़ो",
+    mode: .clean
+)
+guard devanagariRepeat.text == "गूगल फिट पर 100 पुशअप जोड़ो" else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: Devanagari repetition survived: "
+                + "\(devanagariRepeat.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+let devanagariPhraseRepeat = instantRefiner.refine(
+    "आज रात आज रात की पार्टी के बारे में मैसेजेस दिखाओ",
+    mode: .clean
+)
+guard devanagariPhraseRepeat.text
+        == "आज रात की पार्टी के बारे में मैसेजेस दिखाओ" else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: Devanagari phrase repetition survived: "
+                + "\(devanagariPhraseRepeat.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// Hindi hesitation sounds, the counterparts of um and uh.
+let hindiFiller = instantRefiner.refine(
+    "मुझे उम्म, १२३४ स्ट्रीट से पिक करें",
+    mode: .clean
+)
+guard hindiFiller.text == "मुझे १२३४ स्ट्रीट से पिक करें" else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: Hindi filler survived: \(hindiFiller.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// "वो क्या कहते हैं" is a speaker stalling for a word, like "you know".
+let hindiStall = instantRefiner.refine(
+    "इस नंबर को पापा के वो क्या कहते हैं ऑफिस नंबर करके ऐड करो",
+    mode: .clean
+)
+guard hindiStall.text == "इस नंबर को पापा के ऑफिस नंबर करके ऐड करो" else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: Hindi stall phrase survived: \(hindiStall.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+// A Hindi word that merely begins with the filler letters must survive. The
+// filler needs a doubled म where अमेरिका has a vowel sign.
+let hindiLookalike = instantRefiner.refine(
+    "अमेरिका से मेरा पार्सल कब आएगा",
+    mode: .clean
+)
+guard hindiLookalike.text == "अमेरिका से मेरा पार्सल कब आएगा",
+      hindiLookalike.correctionCount == 0 else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: a Hindi word was mistaken for a filler: "
+                + "\(hindiLookalike.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
 // "err" is a verb, not a filler stem. Its near-miss with "er" is why "er" is
 // not in the stem list at all.
 let errRefinement = instantRefiner.refine(
@@ -263,103 +412,289 @@ guard InstantRefinePreferences.load(defaults: refineDefaults)
     )
     exit(1)
 }
-InstantRefinePreferences.save(.localModel, defaults: refineDefaults)
-guard InstantRefinePreferences.load(defaults: refineDefaults)
-        == .localModel else {
+
+print("ZenVoiceCoreChecks: Instant Refine passed")
+
+// A Hinglish user must be recommended the specialist, whatever their hardware.
+//
+// Recommending on hardware alone sent them to Whisper Turbo, which preserves
+// none of the English half of a code-switched sentence: measured on real
+// recordings it kept 0 of 5 English words on a clip the specialist handles.
+let capableMac = HardwareProfile(
+    physicalMemoryBytes: 32 * 1_073_741_824,
+    logicalCoreCount: 12,
+    architecture: "Apple Silicon",
+    availableModelStorageBytes: 200 * 1_073_741_824
+)
+guard ModelRecommendationEngine.recommendedModelID(
+        for: capableMac,
+        language: .hinglish
+      ) == "hindi2hinglish-apex",
+      ModelRecommendationEngine.recommendedModelID(
+        for: capableMac,
+        language: .english
+      ) == "whisper-large-v3-turbo" else {
     FileHandle.standardError.write(
-        Data("FAIL: local model mode did not persist\n".utf8)
+        Data("FAIL: Hinglish was not recommended its specialist\n".utf8)
+    )
+    exit(1)
+}
+guard let apex = VerifiedModelCatalog.model(id: "hindi2hinglish-apex"),
+      let medium = VerifiedModelCatalog.model(
+          id: "whisper-medium-multilingual"
+      ),
+      ModelRecommendationEngine.recommendation(
+          for: apex,
+          profile: capableMac,
+          language: .hinglish
+      ).rationale.contains("code-switching"),
+      !ModelRecommendationEngine.recommendation(
+          for: medium,
+          profile: capableMac,
+          language: .english
+      ).rationale.contains("same accuracy") else {
+    FileHandle.standardError.write(
+        Data("FAIL: model recommendation copy is misleading\n".utf8)
     )
     exit(1)
 }
 
-let refinementModels = VerifiedRefinementModelCatalog.models
-guard refinementModels.count == 2,
-      Set(refinementModels.map(\.tier)) == [.fast, .balanced],
-      refinementModels.allSatisfy({
-          $0.publisher == "Qwen"
-              && $0.license == "Apache-2.0"
-              && $0.downloadURL.scheme == "https"
-              && $0.downloadURL.host == "huggingface.co"
-              && $0.sourceRevision.count == 40
-              && $0.sha256.count == 64
-              && $0.fileSizeBytes > 0
+// And a general multilingual model must not be offered for Hinglish at all.
+guard !LanguageProfile.hinglish.isCompatible(with: .multilingual),
+      LanguageProfile.hinglish.isCompatible(with: .hinglish),
+      // The reverse still holds: the specialist is not a general model.
+      !LanguageProfile.english.isCompatible(with: .hinglish),
+      LanguageProfile.english.isCompatible(with: .multilingual),
+      // A non-English language that is not Hinglish still uses a general
+      // multilingual model, which is the only option it has.
+      LanguageProfile(inputLanguageCode: "es", outputMode: .spokenLanguage)
+        .isCompatible(with: .multilingual) else {
+    FileHandle.standardError.write(
+        Data("FAIL: language/model compatibility is wrong\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: language-aware model recommendation passed")
+
+// Model and profile changes are one transition. Neither settings screen may
+// reject the other side's current value and leave a user unable to move from
+// a retired English model to the Hinglish specialist.
+guard let retiredEnglish = VerifiedModelCatalog.model(
+        id: "whisper-medium-en"
+      ),
+      let turbo = VerifiedModelCatalog.model(
+          id: "whisper-large-v3-turbo"
+      ),
+      VerifiedModelCatalog.isRetired(retiredEnglish),
+      !VerifiedModelCatalog.models.contains(where: {
+          $0.id == retiredEnglish.id
       }),
-      !refinementModels.contains(where: {
-          $0.id.contains("3b")
-      }) else {
+      VerifiedModelCatalog.allModels.contains(where: {
+          $0.id == retiredEnglish.id
+      }),
+      ModelProfileTransition.profileForSelecting(
+          model: apex,
+          currentProfile: .english
+      ) == .hinglish,
+      ModelProfileTransition.profileForSelecting(
+          model: retiredEnglish,
+          currentProfile: LanguageProfile(
+              inputLanguageCode: "hi",
+              outputMode: .spokenLanguage
+          )
+      ) == .english,
+      ModelProfileTransition.profileForSelecting(
+          model: turbo,
+          currentProfile: .hinglish
+      ) == nil,
+      ModelProfileTransition.modelForSelecting(
+          profile: .hinglish,
+          currentModel: retiredEnglish,
+          installedModels: [retiredEnglish, apex, turbo],
+          recommendedModelID: apex.id
+      ) == apex,
+      ModelProfileTransition.modelForSelecting(
+          profile: .english,
+          currentModel: apex,
+          installedModels: [retiredEnglish, apex, turbo],
+          recommendedModelID: turbo.id
+      ) == turbo,
+      // Existing compatible legacy selections remain stable until the user
+      // explicitly chooses a replacement.
+      ModelProfileTransition.modelForSelecting(
+          profile: .english,
+          currentModel: retiredEnglish,
+          installedModels: [retiredEnglish, apex, turbo],
+          recommendedModelID: turbo.id
+      ) == retiredEnglish,
+      ModelProfileTransition.modelForSelecting(
+          profile: .hinglish,
+          currentModel: retiredEnglish,
+          installedModels: [retiredEnglish, turbo],
+          recommendedModelID: apex.id
+      ) == nil,
+      ModelProfileTransition.unavailableMessage(for: .hinglish)
+        .contains("Hinglish Apex"),
+      ModelProfileTransition.unavailableMessage(for: .english)
+        .contains("English or multilingual"),
+      ModelProfileTransition.incompatibilityBadge(
+          model: apex,
+          currentProfile: .english
+      ) == "Hinglish only",
+      ModelProfileTransition.incompatibilityBadge(
+          model: turbo,
+          currentProfile: .hinglish
+      ) == "Not for Hinglish",
+      ModelProfileTransition.incompatibilityBadge(
+          model: retiredEnglish,
+          currentProfile: LanguageProfile(
+              inputLanguageCode: "hi",
+              outputMode: .spokenLanguage
+          )
+      ) == "English only" else {
     FileHandle.standardError.write(
-        Data("FAIL: refinement allowlist is not legally pinned\n".utf8)
+        Data("FAIL: atomic model/profile transition policy is wrong\n".utf8)
     )
     exit(1)
 }
 
-let safeLocalCandidate =
-    LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Create the local app."}"#,
-        original: "create the local app"
-    )
-guard safeLocalCandidate == "Create the local app.",
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Create the cloud app."}"#,
-        original: "Create the local app."
-      ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Keep"}"#,
-        original: "Please keep every important word here"
-      ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Do share this file."}"#,
-        original: "Do not share this file."
-      ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"The file deletes the app."}"#,
-        original: "The app deletes the file."
-      ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: #"{"text":"Keep keep this local."}"#,
-        original: "Keep this local."
-      ) == nil,
-      LocalRefinementGuard.validatedCandidate(
-        output: "```json\n{\"text\":\"Keep this\"}\n```",
-        original: "Keep this"
-      ) == nil,
-      LocalRefinementPrompt.make(transcript: "Hola mundo")
-        .contains("Hola mundo") else {
-    FileHandle.standardError.write(
-        Data("FAIL: local refinement meaning guard is unsafe\n".utf8)
-    )
-    exit(1)
+enum TransitionFixtureError: Error {
+    case preparationFailed
 }
 
-let refinementSuite =
-    "ZenVoiceCoreChecks.RefinementModel.\(UUID().uuidString)"
-guard let refinementDefaults =
-    UserDefaults(suiteName: refinementSuite),
-      let fastRefinementModel = refinementModels.first else {
+let transitionSuite = "ZenVoiceTransition.\(UUID().uuidString)"
+guard let transitionDefaults = UserDefaults(suiteName: transitionSuite) else {
     FileHandle.standardError.write(
-        Data("FAIL: could not create refinement model fixture\n".utf8)
+        Data("FAIL: could not create transition preference fixture\n".utf8)
     )
     exit(1)
 }
 defer {
-    refinementDefaults.removePersistentDomain(
-        forName: refinementSuite
-    )
+    transitionDefaults.removePersistentDomain(forName: transitionSuite)
 }
-RefinementModelSelectionPreferences.save(
-    fastRefinementModel,
-    defaults: refinementDefaults
+ModelSelectionPreferences.save(
+    retiredEnglish,
+    defaults: transitionDefaults
 )
-guard RefinementModelSelectionPreferences.load(
-    defaults: refinementDefaults
-) == fastRefinementModel else {
+LanguagePreferences.save(.english, defaults: transitionDefaults)
+do {
+    let _: String = try ModelProfileTransition.prepareAndCommit(
+        model: apex,
+        profile: .hinglish,
+        defaults: transitionDefaults
+    ) {
+        throw TransitionFixtureError.preparationFailed
+    }
     FileHandle.standardError.write(
-        Data("FAIL: refinement model selection did not persist\n".utf8)
+        Data("FAIL: failed transition unexpectedly committed\n".utf8)
+    )
+    exit(1)
+} catch TransitionFixtureError.preparationFailed {
+    // Expected: the old pair must remain intact.
+}
+guard ModelSelectionPreferences.load(defaults: transitionDefaults)
+        == retiredEnglish,
+      LanguagePreferences.load(defaults: transitionDefaults) == .english else {
+    FileHandle.standardError.write(
+        Data("FAIL: failed transition changed preferences\n".utf8)
+    )
+    exit(1)
+}
+let preparedMarker = ModelProfileTransition.prepareAndCommit(
+    model: apex,
+    profile: .hinglish,
+    defaults: transitionDefaults
+) {
+    "prepared"
+}
+guard preparedMarker == "prepared",
+      ModelSelectionPreferences.load(defaults: transitionDefaults) == apex,
+      LanguagePreferences.load(defaults: transitionDefaults) == .hinglish else {
+    FileHandle.standardError.write(
+        Data("FAIL: prepared transition did not commit atomically\n".utf8)
     )
     exit(1)
 }
 
-print("ZenVoiceCoreChecks: Instant Refine passed")
+print("ZenVoiceCoreChecks: atomic model/profile transitions passed")
+
+// Paragraph structure from the speaker's pauses.
+//
+// The silences are supplied rather than measured here, because the point
+// under test is the decision, not the energy detection.
+let structureSegments = [
+    TranscriptSegment(
+        text: "Please refactor the middleware.",
+        startSeconds: 0,
+        endSeconds: 3
+    ),
+    TranscriptSegment(
+        text: "It validates the token.",
+        startSeconds: 4.5,
+        endSeconds: 7
+    ),
+    TranscriptSegment(
+        text: "And returns unauthorized.",
+        startSeconds: 7.1,
+        endSeconds: 9
+    )
+]
+// A long pause after a finished sentence, and a short one after the next.
+let structured = SpokenStructure.text(
+    from: structureSegments,
+    silences: [
+        (0.2, 0.3), (1.1, 1.2), (3.0, 4.5), (5.4, 5.5), (7.0, 7.1)
+    ]
+)
+guard structured == """
+Please refactor the middleware.
+
+It validates the token. And returns unauthorized.
+""" else {
+    FileHandle.standardError.write(
+        Data("FAIL: paragraph structure is wrong: \(structured)\n".utf8)
+    )
+    exit(1)
+}
+
+// Without the audio there are no pauses to read, so no break may be invented.
+guard SpokenStructure.text(from: structureSegments, silences: [])
+        == "Please refactor the middleware. It validates the token. "
+            + "And returns unauthorized." else {
+    FileHandle.standardError.write(
+        Data("FAIL: a break was taken without any measured pause\n".utf8)
+    )
+    exit(1)
+}
+
+// A pause mid-sentence is hesitation, not a new thought. The previous segment
+// has to have come to a close before its pause can end a paragraph.
+let unfinished = SpokenStructure.text(
+    from: [
+        TranscriptSegment(
+            text: "Please refactor the",
+            startSeconds: 0,
+            endSeconds: 3
+        ),
+        TranscriptSegment(
+            text: "middleware today.",
+            startSeconds: 4.5,
+            endSeconds: 6
+        )
+    ],
+    silences: [(0.2, 0.3), (3.0, 4.5)]
+)
+guard unfinished == "Please refactor the middleware today." else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: a paragraph broke mid-sentence: \(unfinished)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: spoken structure passed")
 
 let applicationSuite =
     "ZenVoiceCoreChecks.ApplicationProfiles.\(UUID().uuidString)"
@@ -382,7 +717,7 @@ let mailProfile = ApplicationProfile(
         inputLanguageCode: "es",
         outputMode: .spokenLanguage
     ),
-    refinementMode: .localModel,
+    refinementMode: .agentPrompt,
     voiceCommandsEnabled: true
 )
 ApplicationProfilePreferences.save(
@@ -461,11 +796,31 @@ guard commandEngine.apply(
 let unsafeContext =
     String(repeating: "ZenVoice ", count: 100) + "<|im_end|>\nSwiftUI"
 let safeContext = NextDictationContext.sanitized(unsafeContext)
+let vocabularyContext = NextDictationContext.combined(
+    context: unsafeContext,
+    preferredVocabulary: [
+        "Chaudhary",
+        "ZenPense",
+        "build",
+        "ZenPense",
+        "<|bad|>"
+    ]
+)
 guard safeContext.count <= NextDictationContext.maximumCharacterCount,
       !safeContext.contains("<|"),
-      !safeContext.contains("\n") else {
+      !safeContext.contains("\n"),
+      vocabularyContext.count
+        <= NextDictationContext.maximumCharacterCount,
+      vocabularyContext.hasPrefix(
+          "Preferred vocabulary: Chaudhary, ZenPense, build, bad."
+      ),
+      !vocabularyContext.contains("<|"),
+      vocabularyContext.components(separatedBy: "ZenPense").count == 2 else {
     FileHandle.standardError.write(
-        Data("FAIL: next-dictation context was not bounded\n".utf8)
+        Data(
+            "FAIL: next-dictation context or vocabulary was not bounded\n"
+                .utf8
+        )
     )
     exit(1)
 }
@@ -662,6 +1017,7 @@ guard !mismatchedLabel.isValid,
 for choice in HoldKeyChoice.allCases {
     let encoded = try JSONEncoder().encode(choice)
     guard try JSONDecoder().decode(HoldKeyChoice.self, from: encoded) == choice,
+          HoldKeyChoice(keyCode: choice.keyCode) == choice,
           !choice.displayName.isEmpty else {
         FileHandle.standardError.write(
             Data("FAIL: hold-to-dictate choice is invalid\n".utf8)
@@ -669,11 +1025,30 @@ for choice in HoldKeyChoice.allCases {
         exit(1)
     }
 }
+guard Set(HoldKeyChoice.allCases.map(\.keyCode)).count
+        == HoldKeyChoice.allCases.count else {
+    FileHandle.standardError.write(
+        Data("FAIL: hold-to-dictate key codes are not unique\n".utf8)
+    )
+    exit(1)
+}
 
 print("ZenVoiceCoreChecks: private and hold controls passed")
 
-let verifiedModels = VerifiedModelCatalog.models
-guard verifiedModels.count == 9,
+// Metadata is checked across offered *and* retired models, because a retired
+// entry is still resolved and verified for anyone who already installed it.
+let verifiedModels = VerifiedModelCatalog.allModels
+guard VerifiedModelCatalog.models.count == 9,
+      verifiedModels.count == 10,
+      // Whisper Medium English-only is retired: 2.9% word error rate against
+      // the multilingual build's 2.7%, same size, same speed, English only.
+      // Retired rather than deleted so an existing install still resolves.
+      VerifiedModelCatalog.models.allSatisfy({
+          $0.id != "whisper-medium-en"
+      }),
+      VerifiedModelCatalog.model(id: "whisper-medium-en") != nil,
+      VerifiedModelCatalog.model(filename: "ggml-medium.en.bin")?.id
+        == "whisper-medium-en",
       Set(verifiedModels.map(\.id)).count == verifiedModels.count,
       Set(verifiedModels.map(\.filename)).count == verifiedModels.count,
       Set(verifiedModels.map(\.tier))
@@ -686,7 +1061,10 @@ guard verifiedModels.count == 9,
               && $0.downloadURL.path.contains($0.sourceRevision)
               && $0.sha256.count == 64
               && $0.fileSizeBytes > 0
-              && $0.license == "MIT"
+              // Apache-2.0 joins MIT for the Hinglish weights. Both permit
+              // redistribution with attribution, which `attribution` carries.
+              && ["MIT", "Apache-2.0"].contains($0.license)
+              && !$0.attribution.isEmpty
               && URL(string: $0.licenseURL)?.scheme == "https"
               && URL(string: $0.upstreamRepository)?.host == "github.com"
       }) else {
@@ -1018,7 +1396,35 @@ LanguagePreferences.save(.hinglish, defaults: languageDefaults)
 guard LanguagePreferences.load(defaults: languageDefaults) == .hinglish,
       LanguageProfile.english.isCompatible(with: .english),
       !LanguageProfile.hinglish.isCompatible(with: .english),
-      LanguageProfile.hinglish.isCompatible(with: .multilingual) else {
+      // A general multilingual model is no longer offered for Hinglish. It
+      // used to be, on the theory that it worked badly rather than not at
+      // all; measured on 30 real code-switched recordings it preserves 0 of
+      // 31 English words against the specialist's 82 of 96.
+      !LanguageProfile.hinglish.isCompatible(with: .multilingual),
+      // A Hinglish model is a specialist. It serves the Hinglish profile and
+      // nothing else — measured at 20.9% word error rate on English dictation
+      // against Whisper Medium's 2.0%, so letting it near another profile
+      // would be a tenfold regression.
+      LanguageProfile.hinglish.isCompatible(with: .hinglish),
+      !LanguageProfile.english.isCompatible(with: .hinglish),
+      !LanguageProfile(inputLanguageCode: "fr", outputMode: .spokenLanguage)
+        .isCompatible(with: .hinglish),
+      // The language token is part of the contract: Oriserve's model reaches
+      // Latin script under `en`, and asking it for `hi` undoes the feature.
+      LanguageProfile.hinglish.whisperLanguageArgument(for: .hinglish) == "en",
+      LanguageProfile.hinglish.whisperLanguageArgument(for: .multilingual)
+        == "hi",
+      LanguageProfile.historyRetryProfile(
+          languageCode: "hi",
+          modelID: "hindi2hinglish-apex"
+      ) == .hinglish,
+      LanguageProfile.historyRetryProfile(
+          languageCode: "hi",
+          modelID: "whisper-large-v3-turbo"
+      ) == LanguageProfile(
+          inputLanguageCode: "hi",
+          outputMode: .spokenLanguage
+      ) else {
     FileHandle.standardError.write(
         Data("FAIL: language profile persistence or compatibility failed\n".utf8)
     )
@@ -1043,6 +1449,34 @@ guard englishConfiguration.language == "en",
       !translationConfiguration.shouldTransliterateToLatin else {
     FileHandle.standardError.write(
         Data("FAIL: language runtime configuration is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+let configurationFixtureDirectory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ZenVoiceConfiguration.\(UUID().uuidString)")
+try FileManager.default.createDirectory(
+    at: configurationFixtureDirectory,
+    withIntermediateDirectories: true
+)
+defer {
+    try? FileManager.default.removeItem(at: configurationFixtureDirectory)
+}
+let apexFixtureURL = configurationFixtureDirectory
+    .appendingPathComponent("ggml-hindi2hinglish-apex-q8_0.bin")
+_ = FileManager.default.createFile(
+    atPath: apexFixtureURL.path(percentEncoded: false),
+    contents: Data()
+)
+let apexOverrideConfiguration = try? ZenVoiceConfiguration.discover(
+    languageProfile: .hinglish,
+    environment: ["ZENVOICE_MODEL_PATH": apexFixtureURL.path],
+    homeDirectory: configurationFixtureDirectory
+)
+guard apexOverrideConfiguration?.modelLanguageCapability == .hinglish,
+      apexOverrideConfiguration?.language == "en" else {
+    FileHandle.standardError.write(
+        Data("FAIL: Apex path override lost its Hinglish capability\n".utf8)
     )
     exit(1)
 }
@@ -1236,3 +1670,81 @@ guard !ZenBarPreferences.showsAtAllTimes(defaults: zenBarDefaults) else {
 }
 
 print("ZenVoiceCoreChecks: ZenVoice bar preference passed")
+
+// Secure input is usually active because a password field has focus. The
+// fallback may write only to a positively identified non-secure text control;
+// ambiguous text fields fail closed instead of risking a password insertion.
+guard !TextInserter.allowsAccessibilityInsertion(
+          role: kAXTextFieldRole as String,
+          subrole: kAXSecureTextFieldSubrole as String
+      ),
+      !TextInserter.allowsAccessibilityInsertion(
+          role: kAXTextFieldRole as String,
+          subrole: nil
+      ),
+      TextInserter.allowsAccessibilityInsertion(
+          role: kAXTextFieldRole as String,
+          subrole: "AXSearchField"
+      ),
+      TextInserter.allowsAccessibilityInsertion(
+          role: kAXTextAreaRole as String,
+          subrole: nil
+      ),
+      !TextInserter.allowsAccessibilityInsertion(
+          role: kAXButtonRole as String,
+          subrole: nil
+      ) else {
+    FileHandle.standardError.write(
+        Data("FAIL: secure-input accessibility policy is unsafe\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: secure-input insertion policy passed")
+
+// Runaway repetition — Whisper's failure on audio it cannot handle. Measured:
+// one clip made Whisper Tiny emit "We are in India," about a hundred times.
+let runaway = TranscriptRepetition.collapsingRunaway(
+    "We are in India, India, India, India, India, India, India."
+)
+guard runaway == "We are in India," else {
+    FileHandle.standardError.write(
+        Data("FAIL: runaway repetition was not collapsed: \(runaway)\n".utf8)
+    )
+    exit(1)
+}
+
+// A repeated phrase, not just a repeated word.
+let phraseLoop = TranscriptRepetition.collapsingRunaway(
+    "Open the file open the file open the file open the file and save it"
+)
+guard phraseLoop == "Open the file and save it" else {
+    FileHandle.standardError.write(
+        Data("FAIL: phrase loop was not collapsed: \(phraseLoop)\n".utf8)
+    )
+    exit(1)
+}
+
+// Ordinary speech must survive. Three repeats is emphasis; the threshold is
+// four, so this is left exactly as spoken.
+let emphasis = TranscriptRepetition.collapsingRunaway(
+    "It was very very good and I said no no no"
+)
+guard emphasis == "It was very very good and I said no no no" else {
+    FileHandle.standardError.write(
+        Data("FAIL: ordinary emphasis was collapsed: \(emphasis)\n".utf8)
+    )
+    exit(1)
+}
+
+// The decode deadline scales with the recording but never drops below its
+// floor, so a two-second utterance still has room for model load.
+guard WhisperDecoding.decodeDeadline(audioSeconds: 2) == 15,
+      WhisperDecoding.decodeDeadline(audioSeconds: 60) == 120 else {
+    FileHandle.standardError.write(
+        Data("FAIL: decode deadline is wrong\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: runaway repetition defence passed")

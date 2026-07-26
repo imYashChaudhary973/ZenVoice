@@ -4,7 +4,6 @@ public enum InstantRefineMode: String, Codable, CaseIterable, Sendable {
     case off
     case clean
     case agentPrompt
-    case localModel
 
     public var displayName: String {
         switch self {
@@ -14,8 +13,6 @@ public enum InstantRefineMode: String, Codable, CaseIterable, Sendable {
             "Clean"
         case .agentPrompt:
             "Agent Prompt"
-        case .localModel:
-            "Local Model"
         }
     }
 
@@ -27,10 +24,9 @@ public enum InstantRefineMode: String, Codable, CaseIterable, Sendable {
             "Remove fillers, repeated words, and clear spoken restarts."
         case .agentPrompt:
             "Clean the transcript and honor explicit layout commands."
-        case .localModel:
-            "Use the selected verified local model with automatic safe fallback."
         }
     }
+
 }
 
 public enum InstantRefinePreferences {
@@ -90,13 +86,13 @@ public struct InstantRefineEngine: Sendable {
         correctionCount += replace(
             in: &candidate,
             pattern:
-                #"(?i)\b(a|an|the)\s+([\p{L}\p{N}_'-]+(?:\s+[\p{L}\p{N}_'-]+){0,3})\s*(?:,|—|-)\s*(?:no\s*,?\s*wait|wait|sorry|i mean|rather)\s*[,—-]?\s*(?:a|an|the)\s+"#,
+                #"(?i)\b(a|an|the)\s+([\p{L}\p{M}\p{N}_'-]+(?:\s+[\p{L}\p{M}\p{N}_'-]+){0,3})\s*(?:,|—|-)\s*(?:no\s*,?\s*wait|wait|sorry|i mean|rather)\s*[,—-]?\s*(?:a|an|the)\s+"#,
             template: "$1 "
         )
         correctionCount += replace(
             in: &candidate,
             pattern:
-                #"(?i)\b([\p{L}\p{N}_'-]+)\s*(?:,|—|-)\s*(?:no\s*,?\s*wait|sorry|i mean|rather)\s*[,—-]?\s*([\p{L}\p{N}_'-]+)\b"#,
+                #"(?i)\b([\p{L}\p{M}\p{N}_'-]+)\s*(?:,|—|-)\s*(?:no\s*,?\s*wait|sorry|i mean|rather)\s*[,—-]?\s*([\p{L}\p{M}\p{N}_'-]+)\b"#,
             template: "$2"
         )
         // Filler stems. "ah" and "hm" were measured escaping in real Whisper
@@ -109,8 +105,37 @@ public struct InstantRefineEngine: Sendable {
         correctionCount += replace(
             in: &candidate,
             pattern:
-                #"(?i)(?<![\p{L}\p{N}_])(?:um+|uh+|erm+|ah+|hm+|mhm+)(?:\s*,\s*|\s+|$)"#,
+                #"(?i)(?<![\p{L}\p{M}\p{N}_])(?:um+|uh+|erm+|ah+|hm+|mhm+)(?:\s*,\s*|\s+|$)"#,
             template: ""
+        )
+        // Devanagari hesitation sounds, the counterparts of um and uh:
+        // उम्म, अम्म, अअअ, हम्म, and their elongated forms. Measured as the
+        // single most-removed tokens in a Hindi disfluency corpus.
+        //
+        // A word merely beginning with these letters is safe — अमेरिका has a
+        // vowel sign where a filler has a doubled म — and the trailing
+        // boundary means the filler must stand alone as its own word.
+        correctionCount += replace(
+            in: &candidate,
+            pattern:
+                #"(?<![\p{L}\p{M}\p{N}_])(?:[उअहम]म्?म+|अ{2,}|ऐ{2,})(?:\s*[,।]\s*|\s+|$)"#,
+            template: ""
+        )
+        // "वो क्या कहते हैं" — literally "what's it called" — is the Hindi
+        // speaker stalling for a word, exactly like an English "you know".
+        // A fixed phrase rather than a single token, so it is matched whole.
+        correctionCount += replace(
+            in: &candidate,
+            pattern:
+                #"\s*,?\s*वो(?:ह)?\s+क्या\s+कहते\s+हैं\s*,?\s*"#,
+            template: " "
+        )
+        // मतलब and यानी mean "meaning" / "that is", and like "I mean" they are
+        // filler only when the speaker's own pause brackets them.
+        correctionCount += replace(
+            in: &candidate,
+            pattern: #"\s*,\s*(?:मतलब|यानी|यानि)\s*,\s*"#,
+            template: " "
         )
         // Discourse markers, but only when the speaker's own pauses bracket
         // them in commas. "like" and "you know" are the two commonest fillers
@@ -132,10 +157,29 @@ public struct InstantRefineEngine: Sendable {
             pattern: #"(?i)\s*,\s*like\s*,\s*"#,
             template: " "
         )
+        // Phrase-level restarts — "we should we should probably revert".
+        //
+        // A speaker who loses the thread repeats the run-up, not just the last
+        // word, and the single-word rule below cannot see that: in "we should
+        // we should" no two *adjacent* words are equal. Whisper only appeared
+        // to clean these up on its own; with the decode pinned they survive to
+        // here, which is how the gap was found.
+        //
+        // Bounded at two to four words, and the separator is spaces and tabs
+        // rather than \s so a repeat cannot be matched across a line break.
+        // Punctuation between the halves also blocks it, which is what keeps
+        // deliberate repeats like "New York, New York" and "come on, come on"
+        // intact — the comma is the speaker marking it as intentional.
         correctionCount += replace(
             in: &candidate,
             pattern:
-                #"(?i)\b([\p{L}\p{N}_'-]{2,})\b(?:[\s,]+\1\b)+"#,
+                #"(?i)\b((?:[\p{L}\p{M}\p{N}_'-]+[ \t]+){2,4})(?:\1)+"#,
+            template: "$1"
+        )
+        correctionCount += replace(
+            in: &candidate,
+            pattern:
+                #"(?i)\b([\p{L}\p{M}\p{N}_'-]{2,})\b(?:[\s,]+\1\b)+"#,
             template: "$1"
         )
 

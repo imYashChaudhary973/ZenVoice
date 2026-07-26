@@ -52,8 +52,8 @@ recorded in
 - [x] Add local model selection for English and multilingual Whisper models
 - [x] Add explicit language selection and optional local detection
 - [x] Add local snippets and conservative voice corrections
-- [x] Add in-process local-only refinement through the pinned llama.cpp runtime
-- [x] Curate downloadable local text-refinement models with meaning guards
+- [x] Measure local generative refinement and remove it after it added no
+  accuracy beyond deterministic rules
 - [x] Add per-application language and refinement profiles
 - [x] Add a memory-only next-dictation context box
 - [x] Add deterministic multilingual layout and punctuation voice commands

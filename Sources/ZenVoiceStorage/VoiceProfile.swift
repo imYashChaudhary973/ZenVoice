@@ -48,10 +48,33 @@ public final class LocalLearningPreferences {
     }
 }
 
+public enum CorrectionLanguageScope:
+    String, CaseIterable, Identifiable, Sendable
+{
+    case all
+    case hinglish
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .all:
+            return "All languages"
+        case .hinglish:
+            return "Hinglish only"
+        }
+    }
+
+    public func applies(to activeScope: CorrectionLanguageScope) -> Bool {
+        self == .all || self == activeScope
+    }
+}
+
 public struct CorrectionRule: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let source: String
     public let replacement: String
+    public let languageScope: CorrectionLanguageScope
     public let usageCount: Int
     public let createdAt: Date
 
@@ -59,14 +82,39 @@ public struct CorrectionRule: Identifiable, Equatable, Sendable {
         id: UUID = UUID(),
         source: String,
         replacement: String,
+        languageScope: CorrectionLanguageScope = .all,
         usageCount: Int = 0,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.source = source
         self.replacement = replacement
+        self.languageScope = languageScope
         self.usageCount = usageCount
         self.createdAt = createdAt
+    }
+}
+
+public struct CorrectionSuggestion: Identifiable, Equatable, Sendable {
+    public var id: String {
+        "\(ruleID.uuidString)|\(source.lowercased())"
+    }
+
+    public let ruleID: UUID
+    public let source: String
+    public let replacement: String
+    public let languageScope: CorrectionLanguageScope
+
+    public init(
+        ruleID: UUID,
+        source: String,
+        replacement: String,
+        languageScope: CorrectionLanguageScope
+    ) {
+        self.ruleID = ruleID
+        self.source = source
+        self.replacement = replacement
+        self.languageScope = languageScope
     }
 }
 
@@ -92,10 +140,17 @@ public struct CorrectionApplication: Equatable, Sendable {
 public enum TranscriptCorrectionEngine {
     public static func apply(
         _ text: String,
-        rules: [CorrectionRule]
+        rules: [CorrectionRule],
+        activeScope: CorrectionLanguageScope = .all
     ) -> CorrectionApplication {
+        let applicableRules = rules
+            .filter { $0.languageScope.applies(to: activeScope) }
+            .sorted {
+                $0.languageScope == activeScope
+                    && $1.languageScope != activeScope
+            }
         let normalizedRules = Dictionary(
-            rules.map { ($0.source.lowercased(), $0) },
+            applicableRules.map { ($0.source.lowercased(), $0) },
             uniquingKeysWith: { first, _ in first }
         )
         let alternatives = normalizedRules.keys
@@ -108,7 +163,11 @@ public enum TranscriptCorrectionEngine {
                     + alternatives.joined(separator: "|")
                     + #")(?![\p{L}\p{N}_])"#
               ) else {
-            return CorrectionApplication(text: text, usages: [])
+            return applyFuzzyMatches(
+                to: text,
+                rules: applicableRules,
+                existingCounts: [:]
+            )
         }
 
         let source = text as NSString
@@ -127,13 +186,209 @@ public enum TranscriptCorrectionEngine {
             corrected.replaceSubrange(range, with: rule.replacement)
             counts[rule.id, default: 0] += 1
         }
-        return CorrectionApplication(
-            text: corrected,
+        return applyFuzzyMatches(
+            to: corrected,
+            rules: applicableRules,
+            existingCounts: counts
+        )
+    }
+
+    public static func suggestions(
+        in text: String,
+        rules: [CorrectionRule],
+        activeScope: CorrectionLanguageScope = .all
+    ) -> [CorrectionSuggestion] {
+        let applicableRules = Array(
+            rules.filter {
+                $0.languageScope.applies(to: activeScope)
+                    && isSingleLatinWord($0.source)
+                    && isSingleLatinWord($0.replacement)
+                    && $0.source.count >= 5
+                    && $0.replacement.count >= 5
+            }
+            .prefix(100)
+        )
+        let protectedTerms = Set(
+            applicableRules.flatMap {
+                [$0.source.lowercased(), $0.replacement.lowercased()]
+            }
+        )
+        return latinWordMatches(in: text).compactMap { match in
+            let token = match.text
+            let normalized = token.lowercased()
+            guard !protectedTerms.contains(normalized) else {
+                return nil
+            }
+            let ranked = applicableRules.compactMap { rule
+                -> (CorrectionRule, Int)? in
+                let sourceDistance = editDistance(
+                    normalized,
+                    rule.source.lowercased()
+                )
+                let replacementDistance = editDistance(
+                    normalized,
+                    rule.replacement.lowercased()
+                )
+                let score = min(sourceDistance, replacementDistance)
+                let limit = max(
+                    normalized.count,
+                    rule.replacement.count
+                ) >= 8 ? 3 : 2
+                return score <= limit ? (rule, score) : nil
+            }
+            .sorted { $0.1 < $1.1 }
+            guard let best = ranked.first,
+                  ranked.dropFirst().first?.1 != best.1 else {
+                return nil
+            }
+            return CorrectionSuggestion(
+                ruleID: best.0.id,
+                source: token,
+                replacement: best.0.replacement,
+                languageScope: best.0.languageScope
+            )
+        }
+        .uniqued { $0.source.lowercased() }
+        .prefix(8)
+        .map(\.self)
+    }
+
+    private static func applyFuzzyMatches(
+        to text: String,
+        rules: [CorrectionRule],
+        existingCounts: [UUID: Int]
+    ) -> CorrectionApplication {
+        let eligibleRules = Array(
+            rules.filter {
+                isSingleLatinWord($0.source)
+                    && isSingleLatinWord($0.replacement)
+                    && $0.source.count >= 5
+                    && $0.replacement.count >= 5
+                    && !fuzzyBlockedTerms.contains(
+                        $0.source.lowercased()
+                    )
+                    && !fuzzyBlockedTerms.contains(
+                        $0.replacement.lowercased()
+                    )
+                    && editDistance(
+                        $0.source.lowercased(),
+                        $0.replacement.lowercased()
+                    ) <= 2
+            }
+            .prefix(100)
+        )
+        guard !eligibleRules.isEmpty else {
+            return application(text: text, counts: existingCounts)
+        }
+        let protectedTerms = Set(
+            eligibleRules.map { $0.replacement.lowercased() }
+        )
+        var corrected = text
+        var counts = existingCounts
+        for match in latinWordMatches(in: text).reversed() {
+            let normalized = match.text.lowercased()
+            guard !protectedTerms.contains(normalized) else {
+                continue
+            }
+            let candidates = eligibleRules.filter {
+                editDistance(normalized, $0.source.lowercased()) <= 1
+                    && editDistance(
+                        normalized,
+                        $0.replacement.lowercased()
+                    ) <= 1
+            }
+            guard candidates.count == 1,
+                  let rule = candidates.first,
+                  let range = Range(match.range, in: corrected) else {
+                continue
+            }
+            corrected.replaceSubrange(range, with: rule.replacement)
+            counts[rule.id, default: 0] += 1
+        }
+        return application(text: corrected, counts: counts)
+    }
+
+    private static func application(
+        text: String,
+        counts: [UUID: Int]
+    ) -> CorrectionApplication {
+        CorrectionApplication(
+            text: text,
             usages: counts.map {
                 CorrectionUsage(ruleID: $0.key, count: $0.value)
             }
             .sorted { $0.ruleID.uuidString < $1.ruleID.uuidString }
         )
+    }
+
+    private static func latinWordMatches(
+        in text: String
+    ) -> [(text: String, range: NSRange)] {
+        guard let expression = try? NSRegularExpression(
+            pattern: #"(?<![A-Za-z])[A-Za-z]{5,64}(?![A-Za-z])"#
+        ) else {
+            return []
+        }
+        let source = text as NSString
+        return expression.matches(
+            in: text,
+            range: NSRange(location: 0, length: source.length)
+        ).prefix(500).map {
+            (source.substring(with: $0.range), $0.range)
+        }
+    }
+
+    private static func isSingleLatinWord(_ value: String) -> Bool {
+        !value.isEmpty && value.unicodeScalars.allSatisfy {
+            $0.isASCII && CharacterSet.letters.contains($0)
+        }
+    }
+
+    // Common terms stay exact-only even after the user approves a rule.
+    // This prevents a nearby valid word from being rewritten silently.
+    private static let fuzzyBlockedTerms: Set<String> = [
+        "about", "after", "again", "before", "could", "every", "first",
+        "other", "should", "their", "there", "these", "thing", "think",
+        "those", "where", "which", "while", "would",
+        "humko", "karna", "karo", "kyunki", "lekin", "mera", "meri",
+        "mujhe", "muje", "nahi", "nahin", "phir", "tera", "tere",
+        "tumhe", "tumko", "wala", "wali"
+    ]
+
+    private static func editDistance(
+        _ lhs: String,
+        _ rhs: String
+    ) -> Int {
+        let left = Array(lhs)
+        let right = Array(rhs)
+        guard !left.isEmpty else { return right.count }
+        guard !right.isEmpty else { return left.count }
+        var previous = Array(0...right.count)
+        for (leftIndex, leftCharacter) in left.enumerated() {
+            var current = [leftIndex + 1]
+            current.reserveCapacity(right.count + 1)
+            for (rightIndex, rightCharacter) in right.enumerated() {
+                current.append(
+                    min(
+                        current[rightIndex] + 1,
+                        previous[rightIndex + 1] + 1,
+                        previous[rightIndex]
+                            + (leftCharacter == rightCharacter ? 0 : 1)
+                    )
+                )
+            }
+            previous = current
+        }
+        return previous[right.count]
+    }
+}
+
+private extension Array {
+    func uniqued<Key: Hashable>(
+        by key: (Element) -> Key
+    ) -> [Element] {
+        var seen = Set<Key>()
+        return filter { seen.insert(key($0)).inserted }
     }
 }
 

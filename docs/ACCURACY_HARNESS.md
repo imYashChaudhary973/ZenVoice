@@ -150,15 +150,21 @@ The run fails when:
   that catches catastrophic breakage rather than drift
 - long-form output invents more than 5% of the reference length, or repeats more
   than 10% of its 5-grams
-- Hindi produces no transcript, or Hinglish output still contains Devanagari
+- Hindi produces no transcript, or Hinglish output contains any non-Latin
+  alphabetic script
 - the loanword metric cannot distinguish natural Hinglish from romanized mush
 - Hinglish coverage should have run but produced no measurements at all, which
   would turn lost coverage into a clean run
+- a **Hinglish-capable model** preserves fewer than 18 of the 26 loanwords
 
-There is deliberately **no threshold on loanword preservation yet**. Today's
-score is zero, so any floor would either fail every run or assert nothing. The
-floor becomes real when a Hinglish-native model lands, and raising it is the
-gate that adoption has to clear.
+That last floor applies **only** to a model that declares
+`ModelLanguageCapability.hinglish`. A general multilingual model scores 0/26 by
+construction — it writes English words in Devanagari and the romanizer cannot
+recover them — and failing it for that would be failing it for the defect a
+Hinglish model exists to fix.
+
+Whisper-Hindi2Hinglish-Apex measures 21/26, so the floor at 18 absorbs a clip of
+drift while still catching a collapse back towards the 0/26 baseline.
 
 ## Environment
 

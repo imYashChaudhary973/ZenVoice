@@ -21,6 +21,7 @@ final class AudioRecorder: NSObject,
         case unableToCreateRecorder
         case unableToStart
         case invalidInputFormat
+        case invalidDeterministicFixture
 
         var errorDescription: String? {
             switch self {
@@ -30,6 +31,10 @@ final class AudioRecorder: NSObject,
                 return "ZenVoice could not start recording."
             case .invalidInputFormat:
                 return "The selected microphone returned an unsupported audio format."
+            case .invalidDeterministicFixture:
+                return
+                    "The E2E audio fixture must be a readable 16 kHz mono "
+                    + "local file no larger than 100 MB or 10 minutes."
             }
         }
     }
@@ -52,6 +57,12 @@ final class AudioRecorder: NSObject,
     private var lastSpeechSampleIndex = 0
     private var capturesLiveSamples = false
     private var speechDetector = SpeechActivityDetector()
+#if DEBUG
+    private static let fixtureEnvironmentKey = "ZENVOICE_E2E_AUDIO_FILE"
+    private static let maximumFixtureBytes: Int64 = 100 * 1_024 * 1_024
+    private static let maximumFixtureDuration: TimeInterval = 10 * 60
+    private var deterministicFixtureDuration: TimeInterval?
+#endif
     /// Where the last consumed phrase ended.
     private var committedSampleIndex = 0
     /// A completed phrase boundary, remembered until someone asks for it.
@@ -65,7 +76,25 @@ final class AudioRecorder: NSObject,
     private var latchedBoundary: Int?
 
     var isRecording: Bool {
+#if DEBUG
+        deterministicFixtureDuration != nil
+            || captureSession?.isRunning == true
+#else
         captureSession?.isRunning == true
+#endif
+    }
+
+    var usesDeterministicFixture: Bool {
+#if DEBUG
+        guard let path = ProcessInfo.processInfo.environment[
+            Self.fixtureEnvironmentKey
+        ] else {
+            return false
+        }
+        return !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+#else
+        return false
+#endif
     }
 
     func start(
@@ -79,6 +108,18 @@ final class AudioRecorder: NSObject,
             ?? FileManager.default.temporaryDirectory
                 .appendingPathComponent("zenvoice-\(UUID().uuidString)")
                 .appendingPathExtension("wav")
+
+#if DEBUG
+        if let fixtureURL = try deterministicFixtureURL() {
+            try startDeterministicFixture(
+                sourceURL: fixtureURL,
+                destinationURL: url,
+                capturesLiveSamples: capturesLiveSamples,
+                levelChanged: levelChanged
+            )
+            return
+        }
+#endif
 
         guard let device = resolvedDevice(uid: selectedDeviceUID),
               device.isConnected else {
@@ -168,6 +209,10 @@ final class AudioRecorder: NSObject,
     func stop(
         preserveLiveSamples: Bool = false
     ) -> RecordedAudio? {
+#if DEBUG
+        let fixtureDuration = deterministicFixtureDuration
+        deterministicFixtureDuration = nil
+#endif
         if let captureSession {
             captureQueue.sync {
                 audioOutput?.setSampleBufferDelegate(nil, queue: nil)
@@ -191,6 +236,14 @@ final class AudioRecorder: NSObject,
         guard let recordingURL else {
             return nil
         }
+#if DEBUG
+        if let fixtureDuration {
+            return RecordedAudio(
+                url: recordingURL,
+                durationSeconds: fixtureDuration
+            )
+        }
+#endif
         let duration = recordingStartedAt.map {
             max(0, Date().timeIntervalSince($0))
         } ?? 0
@@ -198,6 +251,42 @@ final class AudioRecorder: NSObject,
             url: recordingURL,
             durationSeconds: duration
         )
+    }
+
+    func pause() {
+#if DEBUG
+        if deterministicFixtureDuration != nil {
+            return
+        }
+#endif
+        guard let captureSession, captureSession.isRunning else {
+            return
+        }
+        captureQueue.sync {
+            audioOutput?.setSampleBufferDelegate(nil, queue: nil)
+            captureSession.stopRunning()
+        }
+    }
+
+    func resume() throws {
+#if DEBUG
+        if deterministicFixtureDuration != nil {
+            return
+        }
+#endif
+        guard let captureSession, let audioOutput else {
+            throw RecorderError.unableToStart
+        }
+        guard !captureSession.isRunning else {
+            return
+        }
+        captureQueue.sync {
+            audioOutput.setSampleBufferDelegate(self, queue: captureQueue)
+            captureSession.startRunning()
+        }
+        guard captureSession.isRunning else {
+            throw RecorderError.unableToStart
+        }
     }
 
     func cancel() {
@@ -374,6 +463,106 @@ final class AudioRecorder: NSObject,
         )
     }
 
+#if DEBUG
+    private func deterministicFixtureURL() throws -> URL? {
+        guard let rawPath = ProcessInfo.processInfo.environment[
+            Self.fixtureEnvironmentKey
+        ]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawPath.isEmpty else {
+            return nil
+        }
+        guard rawPath.hasPrefix("/") else {
+            throw RecorderError.invalidDeterministicFixture
+        }
+        let sourceURL = URL(fileURLWithPath: rawPath)
+        let resolvedURL = sourceURL.standardizedFileURL
+            .resolvingSymlinksInPath()
+        let values = try resolvedURL.resourceValues(forKeys: [
+            .isRegularFileKey,
+            .fileSizeKey,
+            .isReadableKey
+        ])
+        guard values.isRegularFile == true,
+              values.isReadable == true,
+              Int64(values.fileSize ?? -1) > 0,
+              Int64(values.fileSize ?? -1) <= Self.maximumFixtureBytes else {
+            throw RecorderError.invalidDeterministicFixture
+        }
+        return resolvedURL
+    }
+
+    private func startDeterministicFixture(
+        sourceURL: URL,
+        destinationURL: URL,
+        capturesLiveSamples: Bool,
+        levelChanged: @escaping (Double) -> Void
+    ) throws {
+        let sourceFile: AVAudioFile
+        do {
+            sourceFile = try AVAudioFile(forReading: sourceURL)
+        } catch {
+            throw RecorderError.invalidDeterministicFixture
+        }
+        let sourceFormat = sourceFile.processingFormat
+        guard sourceFile.length > 0,
+              sourceFormat.sampleRate == 16_000,
+              sourceFormat.channelCount == 1,
+              sourceFormat.commonFormat == .pcmFormatFloat32,
+              !sourceFormat.isInterleaved else {
+            throw RecorderError.invalidDeterministicFixture
+        }
+        let duration = Double(sourceFile.length) / sourceFormat.sampleRate
+        guard duration > 0,
+              duration <= Self.maximumFixtureDuration,
+              let sourceCapacity = AVAudioFrameCount(
+                  exactly: sourceFile.length
+              ),
+              let sourceBuffer = AVAudioPCMBuffer(
+                  pcmFormat: sourceFormat,
+                  frameCapacity: sourceCapacity
+              ) else {
+            throw RecorderError.invalidDeterministicFixture
+        }
+        do {
+            try sourceFile.read(into: sourceBuffer)
+        } catch {
+            throw RecorderError.invalidDeterministicFixture
+        }
+
+        let outputFile: AVAudioFile
+        do {
+            outputFile = try AVAudioFile(
+                forWriting: destinationURL,
+                settings: sourceFormat.settings,
+                commonFormat: .pcmFormatFloat32,
+                interleaved: false
+            )
+        } catch {
+            throw RecorderError.unableToCreateRecorder
+        }
+
+        audioFile = outputFile
+        targetFormat = sourceFormat
+        self.levelChanged = levelChanged
+        activeDeviceUID = "ZenVoice deterministic E2E fixture"
+        recordingURL = destinationURL
+        recordingStartedAt = Date()
+        deterministicFixtureDuration =
+            Double(sourceBuffer.frameLength) / sourceFormat.sampleRate
+        audioLevelMeter = AudioLevelMeter()
+        self.capturesLiveSamples = capturesLiveSamples
+        sampleLock.withLock {
+            capturedSamples.removeAll(keepingCapacity: true)
+            lastSpeechSampleIndex = 0
+            committedSampleIndex = 0
+            latchedBoundary = nil
+            speechDetector = SpeechActivityDetector()
+        }
+        process(sourceBuffer)
+        audioFile = nil
+    }
+#endif
+
     private func reset() {
         audioOutput?.setSampleBufferDelegate(nil, queue: nil)
         captureSession?.stopRunning()
@@ -386,5 +575,8 @@ final class AudioRecorder: NSObject,
         capturesLiveSamples = false
         recordingURL = nil
         recordingStartedAt = nil
+#if DEBUG
+        deterministicFixtureDuration = nil
+#endif
     }
 }

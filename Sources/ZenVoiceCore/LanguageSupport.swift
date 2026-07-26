@@ -93,6 +93,18 @@ public struct LanguageProfile:
         inputLanguageCode
     }
 
+    /// The language token to decode with, which depends on the model.
+    ///
+    /// A Hinglish-native model is trained to emit Latin script under the
+    /// **English** token — that is how Oriserve run it, and it is what makes
+    /// the output Hinglish rather than Devanagari. Handing it `hi` instead puts
+    /// it straight back into the script the profile exists to avoid.
+    public func whisperLanguageArgument(
+        for capability: ModelLanguageCapability
+    ) -> String {
+        capability.emitsLatinScriptNatively ? "en" : inputLanguageCode
+    }
+
     public var shouldTranslateToEnglish: Bool {
         outputMode == .englishTranslation
     }
@@ -145,8 +157,56 @@ public struct LanguageProfile:
         self.outputMode = outputMode
     }
 
+    /// Reconstructs the language behavior saved with a History record.
+    ///
+    /// Older records store the input language and model identifier, but not
+    /// the output mode. The Hinglish specialist is the one unambiguous case:
+    /// it emits Latin-script Hindi, so its records must retry as Hinglish.
+    /// Every other record keeps the spoken language.
+    public static func historyRetryProfile(
+        languageCode: String,
+        modelID: String
+    ) -> LanguageProfile {
+        let recordedCapability =
+            VerifiedModelCatalog.model(id: modelID)?.languageCapability
+        return LanguageProfile(
+            inputLanguageCode: languageCode,
+            outputMode:
+                recordedCapability == .hinglish
+                ? .latinScript
+                : .spokenLanguage
+        )
+    }
+
     public func isCompatible(with capability: ModelLanguageCapability) -> Bool {
-        capability == .multilingual || !requiresMultilingualModel
+        switch capability {
+        case .english:
+            return !requiresMultilingualModel
+        case .multilingual:
+            // A general multilingual model is not an option for Hinglish. It
+            // was allowed on the theory that it "still works, just badly";
+            // measured against 30 real code-switched recordings it does not
+            // work at all. It preserves **0 of 31** English words, respelling
+            // `document` as डोक्यूमेंट and `tutorial` as टिटूटूरल — every
+            // English word phonetically rewritten in a script the reader did
+            // not ask for. The specialist preserves 82 of 96.
+            //
+            // Some of them are also far slower, because general models can
+            // fail to *terminate* on code-switched speech: one clip made
+            // Whisper Tiny emit "We are in India" about a hundred times, and
+            // Medium ran past fifteen minutes on thirty clips the specialist
+            // finished in twenty-nine seconds. Turbo does terminate normally
+            // on the same audio — it simply produces unusable output — so the
+            // block rests on the loanwords, not on the speed.
+            //
+            // See docs/TRANSCRIPTION_ACCURACY.md.
+            return self != .hinglish
+        case .hinglish:
+            // The reverse still holds: a Hinglish specialist is not a better
+            // multilingual model. It scores 16.8% word error rate on English
+            // against Medium's 2.0%.
+            return self == .hinglish
+        }
     }
 }
 

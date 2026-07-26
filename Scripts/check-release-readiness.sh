@@ -33,14 +33,20 @@ else
     block "ZenVoice project licence has not been selected"
 fi
 
-unfinished_items=$(
-    rg --count '^- \[ \]' "$project_dir/docs/RELEASE_READINESS.md" 2>/dev/null ||
-        true
-)
-if [[ "${unfinished_items:-0}" -eq 0 ]]; then
-    pass "manual release checklist is complete"
+if ! command -v rg >/dev/null 2>&1; then
+    block "ripgrep is required to inspect the manual release checklist"
 else
-    block "manual release checklist has $unfinished_items unfinished items"
+    unfinished_items=$(
+        rg --count '^- \[ \]' "$project_dir/docs/RELEASE_READINESS.md" 2>/dev/null
+    )
+    checklist_status=$?
+    if (( checklist_status > 1 )); then
+        block "manual release checklist could not be inspected"
+    elif [[ "${unfinished_items:-0}" -eq 0 ]]; then
+        pass "manual release checklist is complete"
+    else
+        block "manual release checklist has $unfinished_items unfinished items"
+    fi
 fi
 
 secret_files=$(

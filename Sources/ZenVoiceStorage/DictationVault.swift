@@ -342,6 +342,19 @@ public final class DictationVault: @unchecked Sendable {
         try discard(id: id)
     }
 
+    @discardableResult
+    public func deleteRecords(ids: [UUID]) throws -> Int {
+        var deletedCount = 0
+        for id in Set(ids) {
+            guard try record(id: id) != nil else {
+                continue
+            }
+            try discard(id: id)
+            deletedCount += 1
+        }
+        return deletedCount
+    }
+
     public func deleteAll() throws {
         let existingRecovery = try recoveryEntries(whereClause: "1 = 1")
         for entry in existingRecovery {
@@ -543,6 +556,7 @@ public final class DictationVault: @unchecked Sendable {
     public func addCorrectionRule(
         source: String,
         replacement: String,
+        languageScope: CorrectionLanguageScope = .all,
         id: UUID = UUID(),
         createdAt: Date = Date()
     ) throws {
@@ -561,14 +575,16 @@ public final class DictationVault: @unchecked Sendable {
             let existing = try correctionRulesLocked()
             guard !existing.contains(where: {
                 $0.source.caseInsensitiveCompare(source) == .orderedSame
+                    && $0.languageScope == languageScope
             }) else {
                 throw DictationVaultError.invalidRecord
             }
             let statement = try prepare(
                 """
                 INSERT INTO correction_rules (
-                    id, source_text, replacement_text, usage_count, created_at
-                ) VALUES (?, ?, ?, 0, ?);
+                    id, source_text, replacement_text, language_scope,
+                    usage_count, created_at
+                ) VALUES (?, ?, ?, ?, 0, ?);
                 """
             )
             defer { sqlite3_finalize(statement) }
@@ -592,9 +608,10 @@ public final class DictationVault: @unchecked Sendable {
                 at: 3,
                 in: statement
             )
+            bind(languageScope.rawValue, at: 4, in: statement)
             sqlite3_bind_double(
                 statement,
-                4,
+                5,
                 createdAt.timeIntervalSince1970
             )
             try stepDone(statement)
@@ -604,6 +621,14 @@ public final class DictationVault: @unchecked Sendable {
     public func correctionRules() throws -> [CorrectionRule] {
         try queue.sync {
             try correctionRulesLocked()
+        }
+    }
+
+    public func correctionRules(
+        applicableTo activeScope: CorrectionLanguageScope
+    ) throws -> [CorrectionRule] {
+        try correctionRules().filter {
+            $0.languageScope.applies(to: activeScope)
         }
     }
 
@@ -627,12 +652,49 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     public func applyCorrections(
-        to text: String
+        to text: String,
+        activeScope: CorrectionLanguageScope = .all
     ) throws -> CorrectionApplication {
         TranscriptCorrectionEngine.apply(
             text,
-            rules: try correctionRules()
+            rules: try correctionRules(),
+            activeScope: activeScope
         )
+    }
+
+    public func correctionSuggestions(
+        in text: String,
+        activeScope: CorrectionLanguageScope
+    ) throws -> [CorrectionSuggestion] {
+        TranscriptCorrectionEngine.suggestions(
+            in: text,
+            rules: try correctionRules(),
+            activeScope: activeScope
+        )
+    }
+
+    public func preferredVocabulary(
+        activeScope: CorrectionLanguageScope,
+        limit: Int = 12
+    ) throws -> [String] {
+        guard limit > 0 else {
+            return []
+        }
+        var seen = Set<String>()
+        return try correctionRules(applicableTo: activeScope)
+            .compactMap { rule in
+                let term = rule.replacement.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                guard !term.isEmpty,
+                      term.count <= 120,
+                      seen.insert(term.lowercased()).inserted else {
+                    return nil
+                }
+                return term
+            }
+            .prefix(limit)
+            .map(\.self)
     }
 
     public func recordCorrectionUsage(
@@ -748,8 +810,13 @@ public final class DictationVault: @unchecked Sendable {
                 "ALTER TABLE dictations ADD COLUMN persistence_suppressed INTEGER NOT NULL DEFAULT 0;"
             )
         }
-        if version < 4 {
-            try execute("PRAGMA user_version = 4;")
+        if version < 5 {
+            if try !correctionRulesHaveLanguageScope() {
+                try execute(
+                    "ALTER TABLE correction_rules ADD COLUMN language_scope TEXT NOT NULL DEFAULT 'all';"
+                )
+            }
+            try execute("PRAGMA user_version = 5;")
         }
     }
 
@@ -976,7 +1043,8 @@ public final class DictationVault: @unchecked Sendable {
     private func correctionRulesLocked() throws -> [CorrectionRule] {
         let statement = try prepare(
             """
-            SELECT id, source_text, replacement_text, usage_count, created_at
+            SELECT id, source_text, replacement_text, language_scope,
+                   usage_count, created_at
             FROM correction_rules
             ORDER BY usage_count DESC, created_at ASC;
             """
@@ -987,7 +1055,11 @@ public final class DictationVault: @unchecked Sendable {
             guard let idValue = text(at: 0, in: statement),
                   let id = UUID(uuidString: idValue),
                   let sourceData = data(at: 1, in: statement),
-                  let replacementData = data(at: 2, in: statement) else {
+                  let replacementData = data(at: 2, in: statement),
+                  let languageScopeValue = text(at: 3, in: statement),
+                  let languageScope = CorrectionLanguageScope(
+                      rawValue: languageScopeValue
+                  ) else {
                 throw DictationVaultError.invalidRecord
             }
             rules.append(
@@ -1007,11 +1079,12 @@ public final class DictationVault: @unchecked Sendable {
                             field: "replacement"
                         )
                     ),
+                    languageScope: languageScope,
                     usageCount:
-                        Int(sqlite3_column_int64(statement, 3)),
+                        Int(sqlite3_column_int64(statement, 4)),
                     createdAt: Date(
                         timeIntervalSince1970:
-                            sqlite3_column_double(statement, 4)
+                            sqlite3_column_double(statement, 5)
                     )
                 )
             )
@@ -1026,6 +1099,17 @@ public final class DictationVault: @unchecked Sendable {
             throw DictationVaultError.database(databaseMessage)
         }
         return Int(sqlite3_column_int(statement, 0))
+    }
+
+    private func correctionRulesHaveLanguageScope() throws -> Bool {
+        let statement = try prepare("PRAGMA table_info(correction_rules);")
+        defer { sqlite3_finalize(statement) }
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if text(at: 1, in: statement) == "language_scope" {
+                return true
+            }
+        }
+        return false
     }
 
     private func update(

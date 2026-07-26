@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import ZenVoiceCore
 import ZenVoiceStorage
 
 @MainActor
@@ -48,9 +49,6 @@ final class HistoryViewModel: ObservableObject {
         let query = searchText.trimmingCharacters(
             in: .whitespacesAndNewlines
         )
-        let scopedRecords = scope == .recovery
-            ? recoveryRecords
-            : records
         guard !query.isEmpty else {
             return scopedRecords
         }
@@ -66,6 +64,16 @@ final class HistoryViewModel: ObservableObject {
         records.filter {
             $0.status == .failed || $0.isPartial
         }
+    }
+
+    var standardRecords: [DictationRecord] {
+        records.filter {
+            $0.status != .failed && !$0.isPartial
+        }
+    }
+
+    var scopedRecords: [DictationRecord] {
+        scope == .recovery ? recoveryRecords : standardRecords
     }
 
     var recoveryCount: Int {
@@ -190,6 +198,73 @@ final class HistoryViewModel: ObservableObject {
         }
     }
 
+    func spellingSuggestions(
+        for record: DictationRecord
+    ) -> [CorrectionSuggestion] {
+        guard let transcript = record.finalTranscript else {
+            return []
+        }
+        do {
+            return try vaultProvider().correctionSuggestions(
+                in: transcript,
+                activeScope: correctionScope(for: record)
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    func addSpellingCorrection(
+        source: String,
+        replacement: String,
+        for record: DictationRecord
+    ) -> Bool {
+        let source = source.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard let transcript = record.finalTranscript,
+              !source.isEmpty,
+              transcript.localizedCaseInsensitiveContains(source) else {
+            errorMessage =
+                "The incorrect spelling must appear in this transcript."
+            return false
+        }
+        do {
+            try vaultProvider().addCorrectionRule(
+                source: source,
+                replacement: replacement,
+                languageScope: correctionScope(for: record)
+            )
+            errorMessage = nil
+            return true
+        } catch DictationVaultError.invalidRecord {
+            errorMessage =
+                "Use two different non-empty spellings. This spelling may already have a rule."
+            return false
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteAll(in scope: Scope) {
+        let recordsToDelete =
+            scope == .recovery ? recoveryRecords : standardRecords
+        let ids = recordsToDelete.map(\.id)
+        guard !ids.isEmpty else {
+            return
+        }
+        do {
+            _ = try vaultProvider().deleteRecords(ids: ids)
+            let deletedIDs = Set(ids)
+            records.removeAll { deletedIDs.contains($0.id) }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func deleteAll() {
         do {
             try vaultProvider().deleteAll()
@@ -208,5 +283,15 @@ final class HistoryViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func correctionScope(
+        for record: DictationRecord
+    ) -> CorrectionLanguageScope {
+        let profile = LanguageProfile.historyRetryProfile(
+            languageCode: record.language,
+            modelID: record.modelID
+        )
+        return profile == .hinglish ? .hinglish : .all
     }
 }

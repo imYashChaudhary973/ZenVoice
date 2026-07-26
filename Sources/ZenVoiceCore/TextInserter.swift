@@ -1,14 +1,19 @@
 import AppKit
+import Carbon.HIToolbox
 import ApplicationServices
 import Foundation
 
-final class TextInserter {
-    enum InsertResult {
+public final class TextInserter {
+    public enum InsertResult: Equatable {
         case pasted
         case copiedOnly
+        /// Another application has secure input switched on, so macOS refuses
+        /// to deliver the synthetic paste and the accessibility fallback found
+        /// nothing writable. The transcript is on the pasteboard.
+        case blockedBySecureInput
     }
 
-    enum ReplaceResult {
+    public enum ReplaceResult: Equatable {
         /// The expected text was found immediately before the caret and swapped
         /// for the replacement.
         case replaced
@@ -28,7 +33,9 @@ final class TextInserter {
     /// verifying the exact characters before the caret first means a failed
     /// assumption returns ``ReplaceResult/mismatch`` instead of destroying
     /// someone's work.
-    func replaceTextBeforeCaret(
+    public init() {}
+
+    public func replaceTextBeforeCaret(
         _ existing: String,
         with replacement: String
     ) -> ReplaceResult {
@@ -105,7 +112,96 @@ final class TextInserter {
         return .replaced
     }
 
-    func insert(_ text: String) -> InsertResult {
+    /// Whether some application has switched on secure input.
+    ///
+    /// While it is on, macOS blocks synthetic keyboard events system-wide, so
+    /// the Command-V below is swallowed and nothing arrives. Chromium-based
+    /// browsers and Electron apps are the usual cause — they enable it around
+    /// password fields and frequently leave it on — which is why dictation
+    /// appears to stop working in exactly those apps while the recorder, the
+    /// hotkey and the transcript all behave normally.
+    ///
+    /// The hotkey keeps working throughout because it is a Carbon hot key
+    /// rather than an event tap, which is why the failure looks like "the text
+    /// vanished" rather than "the app is dead".
+    public static var isSecureInputEnabled: Bool {
+        IsSecureEventInputEnabled()
+    }
+
+    /// Whether an accessibility write is safe for the focused element.
+    ///
+    /// Secure input normally means a password field has focus. A secure text
+    /// field must never receive a transcript, and a generic text field without
+    /// a subrole is ambiguous while secure input is active, so this fails
+    /// closed. Text areas and explicitly identified non-secure text controls
+    /// remain eligible for the best-effort fallback.
+    public static func allowsAccessibilityInsertion(
+        role: String?,
+        subrole: String?
+    ) -> Bool {
+        guard subrole != kAXSecureTextFieldSubrole as String else {
+            return false
+        }
+        if role == kAXTextAreaRole || role == kAXComboBoxRole {
+            return true
+        }
+        if role == kAXTextFieldRole {
+            return subrole != nil
+        }
+        return false
+    }
+
+    /// Writes text into the focused control through the accessibility API.
+    ///
+    /// The escape hatch from secure input: it blocks *synthetic events*, not
+    /// accessibility writes, so this still lands when Command-V cannot. Not
+    /// the default path because plenty of controls — Chromium's own text
+    /// areas among them — expose no writable selected-text attribute, and
+    /// pasting is what works everywhere else.
+    private func insertViaAccessibility(_ text: String) -> Bool {
+        guard AXIsProcessTrusted() else { return false }
+        var focusedValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            AXUIElementCreateSystemWide(),
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        ) == .success,
+        CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
+            return false
+        }
+        // swiftlint:disable:next force_cast
+        let element = focusedValue as! AXUIElement
+        var roleValue: CFTypeRef?
+        let roleStatus = AXUIElementCopyAttributeValue(
+            element,
+            kAXRoleAttribute as CFString,
+            &roleValue
+        )
+        var subroleValue: CFTypeRef?
+        let subroleStatus = AXUIElementCopyAttributeValue(
+            element,
+            kAXSubroleAttribute as CFString,
+            &subroleValue
+        )
+        let role = roleStatus == .success ? roleValue as? String : nil
+        let subrole =
+            subroleStatus == .success ? subroleValue as? String : nil
+        guard Self.allowsAccessibilityInsertion(
+            role: role,
+            subrole: subrole
+        ) else {
+            return false
+        }
+        // Writing the selected text replaces the selection, or inserts at the
+        // caret when the selection is empty — the same thing a paste does.
+        return AXUIElementSetAttributeValue(
+            element,
+            kAXSelectedTextAttribute as CFString,
+            text as CFTypeRef
+        ) == .success
+    }
+
+    public func insert(_ text: String) -> InsertResult {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -113,6 +209,15 @@ final class TextInserter {
         guard AXIsProcessTrusted() else {
             requestAccessibilityPermission()
             return .copiedOnly
+        }
+
+        // Secure input swallows the paste silently, so try accessibility
+        // first rather than posting an event that cannot arrive. Reporting
+        // `.pasted` here was the actual defect: the transcript was on the
+        // pasteboard, nothing reached the app, and ZenVoice said it had
+        // worked.
+        if Self.isSecureInputEnabled {
+            return insertViaAccessibility(text) ? .pasted : .blockedBySecureInput
         }
 
         let source = CGEventSource(stateID: .hidSystemState)
@@ -140,7 +245,7 @@ final class TextInserter {
         return .pasted
     }
 
-    func requestAccessibilityPermission() {
+    public func requestAccessibilityPermission() {
         let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let options = [promptKey: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)

@@ -1,6 +1,5 @@
 import Foundation
 import ZenVoiceCore
-import ZenVoiceRefinementRuntime
 import ZenVoiceRuntime
 
 // ZenVoiceAccuracyChecks — measures transcription accuracy instead of guessing
@@ -25,6 +24,10 @@ import ZenVoiceRuntime
 //   ZENVOICE_ACCURACY_CLEAN    set to 1 to measure studio-clean audio instead
 //   ZENVOICE_ACCURACY_FIXTURES cache directory for rendered audio
 //   ZENVOICE_ACCURACY_VERBOSE  set to 1 to print every hypothesis
+//   ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS
+//                               cap synthetic clips; real/long-form stay intact
+//   ZENVOICE_ACCURACY_SMOKE    decode one real recording for fast PR coverage
+//   ZENVOICE_SCORING_ONLY      validate deterministic scoring without a model
 
 private let environment = ProcessInfo.processInfo.environment
 
@@ -37,7 +40,7 @@ private func flag(_ key: String) -> Bool {
 }
 
 private func report(_ message: String = "") {
-    print(message)
+    FileHandle.standardOutput.write(Data((message + "\n").utf8))
 }
 
 private func fail(_ message: String) -> Never {
@@ -48,8 +51,107 @@ private func fail(_ message: String) -> Never {
 }
 
 private func skip(_ message: String) -> Never {
+    if flag("ZENVOICE_ACCURACY_REQUIRED") {
+        fail(message)
+    }
     print("ZenVoice accuracy checks skipped: \(message)")
     exit(0)
+}
+
+private func validateScoring() {
+    let emptyTranscript = Scoring.wordErrorRate(
+        reference: "one two three",
+        hypothesis: ""
+    )
+    guard emptyTranscript.distance == 3,
+          emptyTranscript.referenceWords == 3,
+          emptyTranscript.deletions == 3,
+          emptyTranscript.insertions == 0 else {
+        fail("empty-transcript scoring is incorrect")
+    }
+
+    let mixedErrors = Scoring.wordErrorRate(
+        reference: "one two three",
+        hypothesis: "one four three five"
+    )
+    guard mixedErrors.distance == 2,
+          mixedErrors.referenceWords == 3,
+          mixedErrors.substitutions == 1,
+          mixedErrors.deletions == 0,
+          mixedErrors.insertions == 1 else {
+        fail("mixed-error scoring is incorrect")
+    }
+}
+
+private func discoverConfiguration() -> ZenVoiceConfiguration {
+    do {
+        let overrideCapability = environment["ZENVOICE_MODEL_PATH"]
+            .flatMap {
+                VerifiedModelCatalog.model(
+                    filename: URL(fileURLWithPath: $0).lastPathComponent
+                )?.languageCapability
+            }
+        return try ZenVoiceConfiguration.discover(
+            languageProfile:
+                overrideCapability == .hinglish ? .hinglish : .english
+        )
+    } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
+        skip(
+            "install a verified model in Models or set ZENVOICE_MODEL_PATH."
+        )
+    } catch {
+        fail(error.localizedDescription)
+    }
+}
+
+private func runRealSpeechSmoke() -> Bool {
+    guard let corpusPath = environment["ZENVOICE_ACCURACY_CORPUS"] else {
+        fail("ZENVOICE_ACCURACY_SMOKE requires ZENVOICE_ACCURACY_CORPUS")
+    }
+    let corpus = (
+        try? Fixtures.corpus(at: URL(fileURLWithPath: corpusPath))
+    ) ?? []
+    guard let clip = corpus.first else {
+        fail("real-speech smoke corpus is empty at \(corpusPath)")
+    }
+    let samples = (try? Fixtures.samples(at: clip.url)) ?? []
+    guard !samples.isEmpty else {
+        fail("real-speech smoke audio could not be read: \(clip.name)")
+    }
+
+    let configuration = discoverConfiguration()
+    let transcriber = WhisperTranscriber(
+        configuration: configuration,
+        isReproducible: true
+    )
+    let startedAt = Date()
+    let transcript = (
+        try? transcriber.transcribe(
+            samples: samples,
+            languageProfile: .english
+        )
+    )?.finalTranscript ?? ""
+    let elapsed = Date().timeIntervalSince(startedAt)
+    guard !transcript.isEmpty else {
+        fail("real-speech smoke produced no transcript for \(clip.name)")
+    }
+
+    let score = Scoring.wordErrorRate(
+        reference: clip.sentence.text,
+        hypothesis: transcript
+    )
+    report(
+        "real-speech smoke — \(clip.name): \(score.percentage) WER, "
+            + String(format: "%.2fs decode", elapsed)
+    )
+    guard score.rate <= 0.20 else {
+        fail(
+            "real-speech smoke word error rate \(score.percentage) "
+                + "exceeds the 20% ceiling"
+        )
+    }
+    report("ZenVoiceAccuracyChecks smoke passed.")
+    return true
 }
 
 private struct Totals {
@@ -70,6 +172,15 @@ private struct StageOutcome {
     var changed = 0
     var clipCount = 0
     var seconds: TimeInterval = 0
+    /// Per-clip median refine time, so the reported figure is a typical
+    /// dictation rather than a sum that a single slow sample can dominate.
+    var durations: [TimeInterval] = []
+
+    /// Median across clips, in milliseconds.
+    var medianMilliseconds: Double {
+        guard !durations.isEmpty else { return 0 }
+        return durations.sorted()[durations.count / 2] * 1_000
+    }
     /// Protected tokens altered, as "clip: token before→after".
     var violations: [String] = []
 
@@ -89,19 +200,185 @@ private extension String {
 /// Runs the measurement in its own scope so the Whisper context is released
 /// before the process exits. Leaving it alive trips a Metal teardown assertion
 /// inside ggml during static destruction.
-private func measure() -> Bool {
-    let configuration: ZenVoiceConfiguration
-    do {
-        configuration = try ZenVoiceConfiguration.discover(
-            languageProfile: .english
-        )
-    } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
-        skip(
-            "install a verified model in Models or set ZENVOICE_MODEL_PATH."
-        )
-    } catch {
-        fail(error.localizedDescription)
+
+/// Prints the segment timings Whisper reports, and the paragraph structure
+/// they imply. Verifies the timestamps survive `no_timestamps`, which
+/// suppresses timestamp *tokens* but is not documented to affect segment
+/// bounds.
+private func probeSpokenStructure() -> Bool {
+    guard let configuration = try? ZenVoiceConfiguration.discover(
+        languageProfile: .english
+    ) else {
+        skip("no speech model available.")
     }
+    let directory = environment["ZENVOICE_ACCURACY_FIXTURES"]
+        .map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenvoice-accuracy-fixtures")
+    guard let clips = try? Fixtures.render(into: directory),
+          let clip = clips.first else {
+        skip("fixtures unavailable.")
+    }
+    let transcriber = WhisperTranscriber(
+        configuration: configuration,
+        isReproducible: true
+    )
+    let samples = Fixtures.degraded(
+        (try? Fixtures.samples(at: clip.url)) ?? [],
+        gain: 0.35,
+        noise: 0.004
+    )
+    guard let result = try? transcriber.transcribe(
+        samples: samples,
+        languageProfile: .english
+    ) else {
+        fail("could not transcribe \(clip.name)")
+    }
+    report()
+    report("spoken structure — \(clip.name)")
+    report("  segments: \(result.segments.count)")
+    for segment in result.segments {
+        report(
+            String(
+                format: "  %6.2f–%6.2f  %@",
+                segment.startSeconds,
+                segment.endSeconds,
+                segment.text.trimmingCharacters(in: .whitespaces)
+            )
+        )
+    }
+    let silences = SpokenStructure.silences(in: samples)
+    report(
+        "  silences: " + silences.map {
+            String(format: "%.2f–%.2f", $0.start, $0.end)
+        }.joined(separator: ", ")
+    )
+    report()
+    report("  structured:")
+    report(
+        SpokenStructure.text(from: result.segments, silences: silences)
+    )
+    report()
+    return true
+}
+
+/// Scores refinement against human-annotated disfluent/fluent pairs.
+///
+/// Synthetic fixtures could not settle whether refinement generalises — the
+/// whole apparent gain of one approach came from a single one of them.
+/// Refinement is a text stage, so validating it needs no audio at all, only
+/// pairs of what was said and what was meant. A published corpus supplies
+/// thousands, annotated by people rather than by a text-to-speech voice.
+///
+/// Format: one pair per line, disfluent and fluent separated by a tab.
+///
+/// Two cohorts fall out of the same file. The disfluent side is where
+/// refinement must help; the fluent side needs no change at all, so any edit
+/// there that alters words is damage.
+private func evaluateTextCorpus(path: String) -> Bool {
+    guard let contents = try? String(contentsOfFile: path, encoding: .utf8)
+    else {
+        fail("could not read text corpus at \(path)")
+    }
+    let pairs = contents
+        .split(separator: "\n")
+        .compactMap { line -> (disfluent: String, fluent: String)? in
+            let parts = line.components(separatedBy: "\t")
+            guard parts.count >= 2,
+                  !parts[0].isEmpty,
+                  !parts[1].isEmpty else { return nil }
+            return (parts[0], parts[1])
+        }
+    guard !pairs.isEmpty else {
+        fail("no usable pairs in \(path)")
+    }
+
+    let mode = environment["ZENVOICE_TEXTEVAL_MODE"] == "agentPrompt"
+        ? InstantRefineMode.agentPrompt
+        : .clean
+
+    var rawTotal = Scoring.Result.zero
+    var refinedTotal = Scoring.Result.zero
+    var damaged = 0
+    var cosmetic = 0
+    var examples: [String] = []
+
+    for pair in pairs {
+        rawTotal = rawTotal + Scoring.wordErrorRate(
+            reference: pair.fluent,
+            hypothesis: pair.disfluent
+        )
+        let refined = InstantRefineEngine().refine(
+            pair.disfluent,
+            mode: mode
+        ).text
+        refinedTotal = refinedTotal + Scoring.wordErrorRate(
+            reference: pair.fluent,
+            hypothesis: refined
+        )
+
+        // Already-fluent text needs no editing, so a change there is damage —
+        // unless it only recased or respaced, which is the feature working.
+        let touched = InstantRefineEngine().refine(
+            pair.fluent,
+            mode: mode
+        ).text
+        if touched != pair.fluent {
+            if Scoring.normalize(touched) == Scoring.normalize(pair.fluent) {
+                cosmetic += 1
+            } else {
+                damaged += 1
+                if examples.count < 8 {
+                    examples.append(
+                        "    \u{201C}\(pair.fluent)\u{201D}\n"
+                            + "      \u{2192} \u{201C}\(touched)\u{201D}"
+                    )
+                }
+            }
+        }
+    }
+
+    report()
+    report(
+        "text corpus — \(URL(fileURLWithPath: path).lastPathComponent)"
+            + " (\(pairs.count) human-annotated pairs)"
+    )
+    report("  " + String(repeating: "-", count: 62))
+    report(
+        "  "
+            + "disfluent input".padding(
+                toLength: 24, withPad: " ", startingAt: 0
+            )
+            + rawTotal.percentage.leftPadded(to: 7)
+    )
+    report(
+        "  "
+            + "after \(mode.displayName.lowercased())".padding(
+                toLength: 24, withPad: " ", startingAt: 0
+            )
+            + refinedTotal.percentage.leftPadded(to: 7)
+            + String(
+                format: "%+9.1f pts   %4d damaged",
+                (refinedTotal.rate - rawTotal.rate) * 100,
+                damaged
+            )
+    )
+    report()
+    report(
+        "  \(cosmetic) fluent sentences recased or respaced only"
+            + " (not damage)"
+    )
+    if !examples.isEmpty {
+        report()
+        report("  refinement altered words in already-fluent text:")
+        examples.forEach { report($0) }
+    }
+    report()
+    return true
+}
+
+private func measure() -> Bool {
+    let configuration = discoverConfiguration()
 
     let fixtureDirectory = environment["ZENVOICE_ACCURACY_FIXTURES"]
         .map { URL(fileURLWithPath: $0) }
@@ -111,13 +388,22 @@ private func measure() -> Bool {
                 isDirectory: true
             )
 
-    let clips: [Fixtures.Clip]
+    let renderedClips: [Fixtures.Clip]
     do {
-        clips = try Fixtures.render(into: fixtureDirectory)
+        renderedClips = try Fixtures.render(into: fixtureDirectory)
     } catch {
         // A machine without usable speech synthesis cannot run the harness,
         // but that is an environment gap rather than an accuracy regression.
         skip(error.localizedDescription)
+    }
+    let syntheticClipLimit = environment[
+        "ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS"
+    ].flatMap(Int.init)
+    let clips: [Fixtures.Clip]
+    if let syntheticClipLimit, syntheticClipLimit > 0 {
+        clips = Array(renderedClips.prefix(syntheticClipLimit))
+    } else {
+        clips = renderedClips
     }
 
     let isClean = flag("ZENVOICE_ACCURACY_CLEAN")
@@ -125,13 +411,52 @@ private func measure() -> Bool {
     let gain = isClean ? 1 : value("ZENVOICE_ACCURACY_GAIN", default: 0.35)
     let noise = isClean ? 0 : value("ZENVOICE_ACCURACY_NOISE", default: 0.004)
 
-    let transcriber = WhisperTranscriber(configuration: configuration)
+    // Pinned decode by default. The harness exists to detect changes, and it
+    // cannot do that while its own output moves by more than a point of word
+    // error rate between identical runs. Set ZENVOICE_ACCURACY_SAMPLED=1 to
+    // measure the shipping configuration, temperature fallback included.
+    let isReproducible = !flag("ZENVOICE_ACCURACY_SAMPLED")
+    // Refine repeats per clip, for the latency median. Three is enough to
+    // discard a single scheduling stall without tripling a full run.
+    let latencyRepeats = Int(
+        environment["ZENVOICE_REFINE_REPEATS"].flatMap(Int.init) ?? 3
+    )
+    let transcriber = WhisperTranscriber(
+        configuration: configuration,
+        isReproducible: isReproducible
+    )
 
     func decode(_ samples: [Float]) -> String {
         (
             try? transcriber.transcribe(
                 samples: samples,
                 languageProfile: .english
+            )
+        )?.finalTranscript ?? ""
+    }
+
+    // A real-speech corpus need not be English. ZENVOICE_ACCURACY_CORPUS_LANGUAGE
+    // decodes it in its own language instead, which is the only way to get a
+    // Hinglish baseline — and .en models cannot do it at all, so the model has
+    // to be multilingual too.
+    let corpusProfile = environment["ZENVOICE_ACCURACY_CORPUS_LANGUAGE"]
+        .map { code -> LanguageProfile in
+            // "hinglish" is a profile rather than a language code: Hindi in,
+            // Latin script out. A specialist model emits that natively, so
+            // asking for it is the only way to measure one honestly.
+            code == "hinglish"
+                ? .hinglish
+                : LanguageProfile(
+                    inputLanguageCode: code,
+                    outputMode: .spokenLanguage
+                )
+        } ?? .english
+
+    func decodeCorpus(_ samples: [Float]) -> String {
+        (
+            try? transcriber.transcribe(
+                samples: samples,
+                languageProfile: corpusProfile
             )
         )?.finalTranscript ?? ""
     }
@@ -150,6 +475,8 @@ private func measure() -> Bool {
     var totals = Totals()
     var emptyDecodes: [String] = []
     var refinementFailures: [String] = []
+    var realSpeechOutcome:
+        (whole: Scoring.Result, segmented: Scoring.Result)?
 
     for clip in clips {
         let samples = Fixtures.degraded(
@@ -245,31 +572,27 @@ private func measure() -> Bool {
     // content creeps in, so each stage is scored against the same reference the
     // raw transcript is.
     if !flag("ZENVOICE_ACCURACY_SKIP_REFINE") {
-        let coordinator = LocalRefinementCoordinator()
-        // Prefer an explicit path, otherwise use whichever verified refinement
-        // model is actually installed.
-        let installedRefinementModel = VerifiedRefinementModelCatalog.models
-            .compactMap { model -> URL? in
-                guard let url = try? VerifiedRefinementModelCatalog
-                    .installedURL(for: model),
-                    FileManager.default.fileExists(atPath: url.path) else {
-                    return nil
-                }
-                return url
-            }
-            .first
-        let localModelURL = environment["ZENVOICE_REFINEMENT_MODEL_PATH"]
-            .map { URL(fileURLWithPath: $0) }
-            ?? installedRefinementModel
-        coordinator.update(modelURL: localModelURL)
 
-        let stages: [(String, InstantRefineMode)] = localModelURL == nil
-            ? [("clean", .clean), ("agent prompt", .agentPrompt)]
-            : [
-                ("clean", .clean),
-                ("agent prompt", .agentPrompt),
-                ("local model", .localModel)
-            ]
+        // Stages are closures rather than modes, so the lab strategies can be
+        // measured beside the shipping ones on identical transcripts.
+        // (transcript, reference) -> refined
+        typealias Stage = (String, String) -> (text: String, rejected: Bool)
+        func mode(_ mode: InstantRefineMode) -> Stage {
+            { transcript, _ in
+                let result = TranscriptRefinement.refine(
+                    transcript,
+                    mode: mode,
+                    languageCode: "en"
+                )
+                return (result.text, result.wasRejected)
+            }
+        }
+
+        let stages: [(String, Stage)] = [
+            ("clean", mode(.clean)),
+            ("agent prompt", mode(.agentPrompt))
+        ]
+
 
         // Two cohorts, scored separately.
         //
@@ -308,9 +631,6 @@ private func measure() -> Bool {
             )
         }
 
-        if localModelURL == nil {
-            report("  local model stage skipped — no refinement model installed")
-        }
 
         var cohortRaw: [String: Scoring.Result] = [:]
         var cohortStages: [String: [String: StageOutcome]] = [:]
@@ -336,17 +656,28 @@ private func measure() -> Bool {
                     reference: clip.sentence.text,
                     hypothesis: raw
                 )
-                for (name, mode) in stages {
+                for (name, stage) in stages {
                     var outcome = outcomes[name] ?? StageOutcome()
-                    let started = Date()
-                    let result = coordinator.refine(
-                        raw,
-                        mode: mode,
-                        languageCode: "en"
+                    // Repeat and take the median. A single sample was moving
+                    // by 3x between identical runs, which is larger than any
+                    // effect worth measuring; the transcript is fixed by this
+                    // point, so the repeats differ only in machine load.
+                    var samples: [TimeInterval] = []
+                    var refined = raw
+                    var wasRejected = false
+                    for _ in 0..<max(1, latencyRepeats) {
+                        let attemptStart = Date()
+                        let output = stage(raw, clip.sentence.text)
+                        refined = output.text
+                        wasRejected = output.rejected
+                        samples.append(
+                            Date().timeIntervalSince(attemptStart)
+                        )
+                    }
+                    outcome.durations.append(
+                        samples.sorted()[samples.count / 2]
                     )
-                    outcome.seconds += Date().timeIntervalSince(started)
-                    let refined = result.text
-                    if result.wasRejected { outcome.rejections += 1 }
+                    if wasRejected { outcome.rejections += 1 }
                     if refined != raw {
                         outcome.changed += 1
                         clipChanged = true
@@ -416,7 +747,10 @@ private func measure() -> Bool {
                             outcome.rejections,
                             outcome.rejectionRate * 100
                         )
-                        + String(format: "%7.0f ms", outcome.seconds * 1_000)
+                        + String(
+                            format: "%6.0f ms/clip",
+                            outcome.medianMilliseconds
+                        )
                 )
             }
             report()
@@ -665,6 +999,49 @@ private func measure() -> Bool {
     // actually makes Hinglish unusable. This asks the question that can be
     // answered without a canonical spelling: did the English words come back as
     // English?
+    // ---- language routing probe ----
+    //
+    // Answers one question: could ZenVoice send English dictation to a Whisper
+    // model and Hinglish dictation to a Hinglish model, automatically? That
+    // only works if Whisper's own language detector can tell the two apart.
+    // Hinglish is roughly half English content words, so it is genuinely
+    // unclear which way it lands — and a Hinglish clip misrouted to Whisper
+    // gets the `kampyutara` failure the routing was meant to avoid.
+    //
+    // Opt-in: ZENVOICE_PROBE_ROUTING=1.
+    if flag("ZENVOICE_PROBE_ROUTING"), Fixtures.isHindiVoiceInstalled() {
+        report("  language routing probe (can English and Hinglish be told apart?)")
+        report("  " + String(repeating: "-", count: 60))
+        let englishClips = clips.prefix(4)
+        let hinglishClips =
+            (try? Fixtures.renderHinglish(into: fixtureDirectory)) ?? []
+        for (label, group) in [
+            ("english", Array(englishClips)),
+            ("hinglish", hinglishClips)
+        ] {
+            for clip in group {
+                let samples = Fixtures.degraded(
+                    (try? Fixtures.samples(at: clip.url)) ?? [],
+                    gain: gain,
+                    noise: noise
+                )
+                guard !samples.isEmpty,
+                      let detected = try? transcriber.detectedLanguage(
+                        samples: samples
+                      ) else { continue }
+                report(
+                    "  "
+                        + "\(label)/\(clip.name)".padding(
+                            toLength: 34, withPad: " ", startingAt: 0
+                        )
+                        + detected.code.leftPadded(to: 6)
+                        + String(format: "  %.2f", detected.probability)
+                )
+            }
+        }
+        report()
+    }
+
     // A metric that always returned zero would produce exactly the baseline
     // reported below, so it has to demonstrate it can tell the two apart before
     // its verdict on real audio means anything.
@@ -686,7 +1063,10 @@ private func measure() -> Bool {
     }
 
     var hinglishLoanwords = Scoring.LoanwordResult.zero
-    let hinglishShouldRun = configuration.modelLanguageCapability == .multilingual
+    // A Hinglish-native model is not `.multilingual`, and it is the one model
+    // this section most needs to run against.
+    let hinglishShouldRun = [.multilingual, .hinglish]
+        .contains(configuration.modelLanguageCapability)
         && Fixtures.isHindiVoiceInstalled()
     if hinglishShouldRun,
        let hinglishClips = try? Fixtures.renderHinglish(into: fixtureDirectory),
@@ -711,6 +1091,11 @@ private func measure() -> Bool {
                 expected: clip.sentence.loanwords ?? [],
                 hypothesis: latin
             )
+            let unexpectedScript = latin.unicodeScalars.contains {
+                $0.properties.isAlphabetic
+                    && !$0.isASCII
+                    && !($0.properties.name ?? "").contains("LATIN")
+            }
             hinglishLoanwords = hinglishLoanwords + loanwords
 
             report(
@@ -728,6 +1113,12 @@ private func measure() -> Bool {
             if latin.isEmpty {
                 hindiFailures.append(
                     "\(clip.name) produced no Hinglish transcript"
+                )
+            }
+            if unexpectedScript {
+                hindiFailures.append(
+                    "\(clip.name) left a non-Latin script in Hinglish output: "
+                        + latin
                 )
             }
         }
@@ -754,6 +1145,26 @@ private func measure() -> Bool {
         )
     }
 
+    // The floor only applies to a model that claims Hinglish. A general
+    // multilingual model scores zero here by construction — it writes English
+    // words in Devanagari and the romanizer cannot recover them — and that is
+    // the defect a Hinglish model exists to fix, not a regression to fail on.
+    //
+    // Whisper-Hindi2Hinglish-Apex measures 21/26. The floor sits at 18 so a
+    // single clip of drift does not fail a run, while a collapse back towards
+    // the 0/26 baseline — the failure this whole metric was built to catch —
+    // does.
+    if configuration.modelLanguageCapability == .hinglish,
+       hinglishLoanwords.total > 0,
+       hinglishLoanwords.preserved < Scoring.hinglishLoanwordFloor {
+        hindiFailures.append(
+            "Hinglish loanword preservation fell to "
+                + "\(hinglishLoanwords.preserved)/\(hinglishLoanwords.total), "
+                + "below the floor of \(Scoring.hinglishLoanwordFloor) "
+                + "(lost: \(hinglishLoanwords.lost.joined(separator: ", ")))"
+        )
+    }
+
     // ---- real speech ----
     //
     // Optional operator-supplied recordings. Every synthetic number above is
@@ -770,6 +1181,11 @@ private func measure() -> Bool {
             report("  " + String(repeating: "-", count: 60))
             var corpusWhole = Scoring.Result.zero
             var corpusSegmented = Scoring.Result.zero
+            var corpusSeconds: TimeInterval = 0
+            var corpusAudioSeconds: TimeInterval = 0
+            var corpusLoanwords = 0
+            var corpusLoanwordsKept = 0
+            var decodedCorpusClips = 0
             for clip in corpus {
                 // Real recordings arrive at whatever level they were captured
                 // at, so the synthetic degradation is deliberately not applied.
@@ -778,10 +1194,14 @@ private func measure() -> Bool {
                     report("  \(clip.name): could not read audio")
                     continue
                 }
-                let whole = decode(samples)
+                decodedCorpusClips += 1
+                let decodeStart = Date()
+                let whole = decodeCorpus(samples)
+                corpusSeconds += Date().timeIntervalSince(decodeStart)
+                corpusAudioSeconds += Double(samples.count) / 16_000
                 let segments = LiveSegmentation.segments(of: samples)
                 let segmented = segments
-                    .map { decode(Array($0)) }
+                    .map { decodeCorpus(Array($0)) }
                     .filter { !$0.isEmpty }
                     .joined(separator: " ")
                 let wholeScore = Scoring.wordErrorRate(
@@ -807,6 +1227,25 @@ private func measure() -> Bool {
                         )
                         + "  \(segments.count) seg"
                 )
+                // Loanword preservation, for code-switched references.
+                //
+                // Word error rate is the wrong instrument for Hinglish: a
+                // reference writes Hindi in Devanagari and English in Latin,
+                // and a model that romanizes the Hindi scores terribly while
+                // having heard every word correctly. What can be judged is
+                // whether the English words came back as English — "document"
+                // rather than डोक्यूमेंट — which is the difference between
+                // usable Hinglish and a phonetic transliteration of it.
+                let loanwords = Scoring.normalize(clip.sentence.text)
+                    .filter { word in
+                        word.count >= 3
+                            && word.allSatisfy { $0.isASCII && $0.isLetter }
+                    }
+                if !loanwords.isEmpty {
+                    let heard = Set(Scoring.normalize(whole))
+                    corpusLoanwords += loanwords.count
+                    corpusLoanwordsKept += loanwords.filter(heard.contains).count
+                }
                 if isVerbose {
                     report("      whole:    \(whole)")
                     report("      segments: \(segmented)")
@@ -824,7 +1263,40 @@ private func measure() -> Bool {
                         (corpusSegmented.rate - corpusWhole.rate) * 100
                     )
             )
+            if corpusLoanwords > 0 {
+                report(
+                    String(
+                        format:
+                            "  loanwords kept as English: %d/%d (%.0f%%)",
+                        corpusLoanwordsKept,
+                        corpusLoanwords,
+                        100 * Double(corpusLoanwordsKept)
+                            / Double(corpusLoanwords)
+                    )
+                )
+            }
+            // Reported as a multiple of the audio's own duration, because
+            // that is what decides whether a model is usable: a dictation
+            // finishes in its length divided by this.
+            report(
+                String(
+                    format:
+                        "  real-speech decode %.2f s for %.0f s of audio"
+                        + " (%.0fx real time)",
+                    corpusSeconds,
+                    corpusAudioSeconds,
+                    corpusSeconds > 0
+                        ? corpusAudioSeconds / corpusSeconds
+                        : 0
+                )
+            )
             report()
+            if decodedCorpusClips > 0 {
+                realSpeechOutcome = (
+                    whole: corpusWhole,
+                    segmented: corpusSegmented
+                )
+            }
         }
     }
 
@@ -881,17 +1353,75 @@ private func measure() -> Bool {
         )
     }
 
-    report(
-        "ZenVoiceAccuracyChecks passed "
-            + "(whole \(totals.whole.percentage), "
-            + "segmented \(totals.segmented.percentage), "
-            + "segmentation cost "
-            + String(
-                format: "%.1f pts).",
-                (totals.segmented.rate - totals.whole.rate) * 100
+    if flag("ZENVOICE_ACCURACY_REQUIRE_REAL") {
+        guard let realSpeechOutcome else {
+            fail(
+                "a real-speech corpus is required but no recording was decoded"
             )
-    )
+        }
+        guard realSpeechOutcome.whole.rate <= 0.10 else {
+            fail(
+                "real-speech word error rate "
+                    + realSpeechOutcome.whole.percentage
+                    + " exceeds the 10% ceiling"
+            )
+        }
+        let realSegmentationCost =
+            realSpeechOutcome.segmented.rate - realSpeechOutcome.whole.rate
+        guard realSegmentationCost <= 0.05 else {
+            fail(
+                "real-speech segmentation cost "
+                    + String(format: "%.1f pts", realSegmentationCost * 100)
+                    + " exceeds the 5-point ceiling"
+            )
+        }
+    }
+
+    if let realSpeechOutcome {
+        report(
+            "ZenVoiceAccuracyChecks passed "
+                + "(real speech: whole "
+                + realSpeechOutcome.whole.percentage
+                + ", segmented "
+                + realSpeechOutcome.segmented.percentage
+                + ", segmentation cost "
+                + String(
+                    format: "%.1f pts).",
+                    (
+                        realSpeechOutcome.segmented.rate
+                            - realSpeechOutcome.whole.rate
+                    ) * 100
+                )
+        )
+    } else {
+        report(
+            "ZenVoiceAccuracyChecks passed "
+                + "(synthetic: whole \(totals.whole.percentage), "
+                + "segmented \(totals.segmented.percentage), "
+                + "segmentation cost "
+                + String(
+                    format: "%.1f pts).",
+                    (totals.segmented.rate - totals.whole.rate) * 100
+                )
+        )
+    }
     return true
 }
 
-exit(measure() ? 0 : 1)
+// ZENVOICE_REFINE_PROBE=1 answers the scaling question on its own, in seconds
+// rather than the minutes a full transcription pass costs.
+validateScoring()
+let outcome: Bool
+if flag("ZENVOICE_SCORING_ONLY") {
+    report("ZenVoiceAccuracyChecks deterministic scoring passed.")
+    outcome = true
+} else if flag("ZENVOICE_ACCURACY_SMOKE") {
+    outcome = runRealSpeechSmoke()
+} else if flag("ZENVOICE_STRUCTURE_PROBE") {
+    outcome = probeSpokenStructure()
+} else if let corpus = environment["ZENVOICE_REFINE_TEXTEVAL"] {
+    outcome = evaluateTextCorpus(path: corpus)
+} else {
+    outcome = measure()
+}
+exit(outcome ? 0 : 1)
