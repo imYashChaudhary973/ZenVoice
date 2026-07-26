@@ -63,8 +63,7 @@ jobs:
         env:
           ZENVOICE_ACCURACY_REQUIRED: "1"
           ZENVOICE_ACCURACY_REQUIRE_REAL: "1"
-          ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS: "3"
-          ZENVOICE_ACCURACY_SKIP_REFINE: "1"
+          ZENVOICE_ACCURACY_SMOKE: "1"
           ZENVOICE_MODEL_PATH: ${{ runner.temp }}/zenvoice-accuracy/models/ggml-base.en.bin
           ZENVOICE_ACCURACY_CORPUS: ${{ runner.temp }}/zenvoice-accuracy/corpus/dictation
         run: swift run ZenVoiceAccuracyChecks

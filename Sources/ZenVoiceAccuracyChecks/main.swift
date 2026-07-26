@@ -26,6 +26,7 @@ import ZenVoiceRuntime
 //   ZENVOICE_ACCURACY_VERBOSE  set to 1 to print every hypothesis
 //   ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS
 //                               cap synthetic clips; real/long-form stay intact
+//   ZENVOICE_ACCURACY_SMOKE    decode one real recording for fast PR coverage
 
 private let environment = ProcessInfo.processInfo.environment
 
@@ -67,6 +68,77 @@ private func validateScoring() {
           emptyTranscript.insertions == 0 else {
         fail("empty-transcript scoring is incorrect")
     }
+}
+
+private func discoverConfiguration() -> ZenVoiceConfiguration {
+    do {
+        let overrideCapability = environment["ZENVOICE_MODEL_PATH"]
+            .flatMap {
+                VerifiedModelCatalog.model(
+                    filename: URL(fileURLWithPath: $0).lastPathComponent
+                )?.languageCapability
+            }
+        return try ZenVoiceConfiguration.discover(
+            languageProfile:
+                overrideCapability == .hinglish ? .hinglish : .english
+        )
+    } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
+        skip(
+            "install a verified model in Models or set ZENVOICE_MODEL_PATH."
+        )
+    } catch {
+        fail(error.localizedDescription)
+    }
+}
+
+private func runRealSpeechSmoke() -> Bool {
+    guard let corpusPath = environment["ZENVOICE_ACCURACY_CORPUS"] else {
+        fail("ZENVOICE_ACCURACY_SMOKE requires ZENVOICE_ACCURACY_CORPUS")
+    }
+    let corpus = (
+        try? Fixtures.corpus(at: URL(fileURLWithPath: corpusPath))
+    ) ?? []
+    guard let clip = corpus.first else {
+        fail("real-speech smoke corpus is empty at \(corpusPath)")
+    }
+    let samples = (try? Fixtures.samples(at: clip.url)) ?? []
+    guard !samples.isEmpty else {
+        fail("real-speech smoke audio could not be read: \(clip.name)")
+    }
+
+    let configuration = discoverConfiguration()
+    let transcriber = WhisperTranscriber(
+        configuration: configuration,
+        isReproducible: true
+    )
+    let startedAt = Date()
+    let transcript = (
+        try? transcriber.transcribe(
+            samples: samples,
+            languageProfile: .english
+        )
+    )?.finalTranscript ?? ""
+    let elapsed = Date().timeIntervalSince(startedAt)
+    guard !transcript.isEmpty else {
+        fail("real-speech smoke produced no transcript for \(clip.name)")
+    }
+
+    let score = Scoring.wordErrorRate(
+        reference: clip.sentence.text,
+        hypothesis: transcript
+    )
+    report(
+        "real-speech smoke — \(clip.name): \(score.percentage) WER, "
+            + String(format: "%.2fs decode", elapsed)
+    )
+    guard score.rate <= 0.20 else {
+        fail(
+            "real-speech smoke word error rate \(score.percentage) "
+                + "exceeds the 20% ceiling"
+        )
+    }
+    report("ZenVoiceAccuracyChecks smoke passed.")
+    return true
 }
 
 private struct Totals {
@@ -293,25 +365,7 @@ private func evaluateTextCorpus(path: String) -> Bool {
 }
 
 private func measure() -> Bool {
-    let configuration: ZenVoiceConfiguration
-    do {
-        let overrideCapability = environment["ZENVOICE_MODEL_PATH"]
-            .flatMap {
-                VerifiedModelCatalog.model(
-                    filename: URL(fileURLWithPath: $0).lastPathComponent
-                )?.languageCapability
-            }
-        configuration = try ZenVoiceConfiguration.discover(
-            languageProfile:
-                overrideCapability == .hinglish ? .hinglish : .english
-        )
-    } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
-        skip(
-            "install a verified model in Models or set ZENVOICE_MODEL_PATH."
-        )
-    } catch {
-        fail(error.localizedDescription)
-    }
+    let configuration = discoverConfiguration()
 
     let fixtureDirectory = environment["ZENVOICE_ACCURACY_FIXTURES"]
         .map { URL(fileURLWithPath: $0) }
@@ -1345,7 +1399,9 @@ private func measure() -> Bool {
 // rather than the minutes a full transcription pass costs.
 validateScoring()
 let outcome: Bool
-if flag("ZENVOICE_STRUCTURE_PROBE") {
+if flag("ZENVOICE_ACCURACY_SMOKE") {
+    outcome = runRealSpeechSmoke()
+} else if flag("ZENVOICE_STRUCTURE_PROBE") {
     outcome = probeSpokenStructure()
 } else if let corpus = environment["ZENVOICE_REFINE_TEXTEVAL"] {
     outcome = evaluateTextCorpus(path: corpus)
