@@ -27,6 +27,7 @@ import hashlib
 import http.client
 import os
 import shutil
+import ssl
 import sys
 import tarfile
 
@@ -49,7 +50,14 @@ def sha256(path: str) -> str:
 
 
 def download_archive(destination: str) -> None:
-    connection = http.client.HTTPSConnection(ARCHIVE_HOST, timeout=60)
+    tls_context = ssl.create_default_context()
+    tls_context.minimum_version = ssl.TLSVersion.TLSv1_2
+    # The pinned host uses a verified context and rejects TLS older than 1.2.
+    connection = http.client.HTTPSConnection(  # nosemgrep
+        ARCHIVE_HOST,
+        timeout=60,
+        context=tls_context,
+    )
     try:
         connection.request(
             "GET",
