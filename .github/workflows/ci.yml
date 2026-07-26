@@ -18,7 +18,7 @@ jobs:
   verify:
     name: Build and verify
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Check out source
