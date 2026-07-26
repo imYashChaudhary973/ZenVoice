@@ -24,13 +24,15 @@ import argparse
 import collections
 import glob
 import hashlib
+import http.client
 import os
 import shutil
 import sys
-import urllib.request
 import tarfile
 
-ARCHIVE_URL = "https://www.openslr.org/resources/31/dev-clean-2.tar.gz"
+ARCHIVE_HOST = "www.openslr.org"
+ARCHIVE_PATH = "/resources/31/dev-clean-2.tar.gz"
+ARCHIVE_URL = f"https://{ARCHIVE_HOST}{ARCHIVE_PATH}"
 ARCHIVE_SHA256 = (
     "176ec501490eced2d6c1f89f4f0ddc7dfe799e649e5322f8ba49fe3ff50c8012"
 )
@@ -44,6 +46,25 @@ def sha256(path: str) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def download_archive(destination: str) -> None:
+    connection = http.client.HTTPSConnection(ARCHIVE_HOST, timeout=60)
+    try:
+        connection.request(
+            "GET",
+            ARCHIVE_PATH,
+            headers={"User-Agent": "ZenVoice accuracy corpus builder"},
+        )
+        response = connection.getresponse()
+        if response.status != 200:
+            raise RuntimeError(
+                f"LibriSpeech download failed with HTTP {response.status}"
+            )
+        with open(destination, "wb") as handle:
+            shutil.copyfileobj(response, handle, length=1024 * 1024)
+    finally:
+        connection.close()
 
 
 def extract_safely(archive_path: str, destination: str) -> None:
@@ -70,7 +91,7 @@ def fetch(destination: str) -> str:
         print(f"downloading {ARCHIVE_URL} …")
         partial = archive + ".download"
         try:
-            urllib.request.urlretrieve(ARCHIVE_URL, partial)
+            download_archive(partial)
             if sha256(partial) != ARCHIVE_SHA256:
                 raise ValueError("downloaded LibriSpeech archive failed SHA-256")
             os.replace(partial, archive)

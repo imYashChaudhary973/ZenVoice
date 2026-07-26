@@ -40,7 +40,7 @@ jobs:
           key: zenvoice-accuracy-base-en-minilibrispeech-v1
 
       - name: Prepare pinned real-speech accuracy assets
-        shell: zsh
+        shell: /bin/zsh {0}
         run: |
           set -euo pipefail
           accuracy_root="$RUNNER_TEMP/zenvoice-accuracy"
