@@ -67,11 +67,13 @@ final class HoldToDictateController {
         switch key {
         case .function:
             return flags.contains(.function)
-        case .rightOption:
+        case .leftCommand, .rightCommand:
+            return flags.contains(.command)
+        case .leftOption, .rightOption:
             return flags.contains(.option)
-        case .rightControl:
+        case .leftControl, .rightControl:
             return flags.contains(.control)
-        case .rightShift:
+        case .leftShift, .rightShift:
             return flags.contains(.shift)
         }
     }

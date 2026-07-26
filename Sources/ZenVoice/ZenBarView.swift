@@ -1,43 +1,40 @@
 import SwiftUI
 
 struct ZenBarView: View {
+    @AppStorage("zenvoice.appearance")
+    private var appearance = "light"
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
     @ObservedObject var state: AppState
     let toggleRecording: () -> Void
     let cancelRecording: () -> Void
     let finishRecording: () -> Void
+    let dismissError: () -> Void
 
     var body: some View {
-        VStack(spacing: 6) {
-            if let statusMessage {
-                Text(statusMessage)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .padding(.horizontal, 14)
-                    .frame(height: 34)
-                    .background(messageBackground)
-                    .transition(
-                        .asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .opacity
-                        )
-                    )
-                    .accessibilityLabel(statusMessage)
-            }
-
+        ZStack {
             controlBar
         }
-        .frame(width: 320, height: 96, alignment: .bottom)
+        .frame(width: barWidth, height: 44)
+        .background(barBackground)
+        .clipShape(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+        .contentShape(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+        .id(state.phase.label)
+        .transition(
+            reduceMotion
+                ? .opacity
+                : .opacity.combined(with: .scale(scale: 0.985))
+        )
         .animation(
-            reduceMotion ? nil : .easeOut(duration: 0.16),
+            reduceMotion ? nil : .easeOut(duration: 0.20),
             value: state.phase
         )
-        .animation(
-            reduceMotion ? nil : .easeOut(duration: 0.16),
-            value: state.showsStatusMessage
-        )
+        .preferredColorScheme(appearance == "dark" ? .dark : .light)
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder
@@ -45,140 +42,189 @@ struct ZenBarView: View {
         switch state.phase {
         case .idle:
             Button(action: toggleRecording) {
-                HStack(spacing: 6) {
-                    brandLogo(size: 20)
-                    Text("ZenVoice")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                HStack(spacing: 9) {
+                    brandLogo(size: 22)
+                    Text("Ready")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(barSecondary)
+                    Spacer()
+                    Text("⌃⌥ Space")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(barSecondary)
+                        .padding(.horizontal, 7)
+                        .frame(height: 22)
+                        .background {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(ZenDesign.Semantic.surfaceRaised)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(barBorder)
+                                }
+                        }
                 }
-                .foregroundStyle(.white)
-                .frame(width: 88, height: 30)
-                .background(barBackground)
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Start ZenVoice dictation")
             .accessibilityHint("Press Control Option Space or activate this button.")
 
         case .listening:
-            HStack(spacing: 5) {
-                Button(action: cancelRecording) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.16))
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.88))
-                    }
-                    .frame(width: 20, height: 20)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Cancel dictation")
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(barAccent)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: barAccent.opacity(0.55), radius: 4)
+                    .accessibilityHidden(true)
 
                 WaveformView(samples: state.audioSamples)
-                    .frame(width: 56, height: 18)
+                    .frame(width: 92, height: 20)
 
-                Button(action: finishRecording) {
-                    ZStack {
-                        Circle()
-                            .fill(ZenDesign.Primitive.gold300)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .black))
-                            .foregroundStyle(ZenDesign.Primitive.ink950)
-                    }
-                    .frame(width: 20, height: 20)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Finish dictation and insert text")
+                Spacer()
+                barButton("Cancel", action: cancelRecording)
+                barButton(
+                    "Finish",
+                    emphasized: true,
+                    action: finishRecording
+                )
             }
-            .padding(.horizontal, 6)
-            .frame(height: 30)
-            .background(barBackground)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Dictation inserted")
+            .padding(.leading, 14)
+            .padding(.trailing, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("ZenVoice is listening")
 
-        case .transcribing, .inserting:
-            HStack(spacing: 7) {
-                brandLogo(size: 19)
+        case .transcribing:
+            HStack(spacing: 10) {
                 ProgressView()
-                    .controlSize(.mini)
-                    .tint(.white)
-                Text(state.phase == .transcribing ? "Transcribing" : "Inserting")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.88))
+                    .controlSize(.small)
+                    .tint(barAccent)
+                Text("Refining…")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(barPrimary)
+                Spacer()
             }
-            .padding(.horizontal, 9)
-            .frame(height: 30)
-            .background(barBackground)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(state.phase.label)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case .inserting:
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(barAccent)
+                Text("Inserting…")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(barPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .success:
-            HStack(spacing: 6) {
+            HStack(spacing: 9) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(ZenDesign.Primitive.green400)
-                Text("Done")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(barSuccess)
+                Text(successMessage)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(barPrimary)
+                    .lineLimit(1)
+                    .monospacedDigit()
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(barBackground)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel(successMessage)
 
-        case .error:
-            Button(action: toggleRecording) {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundStyle(ZenDesign.Primitive.red400)
-                    Text("Try again")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .background(barBackground)
+        case .error(let message):
+            HStack(spacing: 9) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(barDanger)
+                Text(displayedError(message))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(barPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 6)
+                barButton(
+                    "Try again",
+                    emphasized: true,
+                    action: toggleRecording
+                )
+                barButton("Dismiss", action: dismissError)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Try dictation again")
+            .padding(.leading, 14)
+            .padding(.trailing, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel(displayedError(message))
         }
     }
 
-    private var statusMessage: String? {
+    private var barWidth: CGFloat {
         switch state.phase {
         case .idle:
-            return nil
+            return 310
         case .listening:
-            if !state.liveTranscriptPreview.isEmpty {
-                return state.liveTranscriptPreview
-            }
-            return state.showsStatusMessage ? "Dictating with ZenVoice" : nil
-        case .transcribing:
-            return state.showsStatusMessage ? "Transcribing locally" : nil
-        case .inserting:
-            return state.showsStatusMessage ? "Inserting with ZenVoice" : nil
+            return 350
+        case .transcribing, .inserting:
+            return 310
         case .success:
-            return state.showsStatusMessage ? "Inserted with ZenVoice" : nil
-        case .error(let message):
-            return message
+            return 420
+        case .error:
+            return 530
         }
     }
 
     private var barBackground: some View {
-        Capsule()
-            .fill(ZenDesign.Primitive.ink950.opacity(0.97))
+        RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .fill(barPanel)
             .overlay {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.75)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(barBorder, lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.30), radius: 8, y: 3)
+            .shadow(color: Color.black.opacity(0.22), radius: 18, y: 8)
     }
 
-    private var messageBackground: some View {
-        Capsule()
-            .fill(Color.black.opacity(0.96))
-            .overlay {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.75)
-            }
-            .shadow(color: .black.opacity(0.24), radius: 9, y: 3)
+    private var successMessage: String {
+        guard let summary = state.lastInsertionSummary else {
+            return "Inserted with ZenVoice"
+        }
+        return "Inserted with ZenVoice · \(summary.wordCount) words · \(summary.wordsPerMinute) WPM"
+    }
+
+    private func displayedError(_ message: String) -> String {
+        if message.hasPrefix("Copied—") {
+            let reason = String(message.dropFirst("Copied—".count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return "Couldn’t insert — \(reason) Text copied to clipboard."
+        }
+        return message
+    }
+
+    private func barButton(
+        _ title: String,
+        emphasized: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11.5, weight: emphasized ? .semibold : .medium))
+                .foregroundStyle(emphasized ? barAccent : barSecondary)
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(
+                            emphasized
+                                ? ZenDesign.Semantic.accentMuted
+                                : Color.clear
+                        )
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 
     @ViewBuilder
@@ -186,14 +232,45 @@ struct ZenBarView: View {
         if let logo = BrandAssets.zenLogo {
             Image(nsImage: logo)
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(width: size, height: size)
-                .clipShape(Circle())
+                .clipShape(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                )
         } else {
-            Image(systemName: "z.circle.fill")
+            Image(systemName: "waveform")
                 .resizable()
+                .foregroundStyle(barAccent)
                 .frame(width: size, height: size)
         }
+    }
+
+    private var barPanel: Color {
+        ZenDesign.Semantic.surface.opacity(0.98)
+    }
+
+    private var barBorder: Color {
+        ZenDesign.Semantic.borderStrong
+    }
+
+    private var barPrimary: Color {
+        ZenDesign.Semantic.textPrimary
+    }
+
+    private var barSecondary: Color {
+        ZenDesign.Semantic.textSecondary
+    }
+
+    private var barAccent: Color {
+        ZenDesign.Semantic.accent
+    }
+
+    private var barSuccess: Color {
+        ZenDesign.Semantic.success
+    }
+
+    private var barDanger: Color {
+        ZenDesign.Semantic.danger
     }
 }
 
@@ -213,7 +290,10 @@ private struct WaveformView: View {
                     min(index, visualProfile.count - 1)
                 ]
                 Capsule()
-                    .fill(Color.white.opacity(sample > 0.035 ? 0.98 : 0.30))
+                    .fill(
+                        ZenDesign.Semantic.accent
+                        .opacity(sample > 0.035 ? 0.98 : 0.30)
+                    )
                     .frame(
                         width: 2,
                         height: max(2, 2 + (16 * sample * profile))

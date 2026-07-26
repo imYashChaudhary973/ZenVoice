@@ -33,11 +33,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    struct InsertionSummary: Equatable {
+        let wordCount: Int
+        let wordsPerMinute: Int
+    }
+
     @Published var phase: Phase = .idle
     @Published var audioSamples = Array(repeating: 0.0, count: 13)
     @Published private(set) var showsZenVoiceAtAllTimes: Bool
     @Published var showsStatusMessage: Bool
     @Published var lastTranscript = ""
+    @Published private(set) var lastInsertionSummary: InsertionSummary?
     @Published var languageProfile: LanguageProfile
     @Published var liveTranscriptPreview = ""
 
@@ -72,6 +78,28 @@ final class AppState: ObservableObject {
         samples.removeFirst()
         samples.append(max(0, min(1, level)))
         audioSamples = samples
+    }
+
+    func recordSuccessfulDictation(
+        transcript: String,
+        durationSeconds: TimeInterval
+    ) {
+        lastTranscript = transcript
+        let wordCount = transcript.split(whereSeparator: \.isWhitespace).count
+        guard wordCount > 0, durationSeconds > 0 else {
+            lastInsertionSummary = nil
+            return
+        }
+        lastInsertionSummary = InsertionSummary(
+            wordCount: wordCount,
+            wordsPerMinute: max(
+                1,
+                Int(
+                    (Double(wordCount) * 60 / durationSeconds)
+                        .rounded()
+                )
+            )
+        )
     }
 
     func toggleStatusMessage(defaults: UserDefaults = .standard) {

@@ -23,7 +23,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         applicationProfileViewModel:
             ApplicationProfileViewModel,
         onboardingViewModel: OnboardingViewModel,
-        appState: AppState
+        appState: AppState,
+        toggleRecording: @escaping () -> Void
     ) {
         self.viewModel = viewModel
         self.historyViewModel = historyViewModel
@@ -68,7 +69,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 applicationProfileViewModel:
                     applicationProfileViewModel,
                 onboardingViewModel: onboardingViewModel,
-                appState: appState
+                appState: appState,
+                toggleRecording: toggleRecording
             )
         )
     }

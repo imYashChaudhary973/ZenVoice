@@ -4,4 +4,6 @@ build/
 .DS_Store
 *.xcuserstate
 Screenshot *.png
+Screenshot *.heic
 .claude/settings.local.json
+PrivateBenchmarks/

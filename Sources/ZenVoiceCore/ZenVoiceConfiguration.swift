@@ -69,6 +69,40 @@ public struct ZenVoiceConfiguration {
         return filename.contains(".en.") ? .english : .multilingual
     }
 
+    public static func verified(
+        model: VerifiedModel,
+        languageProfile: LanguageProfile,
+        fileManager: FileManager = .default
+    ) throws -> ZenVoiceConfiguration {
+        guard languageProfile.isCompatible(
+            with: model.languageCapability
+        ) else {
+            throw ConfigurationError.incompatibleProfile(
+                ModelProfileTransition.incompatibleSelectionMessage(
+                    model: model,
+                    currentProfile: languageProfile
+                )
+            )
+        }
+        let modelURL = try VerifiedModelCatalog.installedURL(
+            for: model,
+            fileManager: fileManager
+        )
+        guard (try? VerifiedModelCatalog.verify(
+            modelURL,
+            for: model,
+            fileManager: fileManager
+        )) == true else {
+            throw ConfigurationError.modelVerificationFailed(
+                model.displayName
+            )
+        }
+        return ZenVoiceConfiguration(
+            modelURL: modelURL,
+            languageProfile: languageProfile
+        )
+    }
+
     public static func discover(
         languageProfile: LanguageProfile? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -112,8 +146,16 @@ public struct ZenVoiceConfiguration {
         let resolvedLanguageProfile =
             languageProfile ?? LanguagePreferences.load()
         guard resolvedLanguageProfile.isCompatible(with: capability) else {
-            throw ConfigurationError.multilingualModelRequired(
-                resolvedLanguageProfile.displayName
+            let message = catalogueModel.map {
+                ModelProfileTransition.incompatibleSelectionMessage(
+                    model: $0,
+                    currentProfile: resolvedLanguageProfile
+                )
+            } ?? ModelProfileTransition.unavailableMessage(
+                for: resolvedLanguageProfile
+            )
+            throw ConfigurationError.incompatibleProfile(
+                message
             )
         }
         return ZenVoiceConfiguration(
@@ -124,14 +166,19 @@ public struct ZenVoiceConfiguration {
 
     public enum ConfigurationError: LocalizedError {
         case modelMissing
-        case multilingualModelRequired(String)
+        case modelVerificationFailed(String)
+        case incompatibleProfile(String)
 
         public var errorDescription: String? {
             switch self {
             case .modelMissing:
                 return "No local Whisper model was found. Download one in Models or set ZENVOICE_MODEL_PATH."
-            case .multilingualModelRequired(let profile):
-                return "\(profile) requires a multilingual Whisper model. Download and select one in Models."
+            case .modelVerificationFailed(let model):
+                return
+                    "\(model) failed local size or SHA-256 verification and "
+                    + "was not selected."
+            case .incompatibleProfile(let message):
+                return message
             }
         }
     }

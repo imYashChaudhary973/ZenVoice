@@ -1,4 +1,4 @@
-# ZenVoice — Redesign Design System (v2)
+# ZenVoice — Ledger Design System (v3)
 
 The visual + UX contract for the redesigned app. The prototype in this directory
 implements it; the SwiftUI rebuild copies it.
@@ -13,39 +13,39 @@ implements it; the SwiftUI rebuild copies it.
 4. **States are designed, not defaulted.** Every control ships default / hover /
    focus / active / disabled / loading / error / empty.
 
-## 2. Color — "Ink & Gold", restrained strategy
+## 2. Color — "Ledger", editorial warmth
 Accent is used for primary actions, current selection, and live-state indicators only.
 Everything else is neutral. Success/danger are reserved for true state.
 
 | Token            | Light                      | Dark                       |
 |------------------|----------------------------|----------------------------|
-| canvas           | oklch(0.972 0.002 260)     | oklch(0.145 0.008 265)     |
-| sidebar          | oklch(0.946 0.003 260)     | oklch(0.168 0.009 265)     |
-| surface          | white                      | oklch(0.195 0.010 265)     |
-| surface-raised   | oklch(0.958 0.003 260)     | oklch(0.225 0.011 265)     |
-| border           | ink @ 9%                   | white @ 8%                 |
-| border-strong    | ink @ 17%                  | white @ 15%                |
-| text             | oklch(0.205 0.012 265)     | white @ 95%                |
-| text-2           | oklch(0.42 0.010 265)      | white @ 64%                |
-| text-3           | oklch(0.54 0.008 265)      | white @ 42%                |
-| accent           | oklch(0.52 0.085 75) gold-700 | oklch(0.81 0.075 80) gold-300 |
-| accent-soft      | gold @ 12%                 | gold @ 14%                 |
-| success          | oklch(0.50 0.13 155)       | oklch(0.78 0.15 155)       |
-| danger           | oklch(0.53 0.19 22)        | oklch(0.70 0.17 20)        |
-| on-accent        | white                      | oklch(0.16 0.01 265)       |
+| canvas           | `#F7F5F0`                  | `#201E1B`                   |
+| sidebar          | `#F7F5F0`                  | `#201E1B`                   |
+| surface          | `#FCFBF7`                  | `#262421`                   |
+| surface-raised   | `#F1EEE7`                  | `#2C2A25`                   |
+| border           | warm ink @ 9%              | warm white @ 7%             |
+| border-strong    | warm ink @ 16%             | warm white @ 14%            |
+| text             | `#1F1D1A`                  | `#EDE7DC`                   |
+| text-2           | `#5C564C`                  | `#ADA595`                   |
+| text-3           | `#8B8377`                  | `#7D7568`                   |
+| accent           | `#A6492E`                  | `#D68A62`                   |
+| accent-soft      | rust @ 8%                  | rust @ 12%                  |
+| success          | `#33713F`                  | `#7FB689`                   |
+| danger           | `#AC3A2A`                  | `#D97B66`                   |
+| on-accent        | `#FBF6F0`                  | `#221510`                   |
 
 Contrast verified: body text ≥ 4.5:1 on canvas/surface in both modes; accent-on-canvas
 ≥ 4.5:1 light, ≥ 8:1 dark.
 
 ## 3. Typography
-Single family: system stack (`-apple-system, "SF Pro Text"…`) — native to macOS,
-correct for a product register. Fixed rem scale, ratio ≈ 1.2:
+Ledger pairs the system stack (`-apple-system, "SF Pro Text"…`) with New York's
+serif voice for titles, brand moments, and metrics:
 
 | Step     | Size / weight       | Use                          |
 |----------|---------------------|------------------------------|
-| display  | 26px / 700, -0.02em | Onboarding headlines         |
-| title    | 20px / 700, -0.015em| Screen titles                |
-| heading  | 15px / 600          | Section headings             |
+| display  | 30px / 600 serif    | Onboarding headlines         |
+| title    | 26px / 600 serif    | Screen titles                |
+| heading  | 10px / 600, tracked | Uppercase section labels     |
 | body     | 13px / 400, lh 1.55 | Default                      |
 | label    | 13px / 590          | Buttons, control labels      |
 | caption  | 11.5px / 400        | Helper text, meta            |
@@ -53,9 +53,9 @@ correct for a product register. Fixed rem scale, ratio ≈ 1.2:
 
 ## 4. Spacing & shape
 - Scale: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48.
-- Window: 1080×700 min. Sidebar 224px fixed; content column max 640px for prose,
+- Window: 1180×760 ideal. Sidebar 224px fixed; content column max 760px,
   full width for tables.
-- Radius: control 7px · panel 12px · HUD pill 999px. No radius above 16px.
+- Radius: control 4px · panel 4px · ZenBar 9px. No radius above 10px.
 - Depth: borders first. Shadows only on floating layers (HUD, menus, dialogs),
   ≤ 24px blur, low alpha.
 
@@ -75,7 +75,7 @@ ZenVoice window
 │   ├── Shortcuts           ← all key bindings + hold-to-dictate
 │   ├── Audio               ← mics + Audio Doctor
 │   ├── Languages           ← 64 languages, Hinglish modes
-│   └── Instant Refine      ← modes, refinement models, commit-on-pause,
+│   └── Instant Refine      ← Off/Clean/Agent Prompt, commit-on-pause,
 │                              voice commands, context box
 ├── PERSONAL
 │   ├── Voice Profile       ← phrases + correction rules + pattern controls
@@ -104,12 +104,12 @@ Rules: shown only when `onboarded == false`; closing the window mid-flow resumes
 next launch; **never** rendered above the settings window.
 
 ## 8. ZenBar HUD
-Floating pill, bottom-center, dark glass in both appearances (matches screen
-recording aesthetics), 5 states:
-ready → listening (waveform + live phrase preview + Cancel/Done) → processing
-(indeterminate shimmer) → success (word count + "Inserted into <app>") / error
-(reason + Retry). Private Dictation adds a slashed-eye badge. Optional status line
-"Dictating with ZenVoice".
+Floating paper-like 9px-radius chip, bottom-center, matching the chosen appearance. Runtime states:
+ready → listening (live dot + waveform + Cancel/Finish only) → processing →
+inserting → success / error. Success shows "Inserted with ZenVoice", word count,
+and WPM. Error names the failure and offers Try again / Dismiss. Processing reads
+"Refining…" and insertion reads "Inserting…". The actual
+dictation workflow drives the cycle; prototype-only state controls do not ship.
 
 ## 9. Component vocabulary
 Switch (macOS-style), segmented control, select, kbd chip, shortcut recorder,

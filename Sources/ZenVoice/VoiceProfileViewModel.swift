@@ -46,11 +46,16 @@ final class VoiceProfileViewModel: ObservableObject {
         }
     }
 
-    func addRule(source: String, replacement: String) -> Bool {
+    func addRule(
+        source: String,
+        replacement: String,
+        languageScope: CorrectionLanguageScope
+    ) -> Bool {
         do {
             try vaultProvider().addCorrectionRule(
                 source: source,
-                replacement: replacement
+                replacement: replacement,
+                languageScope: languageScope
             )
             refresh()
             return true

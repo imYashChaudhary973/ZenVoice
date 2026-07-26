@@ -34,6 +34,7 @@ private final class DownloadTaskHandle: @unchecked Sendable {
     private let lock = NSLock()
     private var task: URLSessionDownloadTask?
     private var wasCancelled = false
+    private var exceededExpectedSize = false
 
     func install(_ task: URLSessionDownloadTask) {
         lock.lock()
@@ -51,6 +52,20 @@ private final class DownloadTaskHandle: @unchecked Sendable {
         let task = task
         lock.unlock()
         task?.cancel()
+    }
+
+    func cancelForUnexpectedSize() {
+        lock.lock()
+        exceededExpectedSize = true
+        let task = task
+        lock.unlock()
+        task?.cancel()
+    }
+
+    var wasCancelledForUnexpectedSize: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return exceededExpectedSize
     }
 }
 
@@ -177,7 +192,12 @@ struct VerifiedModelDownloader {
                 let task = URLSession.shared.downloadTask(
                     with: request
                 ) { temporaryURL, response, error in
-                    if let error {
+                    if handle.wasCancelledForUnexpectedSize {
+                        continuation.resume(
+                            throwing:
+                                VerifiedModelDownloadError.unexpectedSize
+                        )
+                    } else if let error {
                         continuation.resume(throwing: error)
                     } else if let temporaryURL, let response {
                         do {
@@ -209,6 +229,13 @@ struct VerifiedModelDownloader {
                 Task.detached(priority: .utility) {
                     while task.state == .running {
                         let received = max(0, task.countOfBytesReceived)
+                        let announced =
+                            task.countOfBytesExpectedToReceive
+                        if received > expectedSize
+                            || announced > expectedSize {
+                            handle.cancelForUnexpectedSize()
+                            return
+                        }
                         let fraction = min(
                             1,
                             Double(received) / Double(max(1, expectedSize))
@@ -241,7 +268,9 @@ final class ModelManagerViewModel: ObservableObject {
 
     private let downloader: VerifiedModelDownloader
     private let fileManager: FileManager
-    private let selectionChanged: () -> Void
+    private let applySelection:
+        (VerifiedModel, LanguageProfile) -> Result<Void, Error>
+    private let selectionInvalidated: () -> Void
     private var downloadTask: Task<Void, Never>?
     private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
@@ -249,11 +278,14 @@ final class ModelManagerViewModel: ObservableObject {
     init(
         downloader: VerifiedModelDownloader = VerifiedModelDownloader(),
         fileManager: FileManager = .default,
-        selectionChanged: @escaping () -> Void
+        applySelection: @escaping
+            (VerifiedModel, LanguageProfile) -> Result<Void, Error>,
+        selectionInvalidated: @escaping () -> Void
     ) {
         self.downloader = downloader
         self.fileManager = fileManager
-        self.selectionChanged = selectionChanged
+        self.applySelection = applySelection
+        self.selectionInvalidated = selectionInvalidated
         hardwareProfile = HardwareProfile.current(fileManager: fileManager)
         selectedModelID = ModelSelectionPreferences.load()?.id
         refreshBenchmarks()
@@ -299,7 +331,7 @@ final class ModelManagerViewModel: ObservableObject {
                 self?.selectedModelID = nil
                 self?.errorMessage =
                     "The selected model could not be verified and was disabled."
-                self?.selectionChanged()
+                self?.selectionInvalidated()
             } else {
                 self?.selectedModelID = ModelSelectionPreferences.load()?.id
             }
@@ -389,18 +421,81 @@ final class ModelManagerViewModel: ObservableObject {
                 VerifiedModelDownloadError.modelNotInstalled.localizedDescription
             return
         }
-        let languageProfile = LanguagePreferences.load()
-        guard languageProfile.isCompatible(
-            with: model.languageCapability
-        ) else {
+        let currentProfile = LanguagePreferences.load()
+        guard let targetProfile =
+                ModelProfileTransition.profileForSelecting(
+                    model: model,
+                    currentProfile: currentProfile
+                ) else {
             errorMessage =
-                "\(languageProfile.displayName) requires a multilingual model."
+                ModelProfileTransition.incompatibleSelectionMessage(
+                    model: model,
+                    currentProfile: currentProfile
+                )
             return
         }
-        ModelSelectionPreferences.save(model)
-        selectedModelID = model.id
-        errorMessage = nil
-        selectionChanged()
+        apply(model: model, profile: targetProfile)
+    }
+
+    @discardableResult
+    func selectProfile(
+        _ profile: LanguageProfile
+    ) -> Result<Void, Error> {
+        let currentModel = ModelSelectionPreferences.load()
+        let installed = VerifiedModelCatalog.allModels.filter {
+            installedModelIDs.contains($0.id)
+        }
+        let recommendedID = ModelRecommendationEngine.recommendedModel(
+            for: hardwareProfile,
+            language: profile
+        )?.id
+        guard let model = ModelProfileTransition.modelForSelecting(
+            profile: profile,
+            currentModel: currentModel,
+            installedModels: installed,
+            recommendedModelID: recommendedID
+        ) else {
+            let error = ZenVoiceConfiguration.ConfigurationError
+                .incompatibleProfile(
+                    ModelProfileTransition.unavailableMessage(for: profile)
+                )
+            errorMessage = error.localizedDescription
+            return .failure(error)
+        }
+        return apply(model: model, profile: profile)
+    }
+
+    var selectedLegacyModel: VerifiedModel? {
+        guard let selectedModelID,
+              installedModelIDs.contains(selectedModelID),
+              let selected = VerifiedModelCatalog.model(id: selectedModelID),
+              VerifiedModelCatalog.isRetired(selected) else {
+            return nil
+        }
+        return selected
+    }
+
+    var recommendedInstalledModel: VerifiedModel? {
+        let profile = LanguagePreferences.load()
+        let recommendedID = ModelRecommendationEngine.recommendedModel(
+            for: hardwareProfile,
+            language: profile
+        )?.id
+        let installed = models.filter {
+            installedModelIDs.contains($0.id)
+                && profile.isCompatible(with: $0.languageCapability)
+        }
+        return installed.first { $0.id == recommendedID }
+            ?? installed.first
+    }
+
+    func switchFromLegacyModel() {
+        guard let recommendedInstalledModel else {
+            errorMessage =
+                "Download a current compatible model before switching."
+            return
+        }
+        select(recommendedInstalledModel)
     }
 
     func remove(_ model: VerifiedModel) {
@@ -419,7 +514,7 @@ final class ModelManagerViewModel: ObservableObject {
             if selectedModelID == model.id {
                 ModelSelectionPreferences.clear()
                 selectedModelID = nil
-                selectionChanged()
+                selectionInvalidated()
             }
             errorMessage = nil
         } catch {
@@ -438,6 +533,13 @@ final class ModelManagerViewModel: ObservableObject {
     func isLanguageCompatible(_ model: VerifiedModel) -> Bool {
         LanguagePreferences.load().isCompatible(
             with: model.languageCapability
+        )
+    }
+
+    func selectionProfile(for model: VerifiedModel) -> LanguageProfile? {
+        ModelProfileTransition.profileForSelecting(
+            model: model,
+            currentProfile: LanguagePreferences.load()
         )
     }
 
@@ -472,5 +574,21 @@ final class ModelManagerViewModel: ObservableObject {
     deinit {
         downloadTask?.cancel()
         verificationTask?.cancel()
+    }
+
+    @discardableResult
+    private func apply(
+        model: VerifiedModel,
+        profile: LanguageProfile
+    ) -> Result<Void, Error> {
+        switch applySelection(model, profile) {
+        case .success:
+            selectedModelID = model.id
+            errorMessage = nil
+            return .success(())
+        case .failure(let error):
+            errorMessage = error.localizedDescription
+            return .failure(error)
+        }
     }
 }

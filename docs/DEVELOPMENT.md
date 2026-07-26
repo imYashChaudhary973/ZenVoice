@@ -156,6 +156,33 @@ push. Semgrep Community Edition runs independently on an Ubuntu runner. The
 Semgrep job uses the public rule registry, does not require an account token,
 and has read-only repository permission.
 
+## Deterministic audio E2E
+
+Debug builds can feed a known local audio file through the real recording,
+transcription, refinement, history, and insertion flow. This avoids the
+unreliable speaker-to-microphone loop used by acoustic tests.
+
+```bash
+ZENVOICE_E2E_AUDIO_FILE=/absolute/path/to/fixture.wav \
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
+swift run ZenVoice
+```
+
+Start and stop dictation normally. Each recording uses the fixture instead of
+the microphone, while every step after capture remains unchanged. The fixture
+must be readable by AVFoundation, 16 kHz mono, referenced by an absolute local
+path, and limited to 100 MB and 10 minutes. For example, normalize an existing
+recording before launch:
+
+```bash
+afconvert input.wav /tmp/zenvoice-e2e.wav -f WAVE -d LEF32@16000 -c 1
+```
+
+The override is compiled only into Debug builds. Release and packaged builds
+ignore `ZENVOICE_E2E_AUDIO_FILE` and always use the selected microphone. Test
+in Private Dictation when the transcript should not be retained, and use only
+non-sensitive fixture speech because normal history settings still apply.
+
 ## Release readiness
 
 Development packaging is intentionally different from public distribution.

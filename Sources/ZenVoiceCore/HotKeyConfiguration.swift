@@ -114,8 +114,13 @@ public struct HotKeyConfiguration: Codable, Equatable, Sendable {
 
 public enum HoldKeyChoice: String, Codable, CaseIterable, Hashable, Sendable {
     case function
+    case leftCommand
+    case rightCommand
+    case leftOption
     case rightOption
+    case leftControl
     case rightControl
+    case leftShift
     case rightShift
 
     public static let `default`: HoldKeyChoice = .function
@@ -123,8 +128,13 @@ public enum HoldKeyChoice: String, Codable, CaseIterable, Hashable, Sendable {
     public var keyCode: UInt16 {
         switch self {
         case .function: 63
+        case .leftCommand: 55
+        case .rightCommand: 54
+        case .leftOption: 58
         case .rightOption: 61
+        case .leftControl: 59
         case .rightControl: 62
+        case .leftShift: 56
         case .rightShift: 60
         }
     }
@@ -132,9 +142,23 @@ public enum HoldKeyChoice: String, Codable, CaseIterable, Hashable, Sendable {
     public var displayName: String {
         switch self {
         case .function: "Fn"
+        case .leftCommand: "Left Command"
+        case .rightCommand: "Right Command"
+        case .leftOption: "Left Option"
         case .rightOption: "Right Option"
+        case .leftControl: "Left Control"
         case .rightControl: "Right Control"
+        case .leftShift: "Left Shift"
         case .rightShift: "Right Shift"
         }
+    }
+
+    public init?(keyCode: UInt16) {
+        guard let choice = Self.allCases.first(where: {
+            $0.keyCode == keyCode
+        }) else {
+            return nil
+        }
+        self = choice
     }
 }

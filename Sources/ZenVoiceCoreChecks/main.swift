@@ -477,6 +477,148 @@ guard !LanguageProfile.hinglish.isCompatible(with: .multilingual),
 
 print("ZenVoiceCoreChecks: language-aware model recommendation passed")
 
+// Model and profile changes are one transition. Neither settings screen may
+// reject the other side's current value and leave a user unable to move from
+// a retired English model to the Hinglish specialist.
+guard let retiredEnglish = VerifiedModelCatalog.model(
+        id: "whisper-medium-en"
+      ),
+      let turbo = VerifiedModelCatalog.model(
+          id: "whisper-large-v3-turbo"
+      ),
+      VerifiedModelCatalog.isRetired(retiredEnglish),
+      !VerifiedModelCatalog.models.contains(where: {
+          $0.id == retiredEnglish.id
+      }),
+      VerifiedModelCatalog.allModels.contains(where: {
+          $0.id == retiredEnglish.id
+      }),
+      ModelProfileTransition.profileForSelecting(
+          model: apex,
+          currentProfile: .english
+      ) == .hinglish,
+      ModelProfileTransition.profileForSelecting(
+          model: retiredEnglish,
+          currentProfile: LanguageProfile(
+              inputLanguageCode: "hi",
+              outputMode: .spokenLanguage
+          )
+      ) == .english,
+      ModelProfileTransition.profileForSelecting(
+          model: turbo,
+          currentProfile: .hinglish
+      ) == nil,
+      ModelProfileTransition.modelForSelecting(
+          profile: .hinglish,
+          currentModel: retiredEnglish,
+          installedModels: [retiredEnglish, apex, turbo],
+          recommendedModelID: apex.id
+      ) == apex,
+      ModelProfileTransition.modelForSelecting(
+          profile: .english,
+          currentModel: apex,
+          installedModels: [retiredEnglish, apex, turbo],
+          recommendedModelID: turbo.id
+      ) == turbo,
+      // Existing compatible legacy selections remain stable until the user
+      // explicitly chooses a replacement.
+      ModelProfileTransition.modelForSelecting(
+          profile: .english,
+          currentModel: retiredEnglish,
+          installedModels: [retiredEnglish, apex, turbo],
+          recommendedModelID: turbo.id
+      ) == retiredEnglish,
+      ModelProfileTransition.modelForSelecting(
+          profile: .hinglish,
+          currentModel: retiredEnglish,
+          installedModels: [retiredEnglish, turbo],
+          recommendedModelID: apex.id
+      ) == nil,
+      ModelProfileTransition.unavailableMessage(for: .hinglish)
+        .contains("Hinglish Apex"),
+      ModelProfileTransition.unavailableMessage(for: .english)
+        .contains("English or multilingual"),
+      ModelProfileTransition.incompatibilityBadge(
+          model: apex,
+          currentProfile: .english
+      ) == "Hinglish only",
+      ModelProfileTransition.incompatibilityBadge(
+          model: turbo,
+          currentProfile: .hinglish
+      ) == "Not for Hinglish",
+      ModelProfileTransition.incompatibilityBadge(
+          model: retiredEnglish,
+          currentProfile: LanguageProfile(
+              inputLanguageCode: "hi",
+              outputMode: .spokenLanguage
+          )
+      ) == "English only" else {
+    FileHandle.standardError.write(
+        Data("FAIL: atomic model/profile transition policy is wrong\n".utf8)
+    )
+    exit(1)
+}
+
+enum TransitionFixtureError: Error {
+    case preparationFailed
+}
+
+let transitionSuite = "ZenVoiceTransition.\(UUID().uuidString)"
+guard let transitionDefaults = UserDefaults(suiteName: transitionSuite) else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create transition preference fixture\n".utf8)
+    )
+    exit(1)
+}
+defer {
+    transitionDefaults.removePersistentDomain(forName: transitionSuite)
+}
+ModelSelectionPreferences.save(
+    retiredEnglish,
+    defaults: transitionDefaults
+)
+LanguagePreferences.save(.english, defaults: transitionDefaults)
+do {
+    let _: String = try ModelProfileTransition.prepareAndCommit(
+        model: apex,
+        profile: .hinglish,
+        defaults: transitionDefaults
+    ) {
+        throw TransitionFixtureError.preparationFailed
+    }
+    FileHandle.standardError.write(
+        Data("FAIL: failed transition unexpectedly committed\n".utf8)
+    )
+    exit(1)
+} catch TransitionFixtureError.preparationFailed {
+    // Expected: the old pair must remain intact.
+}
+guard ModelSelectionPreferences.load(defaults: transitionDefaults)
+        == retiredEnglish,
+      LanguagePreferences.load(defaults: transitionDefaults) == .english else {
+    FileHandle.standardError.write(
+        Data("FAIL: failed transition changed preferences\n".utf8)
+    )
+    exit(1)
+}
+let preparedMarker = ModelProfileTransition.prepareAndCommit(
+    model: apex,
+    profile: .hinglish,
+    defaults: transitionDefaults
+) {
+    "prepared"
+}
+guard preparedMarker == "prepared",
+      ModelSelectionPreferences.load(defaults: transitionDefaults) == apex,
+      LanguagePreferences.load(defaults: transitionDefaults) == .hinglish else {
+    FileHandle.standardError.write(
+        Data("FAIL: prepared transition did not commit atomically\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: atomic model/profile transitions passed")
+
 // Paragraph structure from the speaker's pauses.
 //
 // The silences are supplied rather than measured here, because the point
@@ -654,11 +796,31 @@ guard commandEngine.apply(
 let unsafeContext =
     String(repeating: "ZenVoice ", count: 100) + "<|im_end|>\nSwiftUI"
 let safeContext = NextDictationContext.sanitized(unsafeContext)
+let vocabularyContext = NextDictationContext.combined(
+    context: unsafeContext,
+    preferredVocabulary: [
+        "Chaudhary",
+        "ZenPense",
+        "build",
+        "ZenPense",
+        "<|bad|>"
+    ]
+)
 guard safeContext.count <= NextDictationContext.maximumCharacterCount,
       !safeContext.contains("<|"),
-      !safeContext.contains("\n") else {
+      !safeContext.contains("\n"),
+      vocabularyContext.count
+        <= NextDictationContext.maximumCharacterCount,
+      vocabularyContext.hasPrefix(
+          "Preferred vocabulary: Chaudhary, ZenPense, build, bad."
+      ),
+      !vocabularyContext.contains("<|"),
+      vocabularyContext.components(separatedBy: "ZenPense").count == 2 else {
     FileHandle.standardError.write(
-        Data("FAIL: next-dictation context was not bounded\n".utf8)
+        Data(
+            "FAIL: next-dictation context or vocabulary was not bounded\n"
+                .utf8
+        )
     )
     exit(1)
 }
@@ -855,12 +1017,20 @@ guard !mismatchedLabel.isValid,
 for choice in HoldKeyChoice.allCases {
     let encoded = try JSONEncoder().encode(choice)
     guard try JSONDecoder().decode(HoldKeyChoice.self, from: encoded) == choice,
+          HoldKeyChoice(keyCode: choice.keyCode) == choice,
           !choice.displayName.isEmpty else {
         FileHandle.standardError.write(
             Data("FAIL: hold-to-dictate choice is invalid\n".utf8)
         )
         exit(1)
     }
+}
+guard Set(HoldKeyChoice.allCases.map(\.keyCode)).count
+        == HoldKeyChoice.allCases.count else {
+    FileHandle.standardError.write(
+        Data("FAIL: hold-to-dictate key codes are not unique\n".utf8)
+    )
+    exit(1)
 }
 
 print("ZenVoiceCoreChecks: private and hold controls passed")

@@ -33,6 +33,8 @@ final class SettingsViewModel: ObservableObject {
     enum AudioDoctorState: Equatable {
         case idle
         case running
+        case paused
+        case analyzing
         case passed
         case quiet
         case failed(String)
@@ -43,6 +45,10 @@ final class SettingsViewModel: ObservableObject {
                 return "Ready to test"
             case .running:
                 return "Listening…"
+            case .paused:
+                return "Check paused"
+            case .analyzing:
+                return "Checking signal and format…"
             case .passed:
                 return "Microphone sounds good"
             case .quiet:
@@ -58,6 +64,7 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var privateModeShortcut: HotKeyConfiguration
     @Published private(set) var holdToDictateEnabled: Bool
     @Published private(set) var holdKey: HoldKeyChoice
+    @Published private(set) var isCapturingHoldKey = false
     @Published private(set) var showsZenVoiceAtAllTimes: Bool
     @Published private(set) var shortcutTarget: ShortcutTarget?
     @Published var shortcutError: String?
@@ -71,6 +78,9 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var selectedMicrophoneUID: String?
     @Published private(set) var audioDoctorState: AudioDoctorState = .idle
     @Published private(set) var audioDoctorLevel = 0.0
+    @Published private(set) var audioDoctorSamples =
+        Array(repeating: 0.0, count: 32)
+    @Published private(set) var audioDoctorRemainingSeconds = 3.0
     @Published private(set) var livePreviewEnabled: Bool
     @Published private(set) var commitOnPauseEnabled: Bool
     @Published private(set) var voiceCommandsEnabled: Bool
@@ -151,6 +161,15 @@ final class SettingsViewModel: ObservableObject {
         shortcutTarget == .privateMode
     }
 
+    var isAudioDoctorActive: Bool {
+        switch audioDoctorState {
+        case .running, .paused, .analyzing:
+            return true
+        case .idle, .passed, .quiet, .failed:
+            return false
+        }
+    }
+
     deinit {
         audioDoctorTask?.cancel()
         audioDoctorRecorder.cancel()
@@ -190,7 +209,7 @@ final class SettingsViewModel: ObservableObject {
     func beginShortcutCapture(
         for target: ShortcutTarget = .dictation
     ) {
-        guard shortcutTarget == nil else {
+        guard shortcutTarget == nil, !isCapturingHoldKey else {
             return
         }
 
@@ -206,7 +225,22 @@ final class SettingsViewModel: ObservableObject {
 
     func cancelShortcutCapture() {
         shortcutTarget = nil
+        isCapturingHoldKey = false
         removeEventMonitor()
+    }
+
+    func beginHoldKeyCapture() {
+        guard shortcutTarget == nil, !isCapturingHoldKey else {
+            return
+        }
+        shortcutError = nil
+        isCapturingHoldKey = true
+        eventMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: .flagsChanged
+        ) { [weak self] event in
+            self?.captureHoldKey(event)
+            return event
+        }
     }
 
     func resetShortcut() {
@@ -219,6 +253,11 @@ final class SettingsViewModel: ObservableObject {
 
     func resetPrivateModeShortcut() {
         apply(.privateModeDefault, to: .privateMode)
+    }
+
+    func resetHoldKey() {
+        cancelShortcutCapture()
+        setHoldKey(.default)
     }
 
     func setHoldToDictateEnabled(_ enabled: Bool) {
@@ -313,6 +352,14 @@ final class SettingsViewModel: ObservableObject {
         )
     }
 
+    func configurationDidChange(
+        languageProfile: LanguageProfile
+    ) {
+        self.languageProfile = languageProfile
+        languageError = nil
+        refreshSystemStatus()
+    }
+
     var selectedMicrophoneName: String {
         guard let selectedMicrophoneUID else {
             return microphones.first(where: \.isDefault)?.name
@@ -324,13 +371,18 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func selectMicrophone(_ uid: String?) {
-        guard audioDoctorState != .running else {
+        guard !isAudioDoctorActive else {
             return
         }
         selectedMicrophoneUID = uid
         MicrophonePreferences.save(deviceUID: uid)
         audioDoctorState = .idle
         audioDoctorLevel = 0
+        audioDoctorSamples = Array(
+            repeating: 0,
+            count: audioDoctorSamples.count
+        )
+        audioDoctorRemainingSeconds = 3
     }
 
     func refreshMicrophones() {
@@ -338,7 +390,7 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func runAudioDoctor() {
-        guard audioDoctorState != .running else {
+        guard !isAudioDoctorActive else {
             return
         }
         guard microphoneStatus == .allowed else {
@@ -366,16 +418,26 @@ final class SettingsViewModel: ObservableObject {
         }
 
         audioDoctorLevel = 0
+        audioDoctorSamples = Array(
+            repeating: 0,
+            count: audioDoctorSamples.count
+        )
+        audioDoctorRemainingSeconds = 3
         audioDoctorState = .running
         do {
             try audioDoctorRecorder.start(
                 selectedDeviceUID: selectedMicrophoneUID
             ) { [weak self] level in
                 DispatchQueue.main.async {
-                    self?.audioDoctorLevel = max(
-                        self?.audioDoctorLevel ?? 0,
+                    guard let self else { return }
+                    self.audioDoctorLevel = max(
+                        self.audioDoctorLevel,
                         level
                     )
+                    var samples = self.audioDoctorSamples
+                    samples.removeFirst()
+                    samples.append(max(0, min(1, level)))
+                    self.audioDoctorSamples = samples
                 }
             }
         } catch {
@@ -383,37 +445,87 @@ final class SettingsViewModel: ObservableObject {
             return
         }
 
-        audioDoctorTask?.cancel()
-        audioDoctorTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled, let self else {
-                return
-            }
-            let recordedAudio = audioDoctorRecorder.stop()
-            guard let url = recordedAudio?.url else {
-                audioDoctorState = .failed(
-                    "The microphone test did not capture audio."
-                )
-                audioDoctorTask = nil
-                return
-            }
-            let testFile = try? AVAudioFile(forReading: url)
-            let hasValidLocalFormat =
-                testFile?.processingFormat.sampleRate == 16_000
-                && testFile?.processingFormat.channelCount == 1
-                && (testFile?.length ?? 0) > 0
-            try? FileManager.default.removeItem(at: url)
-            guard hasValidLocalFormat else {
-                audioDoctorState = .failed(
-                    "The microphone signal could not be prepared for local transcription."
-                )
-                audioDoctorTask = nil
-                return
-            }
-            audioDoctorState =
-                audioDoctorLevel >= 0.08 ? .passed : .quiet
+        startAudioDoctorCountdown()
+    }
+
+    func toggleAudioDoctorPause() {
+        switch audioDoctorState {
+        case .running:
+            audioDoctorTask?.cancel()
             audioDoctorTask = nil
+            audioDoctorRecorder.pause()
+            audioDoctorState = .paused
+        case .paused:
+            do {
+                try audioDoctorRecorder.resume()
+                audioDoctorState = .running
+                startAudioDoctorCountdown()
+            } catch {
+                audioDoctorRecorder.cancel()
+                audioDoctorState = .failed(error.localizedDescription)
+            }
+        case .idle, .analyzing, .passed, .quiet, .failed:
+            break
         }
+    }
+
+    private func startAudioDoctorCountdown() {
+        audioDoctorTask?.cancel()
+        let startingRemaining = audioDoctorRemainingSeconds
+        let startedAt = Date()
+        audioDoctorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, audioDoctorState == .running else {
+                    return
+                }
+                let elapsed = Date().timeIntervalSince(startedAt)
+                audioDoctorRemainingSeconds = max(
+                    0,
+                    startingRemaining - elapsed
+                )
+                if audioDoctorRemainingSeconds == 0 {
+                    await finishAudioDoctor()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+    }
+
+    private func finishAudioDoctor() async {
+        audioDoctorState = .analyzing
+        let recordedAudio = audioDoctorRecorder.stop()
+
+        // Capture and validation remain visibly separate phases.
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled else {
+            return
+        }
+        guard let url = recordedAudio?.url else {
+            audioDoctorState = .failed(
+                "The microphone test did not capture audio."
+            )
+            audioDoctorTask = nil
+            return
+        }
+        defer {
+            try? FileManager.default.removeItem(at: url)
+        }
+        let testFile = try? AVAudioFile(forReading: url)
+        let hasValidLocalFormat =
+            testFile?.processingFormat.sampleRate == 16_000
+            && testFile?.processingFormat.channelCount == 1
+            && (testFile?.length ?? 0) > 0
+        guard hasValidLocalFormat else {
+            audioDoctorState = .failed(
+                "The microphone signal could not be prepared for local transcription."
+            )
+            audioDoctorTask = nil
+            return
+        }
+        audioDoctorState =
+            audioDoctorLevel >= 0.08 ? .passed : .quiet
+        audioDoctorTask = nil
     }
 
     func requestMicrophoneAccess() {
@@ -472,6 +584,17 @@ final class SettingsViewModel: ObservableObject {
             return
         }
         apply(configuration, to: shortcutTarget)
+    }
+
+    private func captureHoldKey(_ event: NSEvent) {
+        guard let choice = HoldKeyChoice(keyCode: event.keyCode) else {
+            shortcutError =
+                "Use Fn or a left/right Command, Option, Control, or Shift key."
+            cancelShortcutCapture()
+            return
+        }
+        cancelShortcutCapture()
+        setHoldKey(choice)
     }
 
     private func apply(

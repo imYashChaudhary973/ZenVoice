@@ -28,6 +28,7 @@ private struct Options {
     let limit: Int?
     let corpusURL: URL?
     let cleanAudio: Bool
+    let preferredVocabulary: [String]
 
     static func parse(_ arguments: [String]) throws -> Options {
         var modelPath: String?
@@ -38,6 +39,7 @@ private struct Options {
         var limit: Int?
         var corpusPath: String?
         var cleanAudio = false
+        var vocabularyPath: String?
         var index = 1
 
         while index < arguments.count {
@@ -87,6 +89,14 @@ private struct Options {
                 corpusPath = arguments[index]
             case "--clean":
                 cleanAudio = true
+            case "--vocabulary":
+                index += 1
+                guard index < arguments.count else {
+                    throw BenchmarkError.invalidArguments(
+                        "--vocabulary requires a UTF-8 text file"
+                    )
+                }
+                vocabularyPath = arguments[index]
             case "--help", "-h":
                 print(Self.usage)
                 exit(0)
@@ -107,6 +117,9 @@ private struct Options {
                 "model does not exist: \(modelURL.path)"
             )
         }
+        let preferredVocabulary = try vocabularyPath.map {
+            try loadVocabulary(at: URL(fileURLWithPath: $0))
+        } ?? []
         return Options(
             modelURL: modelURL,
             suite: suite,
@@ -115,7 +128,8 @@ private struct Options {
             corpusURL: corpusPath.map {
                 URL(fileURLWithPath: $0, isDirectory: true)
             },
-            cleanAudio: cleanAudio
+            cleanAudio: cleanAudio,
+            preferredVocabulary: preferredVocabulary
         )
     }
 
@@ -125,8 +139,41 @@ private struct Options {
         --model /path/to/model.bin \
         --suite english|multilingual|hinglish \
         [--corpus /path/to/audio-and-txt-pairs] \
+        [--vocabulary /path/to/preferred-terms.txt] \
         [--limit N] [--cache /tmp/zenvoice-language-bench] [--clean]
     """
+
+    private static func loadVocabulary(at url: URL) throws -> [String] {
+        let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
+        let values = try resolved.resourceValues(forKeys: [
+            .isRegularFileKey,
+            .fileSizeKey
+        ])
+        guard values.isRegularFile == true,
+              let fileSize = values.fileSize,
+              fileSize > 0,
+              fileSize <= 64 * 1_024 else {
+            throw BenchmarkError.invalidArguments(
+                "vocabulary must be a local UTF-8 file no larger than 64 KB"
+            )
+        }
+        let text = try String(contentsOf: resolved, encoding: .utf8)
+        var seen = Set<String>()
+        return text.split(whereSeparator: \.isNewline)
+            .compactMap { line -> String? in
+                let term = line.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                guard !term.isEmpty,
+                      term.count <= 120,
+                      seen.insert(term.lowercased()).inserted else {
+                    return nil
+                }
+                return term
+            }
+            .prefix(100)
+            .map(\.self)
+    }
 }
 
 private struct Fixture {
@@ -1101,6 +1148,16 @@ private func run() throws {
         modelURL: options.modelURL,
         languageProfile: fixtures[0].profile
     )
+    let vocabularyPrompt = NextDictationContext.combined(
+        context: "",
+        preferredVocabulary: options.preferredVocabulary
+    )
+    if !options.preferredVocabulary.isEmpty {
+        print(
+            "preferred vocabulary: "
+                + "\(options.preferredVocabulary.count) local terms"
+        )
+    }
     let transcriber = WhisperTranscriber(
         configuration: configuration,
         isReproducible: true
@@ -1136,7 +1193,8 @@ private func run() throws {
         let samples = options.cleanAudio ? loaded : Audio.degraded(loaded)
         let result = try transcriber.transcribe(
             samples: samples,
-            languageProfile: fixture.profile
+            languageProfile: fixture.profile,
+            initialPrompt: vocabularyPrompt
         )
         let hypothesis = result.finalTranscript
         let isMixedScriptReference =

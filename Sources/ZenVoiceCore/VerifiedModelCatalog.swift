@@ -264,6 +264,10 @@ public enum VerifiedModelCatalog {
         allModels.first { $0.filename == filename }
     }
 
+    public static func isRetired(_ model: VerifiedModel) -> Bool {
+        retiredModels.contains { $0.id == model.id }
+    }
+
     public static func modelsDirectory(
         fileManager: FileManager = .default
     ) throws -> URL {

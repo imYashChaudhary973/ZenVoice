@@ -79,17 +79,26 @@ private struct ProcessedTranscription {
 
 private struct ActiveDictationBehavior: Sendable {
     let languageProfile: LanguageProfile
+    let correctionScope: CorrectionLanguageScope
     let refinementMode: InstantRefineMode
     let voiceCommandsEnabled: Bool
     let context: String
 
     static var global: ActiveDictationBehavior {
-        ActiveDictationBehavior(
-            languageProfile: LanguagePreferences.load(),
+        let languageProfile = LanguagePreferences.load()
+        return ActiveDictationBehavior(
+            languageProfile: languageProfile,
+            correctionScope: languageProfile.correctionScope,
             refinementMode: InstantRefinePreferences.load(),
             voiceCommandsEnabled: false,
             context: ""
         )
+    }
+}
+
+private extension LanguageProfile {
+    var correctionScope: CorrectionLanguageScope {
+        self == .hinglish ? .hinglish : .all
     }
 }
 
@@ -384,6 +393,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             finishRecording: { [weak self] in
                 self?.finishRecording()
+            },
+            dismissError: { [weak self] in
+                self?.dismissZenBarError()
             }
         )
         state.$phase
@@ -490,10 +502,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureSettingsWindow() {
-        modelManagerViewModel = ModelManagerViewModel { [weak self] in
-            self?.configureTranscriber()
-            self?.settingsViewModel?.refreshSystemStatus()
-        }
+        modelManagerViewModel = ModelManagerViewModel(
+            applySelection: { [weak self] model, profile in
+                guard let self else {
+                    return .failure(
+                        ZenVoiceConfiguration.ConfigurationError.modelMissing
+                    )
+                }
+                return self.applyConfiguration(
+                    model: model,
+                    languageProfile: profile
+                )
+            },
+            selectionInvalidated: { [weak self] in
+                self?.configureTranscriber()
+                self?.settingsViewModel?.refreshSystemStatus()
+            }
+        )
         applicationProfileViewModel = ApplicationProfileViewModel()
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
@@ -608,7 +633,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             applicationProfileViewModel:
                 applicationProfileViewModel,
             onboardingViewModel: onboardingViewModel,
-            appState: state
+            appState: state,
+            toggleRecording: { [weak self] in
+                self?.toggleRecording()
+            }
         )
     }
 
@@ -775,13 +803,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyLanguageProfile(
         _ profile: LanguageProfile
     ) -> Result<Void, Error> {
+        modelManagerViewModel.selectProfile(profile)
+    }
+
+    private func applyConfiguration(
+        model: VerifiedModel,
+        languageProfile: LanguageProfile
+    ) -> Result<Void, Error> {
         do {
-            let configuration = try ZenVoiceConfiguration.discover(
-                languageProfile: profile
+            // Verification and candidate construction happen before either
+            // preference changes, so a failure cannot leave a mismatched
+            // model/profile pair behind.
+            let candidate = try ModelProfileTransition.prepareAndCommit(
+                model: model,
+                profile: languageProfile
+            ) {
+                let configuration = try ZenVoiceConfiguration.verified(
+                    model: model,
+                    languageProfile: languageProfile
+                )
+                return WhisperTranscriber(configuration: configuration)
+            }
+            transcriber = candidate
+            state.languageProfile = languageProfile
+            settingsViewModel?.configurationDidChange(
+                languageProfile: languageProfile
             )
-            LanguagePreferences.save(profile)
-            state.languageProfile = profile
-            transcriber = WhisperTranscriber(configuration: configuration)
             updateLanguageMenu()
             return .success(())
         } catch {
@@ -838,6 +885,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
         }
+
+#if DEBUG
+        if recorder.usesDeterministicFixture {
+            startRecorder(startedByHold: startedByHold)
+            return
+        }
+#endif
 
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
@@ -951,13 +1005,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ?? transcriber?.languageCapability
             ?? .english
         guard languageProfile.isCompatible(with: capability) else {
-            showError(
-                "\(languageProfile.displayName) requires a multilingual Whisper model. Select one in Models."
-            )
+            if let model = ModelSelectionPreferences.load() {
+                showError(
+                    ModelProfileTransition.incompatibleSelectionMessage(
+                        model: model,
+                        currentProfile: languageProfile
+                    )
+                )
+            } else {
+                showError(
+                    ModelProfileTransition.unavailableMessage(
+                        for: languageProfile
+                    )
+                )
+            }
             return nil
+        }
+        let correctionScope = languageProfile.correctionScope
+        let preferredVocabulary: [String]
+        if learningPreferences.appliesCorrectionRules,
+           let vault = try? resolvedVault() {
+            preferredVocabulary =
+                (try? vault.preferredVocabulary(
+                    activeScope: correctionScope
+                )) ?? []
+        } else {
+            preferredVocabulary = []
         }
         return ActiveDictationBehavior(
             languageProfile: languageProfile,
+            correctionScope: correctionScope,
             refinementMode:
                 profile?.refinementMode
                 ?? InstantRefinePreferences.load(),
@@ -965,7 +1042,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 profile?.voiceCommandsEnabled
                 ?? LocalVoiceCommandPreferences.isEnabled(),
             context:
-                settingsViewModel.sanitizedNextDictationContext
+                NextDictationContext.combined(
+                    context:
+                        settingsViewModel.sanitizedNextDictationContext,
+                    preferredVocabulary: preferredVocabulary
+                )
         )
     }
 
@@ -1142,7 +1223,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     correctionApplication:
                         appliesCorrectionRules
                             ? try? correctionVault?.applyCorrections(
-                                to: refinement.text
+                                to: refinement.text,
+                                activeScope: behavior.correctionScope
                             )
                             : nil
                 )
@@ -1227,7 +1309,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             result: result,
             refinement: refinement,
             correctionApplication: appliesCorrectionRules
-                ? try? correctionVault?.applyCorrections(to: refinement.text)
+                ? try? correctionVault?.applyCorrections(
+                    to: refinement.text,
+                    activeScope: behavior.correctionScope
+                )
                 : nil
         )
     }
@@ -1267,7 +1352,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     refinement: refinement,
                     correctionApplication: appliesCorrectionRules
                         ? try? correctionVault?.applyCorrections(
-                            to: refinement.text
+                            to: refinement.text,
+                            activeScope: behavior.correctionScope
                         )
                         : nil
                 )
@@ -1434,7 +1520,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     correctionApplication:
                         appliesCorrectionRules
                             ? try? correctionVault?.applyCorrections(
-                                to: refinement.text
+                                to: refinement.text,
+                                activeScope: behavior.correctionScope
                             )
                             : nil
                 )
@@ -1686,7 +1773,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
 
-        state.lastTranscript = result.finalTranscript
+        state.recordSuccessfulDictation(
+            transcript: result.finalTranscript,
+            durationSeconds: recordedAudio.durationSeconds
+        )
         state.phase = .inserting
 
         let textToInsert = insertionText ?? result.finalTranscript
@@ -1806,6 +1896,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.phase = .error(message)
         updateStartStopMenuTitle()
         scheduleIdleReset(after: 4)
+    }
+
+    private func dismissZenBarError() {
+        resetWorkItem?.cancel()
+        state.phase = .idle
+        updateStartStopMenuTitle()
     }
 
     private func scheduleIdleReset(after delay: TimeInterval) {
@@ -2014,6 +2110,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let correctionVault = dictationVault
         let appliesCorrectionRules =
             learningPreferences.appliesCorrectionRules
+        let correctionScope = recordedLanguageProfile.correctionScope
+        let preferredVocabulary =
+            appliesCorrectionRules
+                ? (try? correctionVault?.preferredVocabulary(
+                    activeScope: correctionScope
+                )) ?? []
+                : []
+        let initialPrompt = NextDictationContext.combined(
+            context: "",
+            preferredVocabulary: preferredVocabulary
+        )
         let applicationProfile = ApplicationProfilePreferences.profile(
             for: record.targetBundleID
         )
@@ -2027,7 +2134,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 let result = try transcriber.transcribe(
                     audioURL: audioURL,
-                    languageProfile: recordedLanguageProfile
+                    languageProfile: recordedLanguageProfile,
+                    initialPrompt: initialPrompt
                 )
                 let refinement =
                     TranscriptRefinement.refine(
@@ -2043,7 +2151,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     correctionApplication:
                         appliesCorrectionRules
                             ? try? correctionVault?.applyCorrections(
-                                to: refinement.text
+                                to: refinement.text,
+                                activeScope: correctionScope
                             )
                             : nil
                 )
@@ -2099,7 +2208,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             try vault.deleteRecoveryAudio(id: historyID)
             try? vault.recordCorrectionUsage(processed.correctionUsages)
-            state.lastTranscript = result.finalTranscript
+            state.recordSuccessfulDictation(
+                transcript: result.finalTranscript,
+                durationSeconds: recordedAudio.durationSeconds
+            )
             state.phase = .success
             historyViewModel.refresh()
             insightsViewModel.refresh()

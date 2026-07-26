@@ -28,9 +28,10 @@ final class ZenBarPanelController {
         state: AppState,
         toggleRecording: @escaping () -> Void,
         cancelRecording: @escaping () -> Void,
-        finishRecording: @escaping () -> Void
+        finishRecording: @escaping () -> Void,
+        dismissError: @escaping () -> Void
     ) {
-        let frame = NSRect(x: 0, y: 0, width: 320, height: 96)
+        let frame = NSRect(x: 0, y: 0, width: 550, height: 68)
         panel = NSPanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -54,7 +55,8 @@ final class ZenBarPanelController {
                 state: state,
                 toggleRecording: toggleRecording,
                 cancelRecording: cancelRecording,
-                finishRecording: finishRecording
+                finishRecording: finishRecording,
+                dismissError: dismissError
             )
         )
 
