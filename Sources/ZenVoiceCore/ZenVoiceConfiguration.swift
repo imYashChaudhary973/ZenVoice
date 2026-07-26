@@ -104,12 +104,10 @@ public struct ZenVoiceConfiguration {
             throw ConfigurationError.modelMissing
         }
 
-        let selectedCatalogueModel = selectedModel.flatMap { selected in
-            selected.filename == URL(fileURLWithPath: model).lastPathComponent
-                ? selected
-                : nil
-        }
-        let capability = selectedCatalogueModel?.languageCapability
+        let catalogueModel = VerifiedModelCatalog.model(
+            filename: URL(fileURLWithPath: model).lastPathComponent
+        )
+        let capability = catalogueModel?.languageCapability
             ?? (model.contains(".en.") ? .english : .multilingual)
         let resolvedLanguageProfile =
             languageProfile ?? LanguagePreferences.load()

@@ -261,7 +261,7 @@ public enum VerifiedModelCatalog {
     }
 
     public static func model(filename: String) -> VerifiedModel? {
-        models.first { $0.filename == filename }
+        allModels.first { $0.filename == filename }
     }
 
     public static func modelsDirectory(

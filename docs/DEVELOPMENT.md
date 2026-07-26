@@ -226,16 +226,12 @@ distributable artifact.
 31. Start a model download and confirm percentage progress appears. Cancel,
     immediately start another download, and confirm the cancelled task does not
     clear the new progress state.
-32. Open **Instant Refine**, download the Fast refinement model, and confirm
-    progress changes to a separate verification state before the model becomes
-    selectable.
-33. Select **Local Model**, dictate one English, Spanish, and Hinglish example,
-    and confirm output keeps the spoken language and introduces no new content
-    words.
-34. Remove the selected refinement model and confirm Local Model mode visibly
-    falls back to Clean without blocking dictation.
-35. For a real runtime gate, set `ZENVOICE_REFINEMENT_MODEL_PATH` to the
-    verified Qwen GGUF and run `swift run ZenVoiceRuntimeChecks`.
+32. Retry an English, Hindi, and Hinglish recovery item and confirm each keeps
+    its recorded language and current voice-command preference.
+33. Focus a password field, start dictation, and confirm ZenVoice copies the
+    transcript instead of writing through the secure-input fallback.
+34. Enter and leave a native full-screen space, then start dictation and
+    confirm ZenBar follows the active space.
 
 Also test:
 

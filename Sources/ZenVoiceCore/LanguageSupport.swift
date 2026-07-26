@@ -157,6 +157,27 @@ public struct LanguageProfile:
         self.outputMode = outputMode
     }
 
+    /// Reconstructs the language behavior saved with a History record.
+    ///
+    /// Older records store the input language and model identifier, but not
+    /// the output mode. The Hinglish specialist is the one unambiguous case:
+    /// it emits Latin-script Hindi, so its records must retry as Hinglish.
+    /// Every other record keeps the spoken language.
+    public static func historyRetryProfile(
+        languageCode: String,
+        modelID: String
+    ) -> LanguageProfile {
+        let recordedCapability =
+            VerifiedModelCatalog.model(id: modelID)?.languageCapability
+        return LanguageProfile(
+            inputLanguageCode: languageCode,
+            outputMode:
+                recordedCapability == .hinglish
+                ? .latinScript
+                : .spokenLanguage
+        )
+    }
+
     public func isCompatible(with capability: ModelLanguageCapability) -> Bool {
         switch capability {
         case .english:

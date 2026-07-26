@@ -33,10 +33,38 @@ jobs:
       - name: Run runtime checks
         run: swift run ZenVoiceRuntimeChecks
 
-      # Skips itself when no verified model is installed, which is the norm on
-      # a clean runner. It earns its place locally and on any machine that has
-      # one, where it turns transcription regressions into build failures.
-      - name: Run accuracy checks
+      - name: Cache pinned accuracy assets
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/zenvoice-accuracy
+          key: zenvoice-accuracy-base-en-minilibrispeech-v1
+
+      - name: Prepare pinned real-speech accuracy assets
+        shell: zsh
+        run: |
+          set -euo pipefail
+          accuracy_root="$RUNNER_TEMP/zenvoice-accuracy"
+          model_dir="$accuracy_root/models"
+          model_path="$model_dir/ggml-base.en.bin"
+          model_hash="a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"
+          model_url="https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en.bin?download=true"
+          mkdir -p "$model_dir"
+          if ! print -r -- "$model_hash  $model_path" | shasum -a 256 -c -; then
+            curl --fail --location --retry 3 \
+              --output "$model_path.download" "$model_url"
+            print -r -- "$model_hash  $model_path.download" \
+              | shasum -a 256 -c -
+            mv "$model_path.download" "$model_path"
+          fi
+          python3 Scripts/build-librispeech-corpus.py \
+            --output "$accuracy_root/corpus"
+
+      - name: Run real-speech accuracy gate
+        env:
+          ZENVOICE_ACCURACY_REQUIRED: "1"
+          ZENVOICE_ACCURACY_REQUIRE_REAL: "1"
+          ZENVOICE_MODEL_PATH: ${{ runner.temp }}/zenvoice-accuracy/models/ggml-base.en.bin
+          ZENVOICE_ACCURACY_CORPUS: ${{ runner.temp }}/zenvoice-accuracy/corpus/dictation
         run: swift run ZenVoiceAccuracyChecks
 
       - name: Build debug target

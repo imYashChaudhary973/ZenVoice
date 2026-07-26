@@ -47,6 +47,9 @@ private func fail(_ message: String) -> Never {
 }
 
 private func skip(_ message: String) -> Never {
+    if flag("ZENVOICE_ACCURACY_REQUIRED") {
+        fail(message)
+    }
     print("ZenVoice accuracy checks skipped: \(message)")
     exit(0)
 }
@@ -374,6 +377,8 @@ private func measure() -> Bool {
     var totals = Totals()
     var emptyDecodes: [String] = []
     var refinementFailures: [String] = []
+    var realSpeechOutcome:
+        (whole: Scoring.Result, segmented: Scoring.Result)?
 
     for clip in clips {
         let samples = Fixtures.degraded(
@@ -485,7 +490,7 @@ private func measure() -> Bool {
             }
         }
 
-        var stages: [(String, Stage)] = [
+        let stages: [(String, Stage)] = [
             ("clean", mode(.clean)),
             ("agent prompt", mode(.agentPrompt))
         ]
@@ -1071,6 +1076,7 @@ private func measure() -> Bool {
             var corpusAudioSeconds: TimeInterval = 0
             var corpusLoanwords = 0
             var corpusLoanwordsKept = 0
+            var decodedCorpusClips = 0
             for clip in corpus {
                 // Real recordings arrive at whatever level they were captured
                 // at, so the synthetic degradation is deliberately not applied.
@@ -1079,6 +1085,7 @@ private func measure() -> Bool {
                     report("  \(clip.name): could not read audio")
                     continue
                 }
+                decodedCorpusClips += 1
                 let decodeStart = Date()
                 let whole = decodeCorpus(samples)
                 corpusSeconds += Date().timeIntervalSince(decodeStart)
@@ -1175,6 +1182,12 @@ private func measure() -> Bool {
                 )
             )
             report()
+            if decodedCorpusClips > 0 {
+                realSpeechOutcome = (
+                    whole: corpusWhole,
+                    segmented: corpusSegmented
+                )
+            }
         }
     }
 
@@ -1231,16 +1244,58 @@ private func measure() -> Bool {
         )
     }
 
-    report(
-        "ZenVoiceAccuracyChecks passed "
-            + "(whole \(totals.whole.percentage), "
-            + "segmented \(totals.segmented.percentage), "
-            + "segmentation cost "
-            + String(
-                format: "%.1f pts).",
-                (totals.segmented.rate - totals.whole.rate) * 100
+    if flag("ZENVOICE_ACCURACY_REQUIRE_REAL") {
+        guard let realSpeechOutcome else {
+            fail(
+                "a real-speech corpus is required but no recording was decoded"
             )
-    )
+        }
+        guard realSpeechOutcome.whole.rate <= 0.10 else {
+            fail(
+                "real-speech word error rate "
+                    + realSpeechOutcome.whole.percentage
+                    + " exceeds the 10% ceiling"
+            )
+        }
+        let realSegmentationCost =
+            realSpeechOutcome.segmented.rate - realSpeechOutcome.whole.rate
+        guard realSegmentationCost <= 0.05 else {
+            fail(
+                "real-speech segmentation cost "
+                    + String(format: "%.1f pts", realSegmentationCost * 100)
+                    + " exceeds the 5-point ceiling"
+            )
+        }
+    }
+
+    if let realSpeechOutcome {
+        report(
+            "ZenVoiceAccuracyChecks passed "
+                + "(real speech: whole "
+                + realSpeechOutcome.whole.percentage
+                + ", segmented "
+                + realSpeechOutcome.segmented.percentage
+                + ", segmentation cost "
+                + String(
+                    format: "%.1f pts).",
+                    (
+                        realSpeechOutcome.segmented.rate
+                            - realSpeechOutcome.whole.rate
+                    ) * 100
+                )
+        )
+    } else {
+        report(
+            "ZenVoiceAccuracyChecks passed "
+                + "(synthetic: whole \(totals.whole.percentage), "
+                + "segmented \(totals.segmented.percentage), "
+                + "segmentation cost "
+                + String(
+                    format: "%.1f pts).",
+                    (totals.segmented.rate - totals.whole.rate) * 100
+                )
+        )
+    }
     return true
 }
 

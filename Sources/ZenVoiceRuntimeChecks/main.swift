@@ -54,8 +54,15 @@ private func runPass(
 }
 
 do {
-
-    let configuration = try ZenVoiceConfiguration.discover()
+    let environment = ProcessInfo.processInfo.environment
+    let languageProfile: LanguageProfile =
+        environment["ZENVOICE_RUNTIME_LANGUAGE"] == "hinglish"
+        ? .hinglish
+        : .english
+    let configuration = try ZenVoiceConfiguration.discover(
+        languageProfile: languageProfile,
+        environment: environment
+    )
     let audioURL = try makeSilentFixture()
     defer {
         try? FileManager.default.removeItem(at: audioURL)
@@ -66,7 +73,7 @@ do {
     do {
         _ = try transcriber.transcribe(
             samples: Array(repeating: 0, count: 16_000),
-            languageProfile: .english,
+            languageProfile: languageProfile,
             initialPrompt: "ZenVoice SwiftUI"
         )
     } catch WhisperTranscriber.TranscriptionError.noSpeech {

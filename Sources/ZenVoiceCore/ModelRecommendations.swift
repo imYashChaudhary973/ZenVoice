@@ -174,9 +174,12 @@ public enum ModelRecommendationEngine {
             return ModelRecommendation(
                 level: .recommended,
                 title: "Recommended",
-                rationale: profile.hasGPUAcceleratedTranscription
-                    ? "Best accuracy for its size on this Mac's GPU, and it handles every language."
-                    : "The best accuracy this Mac can transcribe without a noticeable wait."
+                rationale:
+                    model.languageCapability == .hinglish
+                    ? "Built for Hindi-English code-switching and Latin-script output."
+                    : profile.hasGPUAcceleratedTranscription
+                        ? "Best accuracy for its size on this Mac's GPU, and it handles every supported language."
+                        : "The best accuracy this Mac can transcribe without a noticeable wait."
             )
         }
 
@@ -188,7 +191,7 @@ public enum ModelRecommendationEngine {
                 level: .caution,
                 title: "Larger than needed",
                 rationale:
-                    "Whisper Turbo reaches the same accuracy in a fraction of the space; this remains available if you prefer it."
+                    "Whisper Turbo offers nearby accuracy in a fraction of the space; this remains available if you prefer it."
             )
         }
         if model.tier == .highAccuracy,

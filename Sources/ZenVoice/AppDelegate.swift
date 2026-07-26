@@ -1133,12 +1133,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         languageCode:
                             behavior.languageProfile
                                 .inputLanguageCode,
-                        
                         voiceCommandsEnabled:
                             behavior.voiceCommandsEnabled
-                    ) ?? InstantRefineEngine().refine(
-                        result.finalTranscript,
-                        mode: .clean
                     )
                 let processed = ProcessedTranscription(
                     result: result,
@@ -1429,12 +1425,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         languageCode:
                             behavior.languageProfile
                                 .inputLanguageCode,
-                        
                         voiceCommandsEnabled:
                             behavior.voiceCommandsEnabled
-                    ) ?? InstantRefineEngine().refine(
-                        result.finalTranscript,
-                        mode: .clean
                     )
                 let processed = ProcessedTranscription(
                     result: result,
@@ -1989,6 +1981,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             )
         }
+        let recordedLanguageProfile = LanguageProfile.historyRetryProfile(
+            languageCode: record.language,
+            modelID: record.modelID
+        )
+        guard recordedLanguageProfile.isCompatible(
+            with: transcriber.languageCapability
+        ) else {
+            return .failure(
+                DictationVaultError.database(
+                    "This recording used \(recordedLanguageProfile.displayName). "
+                        + "Select a compatible model before retrying."
+                )
+            )
+        }
 
         do {
             try resolvedVault().markTranscribing(
@@ -2008,17 +2014,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let correctionVault = dictationVault
         let appliesCorrectionRules =
             learningPreferences.appliesCorrectionRules
-        let instantRefineMode = InstantRefinePreferences.load()
+        let applicationProfile = ApplicationProfilePreferences.profile(
+            for: record.targetBundleID
+        )
+        let instantRefineMode =
+            applicationProfile?.refinementMode
+            ?? InstantRefinePreferences.load()
+        let voiceCommandsEnabled =
+            applicationProfile?.voiceCommandsEnabled
+            ?? LocalVoiceCommandPreferences.isEnabled()
         transcriptionQueue.async { [weak self] in
             do {
-                let result = try transcriber.transcribe(audioURL: audioURL)
+                let result = try transcriber.transcribe(
+                    audioURL: audioURL,
+                    languageProfile: recordedLanguageProfile
+                )
                 let refinement =
                     TranscriptRefinement.refine(
                         result.finalTranscript,
-                        mode: instantRefineMode
-                    ) ?? InstantRefineEngine().refine(
-                        result.finalTranscript,
-                        mode: .clean
+                        mode: instantRefineMode,
+                        languageCode:
+                            recordedLanguageProfile.inputLanguageCode,
+                        voiceCommandsEnabled: voiceCommandsEnabled
                     )
                 let processed = ProcessedTranscription(
                     result: result,

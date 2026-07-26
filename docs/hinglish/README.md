@@ -37,7 +37,7 @@ an English-only checkpoint that cannot emit Devanagari at all.
 | 3 | Active model is English-only, cannot transcribe Hindi | **Critical** | `selectedModelID = whisper-medium-en` ([01](01-diagnosis.md#f3)) |
 | 4 | Model catalog stops at `medium`; no `large-v3` | High | [`VerifiedModelCatalog.swift`](../../Sources/ZenVoiceCore/VerifiedModelCatalog.swift) ([01](01-diagnosis.md#f4)) |
 | 5 | Greedy decoding only; no beam search or temperature fallback | High | [`WhisperTranscriber.swift`](../../Sources/ZenVoiceRuntime/WhisperTranscriber.swift) ([01](01-diagnosis.md#f5)) |
-| 6 | LLM refinement guard forbids word changes, so it cannot repair Hinglish | High | [`VerifiedRefinementModelCatalog.swift`](../../Sources/ZenVoiceCore/VerifiedRefinementModelCatalog.swift) ([01](01-diagnosis.md#f6)) |
+| 6 | Historical: the removed LLM refinement guard could not repair Hinglish | Closed | [`TranscriptRefinement.swift`](../../Sources/ZenVoiceCore/TranscriptRefinement.swift) ([01](01-diagnosis.md#f6)) |
 | 7 | No Hinglish evaluation harness | High | No benchmark exists ([01](01-diagnosis.md#f7)) |
 | 8 | `initial_prompt` unused for script/style priming | Medium | ([01](01-diagnosis.md#f8)) |
 

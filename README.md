@@ -44,8 +44,8 @@ analytics, or cloud transcription services in the current application.
   dictation.
 - Configurable Private Dictation (`Control + Option + P`) and hold-to-dictate
   controls.
-- Verified English and multilingual model downloads with pinned revisions and
-  SHA-256 validation.
+- Verified English, multilingual, and Hinglish-specialist model downloads with
+  pinned revisions and SHA-256 validation.
 - Explicit English-safe language profiles with 64 selectable languages.
 - Hinglish Latin-script output plus native-script and local English-translation
   modes for multilingual dictation.
@@ -55,12 +55,7 @@ analytics, or cloud transcription services in the current application.
   insertion.
 - Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
   private local timing samples.
-- Local Instant Refine with Off, Clean, and Agent Prompt modes
-  modes.
-- Fast and Balanced Qwen refinement downloads with immutable revisions,
-  Apache-2.0 licence links, exact size, and SHA-256 verification.
-- Grammar-constrained local JSON generation with a five-second deadline,
-  no-invention meaning guard, and deterministic Clean fallback.
+- Deterministic Instant Refine with Off, Clean, and Agent Prompt modes.
 - Per-application language, refinement, and voice-command profiles.
 - A memory-only context box for names and topic hints that clears when the
   next recording starts.
@@ -97,7 +92,7 @@ Hotkey
   → app profile + optional one-shot context
   → local Whisper transcription
   → conservative transcript cleanup
-  → optional verified local text refinement
+  → deterministic local refinement
   → macOS clipboard and active-app paste
 ```
 
@@ -110,7 +105,7 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 - macOS 14 or newer
 - Apple Silicon Mac
 - Swift 5.10 or newer
-- Internet access on the first build for the pinned `whisper.cpp` and
+- Internet access on the first build for the pinned `whisper.cpp` runtime
 - A verified model downloaded from ZenVoice's Models screen
 
 ## Quick start
@@ -130,7 +125,8 @@ On first use, macOS requests:
 Without Accessibility permission, ZenVoice still copies the transcript to the
 clipboard.
 
-Open **Models** to download a checksum-verified English or multilingual model.
+Open **Models** to download a checksum-verified English, multilingual, or
+Hinglish-specialist model.
 The pinned `whisper.cpp` runtime is bundled in the app; Homebrew is not
 required.
 
@@ -140,10 +136,9 @@ spoken language. Any non-English profile requires a Multilingual model.
 Open **Audio** to follow the macOS default input, pin a connected microphone,
 or run a local signal and format test.
 
-Open **Instant Refine** to control stable live preview. Experimental
-commit-on-pause insertion is opt-in and stays locked to the app where dictation
-started. The same screen offers Fast and Balanced verified local refinement
-models; weights download only after you select Download.
+Open **Instant Refine** to choose Off, Clean, or Agent Prompt and control stable
+live preview. Experimental commit-on-pause insertion is opt-in and stays locked
+to the app where dictation started.
 
 ## Use ZenVoice
 

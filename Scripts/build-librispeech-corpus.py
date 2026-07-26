@@ -3,7 +3,7 @@
 
 The harness shipped with synthesized fixtures, which are reproducible and
 free but are not people: `say` does not hesitate, breathe, or sit in a room.
-This turns a published corpus of real recordings into the wav+txt pairs
+This turns a published corpus of real recordings into the audio+txt pairs
 ZENVOICE_ACCURACY_CORPUS expects.
 
     python3 Scripts/build-librispeech-corpus.py --output ~/zenvoice-corpora
@@ -23,70 +23,68 @@ Two sets are produced:
 import argparse
 import collections
 import glob
+import hashlib
 import os
-import struct
-import subprocess
+import shutil
 import sys
 import urllib.request
 import tarfile
-import wave
 
 ARCHIVE_URL = "https://www.openslr.org/resources/31/dev-clean-2.tar.gz"
-SAMPLE_RATE = 16_000
+ARCHIVE_SHA256 = (
+    "176ec501490eced2d6c1f89f4f0ddc7dfe799e649e5322f8ba49fe3ff50c8012"
+)
 PAUSE_SECONDS = 1.2
 UTTERANCES_PER_DICTATION = 4
 
 
-def to_wav(source: str, destination: str) -> None:
-    """FLAC to 16 kHz mono WAV, using the converter macOS already ships."""
-    subprocess.run(
-        [
-            "afconvert", "-f", "WAVE", "-d", f"LEI16@{SAMPLE_RATE}",
-            "-c", "1", source, destination,
-        ],
-        check=True,
-        capture_output=True,
-    )
+def sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
-def pcm(path: str) -> bytes:
-    """Reads the data chunk directly.
-
-    afconvert writes WAVE_FORMAT_EXTENSIBLE, which Python's wave module
-    refuses even though the samples inside are ordinary 16-bit mono.
-    """
-    raw = open(path, "rb").read()
-    if raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
-        raise ValueError(f"{path} is not a RIFF/WAVE file")
-    offset = 12
-    while offset < len(raw) - 8:
-        chunk = raw[offset:offset + 4]
-        size = struct.unpack("<I", raw[offset + 4:offset + 8])[0]
-        if chunk == b"data":
-            return raw[offset + 8:offset + 8 + size]
-        offset += 8 + size + (size & 1)
-    raise ValueError(f"{path} has no data chunk")
-
-
-def write_wav(path: str, frames: bytes) -> None:
-    with wave.open(path, "wb") as handle:
-        handle.setnchannels(1)
-        handle.setsampwidth(2)
-        handle.setframerate(SAMPLE_RATE)
-        handle.writeframes(frames)
+def extract_safely(archive_path: str, destination: str) -> None:
+    root = os.path.realpath(destination) + os.sep
+    with tarfile.open(archive_path) as handle:
+        members = handle.getmembers()
+        for member in members:
+            target = os.path.realpath(os.path.join(destination, member.name))
+            if not target.startswith(root):
+                raise ValueError(
+                    f"archive member escapes destination: {member.name}"
+                )
+            if member.issym() or member.islnk():
+                raise ValueError(
+                    f"archive contains an unsupported link: {member.name}"
+                )
+        handle.extractall(destination, members=members)
 
 
 def fetch(destination: str) -> str:
     root = os.path.join(destination, "LibriSpeech", "dev-clean-2")
-    if os.path.isdir(root):
-        return root
     archive = os.path.join(destination, "dev-clean-2.tar.gz")
     if not os.path.exists(archive):
         print(f"downloading {ARCHIVE_URL} …")
-        urllib.request.urlretrieve(ARCHIVE_URL, archive)
+        partial = archive + ".download"
+        try:
+            urllib.request.urlretrieve(ARCHIVE_URL, partial)
+            if sha256(partial) != ARCHIVE_SHA256:
+                raise ValueError("downloaded LibriSpeech archive failed SHA-256")
+            os.replace(partial, archive)
+        finally:
+            if os.path.exists(partial):
+                os.remove(partial)
+    elif sha256(archive) != ARCHIVE_SHA256:
+        raise ValueError("cached LibriSpeech archive failed SHA-256")
+    # The archive is the pinned source of truth. Cached extracted files are
+    # disposable and are rebuilt so a poisoned cache cannot bypass the hash.
+    if os.path.isdir(root):
+        shutil.rmtree(root)
     print("extracting …")
-    with tarfile.open(archive) as handle:
-        handle.extractall(destination)
+    extract_safely(archive, destination)
     return root
 
 
@@ -120,29 +118,31 @@ def main() -> int:
 
     for index, speaker in enumerate(sorted(speakers)):
         audio, text = speakers[speaker][0]
-        target = os.path.join(single, f"{speaker}-{index:02d}.wav")
-        to_wav(audio, target)
-        open(target[:-4] + ".txt", "w").write(text + "\n")
-    print(f"single: {len(glob.glob(single + '/*.wav'))}")
+        target = os.path.join(single, f"{speaker}-{index:02d}.flac")
+        shutil.copyfile(audio, target)
+        open(os.path.splitext(target)[0] + ".txt", "w").write(text + "\n")
+    print(f"single: {len(glob.glob(single + '/*.flac'))}")
 
-    silence = b"\x00\x00" * int(SAMPLE_RATE * PAUSE_SECONDS)
     made = 0
-    for speaker in sorted(speakers):
+    dictation_speakers = (
+        sorted(speakers) if arguments.dictations > 0 else []
+    )
+    for speaker in dictation_speakers:
         items = speakers[speaker]
         if len(items) < UTTERANCES_PER_DICTATION:
             continue
-        frames, texts = [], []
-        for position, (audio, text) in enumerate(
-            items[:UTTERANCES_PER_DICTATION]
-        ):
-            scratch = os.path.join(arguments.output, f"_join{position}.wav")
-            to_wav(audio, scratch)
-            frames.append(pcm(scratch))
+        sources, texts = [], []
+        for audio, text in items[:UTTERANCES_PER_DICTATION]:
+            sources.append(audio)
             texts.append(text)
-            os.remove(scratch)
-        target = os.path.join(dictation, f"{speaker}.wav")
-        write_wav(target, silence.join(frames))
-        open(target[:-4] + ".txt", "w").write(" ".join(texts) + "\n")
+        target = os.path.join(dictation, f"{speaker}.list")
+        with open(target, "w") as manifest:
+            manifest.write(f"pause_seconds={PAUSE_SECONDS}\n")
+            for source in sources:
+                manifest.write(os.path.relpath(source, dictation) + "\n")
+        open(os.path.splitext(target)[0] + ".txt", "w").write(
+            " ".join(texts) + "\n"
+        )
         made += 1
         if made >= arguments.dictations:
             break

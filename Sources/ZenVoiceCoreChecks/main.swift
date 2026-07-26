@@ -1,3 +1,4 @@
+import ApplicationServices
 import Foundation
 import ZenVoiceCore
 
@@ -438,6 +439,25 @@ guard ModelRecommendationEngine.recommendedModelID(
     )
     exit(1)
 }
+guard let apex = VerifiedModelCatalog.model(id: "hindi2hinglish-apex"),
+      let medium = VerifiedModelCatalog.model(
+          id: "whisper-medium-multilingual"
+      ),
+      ModelRecommendationEngine.recommendation(
+          for: apex,
+          profile: capableMac,
+          language: .hinglish
+      ).rationale.contains("code-switching"),
+      !ModelRecommendationEngine.recommendation(
+          for: medium,
+          profile: capableMac,
+          language: .english
+      ).rationale.contains("same accuracy") else {
+    FileHandle.standardError.write(
+        Data("FAIL: model recommendation copy is misleading\n".utf8)
+    )
+    exit(1)
+}
 
 // And a general multilingual model must not be offered for Hinglish at all.
 guard !LanguageProfile.hinglish.isCompatible(with: .multilingual),
@@ -853,8 +873,12 @@ guard VerifiedModelCatalog.models.count == 9,
       // Whisper Medium English-only is retired: 2.9% word error rate against
       // the multilingual build's 2.7%, same size, same speed, English only.
       // Retired rather than deleted so an existing install still resolves.
-      VerifiedModelCatalog.models.allSatisfy { $0.id != "whisper-medium-en" },
+      VerifiedModelCatalog.models.allSatisfy({
+          $0.id != "whisper-medium-en"
+      }),
       VerifiedModelCatalog.model(id: "whisper-medium-en") != nil,
+      VerifiedModelCatalog.model(filename: "ggml-medium.en.bin")?.id
+        == "whisper-medium-en",
       Set(verifiedModels.map(\.id)).count == verifiedModels.count,
       Set(verifiedModels.map(\.filename)).count == verifiedModels.count,
       Set(verifiedModels.map(\.tier))
@@ -1219,7 +1243,18 @@ guard LanguagePreferences.load(defaults: languageDefaults) == .hinglish,
       // Latin script under `en`, and asking it for `hi` undoes the feature.
       LanguageProfile.hinglish.whisperLanguageArgument(for: .hinglish) == "en",
       LanguageProfile.hinglish.whisperLanguageArgument(for: .multilingual)
-        == "hi" else {
+        == "hi",
+      LanguageProfile.historyRetryProfile(
+          languageCode: "hi",
+          modelID: "hindi2hinglish-apex"
+      ) == .hinglish,
+      LanguageProfile.historyRetryProfile(
+          languageCode: "hi",
+          modelID: "whisper-large-v3-turbo"
+      ) == LanguageProfile(
+          inputLanguageCode: "hi",
+          outputMode: .spokenLanguage
+      ) else {
     FileHandle.standardError.write(
         Data("FAIL: language profile persistence or compatibility failed\n".utf8)
     )
@@ -1244,6 +1279,34 @@ guard englishConfiguration.language == "en",
       !translationConfiguration.shouldTransliterateToLatin else {
     FileHandle.standardError.write(
         Data("FAIL: language runtime configuration is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+let configurationFixtureDirectory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ZenVoiceConfiguration.\(UUID().uuidString)")
+try FileManager.default.createDirectory(
+    at: configurationFixtureDirectory,
+    withIntermediateDirectories: true
+)
+defer {
+    try? FileManager.default.removeItem(at: configurationFixtureDirectory)
+}
+let apexFixtureURL = configurationFixtureDirectory
+    .appendingPathComponent("ggml-hindi2hinglish-apex-q8_0.bin")
+_ = FileManager.default.createFile(
+    atPath: apexFixtureURL.path(percentEncoded: false),
+    contents: Data()
+)
+let apexOverrideConfiguration = try? ZenVoiceConfiguration.discover(
+    languageProfile: .hinglish,
+    environment: ["ZENVOICE_MODEL_PATH": apexFixtureURL.path],
+    homeDirectory: configurationFixtureDirectory
+)
+guard apexOverrideConfiguration?.modelLanguageCapability == .hinglish,
+      apexOverrideConfiguration?.language == "en" else {
+    FileHandle.standardError.write(
+        Data("FAIL: Apex path override lost its Hinglish capability\n".utf8)
     )
     exit(1)
 }
@@ -1437,6 +1500,37 @@ guard !ZenBarPreferences.showsAtAllTimes(defaults: zenBarDefaults) else {
 }
 
 print("ZenVoiceCoreChecks: ZenVoice bar preference passed")
+
+// Secure input is usually active because a password field has focus. The
+// fallback may write only to a positively identified non-secure text control;
+// ambiguous text fields fail closed instead of risking a password insertion.
+guard !TextInserter.allowsAccessibilityInsertion(
+          role: kAXTextFieldRole as String,
+          subrole: kAXSecureTextFieldSubrole as String
+      ),
+      !TextInserter.allowsAccessibilityInsertion(
+          role: kAXTextFieldRole as String,
+          subrole: nil
+      ),
+      TextInserter.allowsAccessibilityInsertion(
+          role: kAXTextFieldRole as String,
+          subrole: "AXSearchField"
+      ),
+      TextInserter.allowsAccessibilityInsertion(
+          role: kAXTextAreaRole as String,
+          subrole: nil
+      ),
+      !TextInserter.allowsAccessibilityInsertion(
+          role: kAXButtonRole as String,
+          subrole: nil
+      ) else {
+    FileHandle.standardError.write(
+        Data("FAIL: secure-input accessibility policy is unsafe\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: secure-input insertion policy passed")
 
 // Runaway repetition — Whisper's failure on audio it cannot handle. Measured:
 // one clip made Whisper Tiny emit "We are in India," about a hundred times.

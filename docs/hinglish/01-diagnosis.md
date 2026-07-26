@@ -1,9 +1,13 @@
 # Diagnosis: Why Hinglish Output Is Bad
 
+> Historical R&D snapshot. ZenVoice now uses the Apex Hinglish specialist and
+> deterministic refinement; the Qwen/llama.cpp path described below was
+> removed. See [MODEL_CATALOG.md](../MODEL_CATALOG.md) for current behavior.
+
 Every finding below is grounded in this codebase or in a measurement taken from
 it. Where a claim is inference rather than measurement, it says so.
 
-## The current pipeline
+## The pipeline at the time of this investigation
 
 ```
 microphone
@@ -191,9 +195,9 @@ be measured rather than assumed ([04-evaluation.md](04-evaluation.md)).
 <a name="f6"></a>
 ## Finding 6 — The refinement guard forbids the repairs Hinglish needs (High)
 
-ZenVoice already runs a local LLM (Qwen 2.5 1.5B) over transcripts. It cannot
-help here, because of this guard in
-[`VerifiedRefinementModelCatalog.swift`](../../Sources/ZenVoiceCore/VerifiedRefinementModelCatalog.swift):
+ZenVoice ran a local LLM (Qwen 2.5 1.5B) over transcripts. It could not help
+here because of this guard in the now-removed
+`VerifiedRefinementModelCatalog`:
 
 ```swift
 guard tokens(in: candidate) == tokens(in: original) else {

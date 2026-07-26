@@ -264,7 +264,10 @@ final class ModelManagerViewModel: ObservableObject {
         verificationTask?.cancel()
         refreshBenchmarks()
         isVerifying = true
-        let models = models
+        // Retired models are hidden from the catalogue, not invalidated.
+        // Verify them too so an existing selection keeps working until the
+        // user explicitly moves to an offered model.
+        let models = VerifiedModelCatalog.allModels
         let fileManager = fileManager
         verificationTask = Task { [weak self] in
             let installed = await Task.detached(priority: .utility) {

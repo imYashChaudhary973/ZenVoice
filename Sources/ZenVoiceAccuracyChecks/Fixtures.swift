@@ -485,6 +485,52 @@ enum Fixtures {
     /// silently decoding those at the wrong rate would produce nonsense that
     /// looks like a transcription failure.
     static func samples(at url: URL) throws -> [Float] {
+        if url.pathExtension.lowercased() == "list" {
+            let lines = try String(contentsOf: url, encoding: .utf8)
+                .split(whereSeparator: \.isNewline)
+                .map(String.init)
+            guard let header = lines.first,
+                  header.hasPrefix("pause_seconds="),
+                  let pauseSeconds = Double(
+                      header.dropFirst("pause_seconds=".count)
+                  ),
+                  pauseSeconds >= 0,
+                  pauseSeconds <= 10 else {
+                return []
+            }
+            let silence = Array(
+                repeating: Float.zero,
+                count: Int(16_000 * pauseSeconds)
+            )
+            let corpusRoot = url
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .standardizedFileURL.path + "/"
+            guard lines.count >= 2, lines.count <= 33 else {
+                return []
+            }
+            var combined: [Float] = []
+            for (index, relativePath) in lines.dropFirst().enumerated() {
+                guard !relativePath.hasPrefix("/") else {
+                    return []
+                }
+                let component = URL(
+                    fileURLWithPath: relativePath,
+                    relativeTo: url.deletingLastPathComponent()
+                )
+                .standardizedFileURL
+                .resolvingSymlinksInPath()
+                guard component.path.hasPrefix(corpusRoot),
+                      component.pathExtension.lowercased() != "list" else {
+                    return []
+                }
+                if index > 0 {
+                    combined.append(contentsOf: silence)
+                }
+                combined.append(contentsOf: try samples(at: component))
+            }
+            return combined
+        }
         let file = try AVAudioFile(forReading: url)
         let sourceFormat = file.processingFormat
         guard let targetFormat = AVAudioFormat(
@@ -558,8 +604,8 @@ enum Fixtures {
         )
     }
 
-    /// Loads human recordings supplied by the operator: each `name.wav` paired
-    /// with a `name.txt` holding what was actually said.
+    /// Loads human recordings supplied by the operator: each audio file or
+    /// multi-clip `.list` manifest is paired with a same-name `.txt` reference.
     ///
     /// Synthetic speech is evenly paced and free of breath, hesitation and room
     /// tone, so every number the harness produces from it is optimistic. This
@@ -570,7 +616,10 @@ enum Fixtures {
             includingPropertiesForKeys: nil
         )
         return contents
-            .filter { ["wav", "aiff", "m4a", "mp3", "caf"].contains($0.pathExtension.lowercased()) }
+            .filter {
+                ["wav", "aiff", "m4a", "mp3", "caf", "flac", "list"]
+                    .contains($0.pathExtension.lowercased())
+            }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .compactMap { audio in
                 let reference = audio

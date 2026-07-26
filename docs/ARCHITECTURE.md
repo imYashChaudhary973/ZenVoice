@@ -30,9 +30,6 @@ AudioRecorder ──────► local WAV ──────► ZenVoiceRunt
                                            │
                                            ▼
                                     InstantRefineEngine
-                                           │ optional
-                                           ▼
-                              ZenVoiceRefinementRuntime
                                            │
                                            ▼
                                      TextInserter
@@ -79,15 +76,14 @@ The native application target owns macOS-specific behavior:
 - When live preview is enabled, `AudioRecorder` also keeps bounded-to-session
   in-memory samples. `StablePauseDetector` exposes a phrase only after reviewed
   speech and silence thresholds.
-- `TextInserter` copies and pastes the final transcript.
 - `ZenBarPanelController` presents ZenBar across desktop spaces.
 - `ZenBarView` renders state and microphone-responsive waveform history.
 - `BrandAssets` loads packaged Zen branding.
 
 ### `ZenVoiceCore`
 
-The platform-independent core contains logic that can be checked without
-launching the application:
+The shared core contains logic that can be checked without launching the full
+application:
 
 - `AudioLevelMeter` maps microphone dB readings into smoothed waveform levels.
 - `HotKeyConfiguration` validates and serializes shortcut choices.
@@ -101,13 +97,8 @@ launching the application:
 - `LocalVoiceCommandEngine` applies reviewed layout and punctuation commands
   before refinement. `NextDictationContext` bounds and sanitizes the
   memory-only hint passed to local runtimes.
-- `VerifiedRefinementModelCatalog` is the independent allowlist for Qwen
-  publisher metadata, immutable revisions, exact GGUF files, licence links,
-  size, SHA-256, and minimum-memory guidance.
-- `LocalRefinementPrompt` defines the no-translation, no-invention JSON
-  contract. Deterministic Clean runs first, then `LocalRefinementGuard`
-  rejects malformed results or any normalized-token deletion, duplication, or
-  reordering.
+- `TextInserter` owns the macOS clipboard and accessibility boundary. Its
+  secure-input policy is deterministic and checked in `ZenVoiceCoreChecks`.
 - `LanguageCatalog` exposes the reviewed language codes and product support
   level. `LanguagePreferences` persists the explicit input/output profile.
 - `LocalTransliterator` converts supported native scripts to Latin characters
@@ -123,8 +114,6 @@ launching the application:
 downloads before atomic replacement, prevents cancelled tasks from clearing a
 new download, and updates the selected local model without sending speech data
 to a server.
-`RefinementModelManagerViewModel` applies the same verified-download and
-atomic-install contract to the separate text-model directory.
 `HistoryViewModel` derives its Recovery Inbox directly from encrypted History
 records marked failed or partial; it does not create a second transcript copy.
 The Privacy screen derives live inventory counts from the same view models and
@@ -149,16 +138,6 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 - The runtime accepts only 16 kHz mono audio produced by `AudioRecorder`.
 - File and in-memory sample transcription use the same retained context and
   dedicated serial queue, preventing concurrent access to `whisper.cpp`.
-
-### `ZenVoiceRefinementRuntime`
-
-- `LocalTextRefiner` loads an exact verified GGUF through the pinned
-- The model stays loaded across dictations; each generation uses a fresh local
-  context and one serialized call through `LocalRefinementCoordinator`.
-- A GBNF grammar restricts output to one JSON object. Generation is greedy,
-  bounded to 192 output tokens, and checked against a five-second deadline.
-- A runtime failure or rejected meaning guard never blocks dictation; ZenVoice
-  falls back to deterministic Clean refinement.
 
 ### `ZenVoiceStorage`
 
@@ -201,10 +180,8 @@ cryptographic Delete All, ciphertext field binding, recovery-path confinement,
 partial transcript flags, and history preferences.
 
 `ZenVoiceRuntimeChecks` creates a local silent WAV and performs two sequential
-passes through one transcriber. It validates both embedded C APIs and the
-persistent Whisper lifecycle without microphone or UI interaction. Setting
-`ZENVOICE_REFINEMENT_MODEL_PATH` adds a real GGUF structured-output and meaning
-guard pass.
+passes through one transcriber. It validates the embedded Whisper C API and the
+persistent model lifecycle without microphone or UI interaction.
 
 `ShareCardSummary` lives in the core target and can contain only total words,
 weighted WPM, current streak, and distinct application count. It has no field
@@ -248,20 +225,17 @@ When history is enabled, a record moves through `recording`, `transcribing`,
 `ready`, and `inserted` or `copiedOnly`. An interrupted or failed operation
 moves to `failed` and can retain its local audio for retry.
 
-The completed Whisper text passes through Instant Refine and then encrypted
-personal correction rules.
-Qwen model, but only a grammar-valid, meaning-guarded result is accepted. The
-resulting text is what history and insertion receive; the raw Whisper
+The completed Whisper text passes through deterministic Instant Refine and then
+encrypted personal correction rules. The resulting text is what history and
+insertion receive; the raw Whisper
 transcript remains available in the encrypted record for local recovery and
 comparison.
 
 ## Concurrency
 
 UI and application state remain on the main actor. Whisper transcription and
-optional text refinement run on a dedicated user-initiated serial queue so
-model processing does not block ZenBar. Selected refinement runtimes are
-replaced through a lock-protected coordinator after background checksum
-verification.
+deterministic text refinement run on a dedicated user-initiated serial queue so
+model processing does not block ZenBar.
 
 ## Current trade-offs
 
