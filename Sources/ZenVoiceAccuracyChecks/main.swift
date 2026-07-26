@@ -24,6 +24,8 @@ import ZenVoiceRuntime
 //   ZENVOICE_ACCURACY_CLEAN    set to 1 to measure studio-clean audio instead
 //   ZENVOICE_ACCURACY_FIXTURES cache directory for rendered audio
 //   ZENVOICE_ACCURACY_VERBOSE  set to 1 to print every hypothesis
+//   ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS
+//                               cap synthetic clips; real/long-form stay intact
 
 private let environment = ProcessInfo.processInfo.environment
 
@@ -36,7 +38,7 @@ private func flag(_ key: String) -> Bool {
 }
 
 private func report(_ message: String = "") {
-    print(message)
+    FileHandle.standardOutput.write(Data((message + "\n").utf8))
 }
 
 private func fail(_ message: String) -> Never {
@@ -319,13 +321,22 @@ private func measure() -> Bool {
                 isDirectory: true
             )
 
-    let clips: [Fixtures.Clip]
+    let renderedClips: [Fixtures.Clip]
     do {
-        clips = try Fixtures.render(into: fixtureDirectory)
+        renderedClips = try Fixtures.render(into: fixtureDirectory)
     } catch {
         // A machine without usable speech synthesis cannot run the harness,
         // but that is an environment gap rather than an accuracy regression.
         skip(error.localizedDescription)
+    }
+    let syntheticClipLimit = environment[
+        "ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS"
+    ].flatMap(Int.init)
+    let clips: [Fixtures.Clip]
+    if let syntheticClipLimit, syntheticClipLimit > 0 {
+        clips = Array(renderedClips.prefix(syntheticClipLimit))
+    } else {
+        clips = renderedClips
     }
 
     let isClean = flag("ZENVOICE_ACCURACY_CLEAN")

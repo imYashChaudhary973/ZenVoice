@@ -5,5 +5,7 @@ build/
 *.xcuserstate
 Screenshot *.png
 Screenshot *.heic
+/Style Personal messages-*.png
+/clipboard-*.png
 .claude/settings.local.json
 PrivateBenchmarks/
