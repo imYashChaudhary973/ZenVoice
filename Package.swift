@@ -21,6 +21,10 @@ let package = Package(
         .executable(
             name: "ZenVoiceAccuracyChecks",
             targets: ["ZenVoiceAccuracyChecks"]
+        ),
+        .executable(
+            name: "ZenVoiceLanguageBench",
+            targets: ["ZenVoiceLanguageBench"]
         )
     ],
     targets: [
@@ -63,6 +67,13 @@ let package = Package(
         ),
         .executableTarget(
             name: "ZenVoiceAccuracyChecks",
+            dependencies: [
+                "ZenVoiceCore",
+                "ZenVoiceRuntime",
+            ]
+        ),
+        .executableTarget(
+            name: "ZenVoiceLanguageBench",
             dependencies: [
                 "ZenVoiceCore",
                 "ZenVoiceRuntime",

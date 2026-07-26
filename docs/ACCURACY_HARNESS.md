@@ -150,7 +150,8 @@ The run fails when:
   that catches catastrophic breakage rather than drift
 - long-form output invents more than 5% of the reference length, or repeats more
   than 10% of its 5-grams
-- Hindi produces no transcript, or Hinglish output still contains Devanagari
+- Hindi produces no transcript, or Hinglish output contains any non-Latin
+  alphabetic script
 - the loanword metric cannot distinguish natural Hinglish from romanized mush
 - Hinglish coverage should have run but produced no measurements at all, which
   would turn lost coverage into a clean run

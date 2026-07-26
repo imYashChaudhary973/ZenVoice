@@ -280,8 +280,15 @@ private func evaluateTextCorpus(path: String) -> Bool {
 private func measure() -> Bool {
     let configuration: ZenVoiceConfiguration
     do {
+        let overrideCapability = environment["ZENVOICE_MODEL_PATH"]
+            .flatMap {
+                VerifiedModelCatalog.model(
+                    filename: URL(fileURLWithPath: $0).lastPathComponent
+                )?.languageCapability
+            }
         configuration = try ZenVoiceConfiguration.discover(
-            languageProfile: .english
+            languageProfile:
+                overrideCapability == .hinglish ? .hinglish : .english
         )
     } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
         skip(
@@ -993,6 +1000,11 @@ private func measure() -> Bool {
                 expected: clip.sentence.loanwords ?? [],
                 hypothesis: latin
             )
+            let unexpectedScript = latin.unicodeScalars.contains {
+                $0.properties.isAlphabetic
+                    && !$0.isASCII
+                    && !($0.properties.name ?? "").contains("LATIN")
+            }
             hinglishLoanwords = hinglishLoanwords + loanwords
 
             report(
@@ -1010,6 +1022,12 @@ private func measure() -> Bool {
             if latin.isEmpty {
                 hindiFailures.append(
                     "\(clip.name) produced no Hinglish transcript"
+                )
+            }
+            if unexpectedScript {
+                hindiFailures.append(
+                    "\(clip.name) left a non-Latin script in Hinglish output: "
+                        + latin
                 )
             }
         }

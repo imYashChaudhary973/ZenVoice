@@ -106,6 +106,10 @@ does not duplicate the transcript or audio. The Models screen reports weighted
 real-time factor from up to 50 recent samples so recommendations can be judged
 against evidence from the user's own Mac.
 
+The reproducible M5 comparison across seven installed models, eight languages,
+multiple voices, speaking rates, memory, and real Hinglish is recorded in
+[LANGUAGE_MODEL_BENCHMARK_2026-07-26.md](LANGUAGE_MODEL_BENCHMARK_2026-07-26.md).
+
 ## Bundled runtime
 
 ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
