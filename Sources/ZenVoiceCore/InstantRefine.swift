@@ -99,11 +99,38 @@ public struct InstantRefineEngine: Sendable {
                 #"(?i)\b([\p{L}\p{N}_'-]+)\s*(?:,|—|-)\s*(?:no\s*,?\s*wait|sorry|i mean|rather)\s*[,—-]?\s*([\p{L}\p{N}_'-]+)\b"#,
             template: "$2"
         )
+        // Filler stems. "ah" and "hm" were measured escaping in real Whisper
+        // output — the harness caught "Do not merge the branch. Ah, until the
+        // tests pass."
+        //
+        // "er" is deliberately absent despite being a filler: it also spells a
+        // real verb, and "err on the side of caution" would lose its verb. The
+        // remaining stems have no English homograph.
         correctionCount += replace(
             in: &candidate,
             pattern:
-                #"(?i)(?<![\p{L}\p{N}_])(?:um+|uh+|erm+)(?:\s*,\s*|\s+|$)"#,
+                #"(?i)(?<![\p{L}\p{N}_])(?:um+|uh+|erm+|ah+|hm+|mhm+)(?:\s*,\s*|\s+|$)"#,
             template: ""
+        )
+        // Discourse markers, but only when the speaker's own pauses bracket
+        // them in commas. "like" and "you know" are the two commonest fillers
+        // in spoken English and both are ordinary words elsewhere — deleting
+        // "like" wherever it appears would eat "I like it" and "like this".
+        // The comma bracketing is what distinguishes the filler use, and it is
+        // how Whisper actually punctuates them.
+        //
+        // Runs after the restart patterns above so that "a login page, I mean,
+        // a sign-up page" is resolved as a correction first.
+        correctionCount += replace(
+            in: &candidate,
+            pattern:
+                #"(?i)\s*,\s*(?:you know|i guess|sort of|kind of)\s*,\s*"#,
+            template: " "
+        )
+        correctionCount += replace(
+            in: &candidate,
+            pattern: #"(?i)\s*,\s*like\s*,\s*"#,
+            template: " "
         )
         correctionCount += replace(
             in: &candidate,
@@ -155,6 +182,18 @@ public struct InstantRefineEngine: Sendable {
                 with: candidate[firstLetterIndex].uppercased()
             )
         }
+        // Deleting a filler that opened a sentence leaves the next word
+        // lowercased — "… the branch. Ah, until the tests pass." becomes
+        // "… the branch. until the tests pass." Fixing the case is part of
+        // finishing the edit, not a separate feature.
+        //
+        // Case never affects the meaning guard, which lowercases before
+        // comparing, so this cannot cause a rejection.
+        let recased = capitalizingSentenceStarts(candidate)
+        if recased != candidate {
+            candidate = recased
+            correctionCount += 1
+        }
         guard meaningIsPreserved(
             original: transcript,
             candidate: candidate
@@ -170,6 +209,34 @@ public struct InstantRefineEngine: Sendable {
             text: candidate,
             correctionCount: candidate == transcript ? 0 : correctionCount
         )
+    }
+
+    /// Uppercases the first letter of each sentence.
+    ///
+    /// A digit immediately after the stop cancels it, so "3.5 seconds" and
+    /// version numbers are left alone. Abbreviations like "e.g. foo" are still
+    /// treated as a sentence break — accepting that over-capitalization is the
+    /// cost of not carrying an abbreviation dictionary, and it is a
+    /// presentation slip rather than a meaning change.
+    private func capitalizingSentenceStarts(_ text: String) -> String {
+        var characters = Array(text)
+        var awaitingStart = false
+        for index in characters.indices {
+            let character = characters[index]
+            if character == "." || character == "!" || character == "?" {
+                awaitingStart = true
+            } else if awaitingStart, character.isLetter {
+                characters[index] = Character(
+                    character.uppercased()
+                )
+                awaitingStart = false
+            } else if !character.isWhitespace,
+                      character != "\"",
+                      character != "'" {
+                awaitingStart = false
+            }
+        }
+        return String(characters)
     }
 
     private func replace(

@@ -15,9 +15,16 @@ Local audio
 ## Current modes
 
 - **Off:** preserves the cleaned Whisper transcript.
-- **Clean:** removes standalone fillers, immediately repeated words, and
-  punctuation-marked spoken restarts such as “a login page, no wait, a sign-up
-  page.”
+- **Clean:** removes standalone fillers (`um`, `uh`, `erm`, `ah`, `hm`),
+  comma-bracketed discourse markers such as “, you know,” and “, like,”,
+  immediately repeated words, and punctuation-marked spoken restarts such as
+  “a login page, no wait, a sign-up page.” It also recapitalizes a sentence
+  whose opening filler it removed.
+
+  Discourse markers are removed only when the speaker's own pauses bracket
+  them in commas, because `like` and `you know` are ordinary words elsewhere —
+  “I like the way you know the answer” is left alone. `er` is not treated as a
+  filler at all, so “err on the side of caution” keeps its verb.
 - **Agent Prompt:** includes Clean behavior and honors the explicit spoken
   commands “new line” and “new paragraph.”
 - **Local Model:** runs the selected verified Qwen model through the bundled

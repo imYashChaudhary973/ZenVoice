@@ -60,6 +60,24 @@ private struct Totals {
     var segmentCount = 0
 }
 
+/// What one refinement mode did to one cohort of clips.
+private struct StageOutcome {
+    var score = Scoring.Result.zero
+    var insertions = 0
+    /// Times the meaning guard threw the candidate away.
+    var rejections = 0
+    /// Times the output differed from the input at all.
+    var changed = 0
+    var clipCount = 0
+    var seconds: TimeInterval = 0
+    /// Protected tokens altered, as "clip: token before→after".
+    var violations: [String] = []
+
+    var rejectionRate: Double {
+        clipCount == 0 ? 0 : Double(rejections) / Double(clipCount)
+    }
+}
+
 private extension String {
     func leftPadded(to width: Int) -> String {
         count >= width
@@ -253,98 +271,265 @@ private func measure() -> Bool {
                 ("local model", .localModel)
             ]
 
-        // Measured against disfluent speech, not the clean fixtures. On tidy
-        // sentences there is nothing to refine, so every mode scores identically
-        // and the test proves nothing. Hesitations and restarts are what
-        // refinement exists for.
-        let refinementClips =
-            ((try? Fixtures.renderDisfluent(into: fixtureDirectory)) ?? [])
-            + clips
+        // Two cohorts, scored separately.
+        //
+        // Pooling them was hiding the very thing this section exists to
+        // measure. Three disfluent clips sat among twelve clean ones, and on
+        // clean speech every mode scores identically because there is nothing
+        // to fix — so a mode that did literally nothing still posted the same
+        // improvement as one that worked, and the suite called it a pass.
+        //
+        // Split, each cohort carries its own half of the contract: refinement
+        // must help where there is something to fix, and must not meddle where
+        // there is not. Neither claim is checkable from the pooled average.
+        let disfluentClips =
+            (try? Fixtures.renderDisfluent(into: fixtureDirectory)) ?? []
+        // Real recordings, from the same ZENVOICE_ACCURACY_CORPUS directory the
+        // transcription section already reads, so one folder of wav+txt pairs
+        // serves both. Synthesized and real speech stay in separate cohorts
+        // rather than merged: they have different error distributions, and
+        // averaging them would reintroduce exactly the dilution the split above
+        // just removed.
+        let corpusClips = environment["ZENVOICE_ACCURACY_CORPUS"]
+            .map { URL(fileURLWithPath: $0) }
+            .flatMap { try? Fixtures.corpus(at: $0) } ?? []
+        var cohorts: [(
+            name: String,
+            clips: [Fixtures.Clip],
+            claim: String,
+            isSynthetic: Bool
+        )] = [
+            ("disfluent speech", disfluentClips, "refinement must help", true),
+            ("clean speech", clips, "refinement must not meddle", true)
+        ]
+        if !corpusClips.isEmpty {
+            cohorts.append(
+                ("real dictation", corpusClips, "refinement must help", false)
+            )
+        }
 
-        report("  refinement stages (disfluent speech + clean fixtures)")
-        report("  " + String(repeating: "-", count: 60))
         if localModelURL == nil {
             report("  local model stage skipped — no refinement model installed")
         }
 
-        var rawTotal = Scoring.Result.zero
-        var stageTotals = [String: Scoring.Result]()
-        var stageInsertions = [String: Int]()
-        var stageRejections = [String: Int]()
-        var stageChanged = [String: Int]()
+        var cohortRaw: [String: Scoring.Result] = [:]
+        var cohortStages: [String: [String: StageOutcome]] = [:]
+        var unhandled: [String] = []
 
-        for clip in refinementClips {
-            let samples = Fixtures.degraded(
-                (try? Fixtures.samples(at: clip.url)) ?? [],
-                gain: gain,
-                noise: noise
-            )
-            guard !samples.isEmpty else { continue }
-            let raw = decode(samples)
-            guard !raw.isEmpty else { continue }
-            rawTotal = rawTotal + Scoring.wordErrorRate(
-                reference: clip.sentence.text,
-                hypothesis: raw
-            )
-            for (name, mode) in stages {
-                let outcome = coordinator.refine(
-                    raw,
-                    mode: mode,
-                    languageCode: "en"
-                )
-                let refined = outcome.text
-                if outcome.wasRejected {
-                    stageRejections[name] = (stageRejections[name] ?? 0) + 1
-                }
-                if refined != raw {
-                    stageChanged[name] = (stageChanged[name] ?? 0) + 1
-                }
-                let score = Scoring.wordErrorRate(
+        for cohort in cohorts {
+            var rawTotal = Scoring.Result.zero
+            var outcomes: [String: StageOutcome] = [:]
+
+            for clip in cohort.clips {
+                let loaded = (try? Fixtures.samples(at: clip.url)) ?? []
+                // Real recordings already carry their own room tone and level.
+                // Degrading them would simulate a microphone on top of a
+                // microphone.
+                let samples = cohort.isSynthetic
+                    ? Fixtures.degraded(loaded, gain: gain, noise: noise)
+                    : loaded
+                guard !samples.isEmpty else { continue }
+                let raw = decode(samples)
+                guard !raw.isEmpty else { continue }
+                var clipChanged = false
+                rawTotal = rawTotal + Scoring.wordErrorRate(
                     reference: clip.sentence.text,
-                    hypothesis: refined
+                    hypothesis: raw
                 )
-                stageTotals[name] = (stageTotals[name] ?? .zero) + score
-                stageInsertions[name] =
-                    (stageInsertions[name] ?? 0) + score.insertions
+                for (name, mode) in stages {
+                    var outcome = outcomes[name] ?? StageOutcome()
+                    let started = Date()
+                    let result = coordinator.refine(
+                        raw,
+                        mode: mode,
+                        languageCode: "en"
+                    )
+                    outcome.seconds += Date().timeIntervalSince(started)
+                    let refined = result.text
+                    if result.wasRejected { outcome.rejections += 1 }
+                    if refined != raw {
+                        outcome.changed += 1
+                        clipChanged = true
+                    }
+                    outcome.clipCount += 1
+                    let score = Scoring.wordErrorRate(
+                        reference: clip.sentence.text,
+                        hypothesis: refined
+                    )
+                    outcome.score = outcome.score + score
+                    outcome.insertions += score.insertions
+                    for violation in SemanticSafety.violations(
+                        raw: raw,
+                        refined: refined
+                    ) {
+                        outcome.violations.append(
+                            "\(clip.name): \(violation.description)"
+                        )
+                    }
+                    outcomes[name] = outcome
+                }
+
+                // A disfluent clip that no mode altered is a disfluency the
+                // product cannot see. This is the actionable list — the WER
+                // delta says refinement helped, but not that it helped on
+                // everything, and an average over eight clips can look healthy
+                // while six of them pass through untouched.
+                if !clipChanged, cohort.name != "clean speech" {
+                    unhandled.append("\(clip.name): \(raw)")
+                }
+            }
+
+            cohortRaw[cohort.name] = rawTotal
+            cohortStages[cohort.name] = outcomes
+        }
+
+        for cohort in cohorts {
+            guard let rawTotal = cohortRaw[cohort.name],
+                  let outcomes = cohortStages[cohort.name] else { continue }
+            let clipCount = outcomes.values.first?.clipCount ?? 0
+            report(
+                "  refinement — \(cohort.name)"
+                    + " (\(clipCount) clips, \(cohort.claim))"
+            )
+            report("  " + String(repeating: "-", count: 60))
+            report(
+                "  "
+                    + "raw transcript".padding(
+                        toLength: 28, withPad: " ", startingAt: 0
+                    )
+                    + rawTotal.percentage.leftPadded(to: 7)
+            )
+            for (name, _) in stages {
+                guard let outcome = outcomes[name] else { continue }
+                let delta = (outcome.score.rate - rawTotal.rate) * 100
+                report(
+                    "  "
+                        + "after \(name)".padding(
+                            toLength: 28, withPad: " ", startingAt: 0
+                        )
+                        + outcome.score.percentage.leftPadded(to: 7)
+                        + String(format: "%+9.1f pts", delta)
+                        + String(format: "%5d ins", outcome.insertions)
+                        + String(
+                            format: "%5d changed, %d rejected (%.0f%%)",
+                            outcome.changed,
+                            outcome.rejections,
+                            outcome.rejectionRate * 100
+                        )
+                        + String(format: "%7.0f ms", outcome.seconds * 1_000)
+                )
+            }
+            report()
+        }
+
+        if !unhandled.isEmpty {
+            report(
+                "  disfluencies no mode touched"
+                    + " (\(unhandled.count) clips passed through unchanged)"
+            )
+            report("  " + String(repeating: "-", count: 60))
+            for clip in unhandled {
+                report("    \(clip)")
+            }
+            report()
+        }
+
+        // ---- assertions ----
+
+        // 1. Refinement must not make clean speech worse. Pre-existing.
+        if let rawTotal = cohortRaw["clean speech"],
+           let outcomes = cohortStages["clean speech"] {
+            for (name, _) in stages {
+                guard let outcome = outcomes[name] else { continue }
+                let delta = (outcome.score.rate - rawTotal.rate) * 100
+                if delta > 2.0 {
+                    refinementFailures.append(
+                        "\(name) raised word error rate on clean speech by "
+                            + String(format: "%.1f", delta) + " points"
+                    )
+                }
             }
         }
 
-        report(
-            "  "
-                + "raw transcript".padding(
-                    toLength: 28, withPad: " ", startingAt: 0
-                )
-                + rawTotal.percentage.leftPadded(to: 7)
-        )
+        // 2. Refinement must never alter a negation or a quantity. Reported as
+        // an absolute count, never a rate: one inverted sentence in a thousand
+        // dictations is a product failure, and an average would bury it.
+        report("  semantic safety (negations and quantities, must be zero)")
+        report("  " + String(repeating: "-", count: 60))
         for (name, _) in stages {
-            guard let score = stageTotals[name] else { continue }
-            let delta = (score.rate - rawTotal.rate) * 100
+            let violations = cohorts.compactMap {
+                cohortStages[$0.name]?[name]?.violations
+            }
+            .flatMap(\.self)
             report(
                 "  "
-                    + "after \(name)".padding(
-                        toLength: 28, withPad: " ", startingAt: 0
-                    )
-                    + score.percentage.leftPadded(to: 7)
-                    + String(format: "%+9.1f pts", delta)
-                    + String(format: "%5d ins", stageInsertions[name] ?? 0)
-                    + String(
-                        format: "%5d changed, %d rejected",
-                        stageChanged[name] ?? 0,
-                        stageRejections[name] ?? 0
-                    )
+                    + name.padding(toLength: 28, withPad: " ", startingAt: 0)
+                    + "\(violations.count) violations".leftPadded(to: 15)
             )
-            // Refinement is meant to tidy text, not rewrite meaning. A stage
-            // that makes the transcript measurably less like what was said is
-            // costing the user accuracy for presentation.
-            if delta > 2.0 {
+            for violation in violations.prefix(5) {
+                report("      \(violation)")
+            }
+            if !violations.isEmpty {
                 refinementFailures.append(
-                    "\(name) refinement raised word error rate by "
-                        + String(format: "%.1f", delta)
-                        + " points"
+                    "\(name) altered \(violations.count) protected token(s): "
+                        + violations.prefix(3).joined(separator: ", ")
                 )
             }
         }
         report()
+
+        // 3. Refinement must actually refine.
+        //
+        // The suite had no assertion in this direction at all: it failed only
+        // when refinement made things worse, so deleting Instant Refine
+        // entirely would have kept it green. That is the wrong shape of test
+        // for a feature whose failure mode is silence, and it is why a mode
+        // contributing 0.0 points shipped unnoticed.
+        //
+        // Opt-in for now, because it fails today by design — turning it on is
+        // the definition of done for the guard work, not a CI break to absorb
+        // before it starts. Enable with ZENVOICE_REFINE_STRICT=1.
+        if let rawTotal = cohortRaw["disfluent speech"],
+           let outcomes = cohortStages["disfluent speech"] {
+            var advisories: [String] = []
+            for (name, _) in stages {
+                guard let outcome = outcomes[name] else { continue }
+                let delta = (outcome.score.rate - rawTotal.rate) * 100
+                if delta > -1.0 {
+                    advisories.append(
+                        "\(name) improved disfluent speech by only "
+                            + String(format: "%.1f", -delta)
+                            + " points (want 1.0+)"
+                    )
+                }
+            }
+            // A downloaded language model has to beat the regexes it runs on
+            // top of, or it is 1.1 GB and a per-dictation stall for nothing.
+            if let local = outcomes["local model"],
+               let clean = outcomes["clean"] {
+                let gain = (clean.score.rate - local.score.rate) * 100
+                if gain < 0.5 {
+                    advisories.append(
+                        "local model beat clean by only "
+                            + String(format: "%.1f", gain)
+                            + " points — the guard is discarding "
+                            + String(format: "%.0f%%", local.rejectionRate * 100)
+                            + " of its output"
+                    )
+                }
+            }
+            if flag("ZENVOICE_REFINE_STRICT") {
+                refinementFailures.append(contentsOf: advisories)
+            } else if !advisories.isEmpty {
+                report("  refinement shortfalls (advisory —"
+                    + " set ZENVOICE_REFINE_STRICT=1 to enforce)")
+                report("  " + String(repeating: "-", count: 60))
+                for advisory in advisories {
+                    report("    \(advisory)")
+                }
+                report()
+            }
+        }
     }
 
     // ---- long form ----
@@ -470,6 +655,103 @@ private func measure() -> Bool {
             }
         }
         report()
+    }
+
+    // ---- Hinglish loanword preservation ----
+    //
+    // The check above only asks whether Devanagari is gone. That is passed
+    // equally by `kampyutara par kama kara raha hum` and by
+    // `computer par kaam kar raha hoon`, so it cannot see the defect that
+    // actually makes Hinglish unusable. This asks the question that can be
+    // answered without a canonical spelling: did the English words come back as
+    // English?
+    // A metric that always returned zero would produce exactly the baseline
+    // reported below, so it has to demonstrate it can tell the two apart before
+    // its verdict on real audio means anything.
+    let metricOnGoodOutput = Scoring.loanwordPreservation(
+        expected: ["project", "status", "pull request"],
+        hypothesis: "project ka status kya hai, pull request review kar do"
+    )
+    let metricOnBrokenOutput = Scoring.loanwordPreservation(
+        expected: ["project", "status", "pull request"],
+        hypothesis: "projekta ka stetasa kya hai, pula rikvesta raviyu kara do"
+    )
+    guard metricOnGoodOutput.preserved == 3, metricOnBrokenOutput.preserved == 0
+    else {
+        fail(
+            "loanword metric is broken: natural Hinglish scored "
+                + "\(metricOnGoodOutput.preserved)/3 and romanized mush scored "
+                + "\(metricOnBrokenOutput.preserved)/3"
+        )
+    }
+
+    var hinglishLoanwords = Scoring.LoanwordResult.zero
+    let hinglishShouldRun = configuration.modelLanguageCapability == .multilingual
+        && Fixtures.isHindiVoiceInstalled()
+    if hinglishShouldRun,
+       let hinglishClips = try? Fixtures.renderHinglish(into: fixtureDirectory),
+       !hinglishClips.isEmpty {
+        report("  Hinglish (English words surviving as English)")
+        report("  " + String(repeating: "-", count: 60))
+        for clip in hinglishClips {
+            let samples = Fixtures.degraded(
+                (try? Fixtures.samples(at: clip.url)) ?? [],
+                gain: gain,
+                noise: noise
+            )
+            guard !samples.isEmpty else { continue }
+
+            let latin = (
+                try? transcriber.transcribe(
+                    samples: samples,
+                    languageProfile: .hinglish
+                )
+            )?.finalTranscript ?? ""
+            let loanwords = Scoring.loanwordPreservation(
+                expected: clip.sentence.loanwords ?? [],
+                hypothesis: latin
+            )
+            hinglishLoanwords = hinglishLoanwords + loanwords
+
+            report(
+                "  "
+                    + clip.name.padding(toLength: 28, withPad: " ", startingAt: 0)
+                    + "\(loanwords.preserved)/\(loanwords.total)".leftPadded(to: 7)
+                    + loanwords.percentage.leftPadded(to: 8)
+                    + (loanwords.lost.isEmpty
+                        ? ""
+                        : "   lost: " + loanwords.lost.joined(separator: ", "))
+            )
+            if isVerbose {
+                report("      hinglish: \(latin.isEmpty ? "<empty>" : latin)")
+            }
+            if latin.isEmpty {
+                hindiFailures.append(
+                    "\(clip.name) produced no Hinglish transcript"
+                )
+            }
+        }
+        report("  " + String(repeating: "-", count: 60))
+        report(
+            "  "
+                + "OVERALL".padding(toLength: 28, withPad: " ", startingAt: 0)
+                + "\(hinglishLoanwords.preserved)/\(hinglishLoanwords.total)"
+                    .leftPadded(to: 7)
+                + hinglishLoanwords.percentage.leftPadded(to: 8)
+        )
+        report()
+    }
+
+    // The whole section sits behind optional rendering, so a fixture set that
+    // quietly stopped producing clips would read as a clean run rather than as
+    // lost coverage. Measured 2026-07-25 on Whisper Medium: 0/26. That zero is
+    // the defect, not a harness fault — see docs/hinglish/05-update-2026-07.md.
+    // The floor rises to a real threshold when a Hinglish-native model lands;
+    // until then the only thing worth asserting is that it still measures.
+    if hinglishShouldRun, hinglishLoanwords.total == 0 {
+        hindiFailures.append(
+            "Hinglish loanword coverage produced no measurements"
+        )
     }
 
     // ---- real speech ----

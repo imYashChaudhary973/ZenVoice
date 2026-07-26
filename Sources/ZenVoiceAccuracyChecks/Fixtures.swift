@@ -20,6 +20,17 @@ enum Fixtures {
         /// way to measure whether refinement earns its place.
         var spokenPhrases: [String]?
 
+        /// The English words in a code-switched sentence, spelled as English.
+        ///
+        /// Hinglish has no canonical spelling — *kya* and *kyaa* are both
+        /// right — so a word error rate against it scores taste rather than
+        /// accuracy. What can be scored is whether the English half of the
+        /// sentence survives as English. A speaker who says "project ka status"
+        /// expects `project` and `status` back; `projekta` and `stetasa` are
+        /// unambiguously wrong no matter which romanization convention the rest
+        /// of the sentence follows.
+        var loanwords: [String]?
+
         /// The reference transcript, without any pause markup.
         var text: String { phrases.joined(separator: " ") }
 
@@ -138,11 +149,71 @@ enum Fixtures {
         )
     ]
 
+    /// Code-switched Hinglish — English content words on Hindi grammar, which
+    /// is how a technical user actually dictates.
+    ///
+    /// The English words are written in Devanagari here on purpose. `Lekha` is
+    /// a Hindi voice, and handing it Latin text produces either an English
+    /// pronunciation or nothing usable; `स्टेटस` gets voiced the way an Indian
+    /// speaker actually says *status*, which is the audio the Hinglish profile
+    /// has to cope with. The Devanagari spelling is the fixture's reference for
+    /// word error rate, and ``Sentence/loanwords`` records what those same
+    /// words must look like coming out.
+    ///
+    /// The vocabulary is deliberately the set from
+    /// `docs/hinglish/01-diagnosis.md`, so the measured baseline is directly
+    /// comparable to the failures recorded there.
+    static let hinglishSentences: [Sentence] = [
+        Sentence(
+            id: "hin-status",
+            label: "project status",
+            phrases: [
+                "प्रोजेक्ट का स्टेटस क्या है",
+                "मैंने ईमेल भेज दिया।"
+            ],
+            loanwords: ["project", "status", "email"]
+        ),
+        Sentence(
+            id: "hin-server",
+            label: "server down",
+            phrases: [
+                "सर्वर डाउन है",
+                "थोड़ा सा वेट करो।"
+            ],
+            loanwords: ["server", "down", "wait"]
+        ),
+        Sentence(
+            id: "hin-meeting",
+            label: "meeting and file",
+            phrases: [
+                "मुझे मीटिंग में जाना है",
+                "यह फ़ाइल डाउनलोड कर दो।"
+            ],
+            loanwords: ["meeting", "file", "download"]
+        ),
+        Sentence(
+            id: "hin-review",
+            label: "pull request review",
+            phrases: [
+                "प्रिया ने पुल रिक्वेस्ट रिव्यू किया",
+                "लेकिन कंप्यूटर पर टेस्ट चलाना होगा।"
+            ],
+            loanwords: ["pull request", "review", "computer", "test"]
+        )
+    ]
+
     /// Dictation as people actually speak it — hesitations, doubled words, and
     /// a mid-sentence restart. The reference is what the speaker meant.
     ///
     /// Refinement should move the transcript *towards* these references. If it
     /// moves away, it is costing accuracy for the sake of tidiness.
+    ///
+    /// The first three fixtures map one-to-one onto the regexes Clean actually
+    /// implements, which made the suite self-fulfilling: it could only ever
+    /// confirm that the implemented rules run. The fixtures after them are
+    /// deliberately outside that rule set — real disfluencies Clean does not
+    /// currently touch — so the suite can show what refinement is missing and
+    /// not merely that it exists.
     static let disfluentSentences: [Sentence] = [
         Sentence(
             id: "dis-filler",
@@ -172,6 +243,70 @@ enum Fixtures {
             ],
             spokenPhrases: [
                 "Create a login page, no wait, a sign-up page using Swift."
+            ]
+        ),
+        // Discourse markers. "you know" and "like" are the two commonest
+        // fillers in spontaneous English and neither is in Clean's filler
+        // stem list, which only covers um/uh/erm.
+        Sentence(
+            id: "dis-discourse",
+            label: "discourse markers",
+            phrases: [
+                "The API returns a cached response when the token is valid."
+            ],
+            spokenPhrases: [
+                "The API, you know, returns a cached response, like,"
+                    + " when the token is valid."
+            ]
+        ),
+        // A restart repeating a whole phrase rather than one word. Clean's
+        // repetition regex is single-token, so this survives it untouched.
+        Sentence(
+            id: "dis-phrase-restart",
+            label: "repeated phrase restart",
+            phrases: [
+                "We should probably revert the change before the release."
+            ],
+            spokenPhrases: [
+                "We should we should probably revert the change"
+                    + " before the release."
+            ]
+        ),
+        // A self-correction with no comma at the pivot. Both of Clean's
+        // restart patterns require a comma or dash there, and Whisper does not
+        // reliably emit one, so this is the common real-world shape.
+        Sentence(
+            id: "dis-selfcorrect",
+            label: "self correction without a pause",
+            phrases: [
+                "Send the invoice on Wednesday."
+            ],
+            spokenPhrases: [
+                "Send the invoice on Tuesday actually Wednesday."
+            ]
+        ),
+        // Safety canaries. These carry a token whose loss would invert or
+        // falsify the dictation. Refinement may tidy around them; it may never
+        // touch them. Scored by SemanticSafety against the raw transcript, so
+        // the check holds regardless of what Whisper heard.
+        Sentence(
+            id: "dis-negation",
+            label: "negation under hesitation",
+            phrases: [
+                "Do not merge the branch until the tests pass."
+            ],
+            spokenPhrases: [
+                "Um, do not merge the branch, uh, until the tests pass."
+            ]
+        ),
+        Sentence(
+            id: "dis-quantity",
+            label: "quantity under hesitation",
+            phrases: [
+                "Increase the request timeout to thirty seconds."
+            ],
+            spokenPhrases: [
+                "Increase the request timeout to, um, thirty seconds."
             ]
         )
     ]
@@ -205,6 +340,16 @@ enum Fixtures {
     ) throws -> [Clip] {
         try render(
             hindiSentences.map { ($0, hindiRates) },
+            into: directory,
+            voice: hindiVoice
+        )
+    }
+
+    static func renderHinglish(
+        into directory: URL
+    ) throws -> [Clip] {
+        try render(
+            hinglishSentences.map { ($0, hindiRates) },
             into: directory,
             voice: hindiVoice
         )
