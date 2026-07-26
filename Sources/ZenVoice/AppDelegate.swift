@@ -1302,7 +1302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             result.finalTranscript,
             mode: behavior.refinementMode,
             languageCode: behavior.languageProfile.inputLanguageCode,
-            
+
             voiceCommandsEnabled: behavior.voiceCommandsEnabled
         )
         return ProcessedTranscription(
@@ -1344,7 +1344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     result.finalTranscript,
                     mode: behavior.refinementMode,
                     languageCode: behavior.languageProfile.inputLanguageCode,
-                    
+
                     voiceCommandsEnabled: behavior.voiceCommandsEnabled
                 )
                 processed = ProcessedTranscription(
