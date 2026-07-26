@@ -27,6 +27,7 @@ import ZenVoiceRuntime
 //   ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS
 //                               cap synthetic clips; real/long-form stay intact
 //   ZENVOICE_ACCURACY_SMOKE    decode one real recording for fast PR coverage
+//   ZENVOICE_SCORING_ONLY      validate deterministic scoring without a model
 
 private let environment = ProcessInfo.processInfo.environment
 
@@ -67,6 +68,18 @@ private func validateScoring() {
           emptyTranscript.deletions == 3,
           emptyTranscript.insertions == 0 else {
         fail("empty-transcript scoring is incorrect")
+    }
+
+    let mixedErrors = Scoring.wordErrorRate(
+        reference: "one two three",
+        hypothesis: "one four three five"
+    )
+    guard mixedErrors.distance == 2,
+          mixedErrors.referenceWords == 3,
+          mixedErrors.substitutions == 1,
+          mixedErrors.deletions == 0,
+          mixedErrors.insertions == 1 else {
+        fail("mixed-error scoring is incorrect")
     }
 }
 
@@ -1399,7 +1412,10 @@ private func measure() -> Bool {
 // rather than the minutes a full transcription pass costs.
 validateScoring()
 let outcome: Bool
-if flag("ZENVOICE_ACCURACY_SMOKE") {
+if flag("ZENVOICE_SCORING_ONLY") {
+    report("ZenVoiceAccuracyChecks deterministic scoring passed.")
+    outcome = true
+} else if flag("ZENVOICE_ACCURACY_SMOKE") {
     outcome = runRealSpeechSmoke()
 } else if flag("ZENVOICE_STRUCTURE_PROBE") {
     outcome = probeSpokenStructure()
