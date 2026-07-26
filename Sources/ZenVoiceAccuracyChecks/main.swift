@@ -54,6 +54,19 @@ private func skip(_ message: String) -> Never {
     exit(0)
 }
 
+private func validateScoring() {
+    let emptyTranscript = Scoring.wordErrorRate(
+        reference: "one two three",
+        hypothesis: ""
+    )
+    guard emptyTranscript.distance == 3,
+          emptyTranscript.referenceWords == 3,
+          emptyTranscript.deletions == 3,
+          emptyTranscript.insertions == 0 else {
+        fail("empty-transcript scoring is incorrect")
+    }
+}
+
 private struct Totals {
     var whole = Scoring.Result.zero
     var segmented = Scoring.Result.zero
@@ -1319,6 +1332,7 @@ private func measure() -> Bool {
 
 // ZENVOICE_REFINE_PROBE=1 answers the scaling question on its own, in seconds
 // rather than the minutes a full transcription pass costs.
+validateScoring()
 let outcome: Bool
 if flag("ZENVOICE_STRUCTURE_PROBE") {
     outcome = probeSpokenStructure()

@@ -116,6 +116,13 @@ enum Scoring {
                 insertions: hypothesis.count
             )
         }
+        guard !hypothesis.isEmpty else {
+            return Result(
+                distance: reference.count,
+                referenceWords: reference.count,
+                deletions: reference.count
+            )
+        }
 
         // Full matrix rather than two rows: the backtrace is what separates
         // insertions from substitutions, and that distinction is the point.
