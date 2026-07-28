@@ -1,9 +1,8 @@
 import SwiftUI
 
 // MARK: - ZenVoice v2 component vocabulary
-// SwiftUI port of the prototype's shared components
-// (ZenVoiceNewDesign/css/base.css). Every redesigned screen is composed
-// from these pieces so the vocabulary stays identical across the app.
+// Every redesigned screen is composed from these shared native components so
+// the interface vocabulary stays consistent across the app.
 
 struct ZenBrandMark: View {
     let size: CGFloat
