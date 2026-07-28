@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// ZenVoice v3 design tokens — "Ledger", warm editorial utility.
-/// Contract: `v3-ledger-impeccable.html`, ported to adaptive native colors.
+/// Native adaptive colors shared across the Ledger interface.
 enum ZenDesign {
     enum Primitive {
         static let ink950 = Color(red: 0.122, green: 0.114, blue: 0.102)

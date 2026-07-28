@@ -9,3 +9,7 @@ Screenshot *.heic
 /clipboard-*.png
 .claude/settings.local.json
 PrivateBenchmarks/
+
+# Website design prototypes do not belong in the native app repository.
+/ZenVoiceNewDesign/
+/*.html
