@@ -7,6 +7,13 @@ The approved milestone sequence and delivery rules are tracked in
 recorded in
 [ADR 0001](decisions/0001-local-data-and-model-governance.md).
 
+Cross-platform expansion is approved under
+[ADR 0003](decisions/0003-cross-platform-rust-core-and-native-adapters.md).
+Its incremental XP0–XP11 program is defined in the
+[Cross-Platform Architecture and Delivery Plan](CROSS_PLATFORM_ARCHITECTURE_PLAN.md).
+This program preserves the existing macOS app while introducing a shared Rust
+core, the pinned `whisper.cpp` runtime, and native platform adapters.
+
 ## Current: dependable personal alpha
 
 - [x] Native macOS menu-bar application
@@ -70,7 +77,8 @@ recorded in
 - Free versus paid pricing
 - License choice
 - Supported macOS hardware and minimum version
-- Whether non-macOS platforms belong in scope
+- Exact minimum OS/API versions and first distribution channel for each new
+  platform
 
 These decisions should be made only after the local English workflow is stable
 and tested through regular personal use.

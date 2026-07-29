@@ -195,6 +195,7 @@ Model provenance, licences, revisions, and checksums are documented in
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Cross-Platform Architecture Plan](docs/CROSS_PLATFORM_ARCHITECTURE_PLAN.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Privacy](docs/PRIVACY.md)
 - [Verified Model Catalogue](docs/MODEL_CATALOG.md)
