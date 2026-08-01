@@ -205,10 +205,13 @@ The model wants the window it was trained on.
   hearing, so the loudest figure in this document — 52.6% — is not an accuracy
   result. The loanword-preservation scoring already in the harness is the
   right instrument; it has not yet been run against this corpus.
-- **Hallucination loops are undefended.** `tiny` produced a hundred repeats of
-  the same phrase on one clip. Nothing in ZenVoice detects or truncates that,
-  and it costs both accuracy and minutes of decode. `Scoring.repetitionRate`
-  already exists to spot it in the harness; the app has no equivalent.
+- **Hallucination loops are truncated, not surfaced.** The decode deadline in
+  `WhisperTranscriber` caps the wasted minutes, and
+  `TranscriptRepetition.collapsingRunaway` cuts the looped text before it
+  reaches the clipboard; both are exercised by the runaway repetition defence
+  checks. What remains open is the signal: `repetitionRate` is never consulted
+  at runtime, so a decode that failed badly enough to loop is still pasted as
+  if it were trustworthy rather than flagged to the speaker.
 - **Read speech is not dictation.** LibriSpeech speakers are reading prepared
   prose, so they are fluent, evenly paced and well recorded. Real dictation is
   hesitant and often noisy. These numbers are a floor.
