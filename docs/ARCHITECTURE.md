@@ -191,7 +191,11 @@ for transcript text, application identity, profile terms, or correction rules.
 
 GitHub Actions runs deterministic Swift checks and packages an ad-hoc-signed
 app on a hosted macOS runner. A separate token-free Semgrep Community Edition
-job scans tracked source with read-only repository permissions.
+job scans tracked source with read-only repository permissions. Real-speech
+decoding stays off the pull-request path deliberately; a scheduled speech-gate
+workflow decodes the pinned model and corpus weekly, and the automated release
+gate in `Scripts/check-release-readiness.sh` is runnable on demand from the
+Actions tab.
 
 CI artifacts are verification builds, not public releases. Public distribution
 requires the independent gates in `docs/RELEASE_READINESS.md`, including a

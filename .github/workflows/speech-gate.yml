@@ -1,0 +1,63 @@
+# Real-speech decoding is deliberately not part of pull-request CI: hosted
+# runners proved unstable under it (processes killed mid-check), and the PR
+# path stays deterministic. This workflow carries the same pinned-model,
+# pinned-corpus smoke gate on a schedule instead, where a flaky runner costs
+# a rerun rather than a blocked merge.
+name: Speech gate
+
+on:
+  schedule:
+    - cron: "30 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: speech-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-speech:
+    name: Real-speech smoke gate
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Cache pinned accuracy assets
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/zenvoice-accuracy
+          key: zenvoice-accuracy-base-en-minilibrispeech-v1
+
+      - name: Prepare pinned real-speech accuracy assets
+        shell: /bin/zsh {0}
+        run: |
+          set -euo pipefail
+          accuracy_root="$RUNNER_TEMP/zenvoice-accuracy"
+          model_dir="$accuracy_root/models"
+          model_path="$model_dir/ggml-base.en.bin"
+          model_hash="a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"
+          model_url="https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en.bin?download=true"
+          mkdir -p "$model_dir"
+          if ! print -r -- "$model_hash  $model_path" | shasum -a 256 -c -; then
+            curl --fail --location --retry 3 \
+              --output "$model_path.download" "$model_url"
+            print -r -- "$model_hash  $model_path.download" \
+              | shasum -a 256 -c -
+            mv "$model_path.download" "$model_path"
+          fi
+          python3 Scripts/build-librispeech-corpus.py \
+            --output "$accuracy_root/corpus"
+
+      - name: Run real-speech accuracy smoke gate
+        env:
+          ZENVOICE_ACCURACY_REQUIRED: "1"
+          ZENVOICE_ACCURACY_REQUIRE_REAL: "1"
+          ZENVOICE_ACCURACY_SMOKE: "1"
+          ZENVOICE_MODEL_PATH: ${{ runner.temp }}/zenvoice-accuracy/models/ggml-base.en.bin
+          ZENVOICE_ACCURACY_CORPUS: ${{ runner.temp }}/zenvoice-accuracy/corpus/dictation
+        run: swift run ZenVoiceAccuracyChecks
