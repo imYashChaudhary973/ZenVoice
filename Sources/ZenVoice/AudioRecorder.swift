@@ -1,4 +1,5 @@
 import AVFoundation
+import Accelerate
 import AudioToolbox
 import CoreMedia
 import Foundation
@@ -189,6 +190,14 @@ final class AudioRecorder: NSObject,
         self.capturesLiveSamples = capturesLiveSamples
         sampleLock.withLock {
             capturedSamples.removeAll(keepingCapacity: true)
+            if capturesLiveSamples {
+                // This array grows inside the capture callback, so a
+                // reallocation there copies everything recorded so far on the
+                // realtime audio thread. Reserving a minute up front keeps an
+                // ordinary dictation clear of that entirely, and costs nothing
+                // when preview is off because nothing is captured at all.
+                capturedSamples.reserveCapacity(60 * 16_000)
+            }
             lastSpeechSampleIndex = 0
             committedSampleIndex = 0
             latchedBoundary = nil
@@ -442,14 +451,15 @@ final class AudioRecorder: NSObject,
         guard frameLength > 0 else {
             return false
         }
-        var sumSquares: Float = 0
+        // Runs in the capture callback for every buffer that arrives, so the
+        // measurement is vectorised rather than looped: `vDSP_measqv` is the
+        // mean of the squares and `vDSP_maxmgv` the largest magnitude, which is
+        // what the scalar version computed a sample at a time.
+        var meanSquare: Float = 0
         var peak: Float = 0
-        for index in 0..<Int(frameLength) {
-            let sample = abs(channel[index])
-            sumSquares += sample * sample
-            peak = max(peak, sample)
-        }
-        let rms = sqrt(sumSquares / Float(frameLength))
+        vDSP_measqv(channel, 1, &meanSquare, vDSP_Length(frameLength))
+        vDSP_maxmgv(channel, 1, &peak, vDSP_Length(frameLength))
+        let rms = sqrt(meanSquare)
         let averageDecibels = 20 * log10(max(rms, 0.000_001))
         let peakDecibels = 20 * log10(max(peak, 0.000_001))
         let level = audioLevelMeter.update(

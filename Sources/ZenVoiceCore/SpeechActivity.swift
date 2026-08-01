@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 
 /// Tracks how quiet the room is, so speech can be judged relative to it.
@@ -88,20 +89,29 @@ public struct SpeechActivityDetector: Sendable {
     }
 
     /// Level summary for a block of mono samples, in dBFS.
+    ///
+    /// Vectorised because of where this runs: ``SpokenStructure/silences(in:)``
+    /// walks the *entire* recording through it after every decode, one window
+    /// at a time, and the same measurement runs again in the capture callback
+    /// for every buffer that arrives. `vDSP_measqv` returns the mean of the
+    /// squares directly and `vDSP_maxmgv` the largest magnitude, which is
+    /// exactly what the scalar loop computed.
     public static func levels(
         of samples: ArraySlice<Float>
     ) -> (average: Float, peak: Float) {
         guard !samples.isEmpty else {
             return (-120, -120)
         }
-        var sumSquares: Float = 0
+        var meanSquare: Float = 0
         var peak: Float = 0
-        for sample in samples {
-            let magnitude = abs(sample)
-            sumSquares += magnitude * magnitude
-            peak = max(peak, magnitude)
+        samples.withUnsafeBufferPointer { buffer in
+            guard let base = buffer.baseAddress else {
+                return
+            }
+            vDSP_measqv(base, 1, &meanSquare, vDSP_Length(buffer.count))
+            vDSP_maxmgv(base, 1, &peak, vDSP_Length(buffer.count))
         }
-        let rms = (sumSquares / Float(samples.count)).squareRoot()
+        let rms = meanSquare.squareRoot()
         return (
             20 * log10(max(rms, 0.000_001)),
             20 * log10(max(peak, 0.000_001))

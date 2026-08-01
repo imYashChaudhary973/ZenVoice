@@ -68,8 +68,47 @@ do {
         try? FileManager.default.removeItem(at: audioURL)
     }
     let transcriber = WhisperTranscriber(configuration: configuration)
+
+    // Warm-up moves model load and Metal pipeline construction off the first
+    // dictation. Two things have to hold: it must be idempotent, because the
+    // app fires it on every route into a recording, and it must leave the
+    // transcriber decoding normally. The timings are reported rather than
+    // asserted — the gap between a cold and a warm first decode is real but its
+    // size depends on the model and the machine, which is not a stable gate.
+    let warmStart = Date()
+    transcriber.warmUp()
+    let warmSeconds = Date().timeIntervalSince(warmStart)
+    let repeatStart = Date()
+    transcriber.warmUp()
+    let repeatSeconds = Date().timeIntervalSince(repeatStart)
+    guard repeatSeconds < warmSeconds || warmSeconds < 0.05 else {
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 3,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "warmUp() repeated the load instead of returning early."
+            ]
+        )
+    }
+
+    let firstDecodeStart = Date()
     try runPass(1, transcriber: transcriber, audioURL: audioURL)
+    let firstDecodeSeconds = Date().timeIntervalSince(firstDecodeStart)
+    let secondDecodeStart = Date()
     try runPass(2, transcriber: transcriber, audioURL: audioURL)
+    let secondDecodeSeconds = Date().timeIntervalSince(secondDecodeStart)
+    print(
+        String(
+            format:
+                "  warm-up %.2fs (repeat %.3fs) · "
+                + "first decode %.2fs · second decode %.2fs",
+            warmSeconds,
+            repeatSeconds,
+            firstDecodeSeconds,
+            secondDecodeSeconds
+        )
+    )
     do {
         _ = try transcriber.transcribe(
             samples: Array(repeating: 0, count: 16_000),

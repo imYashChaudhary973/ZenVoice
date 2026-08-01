@@ -172,7 +172,9 @@ public struct ZenVoiceConfiguration {
         public var errorDescription: String? {
             switch self {
             case .modelMissing:
-                return "No local Whisper model was found. Download one in Models or set ZENVOICE_MODEL_PATH."
+                return
+                    "No local speech model was found. Download one in Models "
+                    + "or set ZENVOICE_MODEL_PATH."
             case .modelVerificationFailed(let model):
                 return
                     "\(model) failed local size or SHA-256 verification and "

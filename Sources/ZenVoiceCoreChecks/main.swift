@@ -426,18 +426,83 @@ let capableMac = HardwareProfile(
     architecture: "Apple Silicon",
     availableModelStorageBytes: 200 * 1_073_741_824
 )
+let intelMac = HardwareProfile(
+    physicalMemoryBytes: 16 * 1_073_741_824,
+    logicalCoreCount: 8,
+    architecture: "Intel",
+    availableModelStorageBytes: 200 * 1_073_741_824
+)
+// English on Apple Silicon goes to Parakeet: measured 5.3% word error rate at
+// 61 ms against Whisper Base's 9.2% at 149 ms, so it is both the most accurate
+// and effectively the fastest English option. It runs on CoreML, so an Intel
+// Mac — with no Neural Engine — must not be sent there.
 guard ModelRecommendationEngine.recommendedModelID(
         for: capableMac,
         language: .hinglish
       ) == "hindi2hinglish-apex",
       ModelRecommendationEngine.recommendedModelID(
+        for: intelMac,
+        language: .hinglish
+      ) == "hindi2hinglish-apex",
+      ModelRecommendationEngine.recommendedModelID(
         for: capableMac,
         language: .english
-      ) == "whisper-large-v3-turbo" else {
+      ) == "parakeet-unified-en-int8",
+      ModelRecommendationEngine.recommendedModelID(
+        for: intelMac,
+        language: .english
+      ) != "parakeet-unified-en-int8" else {
     FileHandle.standardError.write(
-        Data("FAIL: Hinglish was not recommended its specialist\n".utf8)
+        Data("FAIL: language-aware model recommendation is wrong\n".utf8)
     )
     exit(1)
+}
+// Every identifier the engine can return has to exist in the catalogue.
+// Retiring a model that the recommender still points at would leave a Mac with
+// no resolvable recommendation at all.
+for profile in [capableMac, intelMac] {
+    for language in [LanguageProfile.english, .hinglish] {
+        let id = ModelRecommendationEngine.recommendedModelID(
+            for: profile,
+            language: language
+        )
+        guard let recommended = VerifiedModelCatalog.model(id: id),
+              !VerifiedModelCatalog.isRetired(recommended) else {
+            FileHandle.standardError.write(
+                Data("FAIL: recommended \(id) is not offered\n".utf8)
+            )
+            exit(1)
+        }
+    }
+}
+// The catalogue is deliberately five. Each entry is the measured best at one
+// job; the size ladders it replaced were not a speed-for-accuracy curve.
+guard VerifiedModelCatalog.models.count == 5 else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: expected 5 offered models, found "
+                + "\(VerifiedModelCatalog.models.count)\n").utf8
+        )
+    )
+    exit(1)
+}
+// Retired models must stay resolvable, or an installed model becomes "no model
+// installed" and discovery silently falls back to the legacy base.en path.
+for id in [
+    "whisper-medium-en",
+    "whisper-tiny-en",
+    "whisper-tiny-multilingual",
+    "whisper-base-en",
+    "whisper-base-multilingual",
+    "whisper-small-en"
+] {
+    guard let retired = VerifiedModelCatalog.model(id: id),
+          VerifiedModelCatalog.isRetired(retired) else {
+        FileHandle.standardError.write(
+            Data("FAIL: retired \(id) is no longer resolvable\n".utf8)
+        )
+        exit(1)
+    }
 }
 guard let apex = VerifiedModelCatalog.model(id: "hindi2hinglish-apex"),
       let medium = VerifiedModelCatalog.model(
@@ -1038,17 +1103,21 @@ print("ZenVoiceCoreChecks: private and hold controls passed")
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
 let verifiedModels = VerifiedModelCatalog.allModels
-guard VerifiedModelCatalog.models.count == 9,
-      verifiedModels.count == 10,
-      // Whisper Medium English-only is retired: 2.9% word error rate against
-      // the multilingual build's 2.7%, same size, same speed, English only.
-      // Retired rather than deleted so an existing install still resolves.
-      VerifiedModelCatalog.models.allSatisfy({
-          $0.id != "whisper-medium-en"
+// Five offered, six retired. The catalogue was ten offered and one retired
+// until the size ladders were measured end to end and found not to be a
+// speed-for-accuracy curve — see ``VerifiedModelCatalog.models``.
+guard VerifiedModelCatalog.models.count == 5,
+      verifiedModels.count == 11,
+      // Nothing retired may still be offered, and everything retired must
+      // still resolve — by identifier and by filename — so that a model
+      // already on disk does not become "no model installed".
+      VerifiedModelCatalog.retiredModels.allSatisfy({ retired in
+          VerifiedModelCatalog.models.allSatisfy { $0.id != retired.id }
+              && VerifiedModelCatalog.model(id: retired.id) != nil
+              && VerifiedModelCatalog.model(
+                  filename: retired.filename
+              )?.id == retired.id
       }),
-      VerifiedModelCatalog.model(id: "whisper-medium-en") != nil,
-      VerifiedModelCatalog.model(filename: "ggml-medium.en.bin")?.id
-        == "whisper-medium-en",
       Set(verifiedModels.map(\.id)).count == verifiedModels.count,
       Set(verifiedModels.map(\.filename)).count == verifiedModels.count,
       Set(verifiedModels.map(\.tier))
@@ -1061,12 +1130,19 @@ guard VerifiedModelCatalog.models.count == 9,
               && $0.downloadURL.path.contains($0.sourceRevision)
               && $0.sha256.count == 64
               && $0.fileSizeBytes > 0
-              // Apache-2.0 joins MIT for the Hinglish weights. Both permit
-              // redistribution with attribution, which `attribution` carries.
-              && ["MIT", "Apache-2.0"].contains($0.license)
+              // Every allowed licence permits redistribution with its required
+              // notice or attribution, which `attribution` carries.
+              && ["MIT", "Apache-2.0", "CC-BY-4.0"].contains($0.license)
               && !$0.attribution.isEmpty
               && URL(string: $0.licenseURL)?.scheme == "https"
-              && URL(string: $0.upstreamRepository)?.host == "github.com"
+              && ["github.com", "huggingface.co"].contains(
+                  URL(string: $0.upstreamRepository)?.host
+              )
+              && (
+                  $0.runtime == .parakeetCoreML
+                      ? !$0.bundleFiles.isEmpty
+                      : $0.bundleFiles.isEmpty
+              )
       }) else {
     FileHandle.standardError.write(
         Data("FAIL: verified model catalogue metadata is invalid\n".utf8)
@@ -1118,6 +1194,58 @@ guard try !VerifiedModelCatalog.verify(verifierURL, for: verifierModel) else {
     exit(1)
 }
 
+let bundleURL = verifierDirectory.appendingPathComponent(
+    "fixture-bundle",
+    isDirectory: true
+)
+try FileManager.default.createDirectory(
+    at: bundleURL,
+    withIntermediateDirectories: true
+)
+let bundleFileURL = bundleURL.appendingPathComponent("fixture.bin")
+try Data("ZenVoice".utf8).write(to: bundleFileURL)
+let bundleModel = VerifiedModel(
+    id: "bundle-fixture",
+    displayName: "Bundle Fixture",
+    filename: "fixture-bundle",
+    tier: .fast,
+    languageCapability: .english,
+    publisher: "Test",
+    sourceRepository: VerifiedModelCatalog.parakeetRepository,
+    upstreamRepository:
+        "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
+    sourceRevision: VerifiedModelCatalog.parakeetRevision,
+    sha256:
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    fileSizeBytes: 8,
+    format: "Core ML fixture",
+    license: "CC-BY-4.0",
+    licenseURL: "https://creativecommons.org/licenses/by/4.0/legalcode",
+    attribution: "Test bundle fixture",
+    runtime: .parakeetCoreML,
+    bundleFiles: [
+        VerifiedModelFile(
+            relativePath: "fixture.bin",
+            fileSizeBytes: 8,
+            sha256:
+                "954be634e5f577bc940ed27375984b9eb15d137455b6ea8086f4f2b76c526596"
+        )
+    ]
+)
+guard try VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
+    FileHandle.standardError.write(
+        Data("FAIL: bundle verification rejected valid data\n".utf8)
+    )
+    exit(1)
+}
+try Data("ZenVoicf".utf8).write(to: bundleFileURL)
+guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
+    FileHandle.standardError.write(
+        Data("FAIL: bundle verification accepted tampered data\n".utf8)
+    )
+    exit(1)
+}
+
 let selectionSuite = "ZenVoiceCoreChecks.\(UUID().uuidString)"
 guard let selectionDefaults = UserDefaults(suiteName: selectionSuite) else {
     FileHandle.standardError.write(
@@ -1161,21 +1289,38 @@ let twentyFourGigabyteProfile = HardwareProfile(
     architecture: "Apple Silicon",
     availableModelStorageBytes: 10_000_000_000
 )
-// Apple Silicon transcribes on the GPU, so every Metal-capable Mac should be
-// steered to Turbo rather than being downgraded on memory alone. Recommending
-// by memory sent 16 GB Macs to Whisper Base, which loses roughly one word in
-// three at speed.
+// Apple Silicon transcribes on the GPU, so no Metal-capable Mac should be
+// downgraded on memory alone — recommending by memory sent 16 GB Macs to
+// Whisper Base, which loses roughly one word in three at speed.
+//
+// English now resolves to Parakeet on all of them, because there is no
+// trade-off left to make there. Anything beyond English still goes to Turbo:
+// every smaller multilingual build is a cliff, not a cheaper option, with
+// Small at 35.5% word error rate against Turbo's 13.2%.
+let spanishProfile = LanguageProfile(
+    inputLanguageCode: "es",
+    outputMode: .spokenLanguage
+)
 guard ModelRecommendationEngine.recommendedModelID(
     for: eightGigabyteProfile
-) == "whisper-large-v3-turbo",
+) == "parakeet-unified-en-int8",
 ModelRecommendationEngine.recommendedModelID(
     for: sixteenGigabyteProfile
-) == "whisper-large-v3-turbo",
+) == "parakeet-unified-en-int8",
 ModelRecommendationEngine.recommendedModelID(
     for: twentyFourGigabyteProfile
+) == "parakeet-unified-en-int8",
+ModelRecommendationEngine.recommendedModelID(
+    for: eightGigabyteProfile,
+    language: spanishProfile
+) == "whisper-large-v3-turbo",
+ModelRecommendationEngine.recommendedModelID(
+    for: twentyFourGigabyteProfile,
+    language: spanishProfile
 ) == "whisper-large-v3-turbo",
 ModelRecommendationEngine.recommendedTier(
-    for: sixteenGigabyteProfile
+    for: sixteenGigabyteProfile,
+    language: spanishProfile
 ) == .highAccuracy else {
     FileHandle.standardError.write(
         Data("FAIL: hardware model recommendation is incorrect\n".utf8)
@@ -1197,12 +1342,21 @@ let smallIntelProfile = HardwareProfile(
     architecture: "Intel",
     availableModelStorageBytes: 10_000_000_000
 )
+// Both land on Small, including the 8 GB machine that used to be sent to Tiny.
+// Tiny multilingual is not a lighter option, it is a broken one — 64.5% word
+// error rate against Small's 35.5% — and recommending a model that cannot do
+// the job is worse than recommending one that is merely slow. Parakeet is not
+// an answer here either: it runs on CoreML and Intel has no Neural Engine.
 guard ModelRecommendationEngine.recommendedModelID(
     for: intelProfile
 ) == "whisper-small-multilingual",
 ModelRecommendationEngine.recommendedModelID(
     for: smallIntelProfile
-) == "whisper-tiny-multilingual",
+) == "whisper-small-multilingual",
+ModelRecommendationEngine.recommendedModelID(
+    for: intelProfile,
+    language: spanishProfile
+) == "whisper-small-multilingual",
 !intelProfile.hasGPUAcceleratedTranscription,
 twentyFourGigabyteProfile.hasGPUAcceleratedTranscription else {
     FileHandle.standardError.write(
@@ -1551,7 +1705,12 @@ guard let liveDefaults = UserDefaults(suiteName: liveSuite) else {
 defer {
     liveDefaults.removePersistentDomain(forName: liveSuite)
 }
-guard LiveDictationPreferences.isPreviewEnabled(
+// Preview is opt-in. Measured on whisper-large-v3-turbo, decoding the same
+// twelve clips as pause-delimited fragments took 28.39s against 11.13s for the
+// whole recording — 2.55x the work — and scored worse doing it (3.4% against
+// 3.0% word error rate). A default that costs more to be less accurate is not a
+// default, so the absent key must read as off.
+guard !LiveDictationPreferences.isPreviewEnabled(
     defaults: liveDefaults
 ),
 !LiveDictationPreferences.isCommitOnPauseEnabled(
@@ -1583,6 +1742,15 @@ guard StablePauseDetector.isStable(
 ) else {
     FileHandle.standardError.write(
         Data("FAIL: stable pause thresholds are incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// The encoder window stays at the model default. Scaling it to the audio was
+// measured at 41% faster and 8x worse; see ``WhisperDecoding`` for the numbers.
+guard WhisperDecoding.audioContextIsModelDefault else {
+    FileHandle.standardError.write(
+        Data("FAIL: encoder window must stay at the model default\n".utf8)
     )
     exit(1)
 }

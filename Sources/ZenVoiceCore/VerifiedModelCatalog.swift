@@ -47,6 +47,27 @@ public enum ModelLanguageCapability: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum SpeechModelRuntime: String, Codable, Sendable {
+    case whisperCPP
+    case parakeetCoreML
+}
+
+public struct VerifiedModelFile: Codable, Equatable, Sendable {
+    public let relativePath: String
+    public let fileSizeBytes: Int64
+    public let sha256: String
+
+    public init(
+        relativePath: String,
+        fileSizeBytes: Int64,
+        sha256: String
+    ) {
+        self.relativePath = relativePath
+        self.fileSizeBytes = fileSizeBytes
+        self.sha256 = sha256
+    }
+}
+
 public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
     public let id: String
     public let displayName: String
@@ -63,6 +84,8 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
     public let license: String
     public let licenseURL: String
     public let attribution: String
+    public let runtime: SpeechModelRuntime
+    public let bundleFiles: [VerifiedModelFile]
 
     public init(
         id: String,
@@ -79,7 +102,9 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
         format: String,
         license: String,
         licenseURL: String,
-        attribution: String
+        attribution: String,
+        runtime: SpeechModelRuntime = .whisperCPP,
+        bundleFiles: [VerifiedModelFile] = []
     ) {
         self.id = id
         self.displayName = displayName
@@ -96,6 +121,8 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
         self.license = license
         self.licenseURL = licenseURL
         self.attribution = attribution
+        self.runtime = runtime
+        self.bundleFiles = bundleFiles
     }
 
     public var downloadURL: URL {
@@ -119,58 +146,47 @@ public enum VerifiedModelCatalog {
         "5359861c739e955e79d9a303bcbc70fb988958b1"
     public static let sourceRepository =
         "https://huggingface.co/ggerganov/whisper.cpp"
+    public static let parakeetRevision =
+        "4252711f6f060f9a2f91e5f081a806d7f45eebd8"
+    public static let parakeetRepository =
+        "https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml"
 
+    /// Five models, each the measured best at one job.
+    ///
+    /// The catalogue was eleven. Nine of those were rungs on two size ladders —
+    /// tiny, base, small, medium — offered on the assumption that model size
+    /// buys a smooth speed-for-accuracy trade the user can position themselves
+    /// on. Benchmarked end to end, that assumption is wrong in both families.
+    ///
+    /// In English there is no trade left to make. Parakeet is simultaneously the
+    /// most accurate and very nearly the fastest thing measured, so every
+    /// English whisper build is dominated outright:
+    ///
+    ///     parakeet      5.3% WER     61 ms
+    ///     base.en       9.2%        149 ms
+    ///     medium.en     6.6%      1,343 ms
+    ///     tiny.en      13.8%         66 ms
+    ///
+    /// In multilingual the trade is a cliff rather than a curve. Anything below
+    /// Turbo is not "faster with a little less accuracy", it is unusable:
+    ///
+    ///     turbo        13.2% WER   1,451 ms
+    ///     medium       14.5%       1,173 ms
+    ///     small        35.5%         456 ms
+    ///     base         55.1%         139 ms
+    ///     tiny         64.5%          91 ms
+    ///
+    /// Small survives only as the fallback for Macs that cannot run Turbo well,
+    /// and it is offered as exactly that rather than as a speed choice — at
+    /// 35.5% it is European-languages-only in practice, scoring 100% on both
+    /// Japanese and Mandarin.
+    ///
+    /// Nothing here is deleted; see ``retiredModels``.
     public static let models: [VerifiedModel] = [
-        model(
-            id: "whisper-tiny-en",
-            name: "Whisper Tiny",
-            filename: "ggml-tiny.en.bin",
-            tier: .fast,
-            language: .english,
-            sha256:
-                "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
-            size: 77_704_715
-        ),
-        model(
-            id: "whisper-tiny-multilingual",
-            name: "Whisper Tiny",
-            filename: "ggml-tiny.bin",
-            tier: .fast,
-            language: .multilingual,
-            sha256:
-                "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
-            size: 77_691_713
-        ),
-        model(
-            id: "whisper-base-en",
-            name: "Whisper Base",
-            filename: "ggml-base.en.bin",
-            tier: .balanced,
-            language: .english,
-            sha256:
-                "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
-            size: 147_964_211
-        ),
-        model(
-            id: "whisper-base-multilingual",
-            name: "Whisper Base",
-            filename: "ggml-base.bin",
-            tier: .balanced,
-            language: .multilingual,
-            sha256:
-                "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
-            size: 147_951_465
-        ),
-        model(
-            id: "whisper-small-en",
-            name: "Whisper Small",
-            filename: "ggml-small.en.bin",
-            tier: .balanced,
-            language: .english,
-            sha256:
-                "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d",
-            size: 487_614_201
-        ),
+        parakeetUnifiedModel(),
+        // The fallback for Intel and small-memory Macs, where Turbo is too slow
+        // and Parakeet has no Neural Engine to run on. Offered as a compromise,
+        // not as a tier.
         model(
             id: "whisper-small-multilingual",
             name: "Whisper Small",
@@ -228,16 +244,28 @@ public enum VerifiedModelCatalog {
 
     /// Models no longer offered, but still resolvable.
     ///
-    /// Whisper Medium English-only measured 2.9% word error rate against the
-    /// multilingual build's 2.7% — the same 1.5 GB, the same speed, slightly
-    /// worse, and unable to decode anything but English. There is no case for
-    /// offering it.
+    /// Retired rather than deleted because deleting would strand anyone who
+    /// already installed one: selection is stored by identifier and resolved
+    /// through this catalogue, so a missing entry turns a working model on disk
+    /// into "no model installed" — and `discover()` would quietly fall through
+    /// to the legacy `ggml-base.en.bin` path or fail outright. Retired entries
+    /// stay resolvable and verifiable, and simply stop being offered.
     ///
-    /// It is retired rather than deleted because deleting it would strand
-    /// anyone who already installed it: selection is stored by identifier and
-    /// resolved through this catalogue, so a missing entry turns a working
-    /// 1.5 GB model into "no model installed". Retired entries stay
-    /// resolvable and verifiable, and simply stop being offered.
+    /// Each is superseded, with the measurement that retired it:
+    ///
+    ///     whisper-medium-en    2.9% WER against the multilingual build's 2.7%
+    ///                          — same 1.5 GB, same speed, slightly worse, and
+    ///                          English-only.
+    ///     whisper-tiny-en      13.8% WER at 66 ms. Parakeet is 5.3% at 61 ms:
+    ///                          faster *and* two and a half times better.
+    ///     whisper-base-en      9.2% at 149 ms. Same comparison.
+    ///     whisper-small-en     never benchmarked, and bracketed on both sides
+    ///                          by models Parakeet already beats.
+    ///     whisper-tiny-ml      64.5% WER. Not usable for dictation.
+    ///     whisper-base-ml      55.1% WER, measured for the first time when
+    ///                          this cut was made — it had been offered for
+    ///                          months without anyone establishing whether it
+    ///                          worked. It does not.
     public static let retiredModels: [VerifiedModel] = [
         model(
             id: "whisper-medium-en",
@@ -248,6 +276,56 @@ public enum VerifiedModelCatalog {
             sha256:
                 "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356",
             size: 1_533_774_781
+        ),
+        model(
+            id: "whisper-tiny-en",
+            name: "Whisper Tiny",
+            filename: "ggml-tiny.en.bin",
+            tier: .fast,
+            language: .english,
+            sha256:
+                "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+            size: 77_704_715
+        ),
+        model(
+            id: "whisper-tiny-multilingual",
+            name: "Whisper Tiny",
+            filename: "ggml-tiny.bin",
+            tier: .fast,
+            language: .multilingual,
+            sha256:
+                "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+            size: 77_691_713
+        ),
+        model(
+            id: "whisper-base-en",
+            name: "Whisper Base",
+            filename: "ggml-base.en.bin",
+            tier: .balanced,
+            language: .english,
+            sha256:
+                "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
+            size: 147_964_211
+        ),
+        model(
+            id: "whisper-base-multilingual",
+            name: "Whisper Base",
+            filename: "ggml-base.bin",
+            tier: .balanced,
+            language: .multilingual,
+            sha256:
+                "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+            size: 147_951_465
+        ),
+        model(
+            id: "whisper-small-en",
+            name: "Whisper Small",
+            filename: "ggml-small.en.bin",
+            tier: .balanced,
+            language: .english,
+            sha256:
+                "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d",
+            size: 487_614_201
         )
     ]
 
@@ -309,6 +387,51 @@ public enum VerifiedModelCatalog {
         for model: VerifiedModel,
         fileManager: FileManager = .default
     ) throws -> Bool {
+        if model.runtime == .parakeetCoreML {
+            let values = try fileURL.resourceValues(forKeys: [
+                .isDirectoryKey
+            ])
+            guard values.isDirectory == true,
+                  !model.bundleFiles.isEmpty else {
+                return false
+            }
+            let bundleRoot = fileURL.standardizedFileURL
+                .resolvingSymlinksInPath()
+            let bundlePrefix = bundleRoot.path + "/"
+            for file in model.bundleFiles {
+                guard !file.relativePath.hasPrefix("/"),
+                      !file.relativePath.split(separator: "/").contains("..")
+                else {
+                    return false
+                }
+                let candidate = bundleRoot
+                    .appendingPathComponent(
+                        file.relativePath,
+                        isDirectory: false
+                    )
+                    .standardizedFileURL
+                    .resolvingSymlinksInPath()
+                guard candidate.path.hasPrefix(bundlePrefix) else {
+                    return false
+                }
+                let candidateValues = try candidate.resourceValues(forKeys: [
+                    .isRegularFileKey,
+                    .fileSizeKey,
+                    .isSymbolicLinkKey
+                ])
+                guard candidateValues.isRegularFile == true,
+                      candidateValues.isSymbolicLink != true,
+                      Int64(candidateValues.fileSize ?? -1)
+                        == file.fileSizeBytes,
+                      try sha256Hex(of: candidate) == file.sha256 else {
+                    return false
+                }
+            }
+            return model.bundleFiles.reduce(Int64(0)) {
+                $0 + $1.fileSizeBytes
+            } == model.fileSizeBytes
+        }
+
         let values = try fileURL.resourceValues(forKeys: [
             .isRegularFileKey,
             .fileSizeKey
@@ -319,6 +442,137 @@ public enum VerifiedModelCatalog {
         }
         return try sha256Hex(of: fileURL) == model.sha256
     }
+
+    private static func parakeetUnifiedModel() -> VerifiedModel {
+        VerifiedModel(
+            id: "parakeet-unified-en-int8",
+            displayName: "Parakeet",
+            filename: "parakeet-unified-en-0.6b",
+            tier: .fast,
+            languageCapability: .english,
+            publisher: "FluidInference / NVIDIA",
+            sourceRepository: parakeetRepository,
+            upstreamRepository:
+                "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
+            sourceRevision: parakeetRevision,
+            sha256:
+                "dacfe770afb5a0b8e71e3359ace7167433670c75bf61067005d55d1dae66a20b",
+            fileSizeBytes: 614_082_275,
+            format: "Core ML INT8",
+            license: "CC-BY-4.0",
+            licenseURL:
+                "https://creativecommons.org/licenses/by/4.0/legalcode",
+            attribution:
+                "Parakeet Unified EN 0.6B by NVIDIA, converted to Core ML "
+                + "by FluidInference. INT8 encoder inference uses FluidAudio.",
+            runtime: .parakeetCoreML,
+            bundleFiles: parakeetBundleFiles
+        )
+    }
+
+    private static let parakeetBundleFiles: [VerifiedModelFile] = [
+        .init(
+            relativePath: "config.json",
+            fileSizeBytes: 1_355,
+            sha256:
+                "6cbe6c76445410c5c6debf3d44c8c3b75e9966bf09bba5cd138c2378c62120f6"
+        ),
+        .init(
+            relativePath: "metadata.json",
+            fileSizeBytes: 1_046,
+            sha256:
+                "2b26a96b76fe1f7a04d3e867f50c75d6ce5dd1650d0dbcd4c35b591b22305f0e"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_decoder.mlmodelc/analytics/coremldata.bin",
+            fileSizeBytes: 243,
+            sha256:
+                "9ae70f6559989f88b856b326e59315798f9f0d08207a19fcc2dd3287a30088a5"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_decoder.mlmodelc/coremldata.bin",
+            fileSizeBytes: 560,
+            sha256:
+                "ce99c4488840fc463d59f8d4d6d2a9e8ceae8138ead51e3c265dde4d2ba4a0e9"
+        ),
+        .init(
+            relativePath: "parakeet_unified_decoder.mlmodelc/model.mil",
+            fileSizeBytes: 13_102,
+            sha256:
+                "6e60965b89c93943aa2be2d991c2461108145851fde05e1d048223a32d4cb20d"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_decoder.mlmodelc/weights/weight.bin",
+            fileSizeBytes: 14_429_952,
+            sha256:
+                "96f990461a5986d5e7309ad1a0f36084fbf0f4b28aec35948f8b8d0dcbf8599e"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_encoder_int8.mlmodelc/analytics/coremldata.bin",
+            fileSizeBytes: 243,
+            sha256:
+                "57e116a9d5765e39c0cdf754137ab744ddae34d9c6d68a5fdcad6600ae3a7b6b"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_encoder_int8.mlmodelc/coremldata.bin",
+            fileSizeBytes: 492,
+            sha256:
+                "54f533d30343d5e62b324a0691e4c262a6768b07b6e88e7aa14c617a2baba8a3"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_encoder_int8.mlmodelc/model.mil",
+            fileSizeBytes: 1_110_902,
+            sha256:
+                "c1c5d71c6cbf4d35bba08458746bde3640da7b1b444e1229a269393a58222c10"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_encoder_int8.mlmodelc/weights/weight.bin",
+            fileSizeBytes: 595_051_904,
+            sha256:
+                "f984b81590a4deae041ae20fbab8981c2d2a5b528b2ac81fae81c432633535c6"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_joint_decision_single_step.mlmodelc/analytics/coremldata.bin",
+            fileSizeBytes: 243,
+            sha256:
+                "163877ad14af97ec4107cd854fd1c6d336ee5d40ad25a657cc764fb763f452f5"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_joint_decision_single_step.mlmodelc/coremldata.bin",
+            fileSizeBytes: 556,
+            sha256:
+                "68a081570a48b52ec9379e153bd56748a5408a50be16767601563f231eaeff03"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_joint_decision_single_step.mlmodelc/model.mil",
+            fileSizeBytes: 9_611,
+            sha256:
+                "03c21096090bcd0b71c896c5ae0eb815db31a91c6676f572a7868eee4299abe3"
+        ),
+        .init(
+            relativePath:
+                "parakeet_unified_joint_decision_single_step.mlmodelc/weights/weight.bin",
+            fileSizeBytes: 3_446_978,
+            sha256:
+                "06831afa6d1beb0c0b10350ebf7886bc37638e951d14e738d7e06fbd2a05012f"
+        ),
+        .init(
+            relativePath: "vocab.json",
+            fileSizeBytes: 15_088,
+            sha256:
+                "e1a7bff4f5df133c0f4ad47b8e43c96f6bf1865d99126a4c4725ef51d0108bec"
+        ),
+    ]
 
     /// Weights ZenVoice converted itself, pinned by commit.
     ///
