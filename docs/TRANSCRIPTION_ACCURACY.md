@@ -169,6 +169,35 @@ It does, it was installed on the machine throughout, and it emits Latin script
 natively. The conclusion was drawn from the wrong models and the transliterator
 is not on the critical path for this at all.
 
+## Rejected: shrinking the encoder window
+
+whisper pads every input to a 30-second window and runs the encoder across all
+1500 of its positions whatever was said, so a four-second dictation costs the
+same as a twenty-nine second one. `whisper_full_params.audio_ctx` truncates
+that. It is the largest latency lever in the runtime and it cannot be used.
+
+Scaling the window to the audio with 50% headroom over the speech, on
+whisper-large-v3-turbo:
+
+|                     | default | scaled |
+| ------------------- | ------- | ------ |
+| decode, whole       | 10.90s  | 6.44s  |
+| decode, segmented   | 27.96s  | 10.28s |
+| synthetic whole WER | 3.0%    | 24.2%  |
+| synthetic segmented | 3.4%    | 125.6% |
+| clean speech WER    | 3.0%    | 29.3%  |
+| Hinglish loanwords  | 4/26    | 0/26   |
+
+41% faster and eight times worse. The decoder cross-attends to an encoding that
+stops before the utterance does, then loops on whatever it was last confident
+about — repeating a full clause six times, or collapsing into `-e-d-e-d-e-d`.
+Hindi transliteration was lost outright. This is the same fabrication failure
+that ruled out beam search on Apex, at far greater magnitude.
+
+Flash attention was the suspected culprit and is not: with `flash_attn` off the
+repetition is tidier but reaches 218% and 520% word error rate on single clips.
+The model wants the window it was trained on.
+
 ## Open
 
 - **Hinglish needs its own metric before it has a number.** Word error rate
@@ -176,10 +205,13 @@ is not on the critical path for this at all.
   hearing, so the loudest figure in this document — 52.6% — is not an accuracy
   result. The loanword-preservation scoring already in the harness is the
   right instrument; it has not yet been run against this corpus.
-- **Hallucination loops are undefended.** `tiny` produced a hundred repeats of
-  the same phrase on one clip. Nothing in ZenVoice detects or truncates that,
-  and it costs both accuracy and minutes of decode. `Scoring.repetitionRate`
-  already exists to spot it in the harness; the app has no equivalent.
+- **Hallucination loops are truncated, not surfaced.** The decode deadline in
+  `WhisperTranscriber` caps the wasted minutes, and
+  `TranscriptRepetition.collapsingRunaway` cuts the looped text before it
+  reaches the clipboard; both are exercised by the runaway repetition defence
+  checks. What remains open is the signal: `repetitionRate` is never consulted
+  at runtime, so a decode that failed badly enough to loop is still pasted as
+  if it were trustworthy rather than flagged to the speaker.
 - **Read speech is not dictation.** LibriSpeech speakers are reading prepared
   prose, so they are fluent, evenly paced and well recorded. Real dictation is
   hesitant and often noisy. These numbers are a floor.

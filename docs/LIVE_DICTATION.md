@@ -3,6 +3,13 @@
 M13 adds local stable-phrase preview and an optional commit-on-pause insertion
 mode. Both reuse the selected Whisper model and Instant Refine settings.
 
+**Both are off by default.** Preview decodes every pause-delimited fragment with
+the selected model, and the finished recording is then decoded again in a single
+pass. The two share one serial queue, so the accurate decode cannot begin until
+the last preview drains — twice the compute and twice the battery, spent on
+fragments that transcribe measurably worse than the whole utterance. The
+default path decodes the recording once, at the end.
+
 ## Stability boundary
 
 ZenVoice does not treat every changing token as final. It waits for:
@@ -41,9 +48,11 @@ Private Dictation and paused History never write these partials.
 
 ## Resource behavior
 
-- Live preview is on by default.
+- Live preview is off by default.
 - Commit on pause is off by default.
 - Turning live preview off also turns commit on pause off.
+- With preview off nothing is captured in memory, no preview decode is queued,
+  and the recording is decoded exactly once.
 - In-memory live samples are captured only for a recording that starts with
   live preview enabled, then released when that recording stops.
 - Preview and final transcription share one serial Whisper queue so the model

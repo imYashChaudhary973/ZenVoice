@@ -142,6 +142,60 @@ one person. The downloaded official archive was
 `Hindi-English_test.tar.gz`, 443,929,204 bytes, SHA-256
 `93e358b3bf8233a897fcd353c1f4f98fdda6b8c01b7eed17a70c7dd26e984b37`.
 
+## Addendum — 2026-07-29: the measurements that cut the catalogue
+
+Three gaps in the matrix above were filled, and together they reduced the
+catalogue from ten offered models to five. Same machine, same suites, same
+input profile.
+
+### Parakeet, English suite
+
+Parakeet postdates the original run and had never been benchmarked. It wins the
+English suite outright:
+
+| Model | WER | CER | p50 | p95 | RTF |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Parakeet** | **5.3%** | 1.9% | **61 ms** | 127 ms | 0.021 |
+| Base English | 9.2% | 2.7% | 149 ms | 231 ms | 0.048 |
+| Medium English (retired) | 6.6% | 0.8% | 1,343 ms | 1,636 ms | 0.407 |
+| Tiny English | 13.8% | 4.6% | 66 ms | 75 ms | 0.020 |
+
+Most accurate and effectively the fastest, at 47× real time. By voice:
+
+| Model | US | UK | Indian Aman | Indian Tara |
+| --- | ---: | ---: | ---: | ---: |
+| **Parakeet** | 2.6% | **2.6%** | 13.2% | **2.6%** |
+| Base English | 2.6% | 7.9% | **10.5%** | 15.8% |
+| Medium multilingual | 2.6% | 7.9% | **7.9%** | 15.8% |
+
+The open question from the original run — whether an NVIDIA-trained model would
+hold up on Indian English — resolves in its favour: 7.9% averaged across the two
+Indian voices against Base English's 13.2%. Aman is the one regression, and
+almost all of it is a single term, `Postgres` transcribed as `post do` /
+`post does` — the same word the original run flagged as consistently difficult,
+and exactly what Voice Profile corrections exist to absorb.
+
+### Base and Small multilingual, multilingual suite
+
+Both were in the catalogue and neither had ever been measured. Completing the
+ladder shows it is a cliff, not a curve:
+
+| Model | WER | CER | p50 | RTF |
+| --- | ---: | ---: | ---: | ---: |
+| Tiny multilingual | 64.5% | 34.8% | 91 ms | 0.027 |
+| Base multilingual | 55.1% | 27.9% | 139 ms | 0.042 |
+| Small multilingual | 35.5% | 12.5% | 456 ms | 0.130 |
+| Medium multilingual | 14.5% | 5.0% | 1,173 ms | 0.347 |
+| **Turbo multilingual** | **13.2%** | 5.1% | 1,451 ms | 0.397 |
+
+Small by language: Arabic 5.9%, German 5.0%, French 16.7% — then Hindi 47.5%,
+Spanish 52.3%, Tamil 84.6%, Japanese 100%, Mandarin 100%. It is a
+European-languages-only model in practice, and is now offered strictly as the
+fallback for Macs that cannot run Turbo, not as a speed tier.
+
+There is therefore no "fast multilingual with a small accuracy trade-off" to
+offer. The step below Turbo costs 2.7× the word error rate.
+
 ## Findings and next actions
 
 1. Offer Base English as the responsive English choice. Keep Turbo as the

@@ -118,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusMessageMenuItem: NSMenuItem!
     private var languageMenuItem: NSMenuItem!
     private var zenBarController: ZenBarPanelController!
+    private var escapeMonitors: [Any] = []
     private var globalHotKey: GlobalHotKey?
     private var pasteLastGlobalHotKey: GlobalHotKey?
     private var privateModeGlobalHotKey: GlobalHotKey?
@@ -176,7 +177,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureHotKey()
         configureHoldToDictate()
         configureSettingsWindow()
-        settingsWindowController.show()
+        // A menu-bar utility should not seize the screen at every login. The
+        // window is still one click from the status item, and
+        // `applicationShouldHandleReopen` brings it back from the Dock — but
+        // first-run setup does need to be seen.
+        if onboardingViewModel.isPresented {
+            settingsWindowController.show()
+        }
 
         NotificationCenter.default.addObserver(
             self,
@@ -243,8 +250,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             transcriber = WhisperTranscriber(
                 configuration: try ZenVoiceConfiguration.discover()
             )
+            warmUpTranscriber()
         } catch {
             state.phase = .error(error.localizedDescription)
+        }
+    }
+
+    /// Builds the model before the user asks for it.
+    ///
+    /// Runs on `transcriptionQueue` because that is the serial queue every
+    /// decode uses, and ``WhisperTranscriber/warmUp()`` writes the unguarded
+    /// context. Repeat calls are cheap — the transcriber warms once — so this
+    /// is safe to fire on every route into a dictation.
+    private func warmUpTranscriber() {
+        guard let transcriber else {
+            return
+        }
+        transcriptionQueue.async {
+            transcriber.warmUp()
         }
     }
 
@@ -405,6 +428,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     phase: phase,
                     showsAtAllTimes: showsAtAllTimes
                 )
+                self?.updateEscapeToCancel(phase: phase)
             }
             .store(in: &stateObservers)
     }
@@ -825,6 +849,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return WhisperTranscriber(configuration: configuration)
             }
             transcriber = candidate
+            warmUpTranscriber()
             state.languageProfile = languageProfile
             settingsViewModel?.configurationDidChange(
                 languageProfile: languageProfile
@@ -885,6 +910,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
         }
+        // Earliest useful moment: the model finishes building while the user is
+        // still talking, rather than after they stop. A no-op once warm.
+        warmUpTranscriber()
 
 #if DEBUG
         if recorder.usesDeterministicFixture {
@@ -1396,6 +1424,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
             }
+        }
+    }
+
+    /// Esc cancels an active dictation from anywhere. The ZenBar panel is
+    /// non-activating, so the key lands in whichever app has focus — a local
+    /// monitor covers ZenVoice's own windows, a global one covers the rest.
+    /// The global monitor only observes; the frontmost app still receives
+    /// its Esc.
+    private func updateEscapeToCancel(phase: AppState.Phase) {
+        if case .listening = phase {
+            guard escapeMonitors.isEmpty else {
+                return
+            }
+            if let local = NSEvent.addLocalMonitorForEvents(
+                matching: .keyDown,
+                handler: { [weak self] event in
+                    guard event.keyCode == 53 else {
+                        return event
+                    }
+                    self?.cancelRecording()
+                    return nil
+                }
+            ) {
+                escapeMonitors.append(local)
+            }
+            if let global = NSEvent.addGlobalMonitorForEvents(
+                matching: .keyDown,
+                handler: { [weak self] event in
+                    guard event.keyCode == 53 else {
+                        return
+                    }
+                    self?.cancelRecording()
+                }
+            ) {
+                escapeMonitors.append(global)
+            }
+        } else {
+            for monitor in escapeMonitors {
+                NSEvent.removeMonitor(monitor)
+            }
+            escapeMonitors.removeAll()
         }
     }
 

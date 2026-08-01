@@ -57,6 +57,9 @@ install_name_tool \
 cp "$project_dir/Resources/Info.plist" "$contents_dir/Info.plist"
 cp "$brand_dir/ZenLogo.png" "$contents_dir/Resources/ZenLogo.png"
 cp "$icon_path" "$contents_dir/Resources/ZenVoice.icns"
+cp \
+    "$project_dir/THIRD_PARTY_NOTICES.md" \
+    "$contents_dir/Resources/THIRD_PARTY_NOTICES.md"
 
 if [[ -z "$signing_identity" ]]; then
     signing_identity=$(

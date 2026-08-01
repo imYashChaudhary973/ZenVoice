@@ -93,4 +93,45 @@ public enum WhisperDecoding {
         let padding = Int(leadInSilenceSeconds * sampleRate)
         return [Float](repeating: 0, count: padding) + samples
     }
+
+    /// Why `audio_ctx` is left alone.
+    ///
+    /// whisper pads every input out to a 30-second window and runs the encoder
+    /// across all 1500 of its positions regardless of what was said, so a
+    /// four-second dictation pays the same encoder cost as a twenty-nine second
+    /// one. Since dictation is overwhelmingly short, most of that work encodes
+    /// silence, and `whisper_full_params.audio_ctx` exists to truncate it. The
+    /// saving is real and large. It was measured, on the accuracy harness's
+    /// twelve clips under whisper-large-v3-turbo, scaling the window to the
+    /// audio with 50% headroom above what the speech occupied:
+    ///
+    ///     decode time   whole 10.90s -> 6.44s      41% faster
+    ///                   segmented 27.96s -> 10.28s  63% faster
+    ///
+    /// And it destroys the transcript:
+    ///
+    ///     synthetic whole      3.0% -> 24.2% word error rate
+    ///     synthetic segmented  3.4% -> 125.6%
+    ///     clean speech         3.0% -> 29.3%, 59 insertions
+    ///     Hinglish loanwords   4/26 -> 0/26
+    ///     Hindi                transliteration dropped entirely
+    ///
+    /// The failure is the decoder looping: it cross-attends to an encoding that
+    /// stops before the utterance does and repeats the last thing it is sure
+    /// of, emitting "and returns unauthorized instead of a server error" six
+    /// times, or degenerating into "-e-d-e-d-e-d". Fabricated text is the worst
+    /// output a dictation tool has, because the user may never notice words
+    /// they did not say — the same reasoning that ruled out beam search above,
+    /// at far greater cost here.
+    ///
+    /// Flash attention was the obvious suspect, since it has historically
+    /// interacted badly with a reduced context. It is not the cause: with
+    /// `flash_attn` off the repetition is cleaner but no less severe, reaching
+    /// 218% and 520% word error rate on individual clips. The model simply
+    /// requires the window it was trained on.
+    ///
+    /// Anyone reaching for this again should expect to pay for the speed in
+    /// invented words, and should re-run `ZenVoiceAccuracyChecks` before
+    /// believing otherwise.
+    public static let audioContextIsModelDefault = true
 }

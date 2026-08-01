@@ -40,6 +40,13 @@ struct ZenBrandMark: View {
 /// Ledger screen scaffold: editorial header rule and a responsive content
 /// column that stays compact in a normal window and uses a full-screen canvas.
 struct ZenScreen<Content: View>: View {
+    /// Prose stops at a readable measure even when the column does not.
+    ///
+    /// Panels, grids and tables genuinely use the width; a sentence does not.
+    /// At 13pt across the full 1200pt column a line of body text ran to roughly
+    /// 180 characters, about twice a comfortable measure.
+    private static var proseWidth: CGFloat { 640 }
+
     let title: String
     let subtitle: String
     @ViewBuilder let content: Content
@@ -62,6 +69,10 @@ struct ZenScreen<Content: View>: View {
                             .font(ZenDesign.Typography.body)
                             .foregroundStyle(ZenDesign.Semantic.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
+                            .frame(
+                                maxWidth: Self.proseWidth,
+                                alignment: .leading
+                            )
                     }
 
                     Rectangle()
@@ -111,14 +122,17 @@ struct ZenSection<Content: View>: View {
     }
 }
 
-/// Tonal panel. Rows inside are separated with `ZenPanelDivider`.
+/// Tonal panel. Rows inside are separated with `ZenPanelDivider`; pass
+/// `padding` for free-form content that doesn't use `ZenRow`.
 struct ZenPanel<Content: View>: View {
+    var padding: CGFloat = 0
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             content
         }
+        .padding(padding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ZenDesign.Semantic.surface)
         .clipShape(
@@ -229,11 +243,6 @@ struct ZenKbd: View {
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
                             .strokeBorder(ZenDesign.Semantic.borderStrong)
                     }
-                    .shadow(
-                        color: ZenDesign.Semantic.borderStrong.opacity(0.7),
-                        radius: 0,
-                        y: 1
-                    )
             }
     }
 }
@@ -443,7 +452,7 @@ struct ZenMeterRow: View {
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 Spacer()
                 Text("\(percent)%")
-                    .font(ZenDesign.Typography.caption)
+                    .font(ZenDesign.Typography.mono)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
             }
             GeometryReader { proxy in
@@ -721,6 +730,65 @@ struct ZenIconButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityLabel(label)
+    }
+}
+
+/// Terminal-style live status: dot + lowercase mono label, no container.
+/// For transient runtime states ("● listening", "● downloading 42%") —
+/// use `ZenBadge` for persistent states that describe an item.
+struct ZenStatusLabel: View {
+    let text: String
+    var tint: Color = ZenDesign.Semantic.textSecondary
+    var pulses = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dimmed = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+                .opacity(dimmed ? 0.35 : 1)
+            Text(text.lowercased())
+                .font(ZenDesign.Typography.mono)
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                .lineLimit(1)
+        }
+        .onAppear {
+            guard pulses, !reduceMotion else { return }
+            withAnimation(
+                .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+            ) {
+                dimmed = true
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+    }
+}
+
+/// Hairline 2pt progress bar for downloads and long-running work.
+struct ZenProgressBar: View {
+    /// 0…1
+    let value: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(ZenDesign.Semantic.surfaceSunken)
+                Capsule()
+                    .fill(ZenDesign.Semantic.accent)
+                    .frame(
+                        width: proxy.size.width
+                            * CGFloat(max(0, min(value, 1)))
+                    )
+            }
+        }
+        .frame(height: 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityValue("\(Int(value * 100)) percent")
     }
 }
 

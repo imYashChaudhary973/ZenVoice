@@ -1,8 +1,17 @@
 import SwiftUI
 
 struct ZenBarView: View {
-    @AppStorage("zenvoice.appearance")
-    private var appearance = "light"
+    /// Room left around the bar for its shadow to land in.
+    ///
+    /// The panel clips its hosting view, so a shadow with nowhere to go is
+    /// simply not drawn. These are the margins the panel is sized against in
+    /// ``ZenBarPanelController``.
+    static let shadowInset: CGFloat = 26
+    static let barHeight: CGFloat = 44
+    static let maximumBarWidth: CGFloat = 580
+
+    @AppStorage(ZenAppearance.storageKey)
+    private var appearance = ZenAppearance.system.rawValue
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
     @ObservedObject var state: AppState
@@ -12,29 +21,43 @@ struct ZenBarView: View {
     let dismissError: () -> Void
 
     var body: some View {
+        bar
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: .bottom
+            )
+            .padding(.bottom, Self.shadowInset)
+            .preferredColorScheme(
+                ZenAppearance.resolved(appearance).colorScheme
+            )
+    }
+
+    private var bar: some View {
         ZStack {
+            // Identity changes on the *content* only. The container keeps
+            // its own, so the bar's width and background morph between phases
+            // while the contents cross-fade. Putting `.id` on the whole bar —
+            // as this once did — destroyed and rebuilt it instead, which is
+            // why every state change read as a hard cut.
             controlBar
+                .id(state.phase.label)
+                .transition(.opacity)
         }
-        .frame(width: barWidth, height: 44)
+        .frame(width: barWidth, height: Self.barHeight)
         .background(barBackground)
-        .clipShape(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-        )
-        .contentShape(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-        )
-        .id(state.phase.label)
-        .transition(
-            reduceMotion
-                ? .opacity
-                : .opacity.combined(with: .scale(scale: 0.985))
-        )
-        .animation(
-            reduceMotion ? nil : .easeOut(duration: 0.20),
-            value: state.phase
-        )
-        .preferredColorScheme(appearance == "dark" ? .dark : .light)
+        .clipShape(barShape)
+        .contentShape(barShape)
+        .animation(ZenDesign.Motion.standard(reduceMotion), value: state.phase)
+        .animation(ZenDesign.Motion.standard(reduceMotion), value: barWidth)
         .accessibilityElement(children: .contain)
+    }
+
+    private var barShape: RoundedRectangle {
+        RoundedRectangle(
+            cornerRadius: ZenDesign.Radius.bar,
+            style: .continuous
+        )
     }
 
     @ViewBuilder
@@ -48,19 +71,7 @@ struct ZenBarView: View {
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(barSecondary)
                     Spacer()
-                    Text("⌃⌥ Space")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(barSecondary)
-                        .padding(.horizontal, 7)
-                        .frame(height: 22)
-                        .background {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(ZenDesign.Semantic.surfaceRaised)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(barBorder)
-                                }
-                        }
+                    ZenKbdGroup(combo: "⌃⌥ Space")
                 }
                 .padding(.horizontal, 14)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -72,16 +83,28 @@ struct ZenBarView: View {
 
         case .listening:
             HStack(spacing: 10) {
-                Circle()
-                    .fill(barAccent)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: barAccent.opacity(0.55), radius: 4)
-                    .accessibilityHidden(true)
+                ZenStatusLabel(
+                    text: "listening",
+                    tint: barAccent,
+                    pulses: true
+                )
 
-                WaveformView(samples: state.audioSamples)
-                    .frame(width: 92, height: 20)
+                WaveformView(model: state.audioLevel)
 
-                Spacer()
+                // Only present when stable-phrase detection is switched on.
+                // The text was computed and thrown away before this: nothing
+                // read `liveTranscriptPreview` at all.
+                if !state.liveTranscriptPreview.isEmpty {
+                    Text(state.liveTranscriptPreview)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(barSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                } else {
+                    Spacer()
+                }
+
                 barButton("Cancel", action: cancelRecording)
                 barButton(
                     "Finish",
@@ -95,46 +118,44 @@ struct ZenBarView: View {
             .accessibilityLabel("ZenVoice is listening")
 
         case .transcribing:
-            HStack(spacing: 10) {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(barAccent)
-                Text("Refining…")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(barPrimary)
-                Spacer()
+            // Transcribing and inserting were pixel-identical before, during
+            // the slowest part of the interaction. Decoding is the part with
+            // no upper bound the user can feel, so it is the one that gets a
+            // progress hairline.
+            VStack(spacing: 6) {
+                HStack(spacing: 10) {
+                    ZenStatusLabel(text: "transcribing…", pulses: true)
+                    Spacer()
+                }
+                IndeterminateBar()
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("Transcribing locally")
 
         case .inserting:
             HStack(spacing: 10) {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(barAccent)
-                Text("Inserting…")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(barPrimary)
+                ZenStatusLabel(
+                    text: "inserting…",
+                    tint: barSuccess,
+                    pulses: true
+                )
                 Spacer()
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("Inserting text")
 
         case .success:
             HStack(spacing: 9) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(barSuccess)
-                Text(successMessage)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(barPrimary)
-                    .lineLimit(1)
-                    .monospacedDigit()
+                ZenStatusLabel(
+                    text: successMessage,
+                    tint: barSuccess
+                )
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel(successMessage)
 
         case .error(let message):
             HStack(spacing: 9) {
@@ -164,9 +185,9 @@ struct ZenBarView: View {
     private var barWidth: CGFloat {
         switch state.phase {
         case .idle:
-            return 310
+            return 320
         case .listening:
-            return 350
+            return state.liveTranscriptPreview.isEmpty ? 400 : 560
         case .transcribing, .inserting:
             return 310
         case .success:
@@ -177,10 +198,10 @@ struct ZenBarView: View {
     }
 
     private var barBackground: some View {
-        RoundedRectangle(cornerRadius: 9, style: .continuous)
+        barShape
             .fill(barPanel)
             .overlay {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                barShape
                     .strokeBorder(barBorder, lineWidth: 1)
             }
             .shadow(color: Color.black.opacity(0.22), radius: 18, y: 8)
@@ -188,9 +209,9 @@ struct ZenBarView: View {
 
     private var successMessage: String {
         guard let summary = state.lastInsertionSummary else {
-            return "Inserted with ZenVoice"
+            return "inserted"
         }
-        return "Inserted with ZenVoice · \(summary.wordCount) words · \(summary.wordsPerMinute) WPM"
+        return "inserted · \(summary.wordCount) words · \(summary.wordsPerMinute) wpm"
     }
 
     private func displayedError(_ message: String) -> String {
@@ -214,12 +235,15 @@ struct ZenBarView: View {
                 .padding(.horizontal, 10)
                 .frame(height: 30)
                 .background {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(
-                            emphasized
-                                ? ZenDesign.Semantic.accentMuted
-                                : Color.clear
-                        )
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.barControl,
+                        style: .continuous
+                    )
+                    .fill(
+                        emphasized
+                            ? ZenDesign.Semantic.accentMuted
+                            : Color.clear
+                    )
                 }
                 .contentShape(Rectangle())
         }
@@ -235,7 +259,10 @@ struct ZenBarView: View {
                 .scaledToFit()
                 .frame(width: size, height: size)
                 .clipShape(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
                 )
         } else {
             Image(systemName: "waveform")
@@ -274,37 +301,127 @@ struct ZenBarView: View {
     }
 }
 
+/// The one living element in the interface.
+///
+/// Observes ``AudioLevelModel`` rather than ``AppState`` so that a level
+/// arriving fifteen times a second repaints these bars and nothing else.
+///
+/// The history is kept here rather than in the model because it is a property
+/// of the drawing, not of the audio: the recorder reports a level, and what a
+/// trailing window of levels should look like is this view's business.
 private struct WaveformView: View {
+    @ObservedObject var model: AudioLevelModel
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
-    let samples: [Double]
-    private let visualProfile = [
-        0.52, 0.72, 0.88, 0.66, 1.00, 0.78, 0.94,
-        0.70, 1.00, 0.64, 0.86, 0.70, 0.50
-    ]
+
+    private static let barCount = 23
+    private static let barWidth: CGFloat = 2
+    private static let barSpacing: CGFloat = 2
+    private static let maximumHeight: CGFloat = 18
+    private static let minimumHeight: CGFloat = 2
+
+    static var width: CGFloat {
+        CGFloat(barCount) * barWidth
+            + CGFloat(barCount - 1) * barSpacing
+    }
+
+    @State private var history = [Double](
+        repeating: 0,
+        count: barCount
+    )
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Array(samples.enumerated()), id: \.offset) { index, sample in
-                let profile = visualProfile[
-                    min(index, visualProfile.count - 1)
-                ]
+        HStack(spacing: Self.barSpacing) {
+            ForEach(history.indices, id: \.self) { index in
                 Capsule()
                     .fill(
                         ZenDesign.Semantic.accent
-                        .opacity(sample > 0.035 ? 0.98 : 0.30)
+                            .opacity(opacity(at: index))
                     )
                     .frame(
-                        width: 2,
-                        height: max(2, 2 + (16 * sample * profile))
+                        width: Self.barWidth,
+                        height: height(at: index)
                     )
             }
         }
-        .frame(maxHeight: .infinity)
-        .animation(
-            reduceMotion ? nil : .linear(duration: 0.055),
-            value: samples
+        // Capsules are centre-aligned in the row, so a bar of height h extends
+        // equally above and below the midline. That mirrored shape is what
+        // reads as a voice rather than as a graphic equaliser.
+        .frame(width: Self.width, height: Self.maximumHeight)
+        .animation(ZenDesign.Motion.waveform(reduceMotion), value: history)
+        .onChange(of: model.level) { _, level in
+            var next = history
+            next.removeFirst()
+            next.append(level)
+            history = next
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// Newest sample sits at the trailing edge; older ones are damped so the
+    /// trail falls away instead of ending on a cliff.
+    private func taper(at index: Int) -> Double {
+        let age = Double(index) / Double(max(1, Self.barCount - 1))
+        return 0.4 + (0.6 * age)
+    }
+
+    private func height(at index: Int) -> CGFloat {
+        let amplitude = history[index] * taper(at: index)
+        return max(
+            Self.minimumHeight,
+            CGFloat(amplitude) * Self.maximumHeight
         )
+    }
+
+    private func opacity(at index: Int) -> Double {
+        history[index] > 0.035 ? 0.35 + (0.63 * taper(at: index)) : 0.25
+    }
+}
+
+/// A hairline that keeps moving while work of unknown length is happening.
+///
+/// whisper reports no progress, so there is nothing honest to fill a
+/// determinate bar with. What this can truthfully say is "still going", which
+/// is the thing a frozen-looking bar fails to say.
+private struct IndeterminateBar: View {
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
+
+    private static let period: Double = 1.1
+    private static let segmentFraction: CGFloat = 0.32
+
+    var body: some View {
+        GeometryReader { proxy in
+            let segment = proxy.size.width * Self.segmentFraction
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(ZenDesign.Semantic.surfaceSunken)
+                if reduceMotion {
+                    // No travelling segment; a static accent hairline still
+                    // distinguishes this phase from the ones without one.
+                    Capsule()
+                        .fill(ZenDesign.Semantic.accent.opacity(0.45))
+                } else {
+                    TimelineView(.animation) { context in
+                        let elapsed = context.date
+                            .timeIntervalSinceReferenceDate
+                        let phase = (elapsed.truncatingRemainder(
+                            dividingBy: Self.period
+                        )) / Self.period
+                        Capsule()
+                            .fill(ZenDesign.Semantic.accent)
+                            .frame(width: segment)
+                            .offset(
+                                x: CGFloat(phase)
+                                    * (proxy.size.width + segment)
+                                    - segment
+                            )
+                    }
+                }
+            }
+        }
+        .frame(height: 2)
+        .clipShape(Capsule())
         .accessibilityHidden(true)
     }
 }

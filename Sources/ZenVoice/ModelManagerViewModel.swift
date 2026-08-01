@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import ZenVoiceCore
+import ZenVoiceRuntime
 
 enum VerifiedModelDownloadError: LocalizedError {
     case invalidSource
@@ -84,6 +85,13 @@ struct VerifiedModelDownloader {
         let directory = try VerifiedModelCatalog.modelsDirectory(
             fileManager: fileManager
         )
+        if model.runtime == .parakeetCoreML {
+            return try await downloadParakeet(
+                model,
+                to: directory,
+                progress: progress
+            )
+        }
         return try await download(
             sourceURL: model.downloadURL,
             sourceRevision: model.sourceRevision,
@@ -93,6 +101,47 @@ struct VerifiedModelDownloader {
             destinationDirectory: directory,
             progress: progress
         )
+    }
+
+    private func downloadParakeet(
+        _ model: VerifiedModel,
+        to directory: URL,
+        progress:
+            AsyncStream<VerifiedModelDownloadPhase>.Continuation
+    ) async throws -> URL {
+        let destination = directory.appendingPathComponent(
+            model.filename,
+            isDirectory: true
+        )
+        if fileManager.fileExists(atPath: destination.path),
+           (try? VerifiedModelCatalog.verify(
+                destination,
+                for: model,
+                fileManager: fileManager
+           )) != true {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        let downloaded = try await ParakeetModelSupport.download(
+            to: directory
+        ) { fraction in
+            progress.yield(.downloading(fraction))
+        }
+        try Task.checkCancellation()
+        progress.yield(.verifying)
+        guard try VerifiedModelCatalog.verify(
+            downloaded,
+            for: model,
+            fileManager: fileManager
+        ) else {
+            try? fileManager.removeItem(at: downloaded)
+            throw VerifiedModelDownloadError.checksumMismatch
+        }
+        return downloaded
     }
 
 
@@ -473,6 +522,24 @@ final class ModelManagerViewModel: ObservableObject {
             return nil
         }
         return selected
+    }
+
+    /// Retired models sitting on disk that nothing is using.
+    ///
+    /// ``selectedLegacyModel`` only surfaces a retired model while it is the
+    /// selected one, which leaves every *other* retired install invisible and
+    /// undeletable. That was a rounding error when one model was retired; after
+    /// the catalogue was cut from ten offered models to five it can be several
+    /// gigabytes — Whisper Medium English alone is 1.5 GB — with no screen in
+    /// the app admitting the files exist.
+    var reclaimableModels: [VerifiedModel] {
+        VerifiedModelCatalog.retiredModels.filter {
+            installedModelIDs.contains($0.id) && $0.id != selectedModelID
+        }
+    }
+
+    var reclaimableBytes: Int64 {
+        reclaimableModels.reduce(0) { $0 + $1.fileSizeBytes }
     }
 
     var recommendedInstalledModel: VerifiedModel? {

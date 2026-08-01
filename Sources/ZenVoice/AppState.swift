@@ -2,6 +2,27 @@ import Combine
 import Foundation
 import ZenVoiceCore
 
+/// The microphone level, published on its own.
+///
+/// Combine invalidates every view observing an `ObservableObject` whenever any
+/// of its `@Published` properties changes, regardless of which one the view
+/// actually read. The level changes about fifteen times a second while
+/// recording, so keeping it on ``AppState`` re-evaluated the entire ZenBar —
+/// brand mark, keycaps, buttons and all — at that rate to move a few bars.
+/// Split out, a level update repaints the waveform and nothing else.
+@MainActor
+final class AudioLevelModel: ObservableObject {
+    @Published private(set) var level: Double = 0
+
+    func update(_ value: Double) {
+        level = max(0, min(1, value))
+    }
+
+    func reset() {
+        level = 0
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     private static let statusMessagePreferenceKey =
@@ -39,7 +60,8 @@ final class AppState: ObservableObject {
     }
 
     @Published var phase: Phase = .idle
-    @Published var audioSamples = Array(repeating: 0.0, count: 13)
+    /// Deliberately not `@Published` — see ``AudioLevelModel``.
+    let audioLevel = AudioLevelModel()
     @Published private(set) var showsZenVoiceAtAllTimes: Bool
     @Published var showsStatusMessage: Bool
     @Published var lastTranscript = ""
@@ -70,14 +92,11 @@ final class AppState: ObservableObject {
     }
 
     func resetAudioSamples() {
-        audioSamples = Array(repeating: 0, count: audioSamples.count)
+        audioLevel.reset()
     }
 
     func appendAudioLevel(_ level: Double) {
-        var samples = audioSamples
-        samples.removeFirst()
-        samples.append(max(0, min(1, level)))
-        audioSamples = samples
+        audioLevel.update(level)
     }
 
     func recordSuccessfulDictation(

@@ -7,8 +7,12 @@ Screenshot *.png
 Screenshot *.heic
 /Style Personal messages-*.png
 /clipboard-*.png
+/clipboard-*.heic
 .claude/settings.local.json
 PrivateBenchmarks/
+
+# Local evaluation corpora are fetched on demand and never belong in git.
+/Datasets/
 
 # Website design prototypes do not belong in the native app repository.
 /ZenVoiceNewDesign/

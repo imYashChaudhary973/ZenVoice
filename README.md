@@ -105,7 +105,7 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 - macOS 14 or newer
 - Apple Silicon Mac
 - Swift 5.10 or newer
-- Internet access on the first build for the pinned `whisper.cpp` runtime
+- Internet access on the first build for the pinned local speech runtimes
 - A verified model downloaded from ZenVoice's Models screen
 
 ## Quick start
@@ -127,8 +127,8 @@ clipboard.
 
 Open **Models** to download a checksum-verified English, multilingual, or
 Hinglish-specialist model.
-The pinned `whisper.cpp` runtime is bundled in the app; Homebrew is not
-required.
+The pinned `whisper.cpp` and FluidAudio runtimes are bundled in the app;
+Homebrew is not required.
 
 Open **Languages** to choose English, Hinglish, automatic detection, or another
 spoken language. Any non-English profile requires a Multilingual model.

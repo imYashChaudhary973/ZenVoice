@@ -15,15 +15,6 @@ enum ZenDesign {
         static let rust800 = Color(red: 0.588, green: 0.259, blue: 0.165)
         static let green400 = Color(red: 0.498, green: 0.714, blue: 0.537)
         static let red400 = Color(red: 0.851, green: 0.482, blue: 0.400)
-
-        // Back-compat aliases (pre-v2 names still referenced in views).
-        static let gold300 = rust400
-        static let gold200 = rust300
-        static let gold700 = rust700
-        static let gold800 = rust800
-        static let gold500 = rust400
-        static let gold400 = rust300
-        static let black950 = ink950
         static let white = Color.white
     }
 
@@ -64,10 +55,15 @@ enum ZenDesign {
             light: NSColor(red: 0.361, green: 0.337, blue: 0.298, alpha: 1),
             dark: NSColor(red: 0.690, green: 0.682, blue: 0.663, alpha: 1)
         )
+        // Values below must clear 4.5:1 on `surfaceRaised`, the lightest
+        // (dark) / darkest (light) background tertiary text sits on.
         static let textTertiary = adaptive(
-            light: NSColor(red: 0.545, green: 0.514, blue: 0.467, alpha: 1),
-            dark: NSColor(red: 0.500, green: 0.494, blue: 0.482, alpha: 1)
+            light: NSColor(red: 0.400, green: 0.375, blue: 0.339, alpha: 1),
+            dark: NSColor(red: 0.580, green: 0.573, blue: 0.557, alpha: 1)
         )
+        /// Accent discipline: rust appears at most twice per screen — the
+        /// primary action and the live recording state. Everything else is
+        /// ink-on-ink hierarchy via the text ramp.
         static let accent = adaptive(
             light: NSColor(red: 0.651, green: 0.286, blue: 0.180, alpha: 1),
             dark: NSColor(red: 0.839, green: 0.541, blue: 0.384, alpha: 1)
@@ -97,7 +93,7 @@ enum ZenDesign {
             dark: NSColor(red: 0.851, green: 0.482, blue: 0.400, alpha: 0.12)
         )
         static let warn = adaptive(
-            light: NSColor(red: 0.561, green: 0.392, blue: 0.063, alpha: 1),
+            light: NSColor(red: 0.514, green: 0.359, blue: 0.058, alpha: 1),
             dark: NSColor(red: 0.824, green: 0.663, blue: 0.349, alpha: 1)
         )
         static let warnMuted = adaptive(
@@ -149,13 +145,49 @@ enum ZenDesign {
         static let captionStrong = Font.system(size: 11.5, weight: .semibold)
         static let button = Font.system(size: 13, weight: .semibold)
         static let metric = Font.system(size: 22, weight: .semibold, design: .serif)
+            .monospacedDigit()
         static let mono = Font.system(size: 12, design: .monospaced)
         static let monoSmall = Font.system(size: 10.5, design: .monospaced)
     }
 
+    /// Motion vocabulary: quick easeOut fades/slides everywhere; the single
+    /// spring is reserved for the ZenBar waveform — the one living element.
+    /// Helpers return `nil` when Reduce Motion is on, so call sites pass
+    /// `@Environment(\.accessibilityReduceMotion)` straight through.
+    enum Motion {
+        static let fastDuration: Double = 0.15
+        static let standardDuration: Double = 0.22
+
+        static func fast(_ reduceMotion: Bool = false) -> Animation? {
+            reduceMotion ? nil : .easeOut(duration: fastDuration)
+        }
+
+        static func standard(_ reduceMotion: Bool = false) -> Animation? {
+            reduceMotion ? nil : .easeOut(duration: standardDuration)
+        }
+
+        /// ZenBar waveform only.
+        static func waveform(_ reduceMotion: Bool = false) -> Animation? {
+            reduceMotion
+                ? nil
+                : .spring(response: 0.35, dampingFraction: 0.7)
+        }
+    }
+
+    /// Ledger corners are tight by intent — panels read as ruled paper rather
+    /// than as cards, which is why `small` and `medium` currently coincide.
+    /// They are kept as separate names because they mean different things and
+    /// will not always agree.
+    ///
+    /// The ZenBar sits apart from that scale on purpose: it is a floating
+    /// overlay against the desktop rather than a panel on the canvas, and it
+    /// carries a shadow, so it needs a softer corner than ruled paper does.
+    /// These values were previously hardcoded at its call sites.
     enum Radius {
         static let small: CGFloat = 4
         static let medium: CGFloat = 4
         static let large: CGFloat = 10
+        static let bar: CGFloat = 9
+        static let barControl: CGFloat = 6
     }
 }

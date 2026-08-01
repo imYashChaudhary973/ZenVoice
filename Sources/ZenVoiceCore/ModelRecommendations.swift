@@ -120,11 +120,24 @@ public enum ModelRecommendationEngine {
         if language == .hinglish {
             return "hindi2hinglish-apex"
         }
+        // English has no speed-for-accuracy trade left to make. Parakeet
+        // measured 5.3% word error rate at 61 ms against Whisper Base's 9.2% at
+        // 149 ms and the retired Medium English's 6.6% at 1,343 ms — the most
+        // accurate *and* effectively the fastest English model in the matrix,
+        // including on the Indian-accented voices, where it averages 7.9%
+        // against Base's 13.2%.
+        //
+        // It runs through CoreML, so this is gated on Apple Silicon: without a
+        // Neural Engine the proposition is entirely different and unmeasured.
+        if language == .english, profile.hasGPUAcceleratedTranscription {
+            return "parakeet-unified-en-int8"
+        }
+        // No Metal path: model size translates directly into waiting, and Small
+        // is the largest multilingual build that stays responsive. It is a
+        // compromise rather than a tier — 35.5% word error rate overall, and
+        // effectively European-languages-only.
         guard profile.hasGPUAcceleratedTranscription else {
-            // No Metal path: model size translates directly into waiting.
-            return profile.memoryGigabytes >= 16
-                ? "whisper-small-multilingual"
-                : "whisper-tiny-multilingual"
+            return "whisper-small-multilingual"
         }
         return profile.memoryGigabytes >= 8
             ? "whisper-large-v3-turbo"
@@ -208,7 +221,7 @@ public enum ModelRecommendationEngine {
             title: "Compatible",
             rationale:
                 model.tier == .fast
-                    ? "Uses less memory and prioritizes response time."
+                    ? "Prioritizes response time for short local dictation."
                     : "Offers a different speed and accuracy trade-off."
         )
     }

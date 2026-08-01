@@ -31,7 +31,18 @@ final class ZenBarPanelController {
         finishRecording: @escaping () -> Void,
         dismissError: @escaping () -> Void
     ) {
-        let frame = NSRect(x: 0, y: 0, width: 550, height: 68)
+        // Sized to hold the widest bar state plus the margin its shadow needs.
+        // The panel clips its hosting view, so at the old 550x68 the shadow —
+        // 18pt of blur pushed 8pt downward, against 12pt of margin — was simply
+        // cut off along the bottom edge.
+        let frame = NSRect(
+            x: 0,
+            y: 0,
+            width: ZenBarView.maximumBarWidth
+                + (ZenBarView.shadowInset * 2),
+            height: ZenBarView.barHeight
+                + (ZenBarView.shadowInset * 2)
+        )
         panel = NSPanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -188,7 +199,16 @@ final class ZenBarPanelController {
 
         let visibleFrame = screen.visibleFrame
         let x = visibleFrame.midX - panel.frame.width / 2
-        let y = visibleFrame.minY + 6
+        // The bar itself stays where it has always sat, 18pt above the visible
+        // frame. Only the panel around it grew, to give the shadow room, so the
+        // origin drops by that margin — and is then clamped so the panel never
+        // leaves the display when the Dock is hidden and `visibleFrame` already
+        // reaches the bottom edge.
+        let barBottomMargin: CGFloat = 18
+        let y = max(
+            screen.frame.minY,
+            visibleFrame.minY + barBottomMargin - ZenBarView.shadowInset
+        )
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 

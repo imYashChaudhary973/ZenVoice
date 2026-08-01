@@ -90,7 +90,7 @@ public enum ModelProfileTransition {
         if profile == .english {
             return
                 "English requires an installed English or multilingual "
-                + "Whisper model."
+                + "speech model."
         }
         return
             "\(profile.displayName) requires an installed multilingual "

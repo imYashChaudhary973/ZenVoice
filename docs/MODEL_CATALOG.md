@@ -28,21 +28,64 @@ Python objects, or install repository scripts.
 
 ## Speech model catalogue
 
+Five models, each the measured best at one job.
+
 | Tier | Capability | File | Size | SHA-256 |
 | --- | --- | --- | ---: | --- |
-| Fast | English | `ggml-tiny.en.bin` | 77,704,715 B | `921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f` |
-| Fast | Multilingual | `ggml-tiny.bin` | 77,691,713 B | `be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21` |
-| Balanced | English | `ggml-base.en.bin` | 147,964,211 B | `a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002` |
-| Balanced | Multilingual | `ggml-base.bin` | 147,951,465 B | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` |
-| Balanced | English | `ggml-small.en.bin` | 487,614,201 B | `c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d` |
+| Fast | English | `parakeet-unified-en-0.6b` | 614,082,275 B | *(CoreML bundle, per-file checksums)* |
 | Balanced | Multilingual | `ggml-small.bin` | 487,601,967 B | `1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b` |
 | High Accuracy | Multilingual | `ggml-large-v3-turbo-q5_0.bin` | 574,041,195 B | `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2` |
 | High Accuracy | Hinglish | `ggml-hindi2hinglish-apex-q8_0.bin` | 874,188,075 B | `0b4324d2c1ad64f20883ee7fcd5d2bb0a8466287dc70d74bc47066200c28c719` |
 | High Accuracy | Multilingual | `ggml-medium.bin` | 1,533,763,059 B | `6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208` |
 
-Whisper Medium English-only is retired from new downloads. Existing verified
-installs remain resolvable so an upgrade does not silently disable a working
-selection.
+### Why five and not ten
+
+The catalogue offered ten models: two size ladders — tiny, base, small, medium —
+on the assumption that model size buys a smooth speed-for-accuracy trade the
+user can position themselves on. Benchmarked end to end, that assumption fails
+in both families.
+
+**English has no trade-off left.** Parakeet is simultaneously the most accurate
+and effectively the fastest, so every English whisper build is dominated:
+
+| Model | WER | p50 |
+| --- | ---: | ---: |
+| **Parakeet** | **5.3%** | **61 ms** |
+| Whisper Base English | 9.2% | 149 ms |
+| Whisper Medium English | 6.6% | 1,343 ms |
+| Whisper Tiny English | 13.8% | 66 ms |
+
+It also holds up on Indian-accented voices, averaging 7.9% against Base's 13.2%.
+
+**Multilingual is a cliff, not a curve.** Below Turbo there is no "faster with a
+little less accuracy" — there is unusable:
+
+| Model | WER | CER | p50 |
+| --- | ---: | ---: | ---: |
+| **Whisper Turbo** | **13.2%** | 5.1% | 1,451 ms |
+| Whisper Medium | 14.5% | 5.0% | 1,173 ms |
+| Whisper Small | 35.5% | 12.5% | 456 ms |
+| Whisper Base | 55.1% | 27.9% | 139 ms |
+| Whisper Tiny | 64.5% | 34.8% | 91 ms |
+
+Whisper Small survives only as the fallback for Macs that cannot run Turbo well
+— Intel, where Parakeet has no Neural Engine — and is offered as that rather
+than as a speed tier. At 35.5% it is European-languages-only in practice,
+scoring 100% word error rate on both Japanese and Mandarin.
+
+Whisper Base multilingual had been offered for months and was measured for the
+first time when this cut was made.
+
+### Retired
+
+Retired from new downloads, still resolvable and verifiable: Whisper Tiny
+(English and multilingual), Whisper Base (English and multilingual), Whisper
+Small English, and Whisper Medium English.
+
+Retired rather than deleted because selection is stored by identifier: a missing
+catalogue entry would turn a working model on disk into "no model installed" and
+send discovery down its legacy fallback path. Anything already installed keeps
+working, and the Models screen offers to reclaim the disk.
 
 The catalogue metadata was verified against the official Hugging Face API on
 2026-07-26 at the pinned revision. Any model revision or file replacement
@@ -57,15 +100,24 @@ Mac, and only that model carries the "Recommended" badge.
 | Condition | Recommendation | Why |
 | --- | --- | --- |
 | Hinglish profile | Hinglish Apex | Preserves code-switched English words in Latin script |
-| Apple Silicon, ≥ 8 GB | Whisper Turbo | Best measured accuracy/size trade-off on the GPU and multilingual |
-| Apple Silicon, < 8 GB | Whisper Small (multilingual) | Keeps memory pressure down without falling back to Base |
-| Intel, ≥ 16 GB | Whisper Small (multilingual) | No Metal path, so size turns directly into waiting |
-| Intel, < 16 GB | Whisper Tiny (multilingual) | Responsiveness has to win |
+| English profile, Apple Silicon | Parakeet | Most accurate *and* fastest English model measured — 5.3% at 61 ms |
+| Apple Silicon, ≥ 8 GB | Whisper Turbo | Best measured accuracy/size trade-off on the GPU, and multilingual |
+| Apple Silicon, < 8 GB | Whisper Small (multilingual) | Keeps memory pressure down; the only smaller multilingual option that works at all |
+| Intel, any memory | Whisper Small (multilingual) | No Metal path, and CoreML has no Neural Engine to use |
 
-This replaced a rule that picked a tier from installed memory alone, which sent
-capable 16 GB Apple Silicon Macs to Whisper Base — measured at roughly one word
-in three wrong when the speaker is fast. Memory says nothing about whether a Mac
-can transcribe quickly; the presence of a Metal path does. See
+Two rules were replaced here. The first picked a tier from installed memory
+alone, which sent capable 16 GB Apple Silicon Macs to Whisper Base — measured at
+roughly one word in three wrong when the speaker is fast. Memory says nothing
+about whether a Mac can transcribe quickly; the presence of a Metal path does.
+
+The second sent small Intel Macs to Whisper Tiny multilingual on the theory that
+responsiveness has to win. At 64.5% word error rate Tiny is not a faster option,
+it is a broken one, so those Macs now get Small and a slower answer that is
+actually usable. Recommending a model that cannot do the job is worse than
+recommending one that is merely slow.
+
+Note the engine never recommended an English-only model before Parakeet: English
+users were sent to multilingual Turbo. See
 [ACCURACY_HARNESS.md](ACCURACY_HARNESS.md) for how the underlying numbers are
 produced.
 

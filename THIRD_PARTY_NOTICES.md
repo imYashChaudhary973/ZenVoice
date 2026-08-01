@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-ZenVoice embeds the `whisper.cpp` runtime and lets the user download reviewed
-speech model weights from a verified in-app catalogue. ZenVoice does not bundle
-model weights in the repository or application.
+ZenVoice embeds the `whisper.cpp` and FluidAudio runtimes and lets the user
+download reviewed speech model weights from a verified in-app catalogue.
+ZenVoice does not bundle model weights in the repository or application.
 
 This notice records the reviewed upstream source, pinned runtime revision, and
 applicable licence text. It is not a licence for ZenVoice itself. ZenVoice
@@ -40,6 +40,40 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## FluidAudio
+
+- Project: `FluidInference/FluidAudio`
+- Source revision: `88d6d8166880dee1ac7c32c80f8e10cd782f8ca8`
+- Source: <https://github.com/FluidInference/FluidAudio>
+- Licence: Apache License 2.0
+- Licence text:
+  <https://www.apache.org/licenses/LICENSE-2.0>
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this runtime except in compliance with the License. You may obtain a copy
+of the License at <https://www.apache.org/licenses/LICENSE-2.0>. Unless
+required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+## NVIDIA Parakeet Unified EN 0.6B CoreML model
+
+- Model creator: NVIDIA
+- Upstream model:
+  [`nvidia/parakeet-unified-en-0.6b`](https://huggingface.co/nvidia/parakeet-unified-en-0.6b)
+- CoreML conversion:
+  [`FluidInference/parakeet-unified-en-0.6b-coreml`](https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml)
+- Download revision: `4252711f6f060f9a2f91e5f081a806d7f45eebd8`
+- Variant: offline CoreML encoder, INT8 weights
+- Licence: Creative Commons Attribution 4.0 International
+- Licence text: <https://creativecommons.org/licenses/by/4.0/legalcode>
+
+The Parakeet Unified model is provided by NVIDIA and converted to Core ML by
+FluidInference. ZenVoice downloads the reviewed conversion directly to the
+user's Mac and verifies its pinned file manifest before use. No endorsement by
+NVIDIA or FluidInference is implied.
 
 ## OpenAI Whisper model weights
 
