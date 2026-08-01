@@ -1,0 +1,30 @@
+# The automated release gate, runnable on demand from the Actions tab so the
+# open-gate list in docs/RELEASE_READINESS.md cannot silently rot. It is
+# expected to fail until the release checklist closes — that failure IS the
+# report — which is why it is workflow_dispatch only and never on the PR path.
+name: Release readiness
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Automated release gate
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install ripgrep for the checklist inspection
+        run: brew install ripgrep
+
+      - name: Package local app
+        run: ./Scripts/build-app.sh
+
+      - name: Run automated release gate
+        run: ./Scripts/check-release-readiness.sh
