@@ -291,10 +291,18 @@ public final class WhisperTranscriber: @unchecked Sendable {
         // A runaway loop is collapsed before anything else looks at the text.
         // Instant Refine would catch some of it, but refinement is a user
         // preference that can be switched off, and a transcript repeating
-        // itself a hundred times is broken rather than untidy.
+        // itself a hundred times is broken rather than untidy. The cut size
+        // travels with the result: a large one means the decode failed and
+        // the app should say so.
+        var runawayWordsCut = 0
         let cleanedTranscript = structured
             .components(separatedBy: "\n\n")
-            .map { cleaner.clean(TranscriptRepetition.collapsingRunaway($0)) }
+            .map { paragraph -> String in
+                let collapse =
+                    TranscriptRepetition.collapsingRunawayReporting(paragraph)
+                runawayWordsCut += collapse.wordsCut
+                return cleaner.clean(collapse.text)
+            }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
         // A Hinglish-native model has already written Latin script, and
@@ -318,7 +326,8 @@ public final class WhisperTranscriber: @unchecked Sendable {
             modelID: configuration.modelID,
             processingDurationSeconds:
                 Date().timeIntervalSince(processingStartedAt),
-            segments: segments
+            segments: segments,
+            runawayWordsCut: runawayWordsCut
         )
     }
 
@@ -388,9 +397,15 @@ public final class WhisperTranscriber: @unchecked Sendable {
                 from: decoded.segments,
                 silences: SpokenStructure.silences(in: samples)
             )
+        var runawayWordsCut = 0
         let cleanedTranscript = structured
             .components(separatedBy: "\n\n")
-            .map { cleaner.clean(TranscriptRepetition.collapsingRunaway($0)) }
+            .map { paragraph -> String in
+                let collapse =
+                    TranscriptRepetition.collapsingRunawayReporting(paragraph)
+                runawayWordsCut += collapse.wordsCut
+                return cleaner.clean(collapse.text)
+            }
             .filter { !$0.isEmpty }
             .joined(separator: "\n\n")
         guard !cleanedTranscript.isEmpty else {
@@ -406,7 +421,8 @@ public final class WhisperTranscriber: @unchecked Sendable {
             modelID: configuration.modelID,
             processingDurationSeconds:
                 Date().timeIntervalSince(processingStartedAt),
-            segments: decoded.segments
+            segments: decoded.segments,
+            runawayWordsCut: runawayWordsCut
         )
     }
 

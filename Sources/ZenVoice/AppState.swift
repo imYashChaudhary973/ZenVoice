@@ -66,6 +66,10 @@ final class AppState: ObservableObject {
     @Published var showsStatusMessage: Bool
     @Published var lastTranscript = ""
     @Published private(set) var lastInsertionSummary: InsertionSummary?
+    /// Set alongside ``lastTranscript`` and describing the same text, so a
+    /// copy or re-paste of that transcript carries the same caution. Nil
+    /// whenever the last decode was trusted.
+    @Published private(set) var lastDecodeWarning: String?
     @Published var languageProfile: LanguageProfile
     @Published var liveTranscriptPreview = ""
 
@@ -101,9 +105,14 @@ final class AppState: ObservableObject {
 
     func recordSuccessfulDictation(
         transcript: String,
-        durationSeconds: TimeInterval
+        durationSeconds: TimeInterval,
+        runawayWordsCut: Int = 0
     ) {
         lastTranscript = transcript
+        lastDecodeWarning =
+            runawayWordsCut >= TranscriptRepetition.wordsCutBeforeDistrust
+            ? "the decoder looped — check the inserted text"
+            : nil
         let wordCount = transcript.split(whereSeparator: \.isWhitespace).count
         guard wordCount > 0, durationSeconds > 0 else {
             lastInsertionSummary = nil

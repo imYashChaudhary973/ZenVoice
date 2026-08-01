@@ -25,6 +25,15 @@ public enum TranscriptRepetition {
     /// emphasis. "very very good" is speech; four identical phrases is not.
     public static let repeatsBeforeRunaway = 4
 
+    /// Words a collapse must remove before the decode itself is distrusted
+    /// and the speaker is told to check the result.
+    ///
+    /// Collapsing is tidying; this is diagnosis. A fourfold "no" loses three
+    /// words and stays silent, because speakers do that. Twelve words is two
+    /// full extra cycles of the longest pattern hunted, which no amount of
+    /// emphasis produces — only a decoder that stopped terminating does.
+    public static let wordsCutBeforeDistrust = 12
+
     /// Fraction of repeated n-grams above which a transcript is not trusted.
     ///
     /// Used as a signal that decoding failed, not to edit the text.
@@ -46,6 +55,13 @@ public enum TranscriptRepetition {
         return total == 0 ? 0 : Double(repeats) / Double(total)
     }
 
+    /// A collapse and how much it removed, so a caller can tell a tidied
+    /// transcript from a decode that malfunctioned.
+    public struct RunawayCollapse: Equatable {
+        public let text: String
+        public let wordsCut: Int
+    }
+
     /// Collapses a runaway loop to a single occurrence, keeping everything
     /// around it.
     ///
@@ -53,11 +69,22 @@ public enum TranscriptRepetition {
     /// nine copies of itself still contains what the speaker said, and
     /// throwing the whole transcript away would lose it.
     public static func collapsingRunaway(_ text: String) -> String {
+        collapsingRunawayReporting(text).text
+    }
+
+    /// The collapse plus the number of words it cut, for callers that treat
+    /// a large cut as evidence the decode failed rather than mere untidiness.
+    public static func collapsingRunawayReporting(
+        _ text: String
+    ) -> RunawayCollapse {
         var words = text.split(
             separator: " ",
             omittingEmptySubsequences: true
         ).map(String.init)
-        guard words.count > maximumCycleWords else { return text }
+        guard words.count > maximumCycleWords else {
+            return RunawayCollapse(text: text, wordsCut: 0)
+        }
+        let wordCountBeforeCollapse = words.count
 
         var index = 0
         while index < words.count {
@@ -86,7 +113,10 @@ public enum TranscriptRepetition {
             }
             if !collapsed { index += 1 }
         }
-        return words.joined(separator: " ")
+        return RunawayCollapse(
+            text: words.joined(separator: " "),
+            wordsCut: wordCountBeforeCollapse - words.count
+        )
     }
 
     /// Compares words ignoring case and trailing punctuation, because a loop
