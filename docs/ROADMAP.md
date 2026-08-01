@@ -64,11 +64,18 @@ recorded in
 - [x] Complete the M9 engineering security review
 - [ ] Complete release-candidate accessibility and clean-device QA
 
-## Product decisions intentionally deferred
+## Product decisions
 
-- Public versus private-source distribution
+Decided on 2026-08-01:
+
+- License: proprietary, with the repository staying public as
+  source-visible code under the terms in `LICENSE`.
+- Distribution: direct download of a notarized build. The Mac App Store
+  sandbox cannot host Accessibility-based insertion, which is the product.
+
+Still deferred:
+
 - Free versus paid pricing
-- License choice
 - Supported macOS hardware and minimum version
 - Whether non-macOS platforms belong in scope
 
