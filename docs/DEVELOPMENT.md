@@ -254,7 +254,7 @@ distributable artifact.
 29. Choose **Agent Prompt**, explicitly say “new paragraph,” and confirm the
     pasted prompt contains the requested paragraph break.
 30. Choose **Off**, repeat a filler or word, and confirm Instant Refine makes no
-    additional change beyond Whisper's base cleanup.
+    additional change beyond the speech runtime's base cleanup.
 31. Start a model download and confirm percentage progress appears. Cancel,
     immediately start another download, and confirm the cancelled task does not
     clear the new progress state.
