@@ -102,8 +102,8 @@ asynchronous model loading or decoding succeeded.
 | Start with Parakeet (`parakeet-unified-en-int8`) | English | **In use**, **Home → Model: Parakeet**, two consecutive successful dictations | Not run |
 | Parakeet → current multilingual Whisper model | English | Target **In use**, matching Home model, two consecutive successful dictations | Not run |
 | Multilingual Whisper → Parakeet without relaunching | English | Parakeet **In use**, matching Home model, successful dictation | Not run |
-| Auto-Detect → Parakeet | Auto-Detect, then English | **Switch & use** commits Parakeet and English together; successful dictation | Not run |
 | English/Parakeet → Auto-Detect | Auto-Detect | A compatible installed multilingual Whisper model becomes active; successful dictation | Not run |
+| Auto-Detect/multilingual Whisper → Parakeet | Auto-Detect, then English | **Switch & use** commits Parakeet and English together; successful dictation | Not run |
 
 Record the multilingual Whisper model used for the round trip:
 
@@ -113,18 +113,23 @@ Record the multilingual Whisper model used for the round trip:
 - Local performance sample count before/after, if visible:
 - Notes or issue:
 
-## Supported model choices
+## Performance and language coverage
 
-Exercise each applicable release choice on supported hardware. Record the exact
-model ID because display names can also belong to retired catalogue entries.
+Exercise each performance choice and language path in the release scope. Record
+the exact model ID because display names can also belong to retired catalogue
+entries. **Auto-Detect/multilingual** means a successful mixed or non-English
+dictation through a current model with multilingual capability; it is not a
+performance tier.
 
-| Choice | Model ID | Hardware | Language/profile | Result | Evidence or issue |
+| Coverage | Choice or profile | Model ID | Hardware | Result | Evidence or issue |
 |---|---|---|---|---|---|
-| Fast | | | | Not run | |
-| Balanced | | | | Not run | |
-| Multilingual | | | | Not run | |
-| High Accuracy | | | | Not run | |
-| Hinglish specialist | | | | Not run | |
+| Performance | Fast | | | Not run | |
+| Performance | Balanced | | | Not run | |
+| Performance | High Accuracy | | | Not run | |
+| Language | English | | | Not run | |
+| Language | Hindi | | | Not run | |
+| Language | Auto-Detect/multilingual | | | Not run | |
+| Language | Hinglish specialist | | | Not run | |
 
 ## Additional edge cases
 

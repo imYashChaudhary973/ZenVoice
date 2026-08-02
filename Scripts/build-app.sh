@@ -60,18 +60,9 @@ if [[ -n "$signing_identity" ]] && {
 fi
 
 release_source_commit=""
-if [[ "$developer_id_signing" == true ]]; then
-    if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
-        echo "Error: Developer ID release builds require a clean worktree." >&2
-        echo "Commit or remove every tracked and untracked change first." >&2
-        exit 1
-    fi
-    release_source_commit=$(git rev-parse HEAD)
-fi
 
-swift build -c release
-
-if [[ "$developer_id_signing" == true ]]; then
+verify_release_source_unchanged() {
+    [[ "$developer_id_signing" == true ]] || return 0
     current_source_commit=$(git rev-parse HEAD)
     if [[ "$current_source_commit" != "$release_source_commit" ]] ||
         [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
@@ -79,7 +70,64 @@ if [[ "$developer_id_signing" == true ]]; then
         echo "Discard the candidate and rebuild from a clean worktree." >&2
         exit 1
     fi
+}
+
+verify_release_dependencies() {
+    [[ "$developer_id_signing" == true ]] || return 0
+    local dependency_json dependency_path dependency_revision
+    local -a dependency_paths
+
+    if ! dependency_json=$(swift package show-dependencies --format json); then
+        echo "Error: SwiftPM dependency provenance could not be inspected." >&2
+        exit 1
+    fi
+    dependency_paths=(
+        "${(@f)$(printf '%s\n' "$dependency_json" |
+            grep '"path"' |
+            cut -d '"' -f 4)}"
+    )
+    for dependency_path in "${dependency_paths[@]}"; do
+        [[ "$dependency_path" == "$project_dir" ]] && continue
+        if [[ "$dependency_path" != "$project_dir/.build/checkouts/"* ]] ||
+            [[ ! -d "$dependency_path/.git" ]]; then
+            echo "Error: release build uses an editable or local dependency:" >&2
+            echo "$dependency_path" >&2
+            exit 1
+        fi
+        if [[ -n "$(git -C "$dependency_path" status --porcelain --untracked-files=all)" ]]; then
+            echo "Error: release dependency checkout is dirty: $dependency_path" >&2
+            exit 1
+        fi
+        dependency_revision=$(git -C "$dependency_path" rev-parse HEAD)
+        if ! grep -Fq "\"revision\" : \"$dependency_revision\"" Package.resolved; then
+            echo "Error: dependency revision is absent from Package.resolved:" >&2
+            echo "$dependency_path @ $dependency_revision" >&2
+            exit 1
+        fi
+    done
+}
+
+if [[ "$developer_id_signing" == true ]]; then
+    if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+        echo "Error: Developer ID release builds require a clean worktree." >&2
+        echo "Commit or remove every tracked and untracked change first." >&2
+        exit 1
+    fi
+    release_source_commit=$(git rev-parse HEAD)
+
+    # Clear ignored SwiftPM state so `swift package edit` overrides and modified
+    # cached artifacts cannot enter a signed release under the pinned commit's
+    # identity. Resolving again reconstructs dependencies from Package.swift
+    # and Package.resolved before their paths, revisions, and status are checked.
+    swift package reset
+    swift package resolve
+    verify_release_source_unchanged
+    verify_release_dependencies
 fi
+
+swift build -c release
+verify_release_source_unchanged
+verify_release_dependencies
 
 "$project_dir/Scripts/generate-app-icon.sh" \
     "$brand_dir/ZenLogo.png" \
@@ -98,6 +146,9 @@ cp "$icon_path" "$contents_dir/Resources/ZenVoice.icns"
 cp \
     "$project_dir/THIRD_PARTY_NOTICES.md" \
     "$contents_dir/Resources/THIRD_PARTY_NOTICES.md"
+
+verify_release_source_unchanged
+verify_release_dependencies
 
 if [[ -n "$signing_identity" ]]; then
     # Developer ID distribution requires Apple's secure timestamp;
@@ -139,6 +190,9 @@ else
     echo "Warning: no Apple Development identity found; used ad-hoc signing." >&2
     echo "macOS permissions may need approval after every rebuild." >&2
 fi
+
+verify_release_source_unchanged
+verify_release_dependencies
 
 if [[ -n "$release_source_commit" ]]; then
     echo "Release source commit: $release_source_commit"

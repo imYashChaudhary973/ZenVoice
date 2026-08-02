@@ -54,8 +54,10 @@ approval or release assets. This checklist is a project gate, not legal advice.
   Retain the completed record with the release evidence; its overall result and
   founder approval must be **Pass**, every applicable row must be **Pass**, and
   every **Not applicable** row must explain why.
-- [ ] Test Fast, Balanced, Multilingual, and High Accuracy choices on the
+- [ ] Test Fast, Balanced, and High Accuracy performance choices on the
   supported hardware range.
+- [ ] Test explicit English, Hindi, Auto-Detect/multilingual, and Hinglish
+  specialist language paths with compatible current-catalogue models.
 - [ ] On Apple Silicon, record a successful Parakeet/CoreML → current
   multilingual whisper.cpp → Parakeet round trip without relaunching, plus the
   Parakeet English-only profile transition. Selection state alone is not
@@ -87,13 +89,17 @@ source, resources, dependencies, or build, signing, and packaging scripts. Any
 such change invalidates the evidence: build, sign, notarize, package, and test a
 new candidate.
 
-For the Apple distribution items: `Scripts/build-app.sh` requires a clean worktree
-and reports the source commit when `ZENVOICE_SIGNING_IDENTITY` names a Developer
-ID Application certificate. `Scripts/notarize-app.sh` creates a separate upload
-archive, submits it with `notarytool`, staples and verifies the app with
-`codesign`, `stapler`, and `spctl`, then packages the stapled app as
-`build/ZenVoice-distribution.zip` and prints its SHA-256. The gate can also be
-run hosted via the `Release readiness` workflow in the Actions tab.
+For the Apple distribution items: `Scripts/build-app.sh` requires a clean
+worktree when `ZENVOICE_SIGNING_IDENTITY` names a Developer ID Application
+certificate. It resets ignored SwiftPM state, resolves the pinned manifests,
+rejects editable or dirty dependency checkouts, verifies that tracked inputs
+remain unchanged through signing, and reports the source commit.
+`Scripts/notarize-app.sh` creates a separate upload archive, submits it with
+`notarytool`, staples and verifies the app with `codesign`, `stapler`, and
+`spctl`, then packages the stapled app as `build/ZenVoice-distribution.zip` and
+prints its SHA-256. The local gate rejects additional top-level payloads and
+verifies that the ZIP contains the same app. It can also be run hosted via the
+`Release readiness` workflow in the Actions tab.
 
 Do not place Developer ID certificates, private keys, App Store Connect API
 keys, notary credentials, or passwords in the repository. A future release

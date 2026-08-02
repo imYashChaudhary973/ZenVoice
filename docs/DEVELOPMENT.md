@@ -84,8 +84,10 @@ ZENVOICE_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \
 
 If no Apple Development identity is available, the script falls back to ad-hoc
 signing and prints a warning. When the configured identity is a Developer ID
-Application certificate, the script refuses a dirty worktree, uses a secure
-timestamp, and reports the exact source commit for the QA record.
+Application certificate, the script refuses a dirty worktree, resets and
+re-resolves ignored SwiftPM state from the pinned manifests, rejects editable or
+dirty dependency checkouts, uses a secure timestamp, and reports the exact
+source commit for the QA record.
 
 ## Stable macOS permissions
 
@@ -250,12 +252,11 @@ development builds can use the same list without creating a release record.
       changing the model or relaunching.
     - Switch back to Parakeet and complete another dictation. Selection state
       alone is not runtime evidence; each target must decode successfully.
-    - With the multilingual Whisper model active, choose **Auto-Detect**. Return
-      to **Models**, select Parakeet with **Switch & use**, and confirm it commits
-      both Parakeet and **English** without leaving an incompatible pair.
-      Complete a dictation, then choose **Auto-Detect** again and confirm a
-      compatible installed multilingual model becomes active and decodes
-      successfully.
+    - With Parakeet still active, choose **Auto-Detect** and confirm a compatible
+      installed multilingual model becomes active and decodes successfully.
+      Return to **Models**, select Parakeet with **Switch & use**, and confirm it
+      commits both Parakeet and **English** without leaving an incompatible
+      pair. Complete another dictation.
     - Record the exact display names, catalogue IDs, runtime kinds, and results
       in [Release QA Record](RELEASE_QA_RECORD.md).
 14. Open **Insights**, select **Share Highlights**, and verify the preview
@@ -288,8 +289,22 @@ development builds can use the same list without creating a release record.
 31. Start a model download and confirm percentage progress appears. Cancel,
     immediately start another download, and confirm the cancelled task does not
     clear the new progress state.
-32. Retry an English, Hindi, and Hinglish recovery item and confirm each keeps
-    its recorded language and current voice-command preference.
+32. Create and retry one English, one Hindi, and one Hinglish Recovery Inbox
+    item:
+    - Enable History and **Keep failed audio for 24 hours**, disable Private
+      Dictation and voice commands, install a compatible model, and select the
+      profile being tested.
+    - Dictate non-sensitive speech that includes “new paragraph,” stop, and
+      force-quit ZenVoice while ZenBar shows **transcribing…**. Relaunch and
+      confirm the interrupted item appears under **History → Recovery** with
+      **Retry**. Use a longer recording or slower compatible model if the decode
+      finishes before the force-quit.
+    - Enable voice commands, select a model compatible with the recorded
+      profile, and choose **Retry**. Confirm the output uses the item's recorded
+      English, Hindi, or Hinglish profile and applies the current voice-command
+      preference by turning “new paragraph” into a paragraph break.
+    - Delete the temporary recovery item, disable voice commands, and repeat for
+      the next profile. Do not include the dictated text in the QA record.
 33. Focus a password field, start dictation, and confirm ZenVoice copies the
     transcript instead of writing through the secure-input fallback.
 34. Enter and leave a native full-screen space, then start dictation and
