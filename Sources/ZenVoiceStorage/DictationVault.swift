@@ -295,29 +295,37 @@ public final class DictationVault: @unchecked Sendable {
         now: Date = Date(),
         recoveryExpiresAt: Date? = nil
     ) throws {
-        let expiry = recoveryExpiresAt
-            ?? now.addingTimeInterval(Self.recoveryLifetime)
+        // The published promise is 24 hours from the *start of capture*, so the
+        // fallback is anchored to the row's own started_at rather than to the
+        // failure moment. Anchoring to failure silently added the recording and
+        // decode time on top of the stated window.
         try update(
             """
             UPDATE dictations
             SET status = ?, completed_at = ?, error_message = ?,
-                recovery_audio_expires_at = ?
-            WHERE id = ?;
+                recovery_audio_expires_at = CASE
+                    WHEN ?5 = 0 THEN NULL
+                    WHEN ?6 IS NOT NULL THEN ?6
+                    ELSE started_at + ?7
+                END
+            WHERE id = ?8;
             """,
             bindings: { statement in
                 bind(DictationStatus.failed.rawValue, at: 1, in: statement)
                 sqlite3_bind_double(statement, 2, now.timeIntervalSince1970)
                 bind(message, at: 3, in: statement)
-                if retainAudio {
+                sqlite3_bind_int(statement, 5, retainAudio ? 1 : 0)
+                if let recoveryExpiresAt {
                     sqlite3_bind_double(
                         statement,
-                        4,
-                        expiry.timeIntervalSince1970
+                        6,
+                        recoveryExpiresAt.timeIntervalSince1970
                     )
                 } else {
-                    sqlite3_bind_null(statement, 4)
+                    sqlite3_bind_null(statement, 6)
                 }
-                bind(id.uuidString, at: 5, in: statement)
+                sqlite3_bind_double(statement, 7, Self.recoveryLifetime)
+                bind(id.uuidString, at: 8, in: statement)
             }
         )
 

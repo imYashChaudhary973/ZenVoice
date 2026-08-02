@@ -7,8 +7,10 @@ send audio, transcripts, clipboard contents, or usage analytics over the
 network.
 
 The Privacy screen shows live local counts for encrypted transcripts, retained
-recovery audio, correction rules, and installed speech models.
-These counts are derived in-process and are not telemetry.
+recovery audio, correction rules, and installed speech models. These counts are
+derived in-process and are not telemetry. The transcript and recovery counts are
+taken from the most recent 500 records the screen has loaded, so they describe
+that window rather than the whole database.
 
 ## Data lifecycle
 
@@ -31,7 +33,10 @@ These counts are derived in-process and are not telemetry.
   already retained.
 - Private Dictation mode retains no transcript or recovery audio, including
   when it is enabled during an active or transcribing dictation and ZenVoice
-  exits unexpectedly.
+  exits unexpectedly. If it is enabled mid-dictation after a live-preview
+  partial has already been written, that partial stays encrypted in the
+  database until the dictation completes or ZenVoice next launches, whichever
+  comes first; both discard it.
 - A crash or forced termination could leave a temporary file until macOS cleans
   its temporary directory when history is disabled.
 - Users can delete all retained recovery audio independently from the Privacy
