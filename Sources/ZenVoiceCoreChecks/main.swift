@@ -1905,6 +1905,45 @@ guard emphasis == "It was very very good and I said no no no" else {
     exit(1)
 }
 
+// The collapse reports what it cut, and the distrust floor separates a
+// decoder that looped from a speaker repeating themselves: a fourfold "no"
+// cuts three words and stays trusted, a twenty-fold loop does not.
+let reported = TranscriptRepetition.collapsingRunawayReporting(
+    "We are in India, India, India, India, India, India, India."
+)
+guard reported.text == "We are in India,", reported.wordsCut == 6 else {
+    FileHandle.standardError.write(
+        Data("FAIL: collapse cut count is wrong: \(reported.wordsCut)\n".utf8)
+    )
+    exit(1)
+}
+let loopCut = TranscriptRepetition.collapsingRunawayReporting(
+    Array(repeating: "we are in India", count: 20).joined(separator: " ")
+).wordsCut
+let emphasisCut = TranscriptRepetition.collapsingRunawayReporting(
+    "I said no no no no"
+).wordsCut
+guard loopCut >= TranscriptRepetition.wordsCutBeforeDistrust,
+      emphasisCut < TranscriptRepetition.wordsCutBeforeDistrust else {
+    FileHandle.standardError.write(
+        Data("FAIL: distrust floor misclassifies \(loopCut)/\(emphasisCut)\n"
+            .utf8)
+    )
+    exit(1)
+}
+
+// The cut count travels on the result and defaults to a trusted zero.
+guard TranscriptionResult(
+    rawTranscript: "x",
+    finalTranscript: "x",
+    correctionCount: 0
+).runawayWordsCut == 0 else {
+    FileHandle.standardError.write(
+        Data("FAIL: runawayWordsCut default is not zero\n".utf8)
+    )
+    exit(1)
+}
+
 // The decode deadline scales with the recording but never drops below its
 // floor, so a two-second utterance still has room for model load.
 guard WhisperDecoding.decodeDeadline(audioSeconds: 2) == 15,

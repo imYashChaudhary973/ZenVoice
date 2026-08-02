@@ -71,7 +71,8 @@ private struct ProcessedTranscription {
                 + totalCorrectionCount,
             isPartial: result.isPartial,
             modelID: result.modelID,
-            processingDurationSeconds: result.processingDurationSeconds
+            processingDurationSeconds: result.processingDurationSeconds,
+            runawayWordsCut: result.runawayWordsCut
         )
         correctionUsages = correctionApplication?.usages ?? []
     }
@@ -1844,7 +1845,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         state.recordSuccessfulDictation(
             transcript: result.finalTranscript,
-            durationSeconds: recordedAudio.durationSeconds
+            durationSeconds: recordedAudio.durationSeconds,
+            runawayWordsCut: result.runawayWordsCut
         )
         state.phase = .inserting
 
@@ -1860,7 +1862,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             historyViewModel?.refresh()
             insightsViewModel?.refresh()
             voiceProfileViewModel?.refresh()
-            scheduleIdleReset(after: 1.5)
+            scheduleIdleReset(after: successResetDelay)
             return
         }
 
@@ -1878,7 +1880,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.historyViewModel?.refresh()
                 self.insightsViewModel?.refresh()
                 self.voiceProfileViewModel?.refresh()
-                self.scheduleIdleReset(after: 1.5)
+                self.scheduleIdleReset(after: self.successResetDelay)
             case .copiedOnly:
                 if let historyID, shouldPersist, historySaveError == nil {
                     try? self.resolvedVault().markInsertion(
@@ -1973,6 +1975,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStartStopMenuTitle()
     }
 
+    /// A plain "inserted" needs a moment; a distrust warning needs long
+    /// enough to actually be read.
+    private var successResetDelay: TimeInterval {
+        state.lastDecodeWarning == nil ? 1.5 : 4
+    }
+
     private func scheduleIdleReset(after delay: TimeInterval) {
         resetWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in
@@ -1990,7 +1998,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(state.lastTranscript, forType: .string)
         state.phase = .success
-        scheduleIdleReset(after: 1.5)
+        scheduleIdleReset(after: successResetDelay)
     }
 
     @objc private func pasteLastTranscript() {
@@ -2015,7 +2023,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch inserter.insert(transcript) {
         case .pasted:
             state.phase = .success
-            scheduleIdleReset(after: 1.5)
+            scheduleIdleReset(after: successResetDelay)
         case .copiedOnly:
             showError("Copied—enable Accessibility to auto-paste.")
         case .blockedBySecureInput:
@@ -2279,13 +2287,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? vault.recordCorrectionUsage(processed.correctionUsages)
             state.recordSuccessfulDictation(
                 transcript: result.finalTranscript,
-                durationSeconds: recordedAudio.durationSeconds
+                durationSeconds: recordedAudio.durationSeconds,
+                runawayWordsCut: result.runawayWordsCut
             )
             state.phase = .success
             historyViewModel.refresh()
             insightsViewModel.refresh()
             voiceProfileViewModel.refresh()
-            scheduleIdleReset(after: 1.5)
+            scheduleIdleReset(after: successResetDelay)
         } catch {
             handleTranscriptionFailure(
                 error,

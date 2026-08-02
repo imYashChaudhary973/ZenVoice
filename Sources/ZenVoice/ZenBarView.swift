@@ -148,14 +148,29 @@ struct ZenBarView: View {
 
         case .success:
             HStack(spacing: 9) {
-                ZenStatusLabel(
-                    text: successMessage,
-                    tint: barSuccess
-                )
+                if let warning = state.lastDecodeWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(barDanger)
+                    Text("inserted — \(warning)")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(barPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                } else {
+                    ZenStatusLabel(
+                        text: successMessage,
+                        tint: barSuccess
+                    )
+                }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel(
+                state.lastDecodeWarning.map { "Inserted, but \($0)" }
+                    ?? "Inserted"
+            )
 
         case .error(let message):
             HStack(spacing: 9) {
@@ -191,7 +206,7 @@ struct ZenBarView: View {
         case .transcribing, .inserting:
             return 310
         case .success:
-            return 420
+            return state.lastDecodeWarning == nil ? 420 : 530
         case .error:
             return 530
         }

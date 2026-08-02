@@ -10,6 +10,10 @@ public struct TranscriptionResult: Equatable, Sendable {
     /// The decoded stretches with their timings, kept so pauses can become
     /// paragraphs. Empty when the runtime did not report them.
     public let segments: [TranscriptSegment]
+    /// Words removed by the runaway-repetition collapse. Past
+    /// `TranscriptRepetition.wordsCutBeforeDistrust` the decode looped and
+    /// the speaker should be told to check what was inserted.
+    public let runawayWordsCut: Int
 
     public init(
         rawTranscript: String,
@@ -18,7 +22,8 @@ public struct TranscriptionResult: Equatable, Sendable {
         isPartial: Bool = false,
         modelID: String = "unknown",
         processingDurationSeconds: TimeInterval = 0,
-        segments: [TranscriptSegment] = []
+        segments: [TranscriptSegment] = [],
+        runawayWordsCut: Int = 0
     ) {
         self.rawTranscript = rawTranscript
         self.finalTranscript = finalTranscript
@@ -27,5 +32,6 @@ public struct TranscriptionResult: Equatable, Sendable {
         self.modelID = modelID
         self.processingDurationSeconds = processingDurationSeconds
         self.segments = segments
+        self.runawayWordsCut = runawayWordsCut
     }
 }
