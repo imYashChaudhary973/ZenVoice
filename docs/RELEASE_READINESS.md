@@ -1,8 +1,10 @@
 # Release Readiness
 
 ZenVoice's M9 release controls are implemented. Public distribution is
-deliberately blocked until every unchecked item below is decided, evidenced,
-and committed. This checklist is a project gate, not legal advice.
+deliberately blocked until every unchecked item below is decided and evidenced.
+Decisions and source changes must be committed; per-candidate QA, signing, and
+notarization evidence may instead be retained with the protected release
+approval or release assets. This checklist is a project gate, not legal advice.
 
 ## Automated foundation
 
@@ -37,23 +39,33 @@ and committed. This checklist is a project gate, not legal advice.
   Application** certificate for direct distribution.
 - [ ] Sign with Hardened Runtime and a secure timestamp; confirm
   `com.apple.security.get-task-allow` is absent.
-- [ ] Submit the exact release artifact with `notarytool`, review Apple's log,
-  and staple the accepted ticket.
-- [ ] Verify the stapled artifact with `codesign`, `spctl`, and `stapler`.
-- [ ] Install the exported artifact on a clean supported Mac and complete
+- [ ] Submit the release-candidate app with `notarytool`, review Apple's log,
+  and staple the accepted ticket to that app.
+- [ ] Verify the stapled app with `codesign`, `spctl`, and `stapler`.
+- [ ] Package that verified, stapled app as `build/ZenVoice-distribution.zip`
+  and record the SHA-256 printed by `Scripts/notarize-app.sh`.
+- [ ] Install that exact distribution ZIP on a clean supported Mac and complete
   Microphone and Accessibility permission QA.
 
 ## Product and accessibility QA
 
-- [ ] Complete every manual scenario in `docs/DEVELOPMENT.md` on the exact
-  release commit.
+- [ ] Complete every manual scenario in `docs/DEVELOPMENT.md` against the exact
+  distribution ZIP and source commit recorded in `docs/RELEASE_QA_RECORD.md`.
+  Retain the completed record with the release evidence; its overall result and
+  founder approval must be **Pass**, every applicable row must be **Pass**, and
+  every **Not applicable** row must explain why.
 - [ ] Test Fast, Balanced, Multilingual, and High Accuracy choices on the
   supported hardware range.
+- [ ] On Apple Silicon, record a successful Parakeet/CoreML → current
+  multilingual whisper.cpp → Parakeet round trip without relaunching, plus the
+  Parakeet English-only profile transition. Selection state alone is not
+  sufficient; each selected runtime must complete a dictation.
 - [ ] Verify VoiceOver labels, keyboard navigation, reduced motion, contrast,
   and full-screen/multiple-display ZenBar behavior.
 - [ ] Verify crash recovery, failed-audio expiry, Private Dictation, Delete All,
   and clipboard fallback with real lifecycle interruptions.
-- [ ] Record the release version, commit, hardware, macOS version, model, and
+- [ ] In the completed QA record, identify the release version, commit, exact
+  artifact and SHA-256, hardware, macOS version, model catalogue IDs, and
   results without including private transcript text.
 
 ## Running the local gate
@@ -69,12 +81,19 @@ the project licence exists, this checklist has no unfinished items, the app is
 Developer-ID signed, its nested signatures are valid, a notarization ticket is
 stapled, and no common secret pattern is found in tracked files.
 
-For the Apple distribution items: `Scripts/build-app.sh` signs with a secure
-timestamp automatically when `ZENVOICE_SIGNING_IDENTITY` names a Developer ID
-Application certificate, and `Scripts/notarize-app.sh` submits that exact
-artifact with `notarytool`, staples the accepted ticket, and verifies it with
-`stapler` and `spctl`. The gate can also be run hosted via the
-`Release readiness` workflow in the Actions tab.
+A checklist-only release-approval commit may follow the source commit recorded
+for the tested artifact. The intervening diff must not change application
+source, resources, dependencies, or build, signing, and packaging scripts. Any
+such change invalidates the evidence: build, sign, notarize, package, and test a
+new candidate.
+
+For the Apple distribution items: `Scripts/build-app.sh` requires a clean worktree
+and reports the source commit when `ZENVOICE_SIGNING_IDENTITY` names a Developer
+ID Application certificate. `Scripts/notarize-app.sh` creates a separate upload
+archive, submits it with `notarytool`, staples and verifies the app with
+`codesign`, `stapler`, and `spctl`, then packages the stapled app as
+`build/ZenVoice-distribution.zip` and prints its SHA-256. The gate can also be
+run hosted via the `Release readiness` workflow in the Actions tab.
 
 Do not place Developer ID certificates, private keys, App Store Connect API
 keys, notary credentials, or passwords in the repository. A future release

@@ -42,7 +42,45 @@ fi
 
 export DEVELOPER_DIR="$developer_dir"
 
+if [[ -z "$signing_identity" ]]; then
+    signing_identity=$(
+        security find-identity -v -p codesigning |
+            awk '/"Apple Development:/ { print $2; exit }'
+    )
+fi
+
+developer_id_signing=false
+if [[ -n "$signing_identity" ]] && {
+    [[ "$signing_identity" == *"Developer ID Application"* ]] ||
+        security find-identity -v -p codesigning 2>/dev/null |
+            grep -F -- "$signing_identity" |
+            grep -q "Developer ID Application"
+}; then
+    developer_id_signing=true
+fi
+
+release_source_commit=""
+if [[ "$developer_id_signing" == true ]]; then
+    if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+        echo "Error: Developer ID release builds require a clean worktree." >&2
+        echo "Commit or remove every tracked and untracked change first." >&2
+        exit 1
+    fi
+    release_source_commit=$(git rev-parse HEAD)
+fi
+
 swift build -c release
+
+if [[ "$developer_id_signing" == true ]]; then
+    current_source_commit=$(git rev-parse HEAD)
+    if [[ "$current_source_commit" != "$release_source_commit" ]] ||
+        [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+        echo "Error: the source tree changed during the Developer ID build." >&2
+        echo "Discard the candidate and rebuild from a clean worktree." >&2
+        exit 1
+    fi
+fi
+
 "$project_dir/Scripts/generate-app-icon.sh" \
     "$brand_dir/ZenLogo.png" \
     "$icon_path"
@@ -61,21 +99,11 @@ cp \
     "$project_dir/THIRD_PARTY_NOTICES.md" \
     "$contents_dir/Resources/THIRD_PARTY_NOTICES.md"
 
-if [[ -z "$signing_identity" ]]; then
-    signing_identity=$(
-        security find-identity -v -p codesigning |
-            awk '/"Apple Development:/ { print $2; exit }'
-    )
-fi
-
 if [[ -n "$signing_identity" ]]; then
     # Developer ID distribution requires Apple's secure timestamp;
     # everyday Apple Development builds skip that network round-trip.
     timestamp_flag="--timestamp=none"
-    if [[ "$signing_identity" == *"Developer ID Application"* ]] ||
-        security find-identity -v -p codesigning 2>/dev/null |
-            grep -F -- "$signing_identity" |
-            grep -q "Developer ID Application"; then
+    if [[ "$developer_id_signing" == true ]]; then
         timestamp_flag="--timestamp"
     fi
     codesign \
@@ -112,4 +140,7 @@ else
     echo "macOS permissions may need approval after every rebuild." >&2
 fi
 
+if [[ -n "$release_source_commit" ]]; then
+    echo "Release source commit: $release_source_commit"
+fi
 echo "$app_dir"
