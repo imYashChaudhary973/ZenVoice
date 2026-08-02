@@ -20,14 +20,14 @@ recorded in
 - [x] Configurable paste-last shortcut
 - [x] Configurable Private Dictation shortcut
 - [x] Hold-to-dictate with Fn or a right-side modifier
-- [x] Local English Whisper transcription
+- [x] Local English transcription through Parakeet and Whisper
 - [x] Active-app paste with clipboard fallback
 - [x] ZenBar lifecycle feedback
 - [x] Microphone-responsive waveform
 - [x] Zen branding and packaged app icon
 - [x] Verified local model catalogue, downloader, selection, and removal
 - [x] Hardware-aware model recommendations and local speed benchmarks
-- [x] Bundled persistent `whisper.cpp` runtime
+- [x] Bundled persistent local Whisper and Parakeet runtimes
 - [x] Private local insights, streaks, app usage, and editable categories
 - [x] Local voice profile and encrypted explicit correction rules
 - [x] Privacy-safe local highlight cards with preview and explicit export
@@ -40,7 +40,7 @@ recorded in
 
 ## Next: quality and daily reliability
 
-- [x] Keep the Whisper model loaded to reduce transcription latency
+- [x] Keep the selected speech model loaded to reduce transcription latency
 - [x] Add microphone selection, Audio Doctor, and safe disconnection handling
 - [x] Add a local personal dictionary for names and technical terms
 - [x] Add cancel and recover-last-dictation actions
@@ -49,7 +49,7 @@ recorded in
 
 ## Later: multilingual and distribution readiness
 
-- [x] Add local model selection for English and multilingual Whisper models
+- [x] Add local model selection for English, multilingual, and Hinglish speech models
 - [x] Add explicit language selection and optional local detection
 - [x] Add local snippets and conservative voice corrections
 - [x] Measure local generative refinement and remove it after it added no
@@ -79,5 +79,5 @@ Still deferred:
 - Supported macOS hardware and minimum version
 - Whether non-macOS platforms belong in scope
 
-These decisions should be made only after the local English workflow is stable
-and tested through regular personal use.
+These decisions should be made only after the selected local speech workflows
+are stable and tested through regular personal use.

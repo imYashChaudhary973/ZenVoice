@@ -19,7 +19,7 @@ pass its verification gate before dependent work begins.
 | M11 | Explicit language profiles, Hinglish, translation, and 50+ languages | Implemented; real-microphone QA pending |
 | M12 | Microphone selection, disconnection recovery, and Audio Doctor | Implemented; hardware-disconnect QA pending |
 | M13 | Stable live transcript preview and commit-on-pause | Implemented; spoken-flow QA pending |
-| M14 | Curated downloadable local refinement models | Implemented; broader language QA pending |
+| M14 | Curated downloadable local refinement models | Measured and removed; deterministic refinement retained |
 | M15 | Application profiles, context box, and local voice commands | Implemented; cross-app spoken QA pending |
 | M16 | Local learning controls and Recovery Inbox | Implemented; spoken recovery QA pending |
 | M17 | Onboarding, accessibility, privacy dashboard, and release polish | Implemented; clean-device and distribution gates pending |

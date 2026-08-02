@@ -23,8 +23,10 @@ clear controls and live system status. There are no accounts, subscriptions,
 analytics, or cloud transcription services in the current application.
 
 > [!IMPORTANT]
-> ZenVoice is currently a private personal project. Public distribution,
-> licensing, and pricing have not been decided.
+> ZenVoice is currently a private personal project. It is proprietary,
+> source-visible software governed by [LICENSE](LICENSE). Direct distribution
+> is the selected release channel; pricing and initial release terms remain
+> undecided.
 
 ## What works today
 
@@ -74,7 +76,7 @@ analytics, or cloud transcription services in the current application.
 - Meaning-preserving cleanup for fillers, repeated words, spoken restarts, and
   explicit prompt layout commands.
 - Visible model-download percentage with reliable cancellation.
-- Local English transcription through `whisper.cpp`.
+- Local English transcription through Parakeet/CoreML or `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.
 - A live waveform driven by real microphone loudness.
@@ -90,7 +92,7 @@ analytics, or cloud transcription services in the current application.
 Hotkey
   → local microphone recording
   → app profile + optional one-shot context
-  → local Whisper transcription
+  → selected local speech runtime (Parakeet/CoreML or whisper.cpp)
   → conservative transcript cleanup
   → deterministic local refinement
   → macOS clipboard and active-app paste
@@ -106,7 +108,7 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 - Apple Silicon Mac
 - Swift 5.10 or newer
 - Internet access on the first build for the pinned local speech runtimes
-- A verified model downloaded from ZenVoice's Models screen
+- A verified, compatible model downloaded from ZenVoice's Models screen
 
 ## Quick start
 
@@ -126,12 +128,14 @@ Without Accessibility permission, ZenVoice still copies the transcript to the
 clipboard.
 
 Open **Models** to download a checksum-verified English, multilingual, or
-Hinglish-specialist model.
-The pinned `whisper.cpp` and FluidAudio runtimes are bundled in the app;
-Homebrew is not required.
+Hinglish-specialist model. ZenVoice uses the verified Parakeet CoreML bundle
+for its English recommendation and `whisper.cpp` GGML models for multilingual,
+Hinglish, and fallback paths. The pinned `whisper.cpp` and FluidAudio runtimes
+are bundled in the app; Homebrew is not required.
 
 Open **Languages** to choose English, Hinglish, automatic detection, or another
-spoken language. Any non-English profile requires a Multilingual model.
+spoken language. Non-English profiles require a compatible multilingual or
+Hinglish-specialist model.
 
 Open **Audio** to follow the macOS default input, pin a connected microphone,
 or run a local signal and format test.
@@ -183,7 +187,7 @@ Model provenance, licences, revisions, and checksums are documented in
 ├── Sources/
 │   ├── ZenVoice/        macOS application and ZenBar
 │   ├── ZenVoiceCore/    reusable local processing logic
-│   ├── ZenVoiceRuntime/ persistent in-process whisper.cpp integration
+│   ├── ZenVoiceRuntime/ persistent local Whisper and Parakeet integration
 │   ├── ZenVoiceStorage/ encrypted history and recovery storage
 │   ├── ZenVoiceRuntimeChecks/
 │   ├── ZenVoiceStorageChecks/
@@ -219,7 +223,7 @@ offers explicit multilingual profiles; current work focuses on measured
 language quality, local context, lower transcription latency, expanded
 settings, and distribution readiness.
 
-ZenVoice intentionally has no license while its future distribution model is
-undecided. All rights are reserved by the repository owner. Passing CI does
-not make a build publicly releasable; the manual release gates must also be
-completed.
+ZenVoice is proprietary, source-visible software under [LICENSE](LICENSE).
+Direct download of a Developer-ID-signed and notarized build is the selected
+distribution path. Passing CI does not make a build publicly releasable; the
+manual release gates must also be completed.

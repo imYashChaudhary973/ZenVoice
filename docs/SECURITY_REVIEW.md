@@ -47,7 +47,10 @@ No cloud transcription, analytics endpoint, account system, remote sync,
 automatic publishing, or updater is present. Those are intentionally outside
 M9 and require a new threat review before implementation.
 
-The current build is appropriate for private development testing. It is not
-approved for public distribution because ZenVoice has no selected licence,
-the distribution and pricing decisions are open, the app is not signed with a
-Developer ID Application certificate, and no notarization ticket is stapled.
+The current build is appropriate for private development testing. ZenVoice is
+proprietary software and direct download is the selected distribution channel.
+It is not approved for public distribution because pricing and initial release
+terms remain open, the final privacy statements and post-M9
+runtime/model review are incomplete, the app is not signed with a Developer ID
+Application certificate, no notarization ticket is stapled, and clean-device
+plus release-candidate accessibility QA remain unfinished.

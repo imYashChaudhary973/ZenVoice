@@ -10,10 +10,10 @@ and committed. This checklist is a project gate, not legal advice.
   nested-signature checks.
 - [x] Semgrep Community Edition scans pull requests and `main` without a paid
   account or repository write permission.
-- [x] `whisper.cpp` runtime source, revision, checksum, and MIT notice are
-  recorded.
-- [x] Downloadable Whisper model source, revision, checksums, attribution, and
-  licence are recorded.
+- [x] `whisper.cpp` and FluidAudio runtime sources, pinned revisions or
+  checksums, and licence notices are recorded.
+- [x] Downloadable speech-model sources, immutable revisions, checksums,
+  attribution, and licences are recorded.
 - [x] The privacy and security boundaries are documented.
 - [x] A local release gate checks the packaged artifact and tracked source.
 

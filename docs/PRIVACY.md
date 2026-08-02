@@ -19,7 +19,7 @@ These counts are derived in-process and are not telemetry.
   device identifier and follows the current macOS input.
 - Audio Doctor records an explicit three-second local fixture, validates its
   signal and format, deletes it immediately, and creates no History record.
-- Read in-process by the bundled local `whisper.cpp` runtime.
+- Read in-process by the selected bundled local speech runtime.
 - Deleted after successful transcription.
 - Deleted immediately when a recording is cancelled.
 - When local history and failed-audio recovery are enabled, audio from a failed
@@ -61,8 +61,7 @@ These counts are derived in-process and are not telemetry.
 - The optional next-dictation context is bounded to 500 characters, held only
   in memory, and cleared when recording starts. It is not stored in History,
   preferences, logs, or analytics.
-- That temporary context is provided only to the local Whisper and optional
-  local refinement runtimes.
+- That temporary context is provided only to the selected local speech runtime.
 - ZenVoice uses that application identity for a conservative local category;
   unknown applications remain **Other**, and the user can change a record's
   category in History.
@@ -112,26 +111,22 @@ These counts are derived in-process and are not telemetry.
 
 ### Instant Refine
 
-- Instant Refine processes the completed transcript in memory after local
-  Whisper transcription and before storage or paste.
+- Instant Refine processes the completed transcript in memory after the
+  selected local speech runtime finishes and before storage or paste.
 - Off, Clean, and Agent Prompt modes use deterministic application code.
 - Refinement is deterministic and local. No transcript is sent to an API,
   analytics endpoint, or cloud service.
-- Deterministic Clean runs before the downloadable local model. Its meaning
-  guard then rejects any normalized-word deletion, duplication, or reordering,
+- Its meaning guard rejects destructive or vocabulary-expanding candidates,
   including dropped negations.
 - Private Dictation can use the same in-memory refinement while saving no
   transcript or correction-usage event.
-- Local-model output must be valid grammar-constrained JSON, preserve the
-  exact normalized token order, and finish within the local deadline.
-  Otherwise ZenVoice discards it and uses deterministic Clean refinement.
-- Downloaded refinement weights live in private Application Support with
-  user-only permissions and can be removed from Instant Refine.
+- The former downloadable refinement-model path was measured and removed; no
+  refinement weights are downloaded or loaded by the current application.
 
 ### Live dictation
 
-- Live phrase samples stay in memory and are processed by the same local
-  Whisper runtime after a detected pause.
+- Live phrase samples stay in memory and are processed by the same selected
+  local speech runtime after a detected pause.
 - Stable phrases are encrypted into the active History record for interruption
   recovery; Private Dictation and paused History write no partial text.
 - Commit on pause is off by default. When enabled, it inserts only into the
@@ -152,10 +147,14 @@ These counts are derived in-process and are not telemetry.
 
 ### Models and configuration
 
-- Whisper models remain in the user's local Application Support directory.
+- Whisper GGML files and Parakeet CoreML bundles remain in the user's local
+  Application Support directory.
 - A developer can override the selected model with a local environment
   variable; ZenVoice does not execute a model-supplied program.
-- The runtime is a checksum-pinned binary dependency bundled inside the app.
+- Model downloads are fixed to reviewed HTTPS sources, immutable revisions,
+  expected sizes, and SHA-256 manifests before installation.
+- The `whisper.cpp` XCFramework is checksum-pinned and the FluidAudio source
+  dependency is revision-pinned; both run in process.
 - No API key or online account is required.
 
 ## macOS permissions

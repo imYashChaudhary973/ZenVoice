@@ -1,5 +1,11 @@
 # Implementation Plan
 
+> Historical, superseded plan. Proposed targets and paths below describe the
+> plan before Apex and the current benchmark targets shipped. Do not treat them
+> as current work instructions; see [05-update-2026-07.md](05-update-2026-07.md),
+> [ZenVoiceLanguageBench](../../Sources/ZenVoiceLanguageBench/main.swift), and the
+> [current benchmark](../LANGUAGE_MODEL_BENCHMARK_2026-07-26.md).
+
 Ordered so that each phase is independently shippable and measurable. Phase 0
 comes first because without it no later phase can be shown to have helped.
 

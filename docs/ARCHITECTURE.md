@@ -3,8 +3,8 @@
 ## Purpose
 
 ZenVoice is a local-first macOS dictation application. Its first responsibility
-is dependable English transcription without sending microphone audio or
-transcripts to an external service.
+is dependable transcription without sending microphone audio or transcripts to
+an external service.
 
 ## Runtime flow
 
@@ -71,8 +71,9 @@ The native application target owns macOS-specific behavior:
   AVFoundation identifier to its Core Audio device without changing the macOS
   system default.
 - `AudioRecorder` uses `AVAudioEngine` to capture the selected input and
-  converts it to 16 kHz mono PCM for Whisper. `SettingsViewModel` runs the
-  explicit three-second Audio Doctor and deletes its temporary file.
+  converts it to 16 kHz mono PCM for the selected local speech runtime.
+  `SettingsViewModel` runs the explicit three-second Audio Doctor and deletes
+  its temporary file.
 - When live preview is enabled, `AudioRecorder` also keeps bounded-to-session
   in-memory samples. `StablePauseDetector` exposes a phrase only after reviewed
   speech and silence thresholds.
@@ -124,20 +125,24 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 
 ### `ZenVoiceRuntime`
 
-- `WhisperTranscriber` calls the official pinned `whisper.cpp` XCFramework
-  directly instead of launching a child process.
-- It sets an explicit Whisper language token by default, enables Whisper's
-  local translation flag only for English-output profiles, and applies local
-  transliteration only for Latin-script profiles.
-- The retained model context accepts a per-recording language profile and
-  sanitized initial prompt without loading a second copy of the model.
-- The model context is loaded lazily on the transcription queue and retained
-  by the transcriber for subsequent dictations.
+- `WhisperTranscriber` is the common local speech interface retained for source
+  compatibility. It dispatches to `whisper.cpp` or the Parakeet CoreML engine
+  according to the selected verified model's runtime metadata.
+- The Whisper path calls the official pinned `whisper.cpp` XCFramework directly
+  instead of launching a child process. It accepts a per-recording language
+  token and sanitized initial prompt, enables local translation only for
+  English-output profiles, and applies local transliteration only for
+  Latin-script profiles.
+- `ParakeetTranscriberEngine` loads the verified NVIDIA Parakeet Unified English
+  CoreML bundle through the revision-pinned FluidAudio dependency. It is an
+  English-only path and has no decoder-prompt API; approved personal
+  corrections still apply after transcription.
+- Each runtime warms and retains its model state for subsequent dictations.
 - Model replacement creates a new transcriber; an active transcription keeps
   its original transcriber until that operation completes.
 - The runtime accepts only 16 kHz mono audio produced by `AudioRecorder`.
-- File and in-memory sample transcription use the same retained context and
-  dedicated serial queue, preventing concurrent access to `whisper.cpp`.
+- File and in-memory sample transcription use the same retained runtime and
+  dedicated serial queue, preventing concurrent access to model state.
 
 ### `ZenVoiceStorage`
 
@@ -181,7 +186,8 @@ partial transcript flags, and history preferences.
 
 `ZenVoiceRuntimeChecks` creates a local silent WAV and performs two sequential
 passes through one transcriber. It validates the embedded Whisper C API and the
-persistent model lifecycle without microphone or UI interaction.
+persistent Whisper-model lifecycle without microphone or UI interaction. This
+check is Whisper-path evidence, not Parakeet runtime coverage.
 
 `ShareCardSummary` lives in the core target and can contain only total words,
 weighted WPM, current streak, and distinct application count. It has no field
@@ -198,10 +204,10 @@ gate in `Scripts/check-release-readiness.sh` is runnable on demand from the
 Actions tab.
 
 CI artifacts are verification builds, not public releases. Public distribution
-requires the independent gates in `docs/RELEASE_READINESS.md`, including a
-chosen ZenVoice licence, Developer ID Application signing, a secure timestamp,
-Apple notarization, a stapled ticket, clean-device QA, and founder approval.
-No signing or notarization credentials are stored in this repository.
+requires the independent gates in `docs/RELEASE_READINESS.md`, including
+Developer ID Application signing, a secure timestamp, Apple notarization, a
+stapled ticket, clean-device QA, and founder approval. No signing or
+notarization credentials are stored in this repository.
 
 ## State model
 
@@ -229,17 +235,16 @@ When history is enabled, a record moves through `recording`, `transcribing`,
 `ready`, and `inserted` or `copiedOnly`. An interrupted or failed operation
 moves to `failed` and can retain its local audio for retry.
 
-The completed Whisper text passes through deterministic Instant Refine and then
-encrypted personal correction rules. The resulting text is what history and
-insertion receive; the raw Whisper
-transcript remains available in the encrypted record for local recovery and
-comparison.
+The completed speech transcript passes through deterministic Instant Refine and
+then encrypted personal correction rules. The resulting text is what history
+and insertion receive; the raw speech transcript remains available in the
+encrypted record for local recovery and comparison.
 
 ## Concurrency
 
-UI and application state remain on the main actor. Whisper transcription and
-deterministic text refinement run on a dedicated user-initiated serial queue so
-model processing does not block ZenBar.
+UI and application state remain on the main actor. Local speech transcription
+and deterministic text refinement run on a dedicated user-initiated serial
+queue so model processing does not block ZenBar.
 
 ## Current trade-offs
 

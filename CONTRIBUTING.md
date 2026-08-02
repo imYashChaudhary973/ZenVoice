@@ -1,11 +1,15 @@
 # Contributing
 
-ZenVoice is currently a private personal project. These rules keep the
-repository ready for trusted collaborators and possible future public work.
+ZenVoice is a proprietary, source-visible personal project. These rules apply
+to collaborators whom the repository owner has authorized to contribute. The
+right to submit a contribution does not grant permission to redistribute the
+project or publish a modified fork; those actions remain governed by
+[`LICENSE`](LICENSE).
 
 ## Workflow
 
-1. Create a focused branch from `main`.
+1. After the repository owner authorizes the contribution, create a focused
+   branch from `main`.
 2. Keep changes limited to one feature, fix, or documentation topic.
 3. Run the relevant checks.
 4. Open a pull request using the repository template.

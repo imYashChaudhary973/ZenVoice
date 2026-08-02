@@ -5,9 +5,9 @@ download reviewed speech model weights from a verified in-app catalogue.
 ZenVoice does not bundle model weights in the repository or application.
 
 This notice records the reviewed upstream source, pinned runtime revision, and
-applicable licence text. It is not a licence for ZenVoice itself. ZenVoice
-intentionally remains unlicensed and all rights are reserved until the owner
-selects a public-distribution licence.
+applicable licence text. It is not a licence for ZenVoice itself. ZenVoice is
+proprietary, source-visible software governed by [`LICENSE`](LICENSE); the
+third-party components below remain under their own licences.
 
 ## whisper.cpp
 

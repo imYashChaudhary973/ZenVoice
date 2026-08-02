@@ -1,10 +1,14 @@
 # Refinement R&D
 
-Where Instant Refine stands today, why it under-delivers, and the research
-tracks that would close the gap with products like Wispr Flow.
+> Historical, superseded R&D record. The Qwen/llama.cpp implementation measured
+> below was removed after it added no accuracy beyond deterministic rules. The
+> current product contract is documented in
+> [Instant Refine](INSTANT_REFINE.md), [Privacy](PRIVACY.md), and the
+> [Verified Model Catalogue](MODEL_CATALOG.md).
 
-This is an investigation document, not a commitment. Nothing here has shipped.
-Section 0 is measured; sections 1–5 are analysis and proposals.
+This was an investigation document, not a commitment. Section 0 records the
+measured baseline; the remaining sections preserve historical analysis and
+proposals rather than current implementation guidance.
 
 ## 0. Measured baseline
 
