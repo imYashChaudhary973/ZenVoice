@@ -71,7 +71,8 @@ The script:
 4. embeds and signs the pinned `whisper.framework`; FluidAudio and the Parakeet
    integration are linked into the executable by Swift Package Manager;
 5. embeds the required Hardened Runtime audio-input entitlement;
-6. signs with the first available Apple Development identity.
+6. signs with the configured identity or the first available Apple Development
+   identity.
 
 Set `ZENVOICE_SIGNING_IDENTITY` to a certificate hash or full identity name to
 choose a specific signing identity:
@@ -82,7 +83,11 @@ ZENVOICE_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \
 ```
 
 If no Apple Development identity is available, the script falls back to ad-hoc
-signing and prints a warning.
+signing and prints a warning. When the configured identity is a Developer ID
+Application certificate, the script refuses a dirty worktree, resets and
+re-resolves ignored SwiftPM state from the pinned manifests, rejects editable or
+dirty dependency checkouts, uses a secure timestamp, and reports the exact
+source commit for the QA record.
 
 ## Stable macOS permissions
 
@@ -205,12 +210,19 @@ distributable artifact.
 
 ## Manual QA
 
-1. Launch `build/ZenVoice.app`.
+For a release-candidate run, copy [Release QA Record](RELEASE_QA_RECORD.md),
+identify the exact exported artifact and commit, and record every result without
+including private transcript text. Run the scenarios against that artifact;
+development builds can use the same list without creating a release record.
+
+1. For development QA, launch `build/ZenVoice.app`. For release QA, extract the
+   recorded `ZenVoice-distribution.zip` and launch that exact app.
 2. Confirm the settings window opens and the Zen logo appears in the menu bar
    and ZenBar.
 3. Open **History** and confirm the encrypted-history state is available by
    default.
 4. Pause history in **Privacy**, dictate once, and confirm no record is added.
+   Resume history before continuing.
 5. Open **Shortcuts**, select the current shortcut, and record a temporary
    two-modifier combination.
 6. Repeat for **Paste last dictation** and **Private Dictation**.
@@ -224,11 +236,29 @@ distributable artifact.
     category breakdown updates.
 11. Open **Voice Profile**, add a temporary correction such as `zen pens` →
     `ZenPense`, dictate that phrase, and confirm the corrected result and usage
-    count. Delete the temporary rule.
+    count. Keep the temporary rule for the next scenario.
 12. Enable Private Dictation, use the same phrase, and confirm the correction
-    can still apply but its saved usage count does not change.
-13. Open **Models**, select an installed model, dictate twice, and confirm the
-    second transcription does not reload the model.
+    can still apply but its saved usage count does not change. Disable Private
+    Dictation and delete the temporary rule before continuing.
+13. On Apple Silicon, while ZenVoice is idle, install Parakeet and a current
+    multilingual Whisper model, then complete this runtime round trip:
+    - In **Languages**, choose **English**. In **Models**, activate **Parakeet**
+      with **Use** when it is not already active. Confirm its row shows **In
+      use** and **Home → Model** shows **Parakeet**, then complete two
+      consecutive non-sensitive dictations through ZenBar without changing the
+      model or relaunching.
+    - Select the installed multilingual Whisper model, confirm the same **In
+      use** and Home states, and complete two consecutive dictations without
+      changing the model or relaunching.
+    - Switch back to Parakeet and complete another dictation. Selection state
+      alone is not runtime evidence; each target must decode successfully.
+    - With Parakeet still active, choose **Auto-Detect** and confirm a compatible
+      installed multilingual model becomes active and decodes successfully.
+      Return to **Models**, select Parakeet with **Switch & use**, and confirm it
+      commits both Parakeet and **English** without leaving an incompatible
+      pair. Complete another dictation.
+    - Record the exact display names, catalogue IDs, runtime kinds, and results
+      in [Release QA Record](RELEASE_QA_RECORD.md).
 14. Open **Insights**, select **Share Highlights**, and verify the preview
     contains only words, WPM, streak, and app count. Confirm no transcript or
     application name appears.
@@ -248,7 +278,8 @@ distributable artifact.
    dictation message follows the preference.
 25. Press the shortcut again to confirm hotkey stop-and-insert still works.
 26. Disable Accessibility permission and repeat.
-27. Confirm the transcript remains available on the clipboard.
+27. Confirm the transcript remains available on the clipboard, then restore
+    Accessibility permission before continuing.
 28. Open **Instant Refine**, choose **Clean**, dictate “Create a login page,
     no wait, a sign-up page,” and confirm only the corrected sentence is pasted.
 29. Choose **Agent Prompt**, explicitly say “new paragraph,” and confirm the
@@ -258,8 +289,22 @@ distributable artifact.
 31. Start a model download and confirm percentage progress appears. Cancel,
     immediately start another download, and confirm the cancelled task does not
     clear the new progress state.
-32. Retry an English, Hindi, and Hinglish recovery item and confirm each keeps
-    its recorded language and current voice-command preference.
+32. Create and retry one English, one Hindi, and one Hinglish Recovery Inbox
+    item:
+    - Enable History and **Keep failed audio for 24 hours**, disable Private
+      Dictation and voice commands, install a compatible model, and select the
+      profile being tested.
+    - Dictate non-sensitive speech that includes “new paragraph,” stop, and
+      force-quit ZenVoice while ZenBar shows **transcribing…**. Relaunch and
+      confirm the interrupted item appears under **History → Recovery** with
+      **Retry**. Use a longer recording or slower compatible model if the decode
+      finishes before the force-quit.
+    - Enable voice commands, select a model compatible with the recorded
+      profile, and choose **Retry**. Confirm the output uses the item's recorded
+      English, Hindi, or Hinglish profile and applies the current voice-command
+      preference by turning “new paragraph” into a paragraph break.
+    - Delete the temporary recovery item, disable voice commands, and repeat for
+      the next profile. Do not include the dictated text in the QA record.
 33. Focus a password field, start dictation, and confirm ZenVoice copies the
     transcript instead of writing through the secure-input fallback.
 34. Enter and leave a native full-screen space, then start dictation and
