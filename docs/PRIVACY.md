@@ -151,14 +151,13 @@ These counts are derived in-process and are not telemetry.
   Application Support directory.
 - A developer can override the selected model with a local environment
   variable; ZenVoice does not execute a model-supplied program.
-- Whisper model downloads are fixed to reviewed HTTPS sources, immutable
-  revisions, expected sizes, and SHA-256 digests before installation.
-- The Parakeet CoreML bundle is fetched through the pinned FluidAudio
-  dependency, which resolves the conversion repository's default branch rather
-  than a ZenVoice-constructed revision URL. Every file is then checked against
-  the catalogue's pinned per-file size and SHA-256 manifest, and the bundle is
-  rejected if any file fails. See `docs/MODEL_CATALOG.md` for the exact
-  difference between the two paths.
+- Model downloads are fixed to reviewed HTTPS sources, immutable revisions,
+  expected sizes, and SHA-256 digests before installation. ZenVoice constructs
+  every download URL itself, including one per file for the Parakeet CoreML
+  bundle, and installs only after the whole download verifies.
+- A multi-file bundle must match its pinned manifest exactly — same files, no
+  extra or symlinked entries, same sizes, same digests — and is staged and
+  atomically swapped into place rather than written over in position.
 - The `whisper.cpp` XCFramework is checksum-pinned and the FluidAudio source
   dependency is revision-pinned; both run in process.
 - No API key or online account is required.

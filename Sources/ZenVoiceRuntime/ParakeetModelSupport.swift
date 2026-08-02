@@ -2,29 +2,16 @@ import FluidAudio
 import Foundation
 import ZenVoiceCore
 
-public enum ParakeetModelSupport {
-    public static func download(
-        to modelsDirectory: URL,
-        progress: @escaping @Sendable (Double) -> Void
-    ) async throws -> URL {
-        let manager = UnifiedAsrManager(encoderPrecision: .int8)
-        try await manager.loadModels(
-            to: modelsDirectory,
-            progressHandler: { update in
-                progress(update.fractionCompleted)
-            }
-        )
-        guard let model = VerifiedModelCatalog.model(
-            id: "parakeet-unified-en-int8"
-        ) else {
-            throw WhisperTranscriber.TranscriptionError.modelLoadFailed
-        }
-        return modelsDirectory.appendingPathComponent(
-            model.filename,
-            isDirectory: true
-        )
-    }
-}
+/// Loading only.
+///
+/// Downloading deliberately does not live here. `UnifiedAsrManager.loadModels(to:)`
+/// fetches from the model repository's default branch and honours FluidAudio's
+/// `REGISTRY_URL`/`MODEL_REGISTRY_URL` overrides, which cannot express the
+/// pinned revision this catalogue records. `VerifiedModelDownloader` fetches
+/// each manifest file from that revision itself and verifies the bundle before
+/// installing it; FluidAudio is then handed an already-verified local
+/// directory through `loadModels(from:)`.
+public enum ParakeetModelSupport {}
 
 struct ParakeetDecodedResult {
     let text: String

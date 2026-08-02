@@ -1216,7 +1216,7 @@ let bundleModel = VerifiedModel(
         "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     sourceRevision: VerifiedModelCatalog.parakeetRevision,
     sha256:
-        "0000000000000000000000000000000000000000000000000000000000000000",
+        "3ee4ec82841786eef3346001599c184d6265a29c4a9b0c4e27b19f1b0178890c",
     fileSizeBytes: 8,
     format: "Core ML fixture",
     license: "CC-BY-4.0",
@@ -1245,6 +1245,129 @@ guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
     )
     exit(1)
 }
+try Data("ZenVoice".utf8).write(to: bundleFileURL)
+
+// An unreviewed file delivered alongside the approved manifest is the case a
+// manifest-only walk cannot see, so it is checked explicitly.
+let strayURL = bundleURL.appendingPathComponent("stray.bin")
+try Data("stray".utf8).write(to: strayURL)
+guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
+    FileHandle.standardError.write(
+        Data("FAIL: bundle verification accepted an extra file\n".utf8)
+    )
+    exit(1)
+}
+try FileManager.default.removeItem(at: strayURL)
+
+// Nested extras hide from a shallow listing.
+let strayDirectory = bundleURL.appendingPathComponent(
+    "nested",
+    isDirectory: true
+)
+try FileManager.default.createDirectory(
+    at: strayDirectory,
+    withIntermediateDirectories: true
+)
+try Data("stray".utf8).write(
+    to: strayDirectory.appendingPathComponent("stray.bin")
+)
+guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
+    FileHandle.standardError.write(
+        Data("FAIL: bundle verification accepted a nested extra file\n".utf8)
+    )
+    exit(1)
+}
+try FileManager.default.removeItem(at: strayDirectory)
+
+// A symlink can point at approved-looking bytes outside the bundle.
+let symlinkTarget = verifierDirectory.appendingPathComponent("outside.bin")
+try Data("ZenVoice".utf8).write(to: symlinkTarget)
+let symlinkURL = bundleURL.appendingPathComponent("linked.bin")
+try FileManager.default.createSymbolicLink(
+    at: symlinkURL,
+    withDestinationURL: symlinkTarget
+)
+guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
+    FileHandle.standardError.write(
+        Data("FAIL: bundle verification accepted a symlinked entry\n".utf8)
+    )
+    exit(1)
+}
+try FileManager.default.removeItem(at: symlinkURL)
+
+// A missing manifest file must fail rather than pass vacuously.
+try FileManager.default.removeItem(at: bundleFileURL)
+guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
+    FileHandle.standardError.write(
+        Data("FAIL: bundle verification accepted a missing file\n".utf8)
+    )
+    exit(1)
+}
+try Data("ZenVoice".utf8).write(to: bundleFileURL)
+
+// The recorded digest must describe the manifest it ships with, otherwise the
+// field is decoration and a swapped catalogue entry goes unnoticed.
+guard VerifiedModelCatalog.manifestDigest(of: bundleModel.bundleFiles)
+        == bundleModel.sha256 else {
+    FileHandle.standardError.write(
+        Data("FAIL: fixture manifest digest does not match\n".utf8)
+    )
+    exit(1)
+}
+for model in VerifiedModelCatalog.allModels
+where model.runtime == .parakeetCoreML {
+    guard VerifiedModelCatalog.manifestDigest(of: model.bundleFiles)
+            == model.sha256 else {
+        FileHandle.standardError.write(
+            Data("FAIL: \(model.id) manifest digest does not match\n".utf8)
+        )
+        exit(1)
+    }
+    guard model.bundleFiles.reduce(Int64(0), { $0 + $1.fileSizeBytes })
+            == model.fileSizeBytes else {
+        FileHandle.standardError.write(
+            Data("FAIL: \(model.id) bundle size does not match\n".utf8)
+        )
+        exit(1)
+    }
+    // Every bundle file must be requested from the pinned revision, not from a
+    // branch that can move under a recorded revision string.
+    for file in model.bundleFiles {
+        guard let url = model.bundleFileURL(for: file) else {
+            FileHandle.standardError.write(
+                Data("FAIL: \(model.id) rejected its own manifest path\n".utf8)
+            )
+            exit(1)
+        }
+        guard url.scheme == "https",
+              url.host == "huggingface.co",
+              url.path.contains(model.sourceRevision),
+              !url.path.contains("/main/") else {
+            FileHandle.standardError.write(
+                Data("FAIL: \(model.id) bundle URL is not revision-pinned\n".utf8)
+            )
+            exit(1)
+        }
+    }
+}
+
+// Path traversal and absolute paths must not survive URL construction.
+for hostilePath in ["../escape.bin", "/etc/passwd", "nested/../../escape.bin"] {
+    let hostile = VerifiedModelFile(
+        relativePath: hostilePath,
+        fileSizeBytes: 1,
+        sha256:
+            "0000000000000000000000000000000000000000000000000000000000000000"
+    )
+    guard bundleModel.bundleFileURL(for: hostile) == nil else {
+        FileHandle.standardError.write(
+            Data("FAIL: hostile bundle path \(hostilePath) built a URL\n".utf8)
+        )
+        exit(1)
+    }
+}
+
+print("ZenVoiceCoreChecks: bundle manifest verification passed")
 
 let selectionSuite = "ZenVoiceCoreChecks.\(UUID().uuidString)"
 guard let selectionDefaults = UserDefaults(suiteName: selectionSuite) else {

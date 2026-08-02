@@ -142,30 +142,32 @@ This contract describes the `whisper.cpp` GGML path:
 
 ## Parakeet download path
 
-The Parakeet CoreML bundle does not follow the contract above, and the
-difference is recorded here rather than implied to be equivalent.
+The Parakeet CoreML bundle is a directory rather than a single file, so its
+installation contract is stated separately. It holds the same guarantees.
 
-- ZenVoice delegates the fetch to the revision-pinned FluidAudio dependency
-  (`ParakeetModelSupport.download(to:)`), which resolves the conversion
-  repository's default branch. ZenVoice does not construct a revision-pinned
-  URL for this path, and FluidAudio's registry host is overridable through its
-  own `REGISTRY_URL`/`MODEL_REGISTRY_URL` environment variables.
-- After the fetch, `VerifiedModelCatalog.verify` checks every file in the
-  catalogue's pinned manifest: exact relative path, regular-file type, no
-  symbolic links, no path traversal, exact byte size, and exact SHA-256. The
-  summed file sizes must also equal the recorded bundle size. A bundle that
-  fails any check is deleted and the download reports a checksum mismatch.
-- Two gaps follow from this and are tracked rather than papered over: the
-  manifest is not enumerated against the installed directory, so an
-  *additional* unreviewed file alongside the verified set is not rejected; and
-  the bundle is written into its final directory rather than staged and
-  atomically replaced.
-- The `sha256` field on the Parakeet catalogue entry is not consulted by the
-  bundle verification path, which relies on the per-file manifest instead.
+1. The user explicitly starts a download.
+2. ZenVoice builds one revision-pinned HTTPS URL per manifest entry, of the
+   form `<sourceRepository>/resolve/<sourceRevision>/<relativePath>`. A path
+   that is absolute or contains `..` builds no URL and fails the download.
+3. Each response must be successful and remain on HTTPS.
+4. Each file must be a regular file of the exact approved size.
+5. Each file is streamed through SHA-256 and compared against the manifest.
+6. Files land in a staging directory. The completed tree must contain exactly
+   the manifest's relative paths — no extra file, no nested extra file, and no
+   symbolic link — and the summed sizes must equal the recorded bundle size.
+7. Only a fully verified bundle is atomically swapped into place, so an
+   interrupted download cannot replace a good bundle with a partial one.
+8. Bundle files receive user-only filesystem permissions.
 
-Substituting or tampering with any *manifest* file is therefore detected. The
-open items are extra-file rejection, atomic installation, and making the fetch
-itself revision-pinned.
+The bundle's `sha256` field is the digest of the manifest itself — every entry
+sorted by path and serialized as `path\nsize\nsha256\n`. It is verified on
+every check, so a tampered *catalogue* fails as well as a tampered download.
+
+ZenVoice performs this fetch itself rather than delegating it. FluidAudio's
+downloader resolves the repository's default branch and honours its own
+`REGISTRY_URL`/`MODEL_REGISTRY_URL` overrides, neither of which can express a
+pinned revision. FluidAudio is handed the verified local directory afterwards
+through `loadModels(from:)`.
 
 Deleting a model removes only its catalogue-derived file path. Model downloads
 contain data weights only; ZenVoice never executes them.
