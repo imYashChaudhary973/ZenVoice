@@ -1,5 +1,12 @@
 # ZenVoice Figma-to-SwiftUI Implementation Plan
 
+> Completed historical implementation plan from July 2026. The model counts,
+> refinement modes, and screen details below describe the approved design at
+> implementation time, not the current product contract. Current behavior is
+> defined by the application source, [Architecture](ARCHITECTURE.md),
+> [Instant Refine](INSTANT_REFINE.md), and
+> [Verified Model Catalogue](MODEL_CATALOG.md).
+
 ## Approved design
 
 - Figma file: `2J4wUxWlsMSI0gsMxbLuIM`

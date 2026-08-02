@@ -9,7 +9,7 @@
   (`libSwiftUIMacros.dylib`) is only shipped with Xcode
 - Internet access on the first build so Swift Package Manager can fetch the
   pinned `whisper.cpp` XCFramework
-- A verified GGML model downloaded from ZenVoice's **Models** screen
+- A verified, compatible model downloaded from ZenVoice's **Models** screen
 
 If `xcode-select -p` points at `/Library/Developer/CommandLineTools`, the
 SwiftUI macro plugin is missing and `swift build` fails on valid code with
@@ -34,16 +34,20 @@ an explicit message when none is installed.
 
 ## Configuration
 
-ZenVoice searches for:
+ZenVoice normally resolves the selected model from its verified catalogue.
+That catalogue includes the Parakeet CoreML bundle for the recommended English
+path and `whisper.cpp` GGML files for multilingual, Hinglish, and fallback
+paths. For `whisper.cpp` development overrides, ZenVoice searches for:
 
 1. the model selected in ZenVoice's verified catalogue;
 2. `ZENVOICE_MODEL_PATH` as a developer override; then
    `~/Library/Application Support/ZenVoice/Models/ggml-base.en.bin`.
 
-The runtime is the checksum-pinned `whisper.cpp` v1.9.1 XCFramework declared
-in `Package.swift`. `ZENVOICE_MODEL_PATH` is most useful when launching the
-executable directly from a configured shell. The verified catalogue is
-recommended for the packaged app.
+The runtime dependencies are the checksum-pinned `whisper.cpp` v1.9.1
+XCFramework and revision-pinned FluidAudio package declared in `Package.swift`.
+`ZENVOICE_MODEL_PATH` is most useful when launching a `whisper.cpp` development
+model directly from a configured shell. The verified catalogue is recommended
+for the packaged app.
 
 ## Build
 
@@ -64,7 +68,8 @@ The script:
 1. produces a release Swift build;
 2. generates the macOS icon from the source Zen logo;
 3. assembles `build/ZenVoice.app`;
-4. embeds and signs the pinned `whisper.framework`;
+4. embeds and signs the pinned `whisper.framework`; FluidAudio and the Parakeet
+   integration are linked into the executable by Swift Package Manager;
 5. embeds the required Hardened Runtime audio-input entitlement;
 6. signs with the first available Apple Development identity.
 
@@ -249,7 +254,7 @@ distributable artifact.
 29. Choose **Agent Prompt**, explicitly say “new paragraph,” and confirm the
     pasted prompt contains the requested paragraph break.
 30. Choose **Off**, repeat a filler or word, and confirm Instant Refine makes no
-    additional change beyond Whisper's base cleanup.
+    additional change beyond the speech runtime's base cleanup.
 31. Start a model download and confirm percentage progress appears. Cancel,
     immediately start another download, and confirm the cancelled task does not
     clear the new progress state.

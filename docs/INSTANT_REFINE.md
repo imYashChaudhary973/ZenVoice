@@ -1,13 +1,13 @@
 # Instant Refine
 
-Instant Refine is the local text-processing stage between Whisper
-transcription and personal correction rules.
+Instant Refine is the local text-processing stage between speech transcription
+and personal correction rules.
 
 Paragraph breaks come before any of this, from the speaker's own pauses.
 
 ```text
 Local audio
-  → selected local Whisper model
+  → selected local speech runtime
   → conservative transcript cleanup
   → Instant Refine
   → encrypted personal correction rules
@@ -16,7 +16,7 @@ Local audio
 
 ## Current modes
 
-- **Off:** preserves the cleaned Whisper transcript.
+- **Off:** preserves the cleaned speech transcript.
 - **Clean:** removes standalone fillers (`um`, `uh`, `erm`, `ah`, `hm`),
   comma-bracketed discourse markers such as “, you know,” and “, like,”,
   immediately repeated words, and punctuation-marked spoken restarts such as
@@ -62,8 +62,8 @@ phrase previews.
 
 The optional next-dictation context accepts up to 500 characters of names,
 product terms, or topic hints. It is sanitized, passed only to the in-process
-Whisper and local-refinement runtimes, never written to settings or History,
-and cleared when recording successfully starts.
+speech runtime, never written to settings or History, and cleared when
+recording successfully starts.
 
 Local voice commands are deterministic and run before Instant Refine. The
 reviewed commands are new line, new paragraph, comma, full stop, question
@@ -84,28 +84,16 @@ The built-in engine is deterministic:
 - personal correction rules run afterward, so user-approved names and
   technical terms remain explicit and encrypted.
 
-If the guard rejects a candidate, ZenVoice uses the original cleaned Whisper
+If the guard rejects a candidate, ZenVoice uses the original cleaned speech
 transcript.
-
-The downloadable local-model mode applies deterministic Clean first, then adds
-stricter boundaries:
-
-- generation is grammar-constrained to `{"text":"..."}`;
-- output must preserve every normalized word in the same order, so the model
-  cannot drop a negation, duplicate words, or reorder a sentence;
-- output length is bounded and generation has a five-second deadline;
-- the model keeps the spoken language and is forbidden from translating;
-- failure always falls back to deterministic Clean refinement.
 
 ## Model responsibilities
 
-Whisper models convert audio into text. They are not general-purpose rewriting
-models. The current Instant Refine foundation therefore does not pretend that
-a speech model can perform semantic editing.
-
-The M14 refinement catalogue is independent from speech-model selection. Its
-publisher, source, immutable revision, licence, size, checksum, runtime format,
-hardware requirements, and language claims are recorded in
+Speech models convert audio into text. They are not general-purpose rewriting
+models. Instant Refine therefore uses only deterministic application code and
+has no downloadable refinement-model catalogue. The former M14 Qwen/llama.cpp
+path was measured, contributed no useful accuracy beyond deterministic rules,
+and was removed. Current speech-model provenance and verification remain in the
 [Verified Model Catalogue](MODEL_CATALOG.md).
 
 ## Next guarded stages

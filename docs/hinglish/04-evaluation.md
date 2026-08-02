@@ -1,5 +1,10 @@
 # Evaluation: Measuring Hinglish Quality
 
+> Historical evaluation design. The current repository implements the relevant
+> metrics in `ZenVoiceLanguageBench` and `ZenVoiceAccuracyChecks`; proposed paths
+> and promotion steps below are preserved as decision history. See the
+> [current benchmark](../LANGUAGE_MODEL_BENCHMARK_2026-07-26.md).
+
 Without this, "Hinglish got better" is an opinion. This document specifies how to
 turn it into a number.
 

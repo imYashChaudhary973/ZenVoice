@@ -1,7 +1,7 @@
 # Live Dictation
 
 M13 adds local stable-phrase preview and an optional commit-on-pause insertion
-mode. Both reuse the selected Whisper model and Instant Refine settings.
+mode. Both reuse the selected local speech runtime and Instant Refine settings.
 
 **Both are off by default.** Preview decodes every pause-delimited fragment with
 the selected model, and the finished recording is then decoded again in a single
@@ -17,7 +17,8 @@ ZenVoice does not treat every changing token as final. It waits for:
 - at least 450 milliseconds of detected speech; and
 - at least 700 milliseconds of following silence.
 
-The completed phrase is then transcribed on the existing serial Whisper queue.
+The completed phrase is then transcribed on the existing serial speech-runtime
+queue.
 Only that stable phrase appears in ZenBar. Continuous speech remains recording
 audio and is handled at the next pause or final stop.
 
@@ -55,7 +56,7 @@ Private Dictation and paused History never write these partials.
   and the recording is decoded exactly once.
 - In-memory live samples are captured only for a recording that starts with
   live preview enabled, then released when that recording stops.
-- Preview and final transcription share one serial Whisper queue so the model
+- Preview and final transcription share one serial runtime queue so the model
   context is never used concurrently.
 
 ## Manual QA still required

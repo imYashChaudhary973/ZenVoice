@@ -1,5 +1,10 @@
 # Research: Code-Switched Hindi-English ASR
 
+> Historical research snapshot. Model availability, conversion status, and the
+> chosen implementation changed after this survey. See
+> [05-update-2026-07.md](05-update-2026-07.md) and the
+> [current model catalogue](../MODEL_CATALOG.md) for current behavior.
+
 Survey of the literature, models and tooling relevant to making Hinglish
 dictation work. Sources are listed at the end and linked inline.
 

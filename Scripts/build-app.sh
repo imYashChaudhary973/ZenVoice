@@ -69,20 +69,33 @@ if [[ -z "$signing_identity" ]]; then
 fi
 
 if [[ -n "$signing_identity" ]]; then
+    # Developer ID distribution requires Apple's secure timestamp;
+    # everyday Apple Development builds skip that network round-trip.
+    timestamp_flag="--timestamp=none"
+    if [[ "$signing_identity" == *"Developer ID Application"* ]] ||
+        security find-identity -v -p codesigning 2>/dev/null |
+            grep -F -- "$signing_identity" |
+            grep -q "Developer ID Application"; then
+        timestamp_flag="--timestamp"
+    fi
     codesign \
         --force \
         --options runtime \
-        --timestamp=none \
+        "$timestamp_flag" \
         --sign "$signing_identity" \
         "$frameworks_dir/whisper.framework"
     codesign \
         --force \
         --options runtime \
-        --timestamp=none \
+        "$timestamp_flag" \
         --entitlements "$entitlements_path" \
         --sign "$signing_identity" \
         "$app_dir"
-    echo "Signed with Apple Development identity: $signing_identity"
+    if [[ "$timestamp_flag" == "--timestamp" ]]; then
+        echo "Signed for distribution with: $signing_identity"
+    else
+        echo "Signed with Apple Development identity: $signing_identity"
+    fi
 else
     codesign \
         --force \

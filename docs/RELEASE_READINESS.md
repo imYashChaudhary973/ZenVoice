@@ -10,19 +10,22 @@ and committed. This checklist is a project gate, not legal advice.
   nested-signature checks.
 - [x] Semgrep Community Edition scans pull requests and `main` without a paid
   account or repository write permission.
-- [x] `whisper.cpp` runtime source, revision, checksum, and MIT notice are
-  recorded.
-- [x] Downloadable Whisper model source, revision, checksums, attribution, and
-  licence are recorded.
+- [x] `whisper.cpp` and FluidAudio runtime sources, pinned revisions or
+  checksums, and licence notices are recorded.
+- [x] Downloadable speech-model sources, immutable revisions, checksums,
+  attribution, and licences are recorded.
 - [x] The privacy and security boundaries are documented.
 - [x] A local release gate checks the packaged artifact and tracked source.
 
 ## Founder and legal decisions
 
-- [ ] Select and add the ZenVoice project licence as `LICENSE`.
+- [x] Select and add the ZenVoice project licence as `LICENSE` — proprietary,
+  source-visible, decided 2026-08-01.
 - [ ] Decide whether the first public build is free, paid, or private beta.
-- [ ] Decide direct download, Mac App Store, or both; review the rules and
-  entitlements for the chosen channel.
+- [x] Decide direct download, Mac App Store, or both — direct download,
+  decided 2026-08-01; the Mac App Store sandbox cannot host
+  Accessibility-based insertion. Entitlements reviewed: `audio-input` only,
+  no `get-task-allow`.
 - [ ] Confirm that the final app, website, and store privacy statements match
   the actual release behavior.
 - [ ] Re-review every model or runtime artifact added after the pinned M9
@@ -65,6 +68,13 @@ The command is expected to fail for development builds. It passes only after
 the project licence exists, this checklist has no unfinished items, the app is
 Developer-ID signed, its nested signatures are valid, a notarization ticket is
 stapled, and no common secret pattern is found in tracked files.
+
+For the Apple distribution items: `Scripts/build-app.sh` signs with a secure
+timestamp automatically when `ZENVOICE_SIGNING_IDENTITY` names a Developer ID
+Application certificate, and `Scripts/notarize-app.sh` submits that exact
+artifact with `notarytool`, staples the accepted ticket, and verifies it with
+`stapler` and `spctl`. The gate can also be run hosted via the
+`Release readiness` workflow in the Actions tab.
 
 Do not place Developer ID certificates, private keys, App Store Connect API
 keys, notary credentials, or passwords in the repository. A future release

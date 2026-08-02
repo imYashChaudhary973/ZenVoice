@@ -1,0 +1,35 @@
+ZenVoice Licence
+
+Copyright (c) 2026 Yash Chaudhary. All rights reserved.
+
+ZenVoice is proprietary software. The source code is published so that its
+privacy claims can be audited, not as an open-source grant.
+
+Permitted without further permission:
+
+1. Viewing, cloning, and reading the source code.
+2. Building and running ZenVoice from source on hardware you own, for
+   personal, non-commercial use and evaluation.
+3. Quoting short excerpts for commentary, review, or security research.
+
+Not permitted without prior written permission from the copyright holder:
+
+1. Redistributing the source code or any built artifact, modified or not,
+   inside or outside an organisation, paid or free.
+2. Publishing a derivative work, a modified fork, or a competing product
+   based on this code.
+3. Using the ZenVoice name, icon, or branding on any build you did not
+   receive from the copyright holder.
+
+Third-party components bundled with or downloaded by ZenVoice remain under
+their own licences, recorded in THIRD_PARTY_NOTICES.md. Nothing in this
+licence restricts rights those licences grant.
+
+Official binary releases of ZenVoice are additionally governed by the
+end-user licence agreement distributed with them.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
