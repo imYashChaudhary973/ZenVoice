@@ -31,10 +31,24 @@ approval or release assets. This checklist is a project gate, not legal advice.
   decided 2026-08-01; the Mac App Store sandbox cannot host
   Accessibility-based insertion. Entitlements reviewed: `audio-input` only,
   no `get-task-allow`.
-- [ ] Confirm that the final app, website, and store privacy statements match
-  the actual release behavior.
+- [x] Confirm that the final app, website, and store privacy statements match
+  the actual release behavior — audited 2026-08-02 against the source. There is
+  no website and no store listing for a direct-download private beta, so the
+  app's own statements are the whole surface. Corrections made rather than
+  claimed: recovery-audio expiry now honours its stated 24-hour window from
+  capture, Insights count only completed dictations, the Accessibility scope
+  and secure-input refusal are described, and the Privacy screen's 500-record
+  count window is stated. Re-confirm if application behavior changes before the
+  release commit.
 - [ ] Re-review every model or runtime artifact added after the pinned M9
-  catalogue.
+  catalogue. **Blocked on one external confirmation:** the Parakeet CoreML
+  bundle is recorded as CC-BY-4.0 derived from `nvidia/parakeet-unified-en-0.6b`,
+  and that pairing needs verifying against NVIDIA's published model card before
+  release, because `parakeet-unified-en-0.6b` and `parakeet-tdt-0.6b-v2` do not
+  carry the same licence. Everything else in this review is complete: the
+  transitive FluidAudio components compiled into the shipped binary are now
+  noticed, and the bundle download is revision-pinned, manifest-exact, and
+  atomically installed.
 
 ## Apple distribution
 
