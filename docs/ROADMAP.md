@@ -73,11 +73,16 @@ Decided on 2026-08-01:
 - Distribution: direct download of a notarized build. The Mac App Store
   sandbox cannot host Accessibility-based insertion, which is the product.
 
+Decided on 2026-08-02:
+
+- Initial distribution: invitation-only private beta, not a paid or broad
+  public launch.
+- Supported baseline: Apple Silicon Macs running macOS 14 or newer.
+
 Still deferred:
 
-- Free versus paid pricing
-- Supported macOS hardware and minimum version
+- Public pricing and launch terms after the private beta
 - Whether non-macOS platforms belong in scope
 
-These decisions should be made only after the selected local speech workflows
-are stable and tested through regular personal use.
+The remaining decisions should be made only after the selected local speech
+workflows are stable and tested through regular personal use.

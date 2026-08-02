@@ -18,6 +18,8 @@ contact details, or unrelated personal data in this record or its attachments.
 | Field | Value |
 |---|---|
 | Release version and build | |
+| Distribution scope | Invitation-only private beta |
+| Supported baseline | Apple Silicon, macOS 14 or newer |
 | Source commit reported by `Scripts/build-app.sh` | |
 | Notarization upload archive | `ZenVoice-notarization-upload.zip` |
 | Notarization request ID | |
