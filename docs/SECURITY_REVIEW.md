@@ -24,7 +24,8 @@ permission, privacy, signing, or release testing.
 | Transcript → SQLite | plaintext disclosure or record swapping | AES-GCM, Keychain key, record-and-field authenticated data | an unlocked local account can open ZenVoice and view decrypted history |
 | Transcript → clipboard | another process reads dictated text | explicit clipboard fallback documented; no background upload | clipboard remains outside ZenVoice until another app replaces it |
 | Accessibility paste | synthetic events affect the wrong target | paste only after an explicit dictation lifecycle; denial falls back to copy | focus can change before insertion |
-| Model download | tampered or substituted weights | fixed HTTPS allowlist, revision, size, SHA-256, atomic install, user-only permissions | a newly approved model still requires human provenance and licence review |
+| Whisper model download | tampered or substituted weights | fixed HTTPS allowlist, revision, size, SHA-256, atomic install, user-only permissions | a newly approved model still requires human provenance and licence review |
+| Parakeet bundle download | tampered or substituted weights | pinned per-file size and SHA-256 manifest, symlink and traversal rejection | the fetch resolves the conversion repository's default branch, extra files alongside the manifest are not rejected, and the install is not atomic; see `docs/MODEL_CATALOG.md` |
 | Runtime dependency | compromised binary framework | fixed release URL and SwiftPM checksum; embedded framework signed with the app | upstream binary is trusted after checksum and source review, not reproduced locally |
 | Developer model override | unreviewed local model | opt-in environment override; weights are treated as data, not executable code | developer mode bypasses catalogue verification |
 | Share card | transcript or app identity disclosure | numeric-only type, local renderer, exact preview, explicit destination choice | the user can still share a card intentionally |

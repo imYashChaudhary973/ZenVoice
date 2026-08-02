@@ -22,9 +22,13 @@ been reviewed.
   [`Oriserve/Whisper-Hindi2Hinglish-Apex`](https://huggingface.co/Oriserve/Whisper-Hindi2Hinglish-Apex)
 - Specialist licence: Apache-2.0
 
-The application constructs revision-pinned HTTPS URLs itself. It does not
-accept a user-supplied download URL, execute model-repository code, deserialize
-Python objects, or install repository scripts.
+For `whisper.cpp` GGML models, the application constructs revision-pinned
+HTTPS URLs itself. It does not accept a user-supplied download URL, execute
+model-repository code, deserialize Python objects, or install repository
+scripts.
+
+The Parakeet CoreML bundle is the exception and is documented in
+[Parakeet download path](#parakeet-download-path) below.
 
 ## Speech model catalogue
 
@@ -126,6 +130,8 @@ after human-annotated evaluation found no accuracy gain beyond the rule engine.
 
 ## Installation contract
 
+This contract describes the `whisper.cpp` GGML path:
+
 1. The user explicitly starts a download.
 2. ZenVoice accepts only the catalogue-generated HTTPS URL.
 3. The response must be successful and remain on HTTPS.
@@ -133,6 +139,33 @@ after human-annotated evaluation found no accuracy gain beyond the rule engine.
 5. ZenVoice streams the file through SHA-256 and compares the full digest.
 6. Only a verified file is atomically moved into private Application Support.
 7. Model files receive user-only filesystem permissions.
+
+## Parakeet download path
+
+The Parakeet CoreML bundle does not follow the contract above, and the
+difference is recorded here rather than implied to be equivalent.
+
+- ZenVoice delegates the fetch to the revision-pinned FluidAudio dependency
+  (`ParakeetModelSupport.download(to:)`), which resolves the conversion
+  repository's default branch. ZenVoice does not construct a revision-pinned
+  URL for this path, and FluidAudio's registry host is overridable through its
+  own `REGISTRY_URL`/`MODEL_REGISTRY_URL` environment variables.
+- After the fetch, `VerifiedModelCatalog.verify` checks every file in the
+  catalogue's pinned manifest: exact relative path, regular-file type, no
+  symbolic links, no path traversal, exact byte size, and exact SHA-256. The
+  summed file sizes must also equal the recorded bundle size. A bundle that
+  fails any check is deleted and the download reports a checksum mismatch.
+- Two gaps follow from this and are tracked rather than papered over: the
+  manifest is not enumerated against the installed directory, so an
+  *additional* unreviewed file alongside the verified set is not rejected; and
+  the bundle is written into its final directory rather than staged and
+  atomically replaced.
+- The `sha256` field on the Parakeet catalogue entry is not consulted by the
+  bundle verification path, which relies on the per-file manifest instead.
+
+Substituting or tampering with any *manifest* file is therefore detected. The
+open items are extra-file rejection, atomic installation, and making the fetch
+itself revision-pinned.
 
 Deleting a model removes only its catalogue-derived file path. Model downloads
 contain data weights only; ZenVoice never executes them.
