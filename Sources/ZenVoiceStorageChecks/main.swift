@@ -865,6 +865,52 @@ private func checkCategoryCorrection() throws {
         snapshot.categories.first?.category == .workMessages,
         "vault insight did not use corrected category"
     )
+
+    // Insights promise *completed* dictations. A force-quit dictation keeps its
+    // live-preview partial and is marked failed on relaunch with duration 0, so
+    // counting it inflates words, application counts, streak days, and weighted
+    // WPM — and the share card exports those same numbers.
+    let abandonedID = UUID()
+    let abandonedAudioURL = fixture.vault.recoveryAudioURL(for: abandonedID)
+    try Data("audio".utf8).write(to: abandonedAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: abandonedID,
+            language: "en",
+            modelID: "whisper-base-en",
+            targetBundleID: "com.tinyspeck.slackmacgap",
+            targetAppName: "Slack",
+            category: .workMessages,
+            recoveryAudioURL: abandonedAudioURL
+        )
+    )
+    try fixture.vault.storePartialTranscript(
+        id: abandonedID,
+        rawTranscript: "one two three four five six seven eight",
+        finalTranscript: "One two three four five six seven eight."
+    )
+    try fixture.vault.recoverInterrupted(retainAudio: true)
+    try require(
+        try fixture.vault.record(id: abandonedID)?.status == .failed,
+        "interrupted dictation was not marked failed"
+    )
+    let afterAbandon = try fixture.vault.insights()
+    try require(
+        afterAbandon.totalWordCount == 5,
+        "an interrupted dictation's partial was counted in insights"
+    )
+    try require(
+        afterAbandon.distinctApplicationCount == 1,
+        "an interrupted dictation added an application to insights"
+    )
+    try require(
+        afterAbandon.dictationCount == 1,
+        "an interrupted dictation was counted as a completed dictation"
+    )
+    try require(
+        afterAbandon.currentStreakDays == snapshot.currentStreakDays,
+        "an interrupted dictation changed the streak"
+    )
 }
 
 private func checkCorrectionEngine() throws {

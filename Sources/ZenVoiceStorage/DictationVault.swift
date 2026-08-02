@@ -522,10 +522,19 @@ public final class DictationVault: @unchecked Sendable {
                     category
                 FROM dictations
                 WHERE final_transcript IS NOT NULL
-                    AND persistence_suppressed = 0;
+                    AND persistence_suppressed = 0
+                    AND is_partial = 0
+                    AND status IN (?, ?, ?);
                 """
             )
             defer { sqlite3_finalize(statement) }
+            // "Completed" is the promise Insights makes. A force-quit
+            // dictation keeps its live-preview partial and is later marked
+            // failed with duration 0, so counting it inflated word totals,
+            // streaks, and weighted WPM — and the share card carries those.
+            bind(DictationStatus.ready.rawValue, at: 1, in: statement)
+            bind(DictationStatus.inserted.rawValue, at: 2, in: statement)
+            bind(DictationStatus.copiedOnly.rawValue, at: 3, in: statement)
             var values: [DictationInsightEvent] = []
             while sqlite3_step(statement) == SQLITE_ROW {
                 guard let categoryValue = text(at: 6, in: statement),

@@ -170,7 +170,20 @@ that window rather than the whole database.
 ## macOS permissions
 
 - **Microphone** is required to record speech.
-- **Accessibility** is required only to simulate `Command + V`.
+- **Accessibility** is required to place the transcript into the focused
+  application. That is normally a simulated `Command + V`, but it also covers
+  two narrower uses of the same permission:
+  - when macOS secure input is active, ZenVoice writes the transcript into the
+    focused control directly instead of synthesizing a keystroke; and
+  - when it replaces an already-inserted transcript with a refined version, it
+    reads the focused control's text and caret range to find the span it wrote,
+    then overwrites just that span.
+  Text read this way is used in memory for that comparison only. It is not
+  stored in History, preferences, insights, or logs.
+- ZenVoice refuses to insert into a field macOS marks as a secure text field,
+  and refuses text fields it cannot positively identify while secure input is
+  active. In those cases the transcript is copied to the clipboard instead and
+  ZenBar says so.
 
 The signed app includes the Hardened Runtime audio-input entitlement. This
 permits ZenVoice to ask macOS for microphone access; it does not bypass the

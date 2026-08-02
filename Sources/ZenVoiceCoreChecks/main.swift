@@ -1984,6 +1984,20 @@ guard !TextInserter.allowsAccessibilityInsertion(
       !TextInserter.allowsAccessibilityInsertion(
           role: kAXButtonRole as String,
           subrole: nil
+      ),
+      // A combo box wraps a text field, so an unidentified one is as ambiguous
+      // as a bare text field and must fail closed the same way.
+      !TextInserter.allowsAccessibilityInsertion(
+          role: kAXComboBoxRole as String,
+          subrole: nil
+      ),
+      !TextInserter.allowsAccessibilityInsertion(
+          role: kAXComboBoxRole as String,
+          subrole: kAXSecureTextFieldSubrole as String
+      ),
+      TextInserter.allowsAccessibilityInsertion(
+          role: kAXComboBoxRole as String,
+          subrole: "AXSearchField"
       ) else {
     FileHandle.standardError.write(
         Data("FAIL: secure-input accessibility policy is unsafe\n".utf8)
