@@ -565,12 +565,23 @@ public enum VerifiedModelCatalog {
                 "04974b08a35d460ef32e37f747f938aa0c1df83120452125b01d52bded3f808a",
             fileSizeBytes: 614_082_275,
             format: "Core ML; INT8 encoder",
-            license: "CC-BY-4.0",
+            // The downloaded bundle's own config.json and metadata.json say
+            // model_id: nvidia/parakeet-unified-en-0.6b, which NVIDIA governs
+            // under the Open Model License. The conversion repository declares
+            // CC-BY-4.0 and names parakeet-tdt-0.6b-v2 as its base, so the two
+            // disagree. The artifact's own identity is the stronger evidence
+            // and the stricter of the two, so it is what ZenVoice records and
+            // notices. THIRD_PARTY_NOTICES documents the conflict and release
+            // readiness gates on the publisher confirming the source model.
+            license: "NVIDIA Open Model License",
             licenseURL:
-                "https://creativecommons.org/licenses/by/4.0/legalcode",
+                "https://www.nvidia.com/en-us/agreements/enterprise-software/"
+                + "nvidia-open-model-license/",
             attribution:
-                "Parakeet Unified EN 0.6B by NVIDIA, converted to Core ML "
-                + "by FluidInference. INT8 encoder inference uses FluidAudio.",
+                "Licensed by NVIDIA Corporation under the NVIDIA Open Model "
+                + "License. Parakeet Unified EN 0.6B by NVIDIA, converted to "
+                + "Core ML by FluidInference. INT8 encoder inference uses "
+                + "FluidAudio.",
             runtime: .parakeetCoreML,
             bundleFiles: parakeetBundleFiles
         )

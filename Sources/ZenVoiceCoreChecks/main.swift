@@ -1131,8 +1131,16 @@ guard VerifiedModelCatalog.models.count == 5,
               && $0.sha256.count == 64
               && $0.fileSizeBytes > 0
               // Every allowed licence permits redistribution with its required
-              // notice or attribution, which `attribution` carries.
-              && ["MIT", "Apache-2.0", "CC-BY-4.0"].contains($0.license)
+              // notice or attribution, which `attribution` carries. The NVIDIA
+              // Open Model License permits commercial use, redistribution and
+              // derivative works, and requires the notice line that the
+              // Parakeet entry's attribution now begins with.
+              && [
+                  "MIT",
+                  "Apache-2.0",
+                  "CC-BY-4.0",
+                  "NVIDIA Open Model License"
+              ].contains($0.license)
               && !$0.attribution.isEmpty
               && URL(string: $0.licenseURL)?.scheme == "https"
               && ["github.com", "huggingface.co"].contains(
