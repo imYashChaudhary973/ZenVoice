@@ -142,10 +142,13 @@ public final class TextInserter {
         guard subrole != kAXSecureTextFieldSubrole as String else {
             return false
         }
-        if role == kAXTextAreaRole || role == kAXComboBoxRole {
+        if role == kAXTextAreaRole {
             return true
         }
-        if role == kAXTextFieldRole {
+        // A combo box wraps a text field, so an unidentified one is ambiguous
+        // for the same reason a bare text field is. It used to be admitted with
+        // no subrole at all, which contradicted the rule above it.
+        if role == kAXTextFieldRole || role == kAXComboBoxRole {
             return subrole != nil
         }
         return false

@@ -182,6 +182,83 @@ private func checkRecoveryExpiry() throws {
         "expired audio path remains in database"
     )
 
+    // A dictation that fails normally must expire from the start of capture
+    // too. Anchoring to the failure moment quietly granted the recording and
+    // decode time on top of the 24 hours the privacy contract states.
+    let failedID = UUID()
+    let failedStartedAt = Date(timeIntervalSince1970: 50_000)
+    let failedAudioURL = fixture.vault.recoveryAudioURL(for: failedID)
+    try Data("audio".utf8).write(to: failedAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: failedID,
+            startedAt: failedStartedAt,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: nil,
+            recoveryAudioURL: failedAudioURL
+        )
+    )
+    try fixture.vault.markFailed(
+        id: failedID,
+        message: "test",
+        retainAudio: true,
+        now: failedStartedAt.addingTimeInterval(600)
+    )
+    try require(
+        try fixture.vault.record(id: failedID)?.recoveryAudioExpiresAt
+            == failedStartedAt.addingTimeInterval(
+                DictationVault.recoveryLifetime
+            ),
+        "failed recovery expiry was anchored to failure instead of capture"
+    )
+    try require(
+        try fixture.vault.purgeExpiredRecoveryAudio(
+            now: failedStartedAt.addingTimeInterval(
+                DictationVault.recoveryLifetime + 1
+            )
+        ) == 1,
+        "failed recovery audio outlived its capture-anchored window"
+    )
+
+    // An explicit expiry must still win, and retainAudio: false must clear it.
+    let explicitID = UUID()
+    let explicitAudioURL = fixture.vault.recoveryAudioURL(for: explicitID)
+    try Data("audio".utf8).write(to: explicitAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: explicitID,
+            startedAt: failedStartedAt,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: nil,
+            recoveryAudioURL: explicitAudioURL
+        )
+    )
+    let explicitExpiry = Date(timeIntervalSince1970: 99_999)
+    try fixture.vault.markFailed(
+        id: explicitID,
+        message: "test",
+        retainAudio: true,
+        recoveryExpiresAt: explicitExpiry
+    )
+    try require(
+        try fixture.vault.record(id: explicitID)?.recoveryAudioExpiresAt
+            == explicitExpiry,
+        "explicit recovery expiry was ignored"
+    )
+    try fixture.vault.markFailed(
+        id: explicitID,
+        message: "test",
+        retainAudio: false
+    )
+    try require(
+        try fixture.vault.record(id: explicitID)?.recoveryAudioExpiresAt == nil,
+        "declining audio retention left an expiry behind"
+    )
+
     let staleID = UUID()
     let staleAudioURL = fixture.vault.recoveryAudioURL(for: staleID)
     try Data("stale audio".utf8).write(to: staleAudioURL)
@@ -787,6 +864,52 @@ private func checkCategoryCorrection() throws {
     try require(
         snapshot.categories.first?.category == .workMessages,
         "vault insight did not use corrected category"
+    )
+
+    // Insights promise *completed* dictations. A force-quit dictation keeps its
+    // live-preview partial and is marked failed on relaunch with duration 0, so
+    // counting it inflates words, application counts, streak days, and weighted
+    // WPM — and the share card exports those same numbers.
+    let abandonedID = UUID()
+    let abandonedAudioURL = fixture.vault.recoveryAudioURL(for: abandonedID)
+    try Data("audio".utf8).write(to: abandonedAudioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: abandonedID,
+            language: "en",
+            modelID: "whisper-base-en",
+            targetBundleID: "com.tinyspeck.slackmacgap",
+            targetAppName: "Slack",
+            category: .workMessages,
+            recoveryAudioURL: abandonedAudioURL
+        )
+    )
+    try fixture.vault.storePartialTranscript(
+        id: abandonedID,
+        rawTranscript: "one two three four five six seven eight",
+        finalTranscript: "One two three four five six seven eight."
+    )
+    try fixture.vault.recoverInterrupted(retainAudio: true)
+    try require(
+        try fixture.vault.record(id: abandonedID)?.status == .failed,
+        "interrupted dictation was not marked failed"
+    )
+    let afterAbandon = try fixture.vault.insights()
+    try require(
+        afterAbandon.totalWordCount == 5,
+        "an interrupted dictation's partial was counted in insights"
+    )
+    try require(
+        afterAbandon.distinctApplicationCount == 1,
+        "an interrupted dictation added an application to insights"
+    )
+    try require(
+        afterAbandon.dictationCount == 1,
+        "an interrupted dictation was counted as a completed dictation"
+    )
+    try require(
+        afterAbandon.currentStreakDays == snapshot.currentStreakDays,
+        "an interrupted dictation changed the streak"
     )
 }
 

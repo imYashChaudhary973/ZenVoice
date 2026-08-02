@@ -22,9 +22,13 @@ been reviewed.
   [`Oriserve/Whisper-Hindi2Hinglish-Apex`](https://huggingface.co/Oriserve/Whisper-Hindi2Hinglish-Apex)
 - Specialist licence: Apache-2.0
 
-The application constructs revision-pinned HTTPS URLs itself. It does not
-accept a user-supplied download URL, execute model-repository code, deserialize
-Python objects, or install repository scripts.
+For `whisper.cpp` GGML models, the application constructs revision-pinned
+HTTPS URLs itself. It does not accept a user-supplied download URL, execute
+model-repository code, deserialize Python objects, or install repository
+scripts.
+
+The Parakeet CoreML bundle is the exception and is documented in
+[Parakeet download path](#parakeet-download-path) below.
 
 ## Speech model catalogue
 
@@ -126,6 +130,8 @@ after human-annotated evaluation found no accuracy gain beyond the rule engine.
 
 ## Installation contract
 
+This contract describes the `whisper.cpp` GGML path:
+
 1. The user explicitly starts a download.
 2. ZenVoice accepts only the catalogue-generated HTTPS URL.
 3. The response must be successful and remain on HTTPS.
@@ -133,6 +139,35 @@ after human-annotated evaluation found no accuracy gain beyond the rule engine.
 5. ZenVoice streams the file through SHA-256 and compares the full digest.
 6. Only a verified file is atomically moved into private Application Support.
 7. Model files receive user-only filesystem permissions.
+
+## Parakeet download path
+
+The Parakeet CoreML bundle is a directory rather than a single file, so its
+installation contract is stated separately. It holds the same guarantees.
+
+1. The user explicitly starts a download.
+2. ZenVoice builds one revision-pinned HTTPS URL per manifest entry, of the
+   form `<sourceRepository>/resolve/<sourceRevision>/<relativePath>`. A path
+   that is absolute or contains `..` builds no URL and fails the download.
+3. Each response must be successful and remain on HTTPS.
+4. Each file must be a regular file of the exact approved size.
+5. Each file is streamed through SHA-256 and compared against the manifest.
+6. Files land in a staging directory. The completed tree must contain exactly
+   the manifest's relative paths — no extra file, no nested extra file, and no
+   symbolic link — and the summed sizes must equal the recorded bundle size.
+7. Only a fully verified bundle is atomically swapped into place, so an
+   interrupted download cannot replace a good bundle with a partial one.
+8. Bundle files receive user-only filesystem permissions.
+
+The bundle's `sha256` field is the digest of the manifest itself — every entry
+sorted by path and serialized as `path\nsize\nsha256\n`. It is verified on
+every check, so a tampered *catalogue* fails as well as a tampered download.
+
+ZenVoice performs this fetch itself rather than delegating it. FluidAudio's
+downloader resolves the repository's default branch and honours its own
+`REGISTRY_URL`/`MODEL_REGISTRY_URL` overrides, neither of which can express a
+pinned revision. FluidAudio is handed the verified local directory afterwards
+through `loadModels(from:)`.
 
 Deleting a model removes only its catalogue-derived file path. Model downloads
 contain data weights only; ZenVoice never executes them.

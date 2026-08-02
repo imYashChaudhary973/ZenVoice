@@ -1519,6 +1519,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 message: message,
                 retainAudio: historyPreferences.retainsFailedAudio
             )
+            // Retaining audio without arming the expiry timer means the 24-hour
+            // promise only takes effect at the next launch.
+            scheduleRecoveryExpiry()
         } else if let recordedAudio {
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
@@ -1835,6 +1838,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     message: error.localizedDescription,
                     retainAudio: historyPreferences.retainsFailedAudio
                 )
+                scheduleRecoveryExpiry()
             }
         } else {
             if let historyID {

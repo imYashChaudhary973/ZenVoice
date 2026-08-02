@@ -7,8 +7,10 @@ send audio, transcripts, clipboard contents, or usage analytics over the
 network.
 
 The Privacy screen shows live local counts for encrypted transcripts, retained
-recovery audio, correction rules, and installed speech models.
-These counts are derived in-process and are not telemetry.
+recovery audio, correction rules, and installed speech models. These counts are
+derived in-process and are not telemetry. The transcript and recovery counts are
+taken from the most recent 500 records the screen has loaded, so they describe
+that window rather than the whole database.
 
 ## Data lifecycle
 
@@ -31,7 +33,10 @@ These counts are derived in-process and are not telemetry.
   already retained.
 - Private Dictation mode retains no transcript or recovery audio, including
   when it is enabled during an active or transcribing dictation and ZenVoice
-  exits unexpectedly.
+  exits unexpectedly. If it is enabled mid-dictation after a live-preview
+  partial has already been written, that partial stays encrypted in the
+  database until the dictation completes or ZenVoice next launches, whichever
+  comes first; both discard it.
 - A crash or forced termination could leave a temporary file until macOS cleans
   its temporary directory when history is disabled.
 - Users can delete all retained recovery audio independently from the Privacy
@@ -152,7 +157,12 @@ These counts are derived in-process and are not telemetry.
 - A developer can override the selected model with a local environment
   variable; ZenVoice does not execute a model-supplied program.
 - Model downloads are fixed to reviewed HTTPS sources, immutable revisions,
-  expected sizes, and SHA-256 manifests before installation.
+  expected sizes, and SHA-256 digests before installation. ZenVoice constructs
+  every download URL itself, including one per file for the Parakeet CoreML
+  bundle, and installs only after the whole download verifies.
+- A multi-file bundle must match its pinned manifest exactly — same files, no
+  extra or symlinked entries, same sizes, same digests — and is staged and
+  atomically swapped into place rather than written over in position.
 - The `whisper.cpp` XCFramework is checksum-pinned and the FluidAudio source
   dependency is revision-pinned; both run in process.
 - No API key or online account is required.
@@ -160,7 +170,20 @@ These counts are derived in-process and are not telemetry.
 ## macOS permissions
 
 - **Microphone** is required to record speech.
-- **Accessibility** is required only to simulate `Command + V`.
+- **Accessibility** is required to place the transcript into the focused
+  application. That is normally a simulated `Command + V`, but it also covers
+  two narrower uses of the same permission:
+  - when macOS secure input is active, ZenVoice writes the transcript into the
+    focused control directly instead of synthesizing a keystroke; and
+  - when it replaces an already-inserted transcript with a refined version, it
+    reads the focused control's text and caret range to find the span it wrote,
+    then overwrites just that span.
+  Text read this way is used in memory for that comparison only. It is not
+  stored in History, preferences, insights, or logs.
+- ZenVoice refuses to insert into a field macOS marks as a secure text field,
+  and refuses text fields it cannot positively identify while secure input is
+  active. In those cases the transcript is copied to the clipboard instead and
+  ZenBar says so.
 
 The signed app includes the Hardened Runtime audio-input entitlement. This
 permits ZenVoice to ask macOS for microphone access; it does not bypass the

@@ -68,6 +68,17 @@ else
         block "nested code signature verification failed"
     fi
 
+    # The notice inside the bundle is what a user actually receives, and
+    # fastcluster's BSD terms plus Apache 2.0 both bind the binary we ship.
+    bundled_notice="$app_path/Contents/Resources/THIRD_PARTY_NOTICES.md"
+    if [[ ! -f "$bundled_notice" ]]; then
+        block "packaged app does not contain THIRD_PARTY_NOTICES.md"
+    elif ! cmp -s "$project_dir/THIRD_PARTY_NOTICES.md" "$bundled_notice"; then
+        block "packaged third-party notices differ from the tracked notices"
+    else
+        pass "packaged third-party notices match the tracked notices"
+    fi
+
     signature_details=$(codesign -dvv "$app_path" 2>&1 || true)
     source_cdhash=$(
         codesign -dvvv "$app_path" 2>&1 |

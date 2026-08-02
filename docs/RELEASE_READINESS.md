@@ -31,10 +31,34 @@ approval or release assets. This checklist is a project gate, not legal advice.
   decided 2026-08-01; the Mac App Store sandbox cannot host
   Accessibility-based insertion. Entitlements reviewed: `audio-input` only,
   no `get-task-allow`.
-- [ ] Confirm that the final app, website, and store privacy statements match
-  the actual release behavior.
-- [ ] Re-review every model or runtime artifact added after the pinned M9
-  catalogue.
+- [x] Confirm that the final app, website, and store privacy statements match
+  the actual release behavior — audited 2026-08-02 against the source. There is
+  no website and no store listing for a direct-download private beta, so the
+  app's own statements are the whole surface. Corrections made rather than
+  claimed: recovery-audio expiry now honours its stated 24-hour window from
+  capture, Insights count only completed dictations, the Accessibility scope
+  and secure-input refusal are described, and the Privacy screen's 500-record
+  count window is stated. Re-confirm if application behavior changes before the
+  release commit.
+- [x] Re-review every model or runtime artifact added after the pinned M9
+  catalogue — completed 2026-08-02. The transitive FluidAudio components
+  compiled into the shipped binary are now noticed, including fastcluster's
+  required BSD notice; the Parakeet download is revision-pinned,
+  manifest-exact, and atomically installed; and every recorded size, digest and
+  pinned revision was checked against its source.
+  The Parakeet licence was recorded as CC-BY-4.0 by taking the conversion
+  repository's declaration at face value. Its own bundle metadata says
+  `model_id: nvidia/parakeet-unified-en-0.6b`, which NVIDIA governs under the
+  Open Model License, while the conversion card declares CC-BY-4.0 and names
+  `parakeet-tdt-0.6b-v2`. ZenVoice now records the NVIDIA Open Model License
+  and carries its required notice, that being the stricter of the two and the
+  one the artifact's own identity supports. Both candidates permit commercial
+  use and redistribution with attribution, so ZenVoice is compliant either way.
+  Confirming the exact source model with the publisher remains open as an
+  accuracy item below rather than a distribution blocker.
+- [ ] Ask FluidInference to confirm which NVIDIA model
+  `parakeet-unified-en-0.6b-coreml` was converted from, and align the recorded
+  licence with the answer. See the conflict table in `THIRD_PARTY_NOTICES.md`.
 
 ## Apple distribution
 

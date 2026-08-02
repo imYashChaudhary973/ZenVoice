@@ -133,6 +133,31 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
         )!
     }
 
+    /// Revision-pinned source for one file of a multi-file bundle.
+    ///
+    /// Bundles are fetched file by file from this catalogue's pinned revision
+    /// rather than from a dependency that resolves a moving branch, so the
+    /// recorded `sourceRevision` describes what is actually requested.
+    public func bundleFileURL(for file: VerifiedModelFile) -> URL? {
+        guard !file.relativePath.hasPrefix("/"),
+              !file.relativePath.split(separator: "/").contains("..") else {
+            return nil
+        }
+        let encodedPath = file.relativePath
+            .split(separator: "/", omittingEmptySubsequences: false)
+            .map {
+                $0.addingPercentEncoding(
+                    withAllowedCharacters: .urlPathAllowed
+                ) ?? String($0)
+            }
+            .joined(separator: "/")
+        return URL(
+            string:
+                "\(sourceRepository)/resolve/\(sourceRevision)/\(encodedPath)"
+                + "?download=true"
+        )
+    }
+
     public var formattedFileSize: String {
         ByteCountFormatter.string(
             fromByteCount: fileSizeBytes,
@@ -382,6 +407,66 @@ public enum VerifiedModelCatalog {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
+    /// Canonical digest of a bundle's pinned manifest.
+    ///
+    /// A multi-file bundle has no single file to hash, so `VerifiedModel.sha256`
+    /// carries the digest of the manifest itself: every entry sorted by path and
+    /// serialized as `path\nsize\nsha256\n`. Verifying it means a tampered
+    /// *catalogue* is caught too, not only tampered downloads.
+    public static func manifestDigest(
+        of files: [VerifiedModelFile]
+    ) -> String {
+        let canonical = files
+            .sorted { $0.relativePath < $1.relativePath }
+            .map { "\($0.relativePath)\n\($0.fileSizeBytes)\n\($0.sha256)\n" }
+            .joined()
+        return SHA256.hash(data: Data(canonical.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    /// Every regular file actually present under `root`, relative to it.
+    ///
+    /// Used to reject a bundle that carries the approved files *plus* something
+    /// unreviewed; checking only the manifest entries would accept that.
+    private static func installedRelativePaths(
+        under root: URL,
+        fileManager: FileManager
+    ) throws -> Set<String> {
+        let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
+        guard let enumerator = fileManager.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
+            options: []
+        ) else {
+            throw CatalogError.unreadableBundle
+        }
+        var found: Set<String> = []
+        for case let url as URL in enumerator {
+            let values = try url.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .isSymbolicLinkKey
+            ])
+            if values.isSymbolicLink == true {
+                throw CatalogError.unexpectedBundleEntry
+            }
+            guard values.isRegularFile == true else {
+                continue
+            }
+            let path = url.standardizedFileURL.path
+            guard path.hasPrefix(prefix) else {
+                throw CatalogError.unexpectedBundleEntry
+            }
+            found.insert(String(path.dropFirst(prefix.count)))
+        }
+        return found
+    }
+
+    public enum CatalogError: Error {
+        case unreadableBundle
+        case unexpectedBundleEntry
+    }
+
     public static func verify(
         _ fileURL: URL,
         for model: VerifiedModel,
@@ -392,12 +477,30 @@ public enum VerifiedModelCatalog {
                 .isDirectoryKey
             ])
             guard values.isDirectory == true,
-                  !model.bundleFiles.isEmpty else {
+                  !model.bundleFiles.isEmpty,
+                  manifestDigest(of: model.bundleFiles) == model.sha256 else {
                 return false
             }
             let bundleRoot = fileURL.standardizedFileURL
                 .resolvingSymlinksInPath()
             let bundlePrefix = bundleRoot.path + "/"
+
+            // An approved file set plus one unreviewed extra file would pass a
+            // manifest-only walk, so compare the installed tree both ways.
+            let expectedPaths = Set(model.bundleFiles.map(\.relativePath))
+            let installedPaths: Set<String>
+            do {
+                installedPaths = try installedRelativePaths(
+                    under: bundleRoot,
+                    fileManager: fileManager
+                )
+            } catch {
+                return false
+            }
+            guard installedPaths == expectedPaths else {
+                return false
+            }
+
             for file in model.bundleFiles {
                 guard !file.relativePath.hasPrefix("/"),
                       !file.relativePath.split(separator: "/").contains("..")
@@ -455,16 +558,30 @@ public enum VerifiedModelCatalog {
             upstreamRepository:
                 "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
             sourceRevision: parakeetRevision,
+            // Digest of the pinned manifest below, not of a single file — see
+            // `manifestDigest(of:)`. The previous value here described nothing
+            // any code computed, so verification silently ignored it.
             sha256:
-                "dacfe770afb5a0b8e71e3359ace7167433670c75bf61067005d55d1dae66a20b",
+                "04974b08a35d460ef32e37f747f938aa0c1df83120452125b01d52bded3f808a",
             fileSizeBytes: 614_082_275,
-            format: "Core ML INT8",
-            license: "CC-BY-4.0",
+            format: "Core ML; INT8 encoder",
+            // The downloaded bundle's own config.json and metadata.json say
+            // model_id: nvidia/parakeet-unified-en-0.6b, which NVIDIA governs
+            // under the Open Model License. The conversion repository declares
+            // CC-BY-4.0 and names parakeet-tdt-0.6b-v2 as its base, so the two
+            // disagree. The artifact's own identity is the stronger evidence
+            // and the stricter of the two, so it is what ZenVoice records and
+            // notices. THIRD_PARTY_NOTICES documents the conflict and release
+            // readiness gates on the publisher confirming the source model.
+            license: "NVIDIA Open Model License",
             licenseURL:
-                "https://creativecommons.org/licenses/by/4.0/legalcode",
+                "https://www.nvidia.com/en-us/agreements/enterprise-software/"
+                + "nvidia-open-model-license/",
             attribution:
-                "Parakeet Unified EN 0.6B by NVIDIA, converted to Core ML "
-                + "by FluidInference. INT8 encoder inference uses FluidAudio.",
+                "Licensed by NVIDIA Corporation under the NVIDIA Open Model "
+                + "License. Parakeet Unified EN 0.6B by NVIDIA, converted to "
+                + "Core ML by FluidInference. INT8 encoder inference uses "
+                + "FluidAudio.",
             runtime: .parakeetCoreML,
             bundleFiles: parakeetBundleFiles
         )
