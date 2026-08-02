@@ -25,8 +25,8 @@ analytics, or cloud transcription services in the current application.
 > [!IMPORTANT]
 > ZenVoice is currently a private personal project. It is proprietary,
 > source-visible software governed by [LICENSE](LICENSE). Direct distribution
-> is the selected release channel; pricing and initial release terms remain
-> undecided.
+> is the selected release channel; the first distributed build will be an
+> invitation-only private beta for Apple Silicon Macs running macOS 14 or newer.
 
 ## What works today
 

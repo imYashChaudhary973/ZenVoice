@@ -48,9 +48,10 @@ automatic publishing, or updater is present. Those are intentionally outside
 M9 and require a new threat review before implementation.
 
 The current build is appropriate for private development testing. ZenVoice is
-proprietary software and direct download is the selected distribution channel.
-It is not approved for public distribution because pricing and initial release
-terms remain open, the final privacy statements and post-M9
-runtime/model review are incomplete, the app is not signed with a Developer ID
-Application certificate, no notarization ticket is stapled, and clean-device
-plus release-candidate accessibility QA remain unfinished.
+proprietary software, direct download is the selected channel, and the first
+distributed build is an invitation-only private beta for Apple Silicon Macs
+running macOS 14 or newer. It is not approved even for that beta because the
+final privacy statements and post-M9 runtime/model review are incomplete, the
+app is not signed with a Developer ID Application certificate, no notarization
+ticket is stapled, and clean-device plus release-candidate accessibility QA
+remain unfinished. Public pricing and launch terms remain a later decision.

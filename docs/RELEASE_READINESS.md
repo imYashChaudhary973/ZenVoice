@@ -23,7 +23,10 @@ approval or release assets. This checklist is a project gate, not legal advice.
 
 - [x] Select and add the ZenVoice project licence as `LICENSE` — proprietary,
   source-visible, decided 2026-08-01.
-- [ ] Decide whether the first public build is free, paid, or private beta.
+- [x] Decide whether the first distributed build is free, paid, or private beta
+  — invitation-only private beta, decided 2026-08-02.
+- [x] Define the supported release baseline — Apple Silicon Macs running macOS
+  14 or newer, decided 2026-08-02.
 - [x] Decide direct download, Mac App Store, or both — direct download,
   decided 2026-08-01; the Mac App Store sandbox cannot host
   Accessibility-based insertion. Entitlements reviewed: `audio-input` only,
@@ -55,7 +58,7 @@ approval or release assets. This checklist is a project gate, not legal advice.
   founder approval must be **Pass**, every applicable row must be **Pass**, and
   every **Not applicable** row must explain why.
 - [ ] Test Fast, Balanced, and High Accuracy performance choices on the
-  supported hardware range.
+  private-beta baseline: Apple Silicon Macs running macOS 14 or newer.
 - [ ] Test explicit English, Hindi, Auto-Detect/multilingual, and Hinglish
   specialist language paths with compatible current-catalogue models.
 - [ ] On Apple Silicon, record a successful Parakeet/CoreML → current
