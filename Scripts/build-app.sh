@@ -42,21 +42,36 @@ fi
 
 export DEVELOPER_DIR="$developer_dir"
 
+# Read the identity list once. Piping it into `awk ... exit` or `grep -q` under
+# `set -o pipefail` makes the producer die of SIGPIPE and reports 141, so a
+# successful match looked like a failed command.
+available_identities=$(security find-identity -v -p codesigning 2>/dev/null || true)
+
 if [[ -z "$signing_identity" ]]; then
     signing_identity=$(
-        security find-identity -v -p codesigning |
-            awk '/"Apple Development:/ { print $2; exit }'
+        printf '%s\n' "$available_identities" |
+            awk '/"Apple Development:/ { print $2 }' |
+            head -n 1
     )
 fi
 
+# ZENVOICE_SIGNING_IDENTITY may be a full identity name or a certificate hash,
+# so resolve the hash case against the identity list instead of assuming the
+# string itself says "Developer ID Application". Getting this wrong signed a
+# Developer ID release with no secure timestamp and no clean-worktree check.
 developer_id_signing=false
-if [[ -n "$signing_identity" ]] && {
-    [[ "$signing_identity" == *"Developer ID Application"* ]] ||
-        security find-identity -v -p codesigning 2>/dev/null |
-            grep -F -- "$signing_identity" |
-            grep -q "Developer ID Application"
-}; then
-    developer_id_signing=true
+if [[ -n "$signing_identity" ]]; then
+    if [[ "$signing_identity" == *"Developer ID Application"* ]]; then
+        developer_id_signing=true
+    else
+        matching_identity=$(
+            printf '%s\n' "$available_identities" |
+                grep -F -- "$signing_identity" || true
+        )
+        if [[ "$matching_identity" == *"Developer ID Application"* ]]; then
+            developer_id_signing=true
+        fi
+    fi
 fi
 
 release_source_commit=""
