@@ -4,6 +4,16 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-03
+
+First build distributed outside the author's machine, as an invitation-only
+private beta. Free to its users for an initial one to three month period. There
+is no trial timer, licence key, or account system in the application.
+
+Certified on macOS 27 on Apple Silicon. The build targets macOS 14 or newer,
+but no earlier version has been tested; see
+[Release Readiness](docs/RELEASE_READINESS.md).
+
 ### Added
 
 - Added a native ZenVoice window with Overview, Shortcuts, and Privacy screens
@@ -53,13 +63,6 @@ All notable ZenVoice changes are recorded here.
 - Added stable phrase detection and local in-memory Whisper previews
 - Added opt-in commit-on-pause insertion locked to the original target app
 - Added encrypted partial transcript checkpoints during active dictation
-- Added Fast and Balanced Qwen2.5 refinement models from immutable official
-  revisions with exact size and SHA-256 verification
-- Added the patched, checksum-pinned `llama.cpp` b9637 XCFramework runtime
-- Added grammar-constrained local JSON refinement with timeout, vocabulary,
-  retention, and deterministic fallback guards
-- Added in-app hardware guidance, download progress, selection, removal, and
-  publisher-licence links for local refinement models
 - Added application profiles that select language, refinement mode, and local
   voice-command behavior from the original target app
 - Added a bounded memory-only context box for the next dictation
@@ -72,11 +75,25 @@ All notable ZenVoice changes are recorded here.
   Overview without being forced through setup again
 - Added a local privacy inventory with confirmed recovery-audio deletion
 - Added Reduce Motion support and explicit success announcements to ZenBar
+- Added the NVIDIA Parakeet CoreML runtime through the revision-pinned
+  FluidAudio dependency, and made it the recommended English path
+- Added a ZenBar warning when the decoder repeats itself, so a looped
+  transcript is visible rather than silently pasted
+- Added the Developer ID pipeline: secure-timestamped signing, a notarization
+  and stapling script, and a distribution archive with a printed SHA-256
+- Added `LICENSE`, making ZenVoice proprietary, source-visible software
 
 ### Removed
 
 - Removed Correction Review and stopped Voice Profile from loading raw and
   final transcript pairs solely for comparison.
+- Removed the downloadable local refinement path before it ever shipped. The
+  Qwen2.5 refinement models, the `llama.cpp` runtime, and grammar-constrained
+  JSON refinement were measured against deterministic Clean, scored the same
+  word error rate while being rejected by the meaning guard roughly half the
+  time, and were withdrawn rather than kept for their inference cost. Instant
+  Refine keeps its deterministic Off, Clean, and Agent Prompt modes, and no
+  refinement weights are downloaded or loaded.
 
 ### Changed
 
@@ -106,8 +123,23 @@ All notable ZenVoice changes are recorded here.
   `whisper-cli` for every recording
 - Applied Instant Refine before encrypted personal correction rules, history,
   and paste
-- Extended Instant Refine with an optional multilingual Local Model mode while
-  keeping Clean as the safe fallback
+
+### Fixed
+
+- Fixed retained recovery audio outliving the stated 24-hour window. Two
+  failure paths never armed the expiry timer, and the fallback was measured
+  from the failure rather than from the start of capture.
+- Fixed Insights counting dictations that never completed. A force-quit
+  dictation kept its live-preview partial and was later marked failed with zero
+  duration, inflating word totals, streak days, and weighted words per minute.
+- Fixed the Parakeet bundle being fetched from a moving branch while the
+  catalogue recorded a pinned revision. Each file is now downloaded from that
+  revision, checked against an exact manifest, and installed atomically.
+- Fixed third-party notices omitting components compiled into the shipped
+  binary, including fastcluster, whose licence requires its notice in binary
+  redistributions.
+- Fixed a signing-identity check that rejected a valid Developer ID signature,
+  and a matching one that could sign a release without a secure timestamp.
 
 ## [0.1.0] - 2026-07-23
 
