@@ -26,7 +26,9 @@ analytics, or cloud transcription services in the current application.
 > ZenVoice is currently a private personal project. It is proprietary,
 > source-visible software governed by [LICENSE](LICENSE). Direct distribution
 > is the selected release channel; the first distributed build will be an
-> invitation-only private beta for Apple Silicon Macs running macOS 14 or newer.
+> invitation-only private beta for Apple Silicon Macs running macOS 14 or newer,
+> free to its users for an initial one to three month period. There is no trial
+> timer, licence key, or account system in the application.
 
 ## What works today
 
