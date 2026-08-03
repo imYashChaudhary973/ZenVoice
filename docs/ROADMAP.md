@@ -77,7 +77,17 @@ Decided on 2026-08-02:
 
 - Initial distribution: invitation-only private beta, not a paid or broad
   public launch.
-- Supported baseline: Apple Silicon Macs running macOS 14 or newer.
+- Minimum supported version: Apple Silicon Macs running macOS 14 or newer.
+  That is the deployment target in `Package.swift` and `LSMinimumSystemVersion`,
+  so the build will launch there.
+
+Amended 2026-08-03:
+
+- Certified for the private beta: macOS 27. The minimum supported version above
+  is a build floor, not evidence. Only the version the release candidate was
+  actually tested on may be described as certified, and macOS 14 through 26 have
+  not been tested. Beta invitations should go to macOS 27 users until an older
+  version is swept and recorded.
 
 Decided on 2026-08-03:
 

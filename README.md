@@ -26,9 +26,11 @@ analytics, or cloud transcription services in the current application.
 > ZenVoice is currently a private personal project. It is proprietary,
 > source-visible software governed by [LICENSE](LICENSE). Direct distribution
 > is the selected release channel; the first distributed build will be an
-> invitation-only private beta for Apple Silicon Macs running macOS 14 or newer,
-> free to its users for an initial one to three month period. There is no trial
-> timer, licence key, or account system in the application.
+> invitation-only private beta, free to its users for an initial one to three
+> month period. There is no trial timer, licence key, or account system in the
+> application. ZenVoice builds for macOS 14 or newer, but the beta is certified
+> only on the macOS versions it has actually been tested on; invitations are
+> limited to those.
 
 ## What works today
 
@@ -106,7 +108,9 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
 
 ## Requirements
 
-- macOS 14 or newer
+- macOS 14 or newer — the build target. Which versions are actually certified
+  for the private beta is recorded per release candidate; see
+  [Release Readiness](docs/RELEASE_READINESS.md).
 - Apple Silicon Mac
 - Swift 5.10 or newer
 - Internet access on the first build for the pinned local speech runtimes
