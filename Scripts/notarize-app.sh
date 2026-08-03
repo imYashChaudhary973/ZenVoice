@@ -30,8 +30,13 @@ fi
 
 # Notarization only accepts Developer ID signatures. Catching an Apple
 # Development or ad-hoc build here saves an upload and a rejection.
-if ! codesign -dvv "$app_path" 2>&1 |
-    grep -q "Authority=Developer ID Application:"; then
+#
+# Read the signature into a variable rather than piping into `grep -q`. Under
+# `set -o pipefail`, `grep -q` exits at the first match, `codesign` dies of
+# SIGPIPE, and the pipeline reports 141 — so a correctly signed app was
+# rejected precisely because it matched.
+signature_details=$(codesign -dvv "$app_path" 2>&1 || true)
+if [[ "$signature_details" != *"Authority=Developer ID Application:"* ]]; then
     echo "Error: $app_path is not signed with a Developer ID Application" >&2
     echo "identity. Re-run Scripts/build-app.sh with" >&2
     echo "ZENVOICE_SIGNING_IDENTITY naming one." >&2
