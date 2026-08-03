@@ -79,9 +79,18 @@ Decided on 2026-08-02:
   public launch.
 - Supported baseline: Apple Silicon Macs running macOS 14 or newer.
 
+Decided on 2026-08-03:
+
+- Introductory pricing: ZenVoice is free to its users for an initial one to
+  three month period.
+- That period is a calendar window, not a per-user trial. The application
+  contains no trial timer, licence key, entitlement check, or account system,
+  and none is planned for this release. Charging, if it happens, is designed
+  after the free period produces real usage evidence.
+
 Still deferred:
 
-- Public pricing and launch terms after the private beta
+- What ZenVoice costs after the free period, and how that is collected
 - Whether non-macOS platforms belong in scope
 
 The remaining decisions should be made only after the selected local speech

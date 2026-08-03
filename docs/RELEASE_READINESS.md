@@ -24,7 +24,10 @@ approval or release assets. This checklist is a project gate, not legal advice.
 - [x] Select and add the ZenVoice project licence as `LICENSE` — proprietary,
   source-visible, decided 2026-08-01.
 - [x] Decide whether the first distributed build is free, paid, or private beta
-  — invitation-only private beta, decided 2026-08-02.
+  — invitation-only private beta, decided 2026-08-02. Free to its users for an
+  initial one to three month calendar window, decided 2026-08-03. Not a
+  per-user trial: no trial timer, licence key, entitlement check, or account
+  system ships in this release, so no new authentication surface is introduced.
 - [x] Define the supported release baseline — Apple Silicon Macs running macOS
   14 or newer, decided 2026-08-02.
 - [x] Decide direct download, Mac App Store, or both — direct download,

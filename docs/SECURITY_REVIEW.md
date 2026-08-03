@@ -51,8 +51,22 @@ M9 and require a new threat review before implementation.
 The current build is appropriate for private development testing. ZenVoice is
 proprietary software, direct download is the selected channel, and the first
 distributed build is an invitation-only private beta for Apple Silicon Macs
-running macOS 14 or newer. It is not approved even for that beta because the
-final privacy statements and post-M9 runtime/model review are incomplete, the
-app is not signed with a Developer ID Application certificate, no notarization
-ticket is stapled, and clean-device plus release-candidate accessibility QA
-remain unfinished. Public pricing and launch terms remain a later decision.
+running macOS 14 or newer, free to its users for an initial one to three month
+period.
+
+That free period is deliberately a calendar window rather than a per-user
+trial. Enforcing a trial would require a licence or entitlement mechanism, and
+an account system, updater, or remote entitlement check is outside this review
+and would need a new threat review before implementation. Choosing an
+unenforced window keeps this review's central finding true: there is no
+account system and nothing to authenticate.
+
+The privacy statement review and the post-M9 runtime and model review are
+complete as of 2026-08-02, and the application now signs with a Developer ID
+Application certificate, Hardened Runtime, and a secure timestamp, with
+`com.apple.security.get-task-allow` absent. It is still not approved for the
+beta because no notarization ticket is stapled and clean-device plus
+release-candidate accessibility QA remain unfinished.
+
+What ZenVoice costs after the free period, and how that would be collected,
+remains a later decision and will require its own review.
