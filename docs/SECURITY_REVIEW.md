@@ -50,9 +50,10 @@ M9 and require a new threat review before implementation.
 
 The current build is appropriate for private development testing. ZenVoice is
 proprietary software, direct download is the selected channel, and the first
-distributed build is an invitation-only private beta for Apple Silicon Macs
-running macOS 14 or newer, free to its users for an initial one to three month
-period.
+distributed build is an invitation-only private beta for Apple Silicon Macs,
+free to its users for an initial one to three month period. The build targets
+macOS 14 or newer, but only the macOS versions recorded in the release QA record
+are certified; the deployment target is a floor, not evidence.
 
 That free period is deliberately a calendar window rather than a per-user
 trial. Enforcing a trial would require a licence or entitlement mechanism, and

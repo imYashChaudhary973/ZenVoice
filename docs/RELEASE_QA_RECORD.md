@@ -19,7 +19,8 @@ contact details, or unrelated personal data in this record or its attachments.
 |---|---|
 | Release version and build | |
 | Distribution scope | Invitation-only private beta |
-| Supported baseline | Apple Silicon, macOS 14 or newer |
+| Minimum supported version (deployment target) | Apple Silicon, macOS 14 or newer |
+| macOS versions actually certified by this sweep | |
 | Source commit reported by `Scripts/build-app.sh` | |
 | Notarization upload archive | `ZenVoice-notarization-upload.zip` |
 | Notarization request ID | |

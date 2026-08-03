@@ -29,7 +29,10 @@ approval or release assets. This checklist is a project gate, not legal advice.
   per-user trial: no trial timer, licence key, entitlement check, or account
   system ships in this release, so no new authentication surface is introduced.
 - [x] Define the supported release baseline — Apple Silicon Macs running macOS
-  14 or newer, decided 2026-08-02.
+  14 or newer, decided 2026-08-02. Amended 2026-08-03: that figure is the
+  deployment target, not a tested claim. The private beta is certified only on
+  the macOS versions actually swept and recorded in the QA record, and
+  invitations are limited to those versions.
 - [x] Decide direct download, Mac App Store, or both — direct download,
   decided 2026-08-01; the Mac App Store sandbox cannot host
   Accessibility-based insertion. Entitlements reviewed: `audio-input` only,
@@ -84,8 +87,10 @@ approval or release assets. This checklist is a project gate, not legal advice.
   Retain the completed record with the release evidence; its overall result and
   founder approval must be **Pass**, every applicable row must be **Pass**, and
   every **Not applicable** row must explain why.
-- [ ] Test Fast, Balanced, and High Accuracy performance choices on the
-  private-beta baseline: Apple Silicon Macs running macOS 14 or newer.
+- [ ] Test Fast, Balanced, and High Accuracy performance choices on Apple
+  Silicon, recording the exact macOS version each was tested on. A version that
+  was not tested is not certified and must not be described as supported in
+  release notes or beta invitations, whatever the deployment target allows.
 - [ ] Test explicit English, Hindi, Auto-Detect/multilingual, and Hinglish
   specialist language paths with compatible current-catalogue models.
 - [ ] On Apple Silicon, record a successful Parakeet/CoreML → current
