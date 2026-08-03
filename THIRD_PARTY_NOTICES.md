@@ -166,23 +166,32 @@ from, and the two candidates are not under the same licence. Checked
 | Source | States |
 |---|---|
 | The downloaded bundle's own `config.json` and `metadata.json`, at pinned revision `4252711f…` | `model_id: nvidia/parakeet-unified-en-0.6b` |
+| FluidAudio `Sources/FluidAudio/ASR/Parakeet/Unified/UnifiedMelExtractor.swift`, at pinned revision `88d6d816…` | reproduces the preprocessor "exactly as configured in `nvidia/parakeet-unified-en-0.6b` (`model_config.yaml`)" |
+| FluidAudio `Sources/FluidAudio/ASR/Parakeet/Unified/UnifiedConfig.swift`, same revision | matches "the conversion pipeline in mobius `models/stt/parakeet-unified-en-0.6b/coreml`" |
 | [`nvidia/parakeet-unified-en-0.6b`](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | "Use of the model is governed by the NVIDIA Open Model License Agreement" |
-| [`FluidInference/parakeet-unified-en-0.6b-coreml`](https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml) model card | `cc-by-4.0`, with a model tree naming `nvidia/parakeet-tdt-0.6b-v2` as the base |
+| [`FluidInference/parakeet-unified-en-0.6b-coreml`](https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml) model card | frontmatter `license: cc-by-4.0` and `base_model: [nvidia/parakeet-tdt-0.6b-v2]` |
 | [`nvidia/parakeet-tdt-0.6b-v2`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) | "Use of this model is governed by the CC-BY-4.0 license" |
 
-The artifact ZenVoice actually downloads identifies itself as the **unified**
-model, which carries the NVIDIA Open Model License. The conversion repository
-declares CC-BY-4.0, which matches the *other* NVIDIA model instead. ZenVoice
-previously recorded CC-BY-4.0 by taking the conversion repository's declaration
-at face value; the bundle's own metadata does not support that.
+Three independent artifacts point at the **unified** model as the thing that was
+actually converted: the downloaded bundle's own metadata, and two places in
+FluidAudio's pinned source that name `nvidia/parakeet-unified-en-0.6b` and its
+conversion pipeline directly. One field points elsewhere — the model card's
+`base_model` — and on Hugging Face that field commonly records ancestry rather
+than the immediate conversion input. If NVIDIA's unified model is itself derived
+from `parakeet-tdt-0.6b-v2`, both statements are true at once and only the
+governing licence is in question.
 
-ZenVoice therefore records the NVIDIA Open Model License, because the artifact's
-own identity is the stronger evidence and it is the stricter of the two terms.
+ZenVoice therefore records the NVIDIA Open Model License. It matches what the
+artifact says it is, it is corroborated by the converter's own code, and it is
+the stricter of the two terms. ZenVoice previously recorded CC-BY-4.0 by taking
+the model card's declaration at face value; nothing in the artifact supports
+that.
+
 Both candidate licences permit commercial use, redistribution and derivative
 works with attribution, so this choice affects which notice is required rather
-than whether the model may be used. If the publisher confirms the source is
-`parakeet-tdt-0.6b-v2`, this section reverts to CC-BY-4.0. Obtaining that
-confirmation is a release gate in
+than whether the model may be used, and ZenVoice does not redistribute the
+weights in any case. Publisher confirmation would settle the ancestry question
+but is no longer the only evidence available; see
 [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md).
 
 ## OpenAI Whisper model weights

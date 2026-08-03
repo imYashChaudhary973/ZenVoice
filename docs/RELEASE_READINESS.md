@@ -62,9 +62,19 @@ approval or release assets. This checklist is a project gate, not legal advice.
   use and redistribution with attribution, so ZenVoice is compliant either way.
   Confirming the exact source model with the publisher remains open as an
   accuracy item below rather than a distribution blocker.
-- [ ] Ask FluidInference to confirm which NVIDIA model
-  `parakeet-unified-en-0.6b-coreml` was converted from, and align the recorded
-  licence with the answer. See the conflict table in `THIRD_PARTY_NOTICES.md`.
+- [x] Establish which NVIDIA model `parakeet-unified-en-0.6b-coreml` was
+  converted from — resolved on evidence 2026-08-03. The downloaded bundle's
+  metadata and two places in FluidAudio's pinned source all name
+  `nvidia/parakeet-unified-en-0.6b`, including its conversion pipeline path. The
+  model card's `base_model` names `parakeet-tdt-0.6b-v2`, which on Hugging Face
+  usually records ancestry rather than the conversion input. ZenVoice records the
+  NVIDIA Open Model License accordingly and carries its required notice. See the
+  evidence table in `THIRD_PARTY_NOTICES.md`.
+  Asking FluidInference to confirm the ancestry is worth doing but is
+  deliberately not a checklist item: ZenVoice already carries the stricter of
+  the two terms, so their answer could only relax the recorded licence, never
+  tighten it. A permanently optional checkbox would block this fail-closed gate
+  forever.
 
 ## Apple distribution
 
