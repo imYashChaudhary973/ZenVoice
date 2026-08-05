@@ -47,11 +47,12 @@ No cloud transcription, analytics endpoint, account system, remote sync,
 automatic publishing, or updater is present. Those are intentionally outside
 M9 and require a new threat review before implementation.
 
-The current build is appropriate for development testing and open-source
-contribution. ZenVoice is licensed under the Apache License, Version 2.0, and
-is distributed as a direct download. The build targets macOS 14 or newer,
-but only the macOS versions recorded in the release QA record are certified;
-the deployment target is a floor, not evidence.
+The current build is appropriate for personal use, development testing, and
+open-source contribution. ZenVoice is licensed under the Apache License, Version
+2.0. Public distribution is deferred while ZenVoice is refined for internal use;
+see [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md). The build
+targets macOS 14 or newer, but only the macOS versions recorded in the release
+QA record are certified; the deployment target is a floor, not evidence.
 
 There is no account system, subscription, trial mechanism, or remote entitlement
 check in the application. Adding any of those would require a new threat review
@@ -60,6 +61,6 @@ before implementation.
 The privacy statement review and the runtime and model review are current as of
 2026-08-02. The application can sign with a Developer ID Application
 certificate, Hardened Runtime, and a secure timestamp, with
-`com.apple.security.get-task-allow` absent. Public release still requires a
-stapled notarization ticket and completed clean-device plus release-candidate
-accessibility QA.
+`com.apple.security.get-task-allow` absent. Any future public release would
+require a stapled notarization ticket and completed clean-device plus
+release-candidate accessibility QA.

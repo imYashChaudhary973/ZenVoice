@@ -18,14 +18,14 @@ public enum MicrophonePreferences {
     public static let preferenceKey = "ZenVoice.selectedMicrophoneUID"
 
     public static func selectedDeviceUID(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> String? {
         defaults.string(forKey: preferenceKey)
     }
 
     public static func save(
         deviceUID: String?,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         if let deviceUID {
             defaults.set(deviceUID, forKey: preferenceKey)

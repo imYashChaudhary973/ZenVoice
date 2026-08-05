@@ -44,7 +44,7 @@ public enum ApplicationProfilePreferences {
     public static let preferenceKey = "ZenVoice.applicationProfiles"
 
     public static func load(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> [ApplicationProfile] {
         guard let data = defaults.data(forKey: preferenceKey),
               let decoded = try? JSONDecoder().decode(
@@ -65,7 +65,7 @@ public enum ApplicationProfilePreferences {
 
     public static func profile(
         for bundleIdentifier: String?,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> ApplicationProfile? {
         guard let bundleIdentifier else {
             return nil
@@ -77,7 +77,7 @@ public enum ApplicationProfilePreferences {
 
     public static func save(
         _ profile: ApplicationProfile,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         guard !profile.bundleIdentifier.isEmpty,
               LanguageCatalog.isSupported(
@@ -98,7 +98,7 @@ public enum ApplicationProfilePreferences {
 
     public static func remove(
         bundleIdentifier: String,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         persist(
             load(defaults: defaults).filter {
@@ -124,14 +124,14 @@ public enum LocalVoiceCommandPreferences {
         "ZenVoice.localVoiceCommandsEnabled"
 
     public static func isEnabled(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
         defaults.bool(forKey: preferenceKey)
     }
 
     public static func setEnabled(
         _ enabled: Bool,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(enabled, forKey: preferenceKey)
     }

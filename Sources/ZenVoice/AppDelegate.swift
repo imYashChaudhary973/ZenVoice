@@ -185,6 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        validateRuntimeIdentity()
         configureTranscriber()
         configureMenuBar()
         configureZenBar()
@@ -294,7 +295,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // records and paste-last can recover them after relaunch.
                 historyPreferences.isHistoryEnabled = true
             }
-            let vault = try DictationVault.live()
+            let policy = try RuntimeIdentity.policy()
+            let vault = try DictationVault.live(policy: policy)
             dictationVault = vault
             try vault.recoverInterrupted(
                 retainAudio: historyPreferences.retainsFailedAudio
@@ -1971,7 +1973,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let dictationVault {
             return dictationVault
         }
-        let vault = try DictationVault.live()
+        let policy = try RuntimeIdentity.policy()
+        let vault = try DictationVault.live(policy: policy)
         dictationVault = vault
         return vault
     }
@@ -1991,6 +1994,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         resetWorkItem?.cancel()
         state.phase = .idle
         updateStartStopMenuTitle()
+    }
+
+    /// Refuses to run if the bundle identifier is missing, empty, or foreign.
+    ///
+    /// This is the fail-closed gate for the production Application Support path,
+    /// UserDefaults suite, and Keychain namespace. It must run before any
+    /// production storage is initialized.
+    private func validateRuntimeIdentity() {
+        do {
+            _ = try RuntimeIdentity.policy()
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "ZenVoice cannot start"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "Quit")
+            alert.runModal()
+            NSApp.terminate(nil)
+        }
     }
 
     /// A plain "inserted" needs a moment; a distrust warning needs long

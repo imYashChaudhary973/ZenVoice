@@ -220,6 +220,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Microphones and Audio Doctor](docs/AUDIO.md)
 - [Live Dictation](docs/LIVE_DICTATION.md)
 - [Release Readiness](docs/RELEASE_READINESS.md)
+- [Phased Development Plan](docs/PHASED_PLAN.md)
 - [M9 Security Review](docs/SECURITY_REVIEW.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -229,12 +230,16 @@ Model provenance, licences, revisions, and checksums are documented in
 
 ## Project direction
 
-The immediate goal is a dependable personal dictation tool. ZenVoice already
-offers explicit multilingual profiles; current work focuses on measured
-language quality, local context, lower transcription latency, expanded
-settings, and distribution readiness.
+ZenVoice is being built first for our own daily use. The immediate goal is to
+make it the best possible personal dictation tool: reliable, low-latency,
+multilingual, and respectful of privacy.
 
-ZenVoice is licensed under the Apache License, Version 2.0. Direct download of
-a Developer-ID-signed and notarized build is the selected distribution path.
-Passing CI does not make a build publicly releasable; the manual release gates
-must also be completed.
+Public shipping is explicitly deferred. ZenVoice is open-source under the Apache
+License, Version 2.0, and the distribution path (Developer-ID-signed direct
+download via GitHub Releases, with an optional Homebrew cask) is already
+prepared. That path will only be activated once the product has matured through
+regular personal use and a deliberate future shipping decision is made.
+
+Until then, passing CI and completing the manual release gates are not
+claims of public availability. The current release checklist is retained in
+[Release Readiness](docs/RELEASE_READINESS.md) for when shipping is reconsidered.

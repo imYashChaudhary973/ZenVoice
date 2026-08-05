@@ -19,7 +19,7 @@ public enum ZenBarPreferences {
         "ZenVoice.zenBar.showsAtAllTimes"
 
     public static func showsAtAllTimes(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
         defaults.object(forKey: showsAtAllTimesKey) == nil
             ? true
@@ -28,7 +28,7 @@ public enum ZenBarPreferences {
 
     public static func setShowsAtAllTimes(
         _ enabled: Bool,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(enabled, forKey: showsAtAllTimesKey)
     }

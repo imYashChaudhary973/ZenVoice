@@ -19,7 +19,7 @@ public enum OnboardingPreferences {
         "ZenVoice.onboarding.completed.v1"
 
     public static func shouldPresent(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
         if defaults.object(forKey: completionKey) != nil {
             return !defaults.bool(forKey: completionKey)
@@ -43,13 +43,13 @@ public enum OnboardingPreferences {
     }
 
     public static func complete(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(true, forKey: completionKey)
     }
 
     public static func reset(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(false, forKey: completionKey)
     }

@@ -6,6 +6,19 @@ The approved milestone sequence and delivery rules are tracked in
 [Build Order](BUILD_ORDER.md). Accepted privacy and model constraints are
 recorded in
 [ADR 0001](decisions/0001-local-data-and-model-governance.md).
+The strategic choice to build for internal use first and defer public shipping
+is recorded in
+[ADR 0004](decisions/0004-internal-use-first-defer-shipping.md).
+The detailed implementation sequence for all requested features and models is
+in [Phased Plan](PHASED_PLAN.md).
+
+## Strategic direction
+
+ZenVoice is being built first for our own daily use. Quality, reliability,
+latency, and language accuracy are the current priorities. Public shipping is
+deferred until the product has matured through regular personal use and a
+deliberate future shipping decision is made. The release checklist and signing
+pipeline remain prepared but inactive.
 
 ## Current: dependable personal alpha
 
@@ -60,9 +73,12 @@ recorded in
 - [x] Add explicit local learning controls without transcript comparison UI
 - [x] Add a dedicated Recovery Inbox for failed and partial dictations
 - [x] Add first-run onboarding and expanded permission recovery
-- [ ] Add Developer ID signing, notarization, and update delivery
 - [x] Complete the M9 engineering security review
-- [ ] Complete release-candidate accessibility and clean-device QA
+- [ ] Add Developer ID signing, notarization, and update delivery — deferred
+      until a future shipping decision; see [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md)
+- [ ] Complete release-candidate accessibility and clean-device QA — kept as a
+      quality goal for daily use; treated as a release gate only when shipping
+      is reconsidered
 
 ## Product decisions
 
@@ -88,7 +104,8 @@ Decided on 2026-08-05:
 
 Still deferred:
 
-- Whether non-macOS platforms belong in scope
-
-The remaining decisions should be made only after the selected local speech
-workflows are stable and tested through regular personal use.
+- Whether non-macOS platforms belong in scope.
+- When, if ever, ZenVoice resumes active public shipping. That decision
+  requires a fresh review of [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md),
+  the state of personal-use evidence, and the release checklist in
+  [Release Readiness](RELEASE_READINESS.md).

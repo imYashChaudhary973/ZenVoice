@@ -103,8 +103,10 @@ Never commit:
 Do not add cloud services, telemetry, analytics, or paid dependencies without
 an explicit product decision and privacy review.
 
-Public-release changes must also update the third-party notices when relevant,
-pass Semgrep, and follow [Release Readiness](docs/RELEASE_READINESS.md). Never
+Changes that affect future distribution must also update the third-party notices
+when relevant, pass Semgrep, and follow [Release Readiness](docs/RELEASE_READINESS.md).
+Public shipping is currently deferred, so release-gate work is not actively
+pursued, but the checklist remains ready for a future shipping decision. Never
 commit Developer ID private keys or notarization credentials.
 
 ## DCO

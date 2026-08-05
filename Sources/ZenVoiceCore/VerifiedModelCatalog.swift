@@ -496,7 +496,7 @@ public enum ModelSelectionPreferences {
     public static let preferenceKey = "ZenVoice.selectedModelID"
 
     public static func load(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> VerifiedModel? {
         guard let id = defaults.string(forKey: preferenceKey) else {
             return nil
@@ -506,12 +506,12 @@ public enum ModelSelectionPreferences {
 
     public static func save(
         _ model: VerifiedModel,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(model.id, forKey: preferenceKey)
     }
 
-    public static func clear(defaults: UserDefaults = .standard) {
+    public static func clear(defaults: UserDefaults = RuntimeIdentity.userDefaults()) {
         defaults.removeObject(forKey: preferenceKey)
     }
 }

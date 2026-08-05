@@ -4,6 +4,13 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+### Project direction
+
+- ZenVoice is now internal-use-first. Public shipping is deferred until the
+  product has matured through regular personal use and a deliberate future
+  shipping decision is made. The release checklist and signing pipeline remain
+  prepared but inactive.
+
 ### Changed
 
 - Re-licensed ZenVoice under the Apache License, Version 2.0.

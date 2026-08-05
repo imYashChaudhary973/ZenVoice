@@ -15,6 +15,7 @@
 import CryptoKit
 import Foundation
 import Security
+import ZenVoiceCore
 
 public protocol VaultKeyProviding {
     func loadOrCreateKeyData() throws -> Data
@@ -40,10 +41,10 @@ public final class KeychainVaultKeyProvider: VaultKeyProviding {
     private let account: String
 
     public init(
-        service: String = "dev.yashchaudhary.ZenVoice.vault",
+        policy: BundleIdentifierPolicy,
         account: String = "transcript-encryption-key"
     ) {
-        self.service = service
+        self.service = RuntimeIdentity.keychainServiceName(policy: policy)
         self.account = account
     }
 

@@ -47,7 +47,7 @@ public enum InstantRefinePreferences {
     public static let preferenceKey = "ZenVoice.instantRefine.mode"
 
     public static func load(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> InstantRefineMode {
         guard let rawValue = defaults.string(forKey: preferenceKey),
               let mode = InstantRefineMode(rawValue: rawValue) else {
@@ -58,7 +58,7 @@ public enum InstantRefinePreferences {
 
     public static func save(
         _ mode: InstantRefineMode,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(mode.rawValue, forKey: preferenceKey)
     }

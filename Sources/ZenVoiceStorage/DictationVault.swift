@@ -14,6 +14,7 @@
 
 import Foundation
 import SQLite3
+import ZenVoiceCore
 
 public enum DictationVaultError: LocalizedError {
     case database(String)
@@ -42,17 +43,23 @@ public final class DictationVault: @unchecked Sendable {
     private let queue = DispatchQueue(label: "dev.yashchaudhary.ZenVoice.vault")
     private var database: OpaquePointer?
 
+    /// Creates the production vault at the Application Support path derived
+    /// from the resolved runtime identity.
+    ///
+    /// This factory requires an explicit ``BundleIdentifierPolicy``. Production
+    /// callers obtain it from ``RuntimeIdentity/policy(from:allowedQAIdentifiers:)``;
+    /// checks must call
+    /// `init(databaseURL:recoveryDirectoryURL:keyProvider:)` with an injected
+    /// temporary root and a test key provider.
     public static func live(
         fileManager: FileManager = .default,
-        keyProvider: VaultKeyProviding = KeychainVaultKeyProvider()
+        keyProvider: VaultKeyProviding? = nil,
+        policy: BundleIdentifierPolicy
     ) throws -> DictationVault {
-        let supportDirectory = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
+        let supportDirectory = try RuntimeIdentity.applicationSupportRoot(
+            fileManager: fileManager,
+            policy: policy
         )
-        .appendingPathComponent("ZenVoice", isDirectory: true)
         let dataDirectory = supportDirectory
             .appendingPathComponent("Data", isDirectory: true)
         let recoveryDirectory = supportDirectory
@@ -64,10 +71,13 @@ public final class DictationVault: @unchecked Sendable {
             fileManager: fileManager
         )
 
+        let resolvedKeyProvider = keyProvider ?? KeychainVaultKeyProvider(
+            policy: policy
+        )
         return try DictationVault(
             databaseURL: dataDirectory.appendingPathComponent("ZenVoice.sqlite"),
             recoveryDirectoryURL: recoveryDirectory,
-            keyProvider: keyProvider
+            keyProvider: resolvedKeyProvider
         )
     }
 
@@ -91,7 +101,7 @@ public final class DictationVault: @unchecked Sendable {
         )
         try openDatabase()
         try migrate()
-        try? FileManager.default.setAttributes(
+        try FileManager.default.setAttributes(
             [.posixPermissions: 0o600],
             ofItemAtPath: databaseURL.path
         )
@@ -1053,11 +1063,19 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     private func validatedRecoveryAudioURL(path: String, id: UUID) -> URL? {
-        let supplied = URL(fileURLWithPath: path).standardizedFileURL
-        let expected = recoveryAudioURL(for: id).standardizedFileURL
+        let supplied = URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let expected = recoveryAudioURL(for: id)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let resolvedRecovery = recoveryDirectoryURL
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
         guard supplied.path == expected.path,
               supplied.deletingLastPathComponent().path
-                == recoveryDirectoryURL.standardizedFileURL.path else {
+                == resolvedRecovery.path,
+              supplied.path.hasPrefix(resolvedRecovery.path + "/") else {
             return nil
         }
         return expected
@@ -1265,10 +1283,36 @@ public final class DictationVault: @unchecked Sendable {
             at: url,
             withIntermediateDirectories: true
         )
-        try? fileManager.setAttributes(
+        // Resolve the path after creation so a replacement or symlink
+        // cannot silently redirect the directory elsewhere.
+        let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
+        let parent = url.deletingLastPathComponent()
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        guard resolved.path.hasPrefix(parent.path + "/") else {
+            throw DictationVaultError.database(
+                "Created directory escaped intended parent: \(resolved.path)"
+            )
+        }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw DictationVaultError.database(
+                "Expected directory is not present: \(resolved.path)"
+            )
+        }
+        try fileManager.setAttributes(
             [.posixPermissions: 0o700],
-            ofItemAtPath: url.path
+            ofItemAtPath: resolved.path
         )
+        // Verify the permissions actually took effect.
+        let attributes = try fileManager.attributesOfItem(atPath: resolved.path)
+        let permissions = (attributes[.posixPermissions] as? NSNumber)?.intValue ?? 0
+        guard permissions == 0o700 else {
+            throw DictationVaultError.database(
+                "Directory permissions are \(String(permissions, radix: 8, uppercase: false)) instead of 700: \(resolved.path)"
+            )
+        }
     }
 }
 

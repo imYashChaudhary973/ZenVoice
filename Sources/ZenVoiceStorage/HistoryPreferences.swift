@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import Foundation
+import ZenVoiceCore
 
 public final class HistoryPreferences {
     private enum Key {
@@ -26,7 +27,7 @@ public final class HistoryPreferences {
 
     private let defaults: UserDefaults
 
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = RuntimeIdentity.userDefaults()) {
         self.defaults = defaults
     }
 

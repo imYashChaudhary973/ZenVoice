@@ -1,5 +1,10 @@
 # ZenVoice Private Beta
 
+> **Status: paused.** ZenVoice is currently being refined for internal use and
+> public shipping is deferred. This guide is kept accurate for any future beta,
+> but no invitations are being sent right now. See
+> [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md).
+
 Thank you for testing ZenVoice. This page explains what it does, what it asks
 your Mac for and why, and how to get rid of it cleanly if you decide not to keep
 it.

@@ -1,10 +1,13 @@
 # Release Readiness
 
 ZenVoice's M9 release controls are implemented. Public distribution is
-deliberately blocked until every unchecked item below is decided and evidenced.
-Decisions and source changes must be committed; per-candidate QA, signing, and
-notarization evidence may instead be retained with the protected release
-approval or release assets. This checklist is a project gate, not legal advice.
+deliberately deferred while ZenVoice is refined for internal use; see
+[ADR 0004](decisions/0004-internal-use-first-defer-shipping.md). This checklist
+records the gates that must be completed before any future public distribution
+decision, not a current blocker list. Decisions and source changes must be
+committed; per-candidate QA, signing, and notarization evidence may instead be
+retained with the protected release approval or release assets. This checklist is
+a project gate, not legal advice.
 
 ## Automated foundation
 
@@ -55,7 +58,10 @@ approval or release assets. This checklist is a project gate, not legal advice.
 - [x] Confirm the `whisper.cpp` runtime licence is recorded — MIT, reproduced
   in `THIRD_PARTY_NOTICES.md`.
 
-## Apple distribution
+## Apple distribution (deferred)
+
+The following gates are required before any future public distribution and are
+not being pursued while ZenVoice remains internal-use-first.
 
 - [ ] Sign the app and every nested executable with a **Developer ID
   Application** certificate for direct distribution.
@@ -70,6 +76,10 @@ approval or release assets. This checklist is a project gate, not legal advice.
   Microphone and Accessibility permission QA.
 
 ## Product and accessibility QA
+
+These items remain important for daily use and must be completed before any
+future public distribution. They are not treated as release blockers while
+ZenVoice is internal-use-first.
 
 - [ ] Complete every manual scenario in `docs/DEVELOPMENT.md` against the exact
   distribution ZIP and source commit recorded in `docs/RELEASE_QA_RECORD.md`.
@@ -98,10 +108,11 @@ Build the app, then run:
 ./Scripts/check-release-readiness.sh
 ```
 
-The command is expected to fail for development builds. It passes only after
-the project licence exists, this checklist has no unfinished items, the app is
-Developer-ID signed, its nested signatures are valid, a notarization ticket is
-stapled, and no common secret pattern is found in tracked files.
+The command is expected to fail for development builds and for any build made
+while public distribution is deferred. It passes only after the project licence
+exists, this checklist has no unfinished items, the app is Developer-ID signed,
+its nested signatures are valid, a notarization ticket is stapled, and no common
+secret pattern is found in tracked files.
 
 A checklist-only release-approval commit may follow the source commit recorded
 for the tested artifact. The intervening diff must not change application

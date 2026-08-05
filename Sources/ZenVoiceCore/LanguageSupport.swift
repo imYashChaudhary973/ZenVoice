@@ -319,7 +319,7 @@ public enum LanguagePreferences {
     public static let preferenceKey = "ZenVoice.languageProfile"
 
     public static func load(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> LanguageProfile {
         guard let data = defaults.data(forKey: preferenceKey),
               let profile = try? JSONDecoder().decode(
@@ -335,7 +335,7 @@ public enum LanguagePreferences {
 
     public static func save(
         _ profile: LanguageProfile,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         guard LanguageCatalog.isSupported(code: profile.inputLanguageCode),
               let data = try? JSONEncoder().encode(profile) else {

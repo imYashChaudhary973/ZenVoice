@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import Foundation
+import ZenVoiceCore
 
 public final class LocalLearningPreferences {
     private enum Key {
@@ -24,7 +25,7 @@ public final class LocalLearningPreferences {
 
     private let defaults: UserDefaults
 
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = RuntimeIdentity.userDefaults()) {
         self.defaults = defaults
     }
 

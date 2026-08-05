@@ -22,7 +22,7 @@ pass its verification gate before dependent work begins.
 | M14 | Curated downloadable local refinement models | Measured and removed; deterministic refinement retained |
 | M15 | Application profiles, context box, and local voice commands | Implemented; cross-app spoken QA pending |
 | M16 | Local learning controls and Recovery Inbox | Implemented; spoken recovery QA pending |
-| M17 | Onboarding, accessibility, privacy dashboard, and release polish | Implemented; clean-device and distribution gates pending |
+| M17 | Onboarding, accessibility, privacy dashboard, and release polish | Implemented; distribution gates deferred per ADR 0004 |
 
 ## Delivery rules
 
@@ -33,8 +33,9 @@ pass its verification gate before dependent work begins.
   source, licence, checksum, format, and compatibility.
 - Analytics remain blocked until M1 provides durable and correctly migrated
   records.
-- Public distribution remains blocked until every M9 manual release gate is
-  evidenced and approved.
+- Public distribution remains deferred while ZenVoice is internal-use-first. The
+  M9 manual release gates must be evidenced and approved before any future
+  shipping decision; see [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md).
 
 ## Pull request sequence
 

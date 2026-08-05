@@ -32,7 +32,7 @@ public enum LiveDictationPreferences {
     /// Nothing depends on it being on. Crash recovery is served by the recovery
     /// audio, which the recorder writes before it ever consults this preference.
     public static func isPreviewEnabled(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
         defaults.object(forKey: previewKey) == nil
             ? false
@@ -40,14 +40,14 @@ public enum LiveDictationPreferences {
     }
 
     public static func isCommitOnPauseEnabled(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
         defaults.bool(forKey: commitOnPauseKey)
     }
 
     public static func setPreviewEnabled(
         _ enabled: Bool,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(enabled, forKey: previewKey)
         if !enabled {
@@ -57,7 +57,7 @@ public enum LiveDictationPreferences {
 
     public static func setCommitOnPauseEnabled(
         _ enabled: Bool,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(enabled, forKey: commitOnPauseKey)
         if enabled {
