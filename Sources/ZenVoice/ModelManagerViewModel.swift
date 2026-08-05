@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import Combine
 import Foundation
 import ZenVoiceCore
@@ -85,13 +99,6 @@ struct VerifiedModelDownloader {
         let directory = try VerifiedModelCatalog.modelsDirectory(
             fileManager: fileManager
         )
-        if model.runtime == .parakeetCoreML {
-            return try await downloadParakeet(
-                model,
-                to: directory,
-                progress: progress
-            )
-        }
         return try await download(
             sourceURL: model.downloadURL,
             sourceRevision: model.sourceRevision,
@@ -102,173 +109,6 @@ struct VerifiedModelDownloader {
             progress: progress
         )
     }
-
-    /// Downloads a multi-file bundle from this catalogue's pinned revision.
-    ///
-    /// The fetch is done here, file by file, rather than delegated to
-    /// FluidAudio: its registry resolves the repository's default branch and
-    /// honours `REGISTRY_URL`, so the revision ZenVoice records and the bytes
-    /// ZenVoice requested were not the same statement. Every file is verified
-    /// in a staging directory and the bundle is swapped into place only once
-    /// the whole manifest matches, so an interrupted download cannot leave a
-    /// half-written bundle where a verified one used to be.
-    private func downloadParakeet(
-        _ model: VerifiedModel,
-        to directory: URL,
-        progress:
-            AsyncStream<VerifiedModelDownloadPhase>.Continuation
-    ) async throws -> URL {
-        guard !model.bundleFiles.isEmpty else {
-            throw VerifiedModelDownloadError.invalidSource
-        }
-        try fileManager.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
-        )
-        let destinationURL = directory.appendingPathComponent(
-            model.filename,
-            isDirectory: true
-        )
-        let stagingURL = directory.appendingPathComponent(
-            ".\(model.filename).\(UUID().uuidString)",
-            isDirectory: true
-        )
-        defer {
-            try? fileManager.removeItem(at: stagingURL)
-        }
-        try fileManager.createDirectory(
-            at: stagingURL,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
-        )
-
-        let totalBytes = model.bundleFiles.reduce(Int64(0)) {
-            $0 + $1.fileSizeBytes
-        }
-        var completedBytes: Int64 = 0
-        for file in model.bundleFiles {
-            try Task.checkCancellation()
-            guard let sourceURL = model.bundleFileURL(for: file) else {
-                throw VerifiedModelDownloadError.invalidSource
-            }
-            let fileURL = stagingURL.appendingPathComponent(
-                file.relativePath,
-                isDirectory: false
-            )
-            guard fileURL.standardizedFileURL.path.hasPrefix(
-                stagingURL.standardizedFileURL.path + "/"
-            ) else {
-                throw VerifiedModelDownloadError.invalidSource
-            }
-            try fileManager.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700]
-            )
-            let fileStart = completedBytes
-            try await downloadBundleFile(
-                from: sourceURL,
-                revision: model.sourceRevision,
-                to: fileURL,
-                expectedSize: file.fileSizeBytes,
-                expectedSHA256: file.sha256
-            ) { fraction in
-                guard totalBytes > 0 else { return }
-                let done = Double(fileStart)
-                    + fraction * Double(file.fileSizeBytes)
-                progress.yield(.downloading(done / Double(totalBytes)))
-            }
-            completedBytes += file.fileSizeBytes
-        }
-
-        try Task.checkCancellation()
-        progress.yield(.verifying)
-        guard try VerifiedModelCatalog.verify(
-            stagingURL,
-            for: model,
-            fileManager: fileManager
-        ) else {
-            throw VerifiedModelDownloadError.checksumMismatch
-        }
-
-        if fileManager.fileExists(atPath: destinationURL.path) {
-            _ = try fileManager.replaceItemAt(
-                destinationURL,
-                withItemAt: stagingURL,
-                backupItemName: nil,
-                options: .usingNewMetadataOnly
-            )
-        } else {
-            try fileManager.moveItem(at: stagingURL, to: destinationURL)
-        }
-        return destinationURL
-    }
-
-    private func downloadBundleFile(
-        from sourceURL: URL,
-        revision: String,
-        to destinationURL: URL,
-        expectedSize: Int64,
-        expectedSHA256: String,
-        progress: @escaping @Sendable (Double) -> Void
-    ) async throws {
-        guard sourceURL.scheme == "https",
-              sourceURL.host == "huggingface.co",
-              sourceURL.path.contains(revision) else {
-            throw VerifiedModelDownloadError.invalidSource
-        }
-        var request = URLRequest(url: sourceURL)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 60 * 60
-
-        let stream = AsyncStream<VerifiedModelDownloadPhase>
-            .makeStream(bufferingPolicy: .bufferingNewest(1))
-        let relay = Task {
-            for await phase in stream.stream {
-                if case let .downloading(fraction) = phase {
-                    progress(fraction)
-                }
-            }
-        }
-        defer {
-            stream.continuation.finish()
-            relay.cancel()
-        }
-
-        let (temporaryURL, response) = try await download(
-            request,
-            expectedSize: expectedSize,
-            progress: stream.continuation
-        )
-        defer {
-            try? fileManager.removeItem(at: temporaryURL)
-        }
-        try Task.checkCancellation()
-        guard let response = response as? HTTPURLResponse,
-              (200...299).contains(response.statusCode),
-              response.url?.scheme == "https" else {
-            throw VerifiedModelDownloadError.invalidResponse
-        }
-        let values = try temporaryURL.resourceValues(forKeys: [
-            .isRegularFileKey,
-            .fileSizeKey
-        ])
-        guard values.isRegularFile == true,
-              Int64(values.fileSize ?? -1) == expectedSize else {
-            throw VerifiedModelDownloadError.unexpectedSize
-        }
-        guard try VerifiedModelCatalog.sha256Hex(of: temporaryURL)
-                == expectedSHA256 else {
-            throw VerifiedModelDownloadError.checksumMismatch
-        }
-        try fileManager.moveItem(at: temporaryURL, to: destinationURL)
-        try fileManager.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: destinationURL.path
-        )
-    }
-
 
     private func download(
         sourceURL: URL,

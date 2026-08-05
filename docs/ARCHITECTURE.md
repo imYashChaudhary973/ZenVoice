@@ -125,24 +125,21 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 
 ### `ZenVoiceRuntime`
 
-- `WhisperTranscriber` is the common local speech interface retained for source
-  compatibility. It dispatches to `whisper.cpp` or the Parakeet CoreML engine
-  according to the selected verified model's runtime metadata.
-- The Whisper path calls the official pinned `whisper.cpp` XCFramework directly
-  instead of launching a child process. It accepts a per-recording language
-  token and sanitized initial prompt, enables local translation only for
-  English-output profiles, and applies local transliteration only for
-  Latin-script profiles.
-- `ParakeetTranscriberEngine` loads the verified NVIDIA Parakeet Unified English
-  CoreML bundle through the revision-pinned FluidAudio dependency. It is an
-  English-only path and has no decoder-prompt API; approved personal
-  corrections still apply after transcription.
-- Each runtime warms and retains its model state for subsequent dictations.
+- `WhisperTranscriber` is the local speech interface. It calls the official
+  pinned `whisper.cpp` XCFramework directly instead of launching a child process.
+  It accepts a per-recording language token and sanitized initial prompt, enables
+  local translation only for English-output profiles, and applies local
+  transliteration only for Latin-script profiles.
+- The runtime warms and retains its model state for subsequent dictations.
 - Model replacement creates a new transcriber; an active transcription keeps
   its original transcriber until that operation completes.
 - The runtime accepts only 16 kHz mono audio produced by `AudioRecorder`.
 - File and in-memory sample transcription use the same retained runtime and
   dedicated serial queue, preventing concurrent access to model state.
+
+The previous Parakeet/CoreML path, which required the closed-source FluidAudio
+runtime, has been removed. ZenVoice now uses `whisper.cpp` as its only local
+speech engine.
 
 ### `ZenVoiceStorage`
 
@@ -186,8 +183,7 @@ partial transcript flags, and history preferences.
 
 `ZenVoiceRuntimeChecks` creates a local silent WAV and performs two sequential
 passes through one transcriber. It validates the embedded Whisper C API and the
-persistent Whisper-model lifecycle without microphone or UI interaction. This
-check is Whisper-path evidence, not Parakeet runtime coverage.
+persistent Whisper-model lifecycle without microphone or UI interaction.
 
 `ShareCardSummary` lives in the core target and can contain only total words,
 weighted WPM, current streak, and distinct application count. It has no field

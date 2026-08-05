@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import SwiftUI
 import ZenVoiceCore
 import ZenVoiceStorage
@@ -228,14 +242,35 @@ struct ZenVoiceSettingsView: View {
     }
 
     private var ledgerTitleBar: some View {
-        ZStack {
-            Text("ZenVoice")
-                .font(.system(size: 13.5, weight: .semibold, design: .serif))
-                .italic()
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+        HStack(spacing: ZenDesign.Spacing.sm) {
+            HStack(spacing: 7) {
+                ZenBrandMark(size: 22)
+                Text("ZenVoice")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            }
+            .frame(width: 224, alignment: .leading)
+            .padding(.leading, 12)
+
+            Text("Codebase overview")
+                .font(ZenDesign.Typography.bodyStrong)
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+
+            HStack(spacing: ZenDesign.Spacing.xs) {
+                badgePill(text: "t3.gg", color: ZenDesign.Semantic.accent)
+            }
+
+            Spacer()
+
+            HStack(spacing: ZenDesign.Spacing.xs) {
+                titleAction("plus", label: "Add action", action: { showsCommandPalette = true })
+                titleAction("shippingbox", label: "Open", action: { })
+                titleAction("arrow.up.circle", label: "Commit & push", action: { })
+            }
+            .padding(.trailing, 12)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 44)
+        .frame(height: 40)
         .background(ZenDesign.Semantic.canvas)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -245,31 +280,44 @@ struct ZenVoiceSettingsView: View {
         .accessibilityHidden(true)
     }
 
+    private func titleAction(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .medium))
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+            .padding(.horizontal, 9)
+            .frame(height: 26)
+            .background {
+                RoundedRectangle(cornerRadius: ZenDesign.Radius.small, style: .continuous)
+                    .fill(ZenDesign.Semantic.surfaceRaised)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: ZenDesign.Radius.small, style: .continuous)
+                            .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
+                    }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func badgePill(text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .frame(height: 20)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(color.opacity(0.12))
+            }
+    }
+
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                ZenBrandMark(size: 30)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("ZenVoice")
-                        .font(.system(size: 15, weight: .semibold, design: .serif))
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        .accessibilityAddTraits(.isHeader)
-                    Text("Local voice, refined")
-                        .font(.system(size: 10.5, design: .serif))
-                        .italic()
-                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-            .padding(.bottom, 14)
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(ZenDesign.Semantic.border)
-                    .frame(height: 1)
-            }
-            .padding(.bottom, 6)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(
@@ -279,13 +327,13 @@ struct ZenVoiceSettingsView: View {
                         if let title = group.title {
                             Text(title.uppercased())
                                 .font(.system(size: 10, weight: .semibold))
-                                .tracking(0.8)
+                                .tracking(0.6)
                                 .foregroundStyle(
                                     ZenDesign.Semantic.textTertiary
                                 )
-                                .padding(.horizontal, 8)
-                                .padding(.top, index == 0 ? 0 : 16)
-                                .padding(.bottom, 6)
+                                .padding(.horizontal, 6)
+                                .padding(.top, index == 0 ? 6 : 18)
+                                .padding(.bottom, 4)
                                 .accessibilityAddTraits(.isHeader)
                         }
                         ForEach(group.sections) { section in
@@ -323,10 +371,9 @@ struct ZenVoiceSettingsView: View {
                     .strokeBorder(ZenDesign.Semantic.border)
                 }
             }
-
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 14)
+        .padding(.horizontal, 8)
+        .padding(.top, 10)
         .padding(.bottom, 12)
         .frame(width: 224)
         .background(ZenDesign.Semantic.sidebar)
@@ -341,13 +388,13 @@ struct ZenVoiceSettingsView: View {
         Button {
             selection = section
         } label: {
-            HStack(spacing: 9) {
+            HStack(spacing: 8) {
                 Image(systemName: section.icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 15)
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 18)
                     .foregroundStyle(
                         selection == section
-                            ? ZenDesign.Semantic.accent
+                            ? ZenDesign.Semantic.textPrimary
                             : ZenDesign.Semantic.textTertiary
                     )
                 Text(section.rawValue)
@@ -358,7 +405,7 @@ struct ZenVoiceSettingsView: View {
                     )
                     .foregroundStyle(
                         selection == section
-                            ? ZenDesign.Semantic.accentStrong
+                            ? ZenDesign.Semantic.textPrimary
                             : ZenDesign.Semantic.textSecondary
                     )
                 Spacer()
@@ -366,24 +413,20 @@ struct ZenVoiceSettingsView: View {
                    historyViewModel.recoveryCount > 0 {
                     Text("\(historyViewModel.recoveryCount)")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textOnAccent
-                        )
+                        .foregroundStyle(ZenDesign.Semantic.textOnAccent)
                         .padding(.horizontal, 6)
                         .frame(height: 16)
                         .background {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(
-                                    ZenDesign.Semantic.accent
-                                )
+                                .fill(ZenDesign.Semantic.accent)
                         }
                         .accessibilityLabel(
                             "\(historyViewModel.recoveryCount) items in Recovery Inbox"
                         )
                 }
             }
-            .padding(.horizontal, 8)
-            .frame(height: 30)
+            .padding(.horizontal, 6)
+            .frame(height: 28)
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,

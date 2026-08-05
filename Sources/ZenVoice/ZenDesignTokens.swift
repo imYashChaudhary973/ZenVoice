@@ -1,108 +1,120 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import AppKit
 import SwiftUI
 
-/// ZenVoice v3 design tokens — "Ledger", warm editorial utility.
-/// Native adaptive colors shared across the Ledger interface.
+/// ZenVoice v4 design tokens — "Graphite", a cooler devtool utility.
+/// Native adaptive colors shared across the interface.
 enum ZenDesign {
     enum Primitive {
-        static let ink950 = Color(red: 0.122, green: 0.114, blue: 0.102)
-        static let ink900 = Color(red: 0.125, green: 0.118, blue: 0.106)
-        static let ink850 = Color(red: 0.149, green: 0.141, blue: 0.129)
-        static let ink800 = Color(red: 0.173, green: 0.165, blue: 0.145)
-        static let rust300 = Color(red: 0.878, green: 0.604, blue: 0.451)
-        static let rust400 = Color(red: 0.839, green: 0.541, blue: 0.384)
-        static let rust700 = Color(red: 0.651, green: 0.286, blue: 0.180)
-        static let rust800 = Color(red: 0.588, green: 0.259, blue: 0.165)
-        static let green400 = Color(red: 0.498, green: 0.714, blue: 0.537)
-        static let red400 = Color(red: 0.851, green: 0.482, blue: 0.400)
+        static let graphite950 = Color(red: 0.051, green: 0.055, blue: 0.059)
+        static let graphite900 = Color(red: 0.071, green: 0.075, blue: 0.082)
+        static let graphite850 = Color(red: 0.090, green: 0.094, blue: 0.102)
+        static let graphite800 = Color(red: 0.122, green: 0.129, blue: 0.137)
+        static let graphite700 = Color(red: 0.176, green: 0.184, blue: 0.196)
+        static let graphite600 = Color(red: 0.231, green: 0.239, blue: 0.251)
+        static let blue400 = Color(red: 0.510, green: 0.675, blue: 0.898)
+        static let blue500 = Color(red: 0.361, green: 0.573, blue: 0.878)
+        static let blue600 = Color(red: 0.243, green: 0.475, blue: 0.800)
+        static let green400 = Color(red: 0.478, green: 0.737, blue: 0.557)
+        static let red400 = Color(red: 0.898, green: 0.510, blue: 0.510)
         static let white = Color.white
     }
 
     enum Semantic {
         static let canvas = adaptive(
-            light: NSColor(red: 0.969, green: 0.961, blue: 0.941, alpha: 1),
-            dark: NSColor(red: 0.047, green: 0.051, blue: 0.057, alpha: 1)
+            light: NSColor(red: 0.973, green: 0.973, blue: 0.976, alpha: 1),
+            dark: NSColor(red: 0.051, green: 0.055, blue: 0.059, alpha: 1)
         )
         static let sidebar = adaptive(
-            light: NSColor(red: 0.969, green: 0.961, blue: 0.941, alpha: 1),
-            dark: NSColor(red: 0.035, green: 0.039, blue: 0.043, alpha: 1)
+            light: NSColor(red: 0.957, green: 0.957, blue: 0.961, alpha: 1),
+            dark: NSColor(red: 0.039, green: 0.043, blue: 0.047, alpha: 1)
         )
         static let surface = adaptive(
-            light: NSColor(red: 0.988, green: 0.984, blue: 0.969, alpha: 1),
+            light: NSColor(red: 0.984, green: 0.984, blue: 0.988, alpha: 1),
             dark: NSColor(red: 0.078, green: 0.082, blue: 0.090, alpha: 1)
         )
         static let surfaceRaised = adaptive(
-            light: NSColor(red: 0.945, green: 0.933, blue: 0.906, alpha: 1),
-            dark: NSColor(red: 0.110, green: 0.118, blue: 0.129, alpha: 1)
+            light: NSColor(red: 0.933, green: 0.937, blue: 0.945, alpha: 1),
+            dark: NSColor(red: 0.114, green: 0.118, blue: 0.125, alpha: 1)
         )
         static let surfaceSunken = adaptive(
-            light: NSColor(red: 0.898, green: 0.882, blue: 0.839, alpha: 1),
-            dark: NSColor(red: 0.137, green: 0.145, blue: 0.157, alpha: 1)
+            light: NSColor(red: 0.898, green: 0.902, blue: 0.910, alpha: 1),
+            dark: NSColor(red: 0.137, green: 0.141, blue: 0.149, alpha: 1)
         )
         static let border = adaptive(
-            light: NSColor(red: 0.216, green: 0.176, blue: 0.125, alpha: 0.09),
-            dark: NSColor(white: 0.92, alpha: 0.08)
+            light: NSColor(white: 0.02, alpha: 0.08),
+            dark: NSColor(white: 1.0, alpha: 0.08)
         )
         static let borderStrong = adaptive(
-            light: NSColor(red: 0.216, green: 0.176, blue: 0.125, alpha: 0.16),
-            dark: NSColor(white: 0.92, alpha: 0.15)
+            light: NSColor(white: 0.02, alpha: 0.14),
+            dark: NSColor(white: 1.0, alpha: 0.14)
         )
         static let textPrimary = adaptive(
-            light: NSColor(red: 0.122, green: 0.114, blue: 0.102, alpha: 1),
-            dark: NSColor(red: 0.925, green: 0.918, blue: 0.902, alpha: 1)
+            light: NSColor(red: 0.071, green: 0.078, blue: 0.086, alpha: 1),
+            dark: NSColor(red: 0.937, green: 0.941, blue: 0.949, alpha: 1)
         )
         static let textSecondary = adaptive(
-            light: NSColor(red: 0.361, green: 0.337, blue: 0.298, alpha: 1),
-            dark: NSColor(red: 0.690, green: 0.682, blue: 0.663, alpha: 1)
+            light: NSColor(red: 0.349, green: 0.361, blue: 0.384, alpha: 1),
+            dark: NSColor(red: 0.678, green: 0.686, blue: 0.706, alpha: 1)
         )
-        // Values below must clear 4.5:1 on `surfaceRaised`, the lightest
-        // (dark) / darkest (light) background tertiary text sits on.
         static let textTertiary = adaptive(
-            light: NSColor(red: 0.400, green: 0.375, blue: 0.339, alpha: 1),
-            dark: NSColor(red: 0.580, green: 0.573, blue: 0.557, alpha: 1)
+            light: NSColor(red: 0.459, green: 0.471, blue: 0.498, alpha: 1),
+            dark: NSColor(red: 0.529, green: 0.541, blue: 0.565, alpha: 1)
         )
-        /// Accent discipline: rust appears at most twice per screen — the
-        /// primary action and the live recording state. Everything else is
-        /// ink-on-ink hierarchy via the text ramp.
+        /// Single accent: a calm electric blue. Reserved for primary action and
+        /// the live recording state, mirroring the reference's action chips.
         static let accent = adaptive(
-            light: NSColor(red: 0.651, green: 0.286, blue: 0.180, alpha: 1),
-            dark: NSColor(red: 0.839, green: 0.541, blue: 0.384, alpha: 1)
+            light: NSColor(red: 0.243, green: 0.475, blue: 0.800, alpha: 1),
+            dark: NSColor(red: 0.510, green: 0.675, blue: 0.898, alpha: 1)
         )
         static let accentStrong = adaptive(
-            light: NSColor(red: 0.588, green: 0.259, blue: 0.165, alpha: 1),
-            dark: NSColor(red: 0.878, green: 0.604, blue: 0.451, alpha: 1)
+            light: NSColor(red: 0.188, green: 0.408, blue: 0.729, alpha: 1),
+            dark: NSColor(red: 0.612, green: 0.729, blue: 0.929, alpha: 1)
         )
         static let accentMuted = adaptive(
-            light: NSColor(red: 0.651, green: 0.286, blue: 0.180, alpha: 0.08),
-            dark: NSColor(red: 0.839, green: 0.541, blue: 0.384, alpha: 0.12)
+            light: NSColor(red: 0.243, green: 0.475, blue: 0.800, alpha: 0.10),
+            dark: NSColor(red: 0.510, green: 0.675, blue: 0.898, alpha: 0.16)
         )
         static let success = adaptive(
-            light: NSColor(red: 0.200, green: 0.443, blue: 0.247, alpha: 1),
-            dark: NSColor(red: 0.498, green: 0.714, blue: 0.537, alpha: 1)
+            light: NSColor(red: 0.200, green: 0.510, blue: 0.290, alpha: 1),
+            dark: NSColor(red: 0.478, green: 0.737, blue: 0.557, alpha: 1)
         )
         static let successMuted = adaptive(
-            light: NSColor(red: 0.200, green: 0.443, blue: 0.247, alpha: 0.10),
-            dark: NSColor(red: 0.498, green: 0.714, blue: 0.537, alpha: 0.12)
+            light: NSColor(red: 0.200, green: 0.510, blue: 0.290, alpha: 0.10),
+            dark: NSColor(red: 0.478, green: 0.737, blue: 0.557, alpha: 0.14)
         )
         static let danger = adaptive(
-            light: NSColor(red: 0.675, green: 0.227, blue: 0.165, alpha: 1),
-            dark: NSColor(red: 0.851, green: 0.482, blue: 0.400, alpha: 1)
+            light: NSColor(red: 0.741, green: 0.220, blue: 0.220, alpha: 1),
+            dark: NSColor(red: 0.898, green: 0.510, blue: 0.510, alpha: 1)
         )
         static let dangerMuted = adaptive(
-            light: NSColor(red: 0.675, green: 0.227, blue: 0.165, alpha: 0.10),
-            dark: NSColor(red: 0.851, green: 0.482, blue: 0.400, alpha: 0.12)
+            light: NSColor(red: 0.741, green: 0.220, blue: 0.220, alpha: 0.10),
+            dark: NSColor(red: 0.898, green: 0.510, blue: 0.510, alpha: 0.14)
         )
         static let warn = adaptive(
-            light: NSColor(red: 0.514, green: 0.359, blue: 0.058, alpha: 1),
-            dark: NSColor(red: 0.824, green: 0.663, blue: 0.349, alpha: 1)
+            light: NSColor(red: 0.600, green: 0.420, blue: 0.090, alpha: 1),
+            dark: NSColor(red: 0.820, green: 0.659, blue: 0.349, alpha: 1)
         )
         static let warnMuted = adaptive(
-            light: NSColor(red: 0.561, green: 0.392, blue: 0.063, alpha: 0.10),
-            dark: NSColor(red: 0.824, green: 0.663, blue: 0.349, alpha: 0.12)
+            light: NSColor(red: 0.600, green: 0.420, blue: 0.090, alpha: 0.10),
+            dark: NSColor(red: 0.820, green: 0.659, blue: 0.349, alpha: 0.14)
         )
         static let textOnAccent = adaptive(
-            light: NSColor(red: 0.984, green: 0.965, blue: 0.941, alpha: 1),
-            dark: NSColor(red: 0.133, green: 0.082, blue: 0.063, alpha: 1)
+            light: NSColor(white: 1.0, alpha: 1),
+            dark: NSColor(red: 0.031, green: 0.035, blue: 0.043, alpha: 1)
         )
 
         private static func adaptive(light: NSColor, dark: NSColor) -> Color {
@@ -118,9 +130,9 @@ enum ZenDesign {
     enum Component {
         static let cardBackground = Semantic.surface
         static let cardBorder = Semantic.border
-        static let selectedNavigation = Semantic.accentMuted
-        static let shortcutBackground = Semantic.surface
-        static let focusRing = Semantic.accent.opacity(0.35)
+        static let selectedNavigation = Semantic.surfaceRaised
+        static let shortcutBackground = Semantic.surfaceRaised
+        static let focusRing = Semantic.accent.opacity(0.40)
     }
 
     enum Spacing {
@@ -133,10 +145,10 @@ enum ZenDesign {
         static let xxl: CGFloat = 48
     }
 
-    /// Ledger pairs restrained system text with editorial serif display type.
+    /// Graphite pairs clean system text with a single sans display weight.
     enum Typography {
-        static let display = Font.system(size: 30, weight: .semibold, design: .serif)
-        static let pageTitle = Font.system(size: 26, weight: .semibold, design: .serif)
+        static let display = Font.system(size: 30, weight: .semibold)
+        static let pageTitle = Font.system(size: 24, weight: .semibold)
         static let pageContext = Font.system(size: 11, weight: .semibold)
         static let sectionTitle = Font.system(size: 10, weight: .semibold)
         static let body = Font.system(size: 13)
@@ -144,7 +156,7 @@ enum ZenDesign {
         static let caption = Font.system(size: 11.5)
         static let captionStrong = Font.system(size: 11.5, weight: .semibold)
         static let button = Font.system(size: 13, weight: .semibold)
-        static let metric = Font.system(size: 22, weight: .semibold, design: .serif)
+        static let metric = Font.system(size: 22, weight: .semibold)
             .monospacedDigit()
         static let mono = Font.system(size: 12, design: .monospaced)
         static let monoSmall = Font.system(size: 10.5, design: .monospaced)

@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import SwiftUI
 import ZenVoiceCore
 import ZenVoiceStorage
@@ -28,23 +42,67 @@ struct OverviewScreen: View {
     }
 
     private var homeGrid: some View {
-        ViewThatFits(in: .horizontal) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+            statusOverview
             HStack(alignment: .top, spacing: 16) {
-                readyPanel(
-                    minHeight: historyViewModel.recoveryCount > 0
-                        ? 312
-                        : nil
-                )
-                    .frame(minWidth: 430, maxWidth: .infinity)
+                quickActionsPanel
+                    .frame(minWidth: 260, maxWidth: .infinity)
                 homeSideColumn
-                    .frame(width: 278)
-            }
-
-            VStack(spacing: 16) {
-                readyPanel()
-                homeSideColumn
+                    .frame(width: 300)
             }
         }
+    }
+
+    private var statusOverview: some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(ZenDesign.Semantic.success)
+                        .frame(width: 8, height: 8)
+                    Text("Ready to dictate")
+                        .font(ZenDesign.Typography.bodyStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Spacer()
+                    Text("Local · encrypted · on-device")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+                .padding(.bottom, 12)
+
+                HStack(spacing: 0) {
+                    statusItem("Shortcut", value: viewModel.currentShortcut.displayName, isKeycap: true)
+                    Divider().overlay(ZenDesign.Semantic.border)
+                    statusItem("Microphone", value: microphoneDisplayName)
+                    Divider().overlay(ZenDesign.Semantic.border)
+                    statusItem("Language", value: appState.languageProfile.displayName)
+                    Divider().overlay(ZenDesign.Semantic.border)
+                    statusItem("Model", value: modelDisplayName)
+                }
+                .frame(height: 52)
+                .background(ZenDesign.Semantic.surfaceRaised)
+                .clipShape(RoundedRectangle(cornerRadius: ZenDesign.Radius.small, style: .continuous))
+            }
+            .padding(ZenDesign.Spacing.md)
+        }
+    }
+
+    private func statusItem(_ label: String, value: String, isKeycap: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            if isKeycap {
+                ZenKbdGroup(combo: value)
+            } else {
+                Text(value)
+                    .font(ZenDesign.Typography.bodyStrong)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, ZenDesign.Spacing.md)
     }
 
     private var homeSideColumn: some View {
@@ -57,33 +115,10 @@ struct OverviewScreen: View {
         }
     }
 
-    private func readyPanel(minHeight: CGFloat? = nil) -> some View {
+    private var quickActionsPanel: some View {
         ZenPanel {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(ZenDesign.Semantic.success)
-                        .frame(width: 8, height: 8)
-                    Text("Ready to dictate")
-                        .font(.system(size: 24, weight: .semibold, design: .serif))
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                }
-
-                VStack(spacing: 0) {
-                    readyFact(
-                        "Shortcut",
-                        value: viewModel.currentShortcut.displayName,
-                        usesKeycap: true
-                    )
-                    readyFact("Microphone", value: microphoneDisplayName)
-                    readyFact(
-                        "Language",
-                        value: appState.languageProfile.displayName
-                    )
-                    readyFact("Model", value: modelDisplayName)
-                }
-                .padding(.top, 12)
-
+            VStack(alignment: .leading, spacing: 10) {
+                miniTitle("Actions")
                 HStack(spacing: 10) {
                     Button(action: startDictation) {
                         Label("Start dictating", systemImage: "mic")
@@ -94,38 +129,8 @@ struct OverviewScreen: View {
                     Button("Replay setup guide", action: replaySetup)
                         .buttonStyle(ZenSecondaryButtonStyle())
                 }
-                .padding(.top, 18)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 22)
-            .frame(minHeight: minHeight, alignment: .topLeading)
-        }
-    }
-
-    private func readyFact(
-        _ label: String,
-        value: String,
-        usesKeycap: Bool = false
-    ) -> some View {
-        HStack {
-            Text(label)
-                .font(ZenDesign.Typography.body)
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-            Spacer()
-            if usesKeycap {
-                ZenKbdGroup(combo: value)
-            } else {
-                Text(value)
-                    .font(ZenDesign.Typography.bodyStrong)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.vertical, 9)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(ZenDesign.Semantic.border)
-                .frame(height: 1)
+            .padding(ZenDesign.Spacing.md)
         }
     }
 

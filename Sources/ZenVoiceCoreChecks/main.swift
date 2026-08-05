@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import ApplicationServices
 import Foundation
 import ZenVoiceCore
@@ -432,10 +446,9 @@ let intelMac = HardwareProfile(
     architecture: "Intel",
     availableModelStorageBytes: 200 * 1_073_741_824
 )
-// English on Apple Silicon goes to Parakeet: measured 5.3% word error rate at
-// 61 ms against Whisper Base's 9.2% at 149 ms, so it is both the most accurate
-// and effectively the fastest English option. It runs on CoreML, so an Intel
-// Mac — with no Neural Engine — must not be sent there.
+// English on Apple Silicon now goes to Whisper Turbo: it is the best open
+// multilingual model available through whisper.cpp. An Intel Mac — with no GPU
+// transcription — must not be sent to a large model.
 guard ModelRecommendationEngine.recommendedModelID(
         for: capableMac,
         language: .hinglish
@@ -447,11 +460,11 @@ guard ModelRecommendationEngine.recommendedModelID(
       ModelRecommendationEngine.recommendedModelID(
         for: capableMac,
         language: .english
-      ) == "parakeet-unified-en-int8",
+      ) == "whisper-large-v3-turbo",
       ModelRecommendationEngine.recommendedModelID(
         for: intelMac,
         language: .english
-      ) != "parakeet-unified-en-int8" else {
+      ) != "whisper-large-v3-turbo" else {
     FileHandle.standardError.write(
         Data("FAIL: language-aware model recommendation is wrong\n".utf8)
     )
@@ -475,12 +488,12 @@ for profile in [capableMac, intelMac] {
         }
     }
 }
-// The catalogue is deliberately five. Each entry is the measured best at one
+// The catalogue is deliberately four. Each entry is the measured best at one
 // job; the size ladders it replaced were not a speed-for-accuracy curve.
-guard VerifiedModelCatalog.models.count == 5 else {
+guard VerifiedModelCatalog.models.count == 4 else {
     FileHandle.standardError.write(
         Data(
-            ("FAIL: expected 5 offered models, found "
+            ("FAIL: expected 4 offered models, found "
                 + "\(VerifiedModelCatalog.models.count)\n").utf8
         )
     )
@@ -1103,10 +1116,10 @@ print("ZenVoiceCoreChecks: private and hold controls passed")
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
 let verifiedModels = VerifiedModelCatalog.allModels
-// Five offered, six retired. The catalogue was ten offered and one retired
-// until the size ladders were measured end to end and found not to be a
-// speed-for-accuracy curve — see ``VerifiedModelCatalog.models``.
-guard VerifiedModelCatalog.models.count == 5,
+// Four offered, seven retired. Parakeet was retired because it depends on the
+// closed-source FluidAudio runtime; Whisper is now the only transcription
+// engine — see ``VerifiedModelCatalog.models``.
+guard VerifiedModelCatalog.models.count == 4,
       verifiedModels.count == 11,
       // Nothing retired may still be offered, and everything retired must
       // still resolve — by identifier and by filename — so that a model
@@ -1145,11 +1158,6 @@ guard VerifiedModelCatalog.models.count == 5,
               && URL(string: $0.licenseURL)?.scheme == "https"
               && ["github.com", "huggingface.co"].contains(
                   URL(string: $0.upstreamRepository)?.host
-              )
-              && (
-                  $0.runtime == .parakeetCoreML
-                      ? !$0.bundleFiles.isEmpty
-                      : $0.bundleFiles.isEmpty
               )
       }) else {
     FileHandle.standardError.write(
@@ -1202,180 +1210,7 @@ guard try !VerifiedModelCatalog.verify(verifierURL, for: verifierModel) else {
     exit(1)
 }
 
-let bundleURL = verifierDirectory.appendingPathComponent(
-    "fixture-bundle",
-    isDirectory: true
-)
-try FileManager.default.createDirectory(
-    at: bundleURL,
-    withIntermediateDirectories: true
-)
-let bundleFileURL = bundleURL.appendingPathComponent("fixture.bin")
-try Data("ZenVoice".utf8).write(to: bundleFileURL)
-let bundleModel = VerifiedModel(
-    id: "bundle-fixture",
-    displayName: "Bundle Fixture",
-    filename: "fixture-bundle",
-    tier: .fast,
-    languageCapability: .english,
-    publisher: "Test",
-    sourceRepository: VerifiedModelCatalog.parakeetRepository,
-    upstreamRepository:
-        "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
-    sourceRevision: VerifiedModelCatalog.parakeetRevision,
-    sha256:
-        "3ee4ec82841786eef3346001599c184d6265a29c4a9b0c4e27b19f1b0178890c",
-    fileSizeBytes: 8,
-    format: "Core ML fixture",
-    license: "CC-BY-4.0",
-    licenseURL: "https://creativecommons.org/licenses/by/4.0/legalcode",
-    attribution: "Test bundle fixture",
-    runtime: .parakeetCoreML,
-    bundleFiles: [
-        VerifiedModelFile(
-            relativePath: "fixture.bin",
-            fileSizeBytes: 8,
-            sha256:
-                "954be634e5f577bc940ed27375984b9eb15d137455b6ea8086f4f2b76c526596"
-        )
-    ]
-)
-guard try VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification rejected valid data\n".utf8)
-    )
-    exit(1)
-}
-try Data("ZenVoicf".utf8).write(to: bundleFileURL)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted tampered data\n".utf8)
-    )
-    exit(1)
-}
-try Data("ZenVoice".utf8).write(to: bundleFileURL)
-
-// An unreviewed file delivered alongside the approved manifest is the case a
-// manifest-only walk cannot see, so it is checked explicitly.
-let strayURL = bundleURL.appendingPathComponent("stray.bin")
-try Data("stray".utf8).write(to: strayURL)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted an extra file\n".utf8)
-    )
-    exit(1)
-}
-try FileManager.default.removeItem(at: strayURL)
-
-// Nested extras hide from a shallow listing.
-let strayDirectory = bundleURL.appendingPathComponent(
-    "nested",
-    isDirectory: true
-)
-try FileManager.default.createDirectory(
-    at: strayDirectory,
-    withIntermediateDirectories: true
-)
-try Data("stray".utf8).write(
-    to: strayDirectory.appendingPathComponent("stray.bin")
-)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted a nested extra file\n".utf8)
-    )
-    exit(1)
-}
-try FileManager.default.removeItem(at: strayDirectory)
-
-// A symlink can point at approved-looking bytes outside the bundle.
-let symlinkTarget = verifierDirectory.appendingPathComponent("outside.bin")
-try Data("ZenVoice".utf8).write(to: symlinkTarget)
-let symlinkURL = bundleURL.appendingPathComponent("linked.bin")
-try FileManager.default.createSymbolicLink(
-    at: symlinkURL,
-    withDestinationURL: symlinkTarget
-)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted a symlinked entry\n".utf8)
-    )
-    exit(1)
-}
-try FileManager.default.removeItem(at: symlinkURL)
-
-// A missing manifest file must fail rather than pass vacuously.
-try FileManager.default.removeItem(at: bundleFileURL)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted a missing file\n".utf8)
-    )
-    exit(1)
-}
-try Data("ZenVoice".utf8).write(to: bundleFileURL)
-
-// The recorded digest must describe the manifest it ships with, otherwise the
-// field is decoration and a swapped catalogue entry goes unnoticed.
-guard VerifiedModelCatalog.manifestDigest(of: bundleModel.bundleFiles)
-        == bundleModel.sha256 else {
-    FileHandle.standardError.write(
-        Data("FAIL: fixture manifest digest does not match\n".utf8)
-    )
-    exit(1)
-}
-for model in VerifiedModelCatalog.allModels
-where model.runtime == .parakeetCoreML {
-    guard VerifiedModelCatalog.manifestDigest(of: model.bundleFiles)
-            == model.sha256 else {
-        FileHandle.standardError.write(
-            Data("FAIL: \(model.id) manifest digest does not match\n".utf8)
-        )
-        exit(1)
-    }
-    guard model.bundleFiles.reduce(Int64(0), { $0 + $1.fileSizeBytes })
-            == model.fileSizeBytes else {
-        FileHandle.standardError.write(
-            Data("FAIL: \(model.id) bundle size does not match\n".utf8)
-        )
-        exit(1)
-    }
-    // Every bundle file must be requested from the pinned revision, not from a
-    // branch that can move under a recorded revision string.
-    for file in model.bundleFiles {
-        guard let url = model.bundleFileURL(for: file) else {
-            FileHandle.standardError.write(
-                Data("FAIL: \(model.id) rejected its own manifest path\n".utf8)
-            )
-            exit(1)
-        }
-        guard url.scheme == "https",
-              url.host == "huggingface.co",
-              url.path.contains(model.sourceRevision),
-              !url.path.contains("/main/") else {
-            FileHandle.standardError.write(
-                Data("FAIL: \(model.id) bundle URL is not revision-pinned\n".utf8)
-            )
-            exit(1)
-        }
-    }
-}
-
-// Path traversal and absolute paths must not survive URL construction.
-for hostilePath in ["../escape.bin", "/etc/passwd", "nested/../../escape.bin"] {
-    let hostile = VerifiedModelFile(
-        relativePath: hostilePath,
-        fileSizeBytes: 1,
-        sha256:
-            "0000000000000000000000000000000000000000000000000000000000000000"
-    )
-    guard bundleModel.bundleFileURL(for: hostile) == nil else {
-        FileHandle.standardError.write(
-            Data("FAIL: hostile bundle path \(hostilePath) built a URL\n".utf8)
-        )
-        exit(1)
-    }
-}
-
-print("ZenVoiceCoreChecks: bundle manifest verification passed")
+print("ZenVoiceCoreChecks: bundle manifest verification skipped — no multi-file bundles")
 
 let selectionSuite = "ZenVoiceCoreChecks.\(UUID().uuidString)"
 guard let selectionDefaults = UserDefaults(suiteName: selectionSuite) else {
@@ -1424,23 +1259,22 @@ let twentyFourGigabyteProfile = HardwareProfile(
 // downgraded on memory alone — recommending by memory sent 16 GB Macs to
 // Whisper Base, which loses roughly one word in three at speed.
 //
-// English now resolves to Parakeet on all of them, because there is no
-// trade-off left to make there. Anything beyond English still goes to Turbo:
-// every smaller multilingual build is a cliff, not a cheaper option, with
-// Small at 35.5% word error rate against Turbo's 13.2%.
+// English now resolves to Whisper Turbo on all of them. Anything beyond English
+// still goes to Turbo: every smaller multilingual build is a cliff, not a
+// cheaper option, with Small at 35.5% word error rate against Turbo's 13.2%.
 let spanishProfile = LanguageProfile(
     inputLanguageCode: "es",
     outputMode: .spokenLanguage
 )
 guard ModelRecommendationEngine.recommendedModelID(
     for: eightGigabyteProfile
-) == "parakeet-unified-en-int8",
+) == "whisper-large-v3-turbo",
 ModelRecommendationEngine.recommendedModelID(
     for: sixteenGigabyteProfile
-) == "parakeet-unified-en-int8",
+) == "whisper-large-v3-turbo",
 ModelRecommendationEngine.recommendedModelID(
     for: twentyFourGigabyteProfile
-) == "parakeet-unified-en-int8",
+) == "whisper-large-v3-turbo",
 ModelRecommendationEngine.recommendedModelID(
     for: eightGigabyteProfile,
     language: spanishProfile
@@ -1476,8 +1310,7 @@ let smallIntelProfile = HardwareProfile(
 // Both land on Small, including the 8 GB machine that used to be sent to Tiny.
 // Tiny multilingual is not a lighter option, it is a broken one — 64.5% word
 // error rate against Small's 35.5% — and recommending a model that cannot do
-// the job is worse than recommending one that is merely slow. Parakeet is not
-// an answer here either: it runs on CoreML and Intel has no Neural Engine.
+// the job is worse than recommending one that is merely slow.
 guard ModelRecommendationEngine.recommendedModelID(
     for: intelProfile
 ) == "whisper-small-multilingual",

@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import Foundation
 
 public struct HardwareProfile: Equatable, Sendable {
@@ -120,17 +134,12 @@ public enum ModelRecommendationEngine {
         if language == .hinglish {
             return "hindi2hinglish-apex"
         }
-        // English has no speed-for-accuracy trade left to make. Parakeet
-        // measured 5.3% word error rate at 61 ms against Whisper Base's 9.2% at
-        // 149 ms and the retired Medium English's 6.6% at 1,343 ms — the most
-        // accurate *and* effectively the fastest English model in the matrix,
-        // including on the Indian-accented voices, where it averages 7.9%
-        // against Base's 13.2%.
-        //
-        // It runs through CoreML, so this is gated on Apple Silicon: without a
-        // Neural Engine the proposition is entirely different and unmeasured.
+        // English on Apple Silicon defaults to Whisper Turbo, the most capable
+        // open multilingual model available through whisper.cpp. Without GPU
+        // transcription the same size model is too slow, so Intel and small-
+        // memory Macs fall through to Small.
         if language == .english, profile.hasGPUAcceleratedTranscription {
-            return "parakeet-unified-en-int8"
+            return "whisper-large-v3-turbo"
         }
         // No Metal path: model size translates directly into waiting, and Small
         // is the largest multilingual build that stays responsive. It is a

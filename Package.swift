@@ -27,12 +27,7 @@ let package = Package(
             targets: ["ZenVoiceLanguageBench"]
         )
     ],
-    dependencies: [
-        .package(
-            url: "https://github.com/FluidInference/FluidAudio.git",
-            revision: "88d6d8166880dee1ac7c32c80f8e10cd782f8ca8"
-        )
-    ],
+    dependencies: [],
     targets: [
         .target(
             name: "ZenVoiceCore"
@@ -49,7 +44,6 @@ let package = Package(
             dependencies: [
                 "ZenVoiceCore",
                 "whisper",
-                .product(name: "FluidAudio", package: "FluidAudio"),
             ]
         ),
         .executableTarget(

@@ -20,14 +20,14 @@ recorded in
 - [x] Configurable paste-last shortcut
 - [x] Configurable Private Dictation shortcut
 - [x] Hold-to-dictate with Fn or a right-side modifier
-- [x] Local English transcription through Parakeet and Whisper
+- [x] Local English transcription through Whisper
 - [x] Active-app paste with clipboard fallback
 - [x] ZenBar lifecycle feedback
 - [x] Microphone-responsive waveform
 - [x] Zen branding and packaged app icon
 - [x] Verified local model catalogue, downloader, selection, and removal
 - [x] Hardware-aware model recommendations and local speed benchmarks
-- [x] Bundled persistent local Whisper and Parakeet runtimes
+- [x] Bundled persistent local Whisper runtime
 - [x] Private local insights, streaks, app usage, and editable categories
 - [x] Local voice profile and encrypted explicit correction rules
 - [x] Privacy-safe local highlight cards with preview and explicit export
@@ -68,39 +68,26 @@ recorded in
 
 Decided on 2026-08-01:
 
-- License: proprietary, with the repository staying public as
-  source-visible code under the terms in `LICENSE`.
+- License: Apache License, Version 2.0, with the repository public and
+  open to contributions under `LICENSE`.
 - Distribution: direct download of a notarized build. The Mac App Store
   sandbox cannot host Accessibility-based insertion, which is the product.
 
-Decided on 2026-08-02:
+Decided on 2026-08-05:
 
-- Initial distribution: invitation-only private beta, not a paid or broad
-  public launch.
+- Initial distribution: open-source direct download, free to users.
 - Minimum supported version: Apple Silicon Macs running macOS 14 or newer.
   That is the deployment target in `Package.swift` and `LSMinimumSystemVersion`,
   so the build will launch there.
-
-Amended 2026-08-03:
-
-- Certified for the private beta: macOS 27. The minimum supported version above
-  is a build floor, not evidence. Only the version the release candidate was
+- Certified for release: macOS 27. The minimum supported version above is a
+  build floor, not evidence. Only the version the release candidate was
   actually tested on may be described as certified, and macOS 14 through 26 have
-  not been tested. Beta invitations should go to macOS 27 users until an older
-  version is swept and recorded.
-
-Decided on 2026-08-03:
-
-- Introductory pricing: ZenVoice is free to its users for an initial one to
-  three month period.
-- That period is a calendar window, not a per-user trial. The application
-  contains no trial timer, licence key, entitlement check, or account system,
-  and none is planned for this release. Charging, if it happens, is designed
-  after the free period produces real usage evidence.
+  not been tested.
+- The application contains no trial timer, licence key, entitlement check, or
+  account system, and none is planned.
 
 Still deferred:
 
-- What ZenVoice costs after the free period, and how that is collected
 - Whether non-macOS platforms belong in scope
 
 The remaining decisions should be made only after the selected local speech

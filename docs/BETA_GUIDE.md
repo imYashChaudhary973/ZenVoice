@@ -83,9 +83,9 @@ take my word for it.
 
 ## First run
 
-1. Open **Models** and download a speech model. **Parakeet** is the recommended
-   English one and the fastest. If you dictate in another language, or in
-   Hinglish, pick the model the screen suggests for it.
+1. Open **Models** and download a speech model. **Whisper Turbo** is the
+   recommended model on Apple Silicon. If you dictate in another language, or
+   in Hinglish, pick the model the screen suggests for it.
 2. Open **Shortcuts** to see or change the dictation shortcut.
 3. Put your cursor somewhere you can type, press the shortcut, say a sentence,
    and press it again.

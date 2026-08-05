@@ -1,14 +1,14 @@
 # Security Policy
 
-## Supported version
+## Supported versions
 
-ZenVoice is currently a private pre-release project. Only the latest commit on
-`main` is supported.
+Only the latest commit on `main` is supported. Security fixes are backported to
+the most recent release branch when one exists.
 
 ## Reporting a vulnerability
 
 Do not open a public issue containing sensitive details. Use GitHub's private
-security reporting for this repository or contact the repository owner through
+security reporting for this repository or contact the maintainers through
 GitHub.
 
 Include:

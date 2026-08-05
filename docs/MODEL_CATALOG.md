@@ -27,39 +27,23 @@ HTTPS URLs itself. It does not accept a user-supplied download URL, execute
 model-repository code, deserialize Python objects, or install repository
 scripts.
 
-The Parakeet CoreML bundle is the exception and is documented in
-[Parakeet download path](#parakeet-download-path) below.
-
 ## Speech model catalogue
 
-Five models, each the measured best at one job.
+Four models, each the measured best at one job.
 
 | Tier | Capability | File | Size | SHA-256 |
 | --- | --- | --- | ---: | --- |
-| Fast | English | `parakeet-unified-en-0.6b` | 614,082,275 B | *(CoreML bundle, per-file checksums)* |
 | Balanced | Multilingual | `ggml-small.bin` | 487,601,967 B | `1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b` |
 | High Accuracy | Multilingual | `ggml-large-v3-turbo-q5_0.bin` | 574,041,195 B | `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2` |
 | High Accuracy | Hinglish | `ggml-hindi2hinglish-apex-q8_0.bin` | 874,188,075 B | `0b4324d2c1ad64f20883ee7fcd5d2bb0a8466287dc70d74bc47066200c28c719` |
 | High Accuracy | Multilingual | `ggml-medium.bin` | 1,533,763,059 B | `6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208` |
 
-### Why five and not ten
+### Why four and not ten
 
-The catalogue offered ten models: two size ladders — tiny, base, small, medium —
-on the assumption that model size buys a smooth speed-for-accuracy trade the
-user can position themselves on. Benchmarked end to end, that assumption fails
-in both families.
-
-**English has no trade-off left.** Parakeet is simultaneously the most accurate
-and effectively the fastest, so every English whisper build is dominated:
-
-| Model | WER | p50 |
-| --- | ---: | ---: |
-| **Parakeet** | **5.3%** | **61 ms** |
-| Whisper Base English | 9.2% | 149 ms |
-| Whisper Medium English | 6.6% | 1,343 ms |
-| Whisper Tiny English | 13.8% | 66 ms |
-
-It also holds up on Indian-accented voices, averaging 7.9% against Base's 13.2%.
+The catalogue originally offered ten models: two size ladders — tiny, base,
+small, medium — on the assumption that model size buys a smooth
+speed-for-accuracy trade the user can position themselves on. Benchmarked end
+to end, that assumption fails.
 
 **Multilingual is a cliff, not a curve.** Below Turbo there is no "faster with a
 little less accuracy" — there is unusable:
@@ -73,9 +57,9 @@ little less accuracy" — there is unusable:
 | Whisper Tiny | 64.5% | 34.8% | 91 ms |
 
 Whisper Small survives only as the fallback for Macs that cannot run Turbo well
-— Intel, where Parakeet has no Neural Engine — and is offered as that rather
-than as a speed tier. At 35.5% it is European-languages-only in practice,
-scoring 100% word error rate on both Japanese and Mandarin.
+— Intel — and is offered as that rather than as a speed tier. At 35.5% it is
+European-languages-only in practice, scoring 100% word error rate on both
+Japanese and Mandarin.
 
 Whisper Base multilingual had been offered for months and was measured for the
 first time when this cut was made.
@@ -84,12 +68,16 @@ first time when this cut was made.
 
 Retired from new downloads, still resolvable and verifiable: Whisper Tiny
 (English and multilingual), Whisper Base (English and multilingual), Whisper
-Small English, and Whisper Medium English.
+Small English, Whisper Medium English, and the Parakeet Unified EN CoreML
+bundle.
 
 Retired rather than deleted because selection is stored by identifier: a missing
 catalogue entry would turn a working model on disk into "no model installed" and
 send discovery down its legacy fallback path. Anything already installed keeps
 working, and the Models screen offers to reclaim the disk.
+
+The Parakeet model was retired because it required the closed-source FluidAudio
+runtime. ZenVoice now uses `whisper.cpp` as its only local speech engine.
 
 The catalogue metadata was verified against the official Hugging Face API on
 2026-07-26 at the pinned revision. Any model revision or file replacement
@@ -104,10 +92,10 @@ Mac, and only that model carries the "Recommended" badge.
 | Condition | Recommendation | Why |
 | --- | --- | --- |
 | Hinglish profile | Hinglish Apex | Preserves code-switched English words in Latin script |
-| English profile, Apple Silicon | Parakeet | Most accurate *and* fastest English model measured — 5.3% at 61 ms |
+| English profile, Apple Silicon | Whisper Turbo | Best open multilingual model on the GPU |
 | Apple Silicon, ≥ 8 GB | Whisper Turbo | Best measured accuracy/size trade-off on the GPU, and multilingual |
 | Apple Silicon, < 8 GB | Whisper Small (multilingual) | Keeps memory pressure down; the only smaller multilingual option that works at all |
-| Intel, any memory | Whisper Small (multilingual) | No Metal path, and CoreML has no Neural Engine to use |
+| Intel, any memory | Whisper Small (multilingual) | No Metal path; large models are too slow without GPU transcription |
 
 Two rules were replaced here. The first picked a tier from installed memory
 alone, which sent capable 16 GB Apple Silicon Macs to Whisper Base — measured at
@@ -120,8 +108,8 @@ it is a broken one, so those Macs now get Small and a slower answer that is
 actually usable. Recommending a model that cannot do the job is worse than
 recommending one that is merely slow.
 
-Note the engine never recommended an English-only model before Parakeet: English
-users were sent to multilingual Turbo. See
+English users were previously sent to multilingual Turbo; now they remain on
+Turbo on Apple Silicon and Small on Intel. See
 [ACCURACY_HARNESS.md](ACCURACY_HARNESS.md) for how the underlying numbers are
 produced.
 
@@ -139,35 +127,6 @@ This contract describes the `whisper.cpp` GGML path:
 5. ZenVoice streams the file through SHA-256 and compares the full digest.
 6. Only a verified file is atomically moved into private Application Support.
 7. Model files receive user-only filesystem permissions.
-
-## Parakeet download path
-
-The Parakeet CoreML bundle is a directory rather than a single file, so its
-installation contract is stated separately. It holds the same guarantees.
-
-1. The user explicitly starts a download.
-2. ZenVoice builds one revision-pinned HTTPS URL per manifest entry, of the
-   form `<sourceRepository>/resolve/<sourceRevision>/<relativePath>`. A path
-   that is absolute or contains `..` builds no URL and fails the download.
-3. Each response must be successful and remain on HTTPS.
-4. Each file must be a regular file of the exact approved size.
-5. Each file is streamed through SHA-256 and compared against the manifest.
-6. Files land in a staging directory. The completed tree must contain exactly
-   the manifest's relative paths — no extra file, no nested extra file, and no
-   symbolic link — and the summed sizes must equal the recorded bundle size.
-7. Only a fully verified bundle is atomically swapped into place, so an
-   interrupted download cannot replace a good bundle with a partial one.
-8. Bundle files receive user-only filesystem permissions.
-
-The bundle's `sha256` field is the digest of the manifest itself — every entry
-sorted by path and serialized as `path\nsize\nsha256\n`. It is verified on
-every check, so a tampered *catalogue* fails as well as a tampered download.
-
-ZenVoice performs this fetch itself rather than delegating it. FluidAudio's
-downloader resolves the repository's default branch and honours its own
-`REGISTRY_URL`/`MODEL_REGISTRY_URL` overrides, neither of which can express a
-pinned revision. FluidAudio is handed the verified local directory afterwards
-through `loadModels(from:)`.
 
 Deleting a model removes only its catalogue-derived file path. Model downloads
 contain data weights only; ZenVoice never executes them.

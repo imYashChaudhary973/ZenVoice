@@ -41,7 +41,6 @@ model `Not installed` when it is outside this candidate's test matrix.
 
 | Display name | Catalogue ID | Runtime | Revision | Status |
 |---|---|---|---|---|
-| Parakeet | `parakeet-unified-en-int8` | Parakeet/CoreML | | |
 | Whisper Small | `whisper-small-multilingual` | whisper.cpp | | |
 | Whisper Turbo | `whisper-large-v3-turbo` | whisper.cpp | | |
 | Hinglish Apex | `hindi2hinglish-apex` | whisper.cpp | | |
@@ -93,20 +92,21 @@ count, or an issue link. Do not paste the dictated sentence into this record.
 
 ## Model-runtime evidence
 
-Perform these transitions while ZenVoice is idle on Apple Silicon with
-Parakeet and at least one current multilingual Whisper model installed. A row
-passes only after the target shows **In use**, **Home → Model** shows the target,
-and a new non-sensitive dictation completes through ZenBar. The successful
-dictation is the runtime proof; the selection state alone does not prove that
-asynchronous model loading or decoding succeeded.
+Perform these transitions while ZenVoice is idle on Apple Silicon with at
+least two current models installed (for example Whisper Turbo and Whisper
+Small, or Whisper Turbo and Hinglish Apex). A row passes only after the target
+shows **In use**, **Home → Model** shows the target, and a new non-sensitive
+dictation completes through ZenBar. The successful dictation is the runtime
+proof; the selection state alone does not prove that asynchronous model loading
+or decoding succeeded.
 
 | Transition | Language profile | Observable evidence | Result |
 |---|---|---|---|
-| Start with Parakeet (`parakeet-unified-en-int8`) | English | **In use**, **Home → Model: Parakeet**, two consecutive successful dictations | Not run |
-| Parakeet → current multilingual Whisper model | English | Target **In use**, matching Home model, two consecutive successful dictations | Not run |
-| Multilingual Whisper → Parakeet without relaunching | English | Parakeet **In use**, matching Home model, successful dictation | Not run |
-| English/Parakeet → Auto-Detect | Auto-Detect | A compatible installed multilingual Whisper model becomes active; successful dictation | Not run |
-| Auto-Detect/multilingual Whisper → Parakeet | Auto-Detect, then English | **Switch & use** commits Parakeet and English together; successful dictation | Not run |
+| Start with Whisper Turbo (`whisper-large-v3-turbo`) | English | **In use**, **Home → Model: Whisper Turbo**, two consecutive successful dictations | Not run |
+| Whisper Turbo → current multilingual Whisper model | English | Target **In use**, matching Home model, two consecutive successful dictations | Not run |
+| Multilingual Whisper → Whisper Turbo without relaunching | English | Whisper Turbo **In use**, matching Home model, successful dictation | Not run |
+| English/Whisper Turbo → Auto-Detect | Auto-Detect | A compatible installed multilingual Whisper model becomes active; successful dictation | Not run |
+| Auto-Detect/multilingual Whisper → Whisper Turbo | Auto-Detect, then English | **Switch & use** commits Whisper Turbo and English together; successful dictation | Not run |
 
 Record the multilingual Whisper model used for the round trip:
 

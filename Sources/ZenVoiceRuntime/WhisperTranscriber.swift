@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import AVFoundation
 import Foundation
 import ZenVoiceCore
@@ -33,7 +47,6 @@ public final class WhisperTranscriber: @unchecked Sendable {
     private let cleaner = TranscriptCleaner()
     private var context: OpaquePointer?
     private var hasWarmedUp = false
-    private let parakeetEngine: ParakeetTranscriberEngine?
     /// Resolved once — it reads the model file when the model is not in the
     /// catalogue, and transcription happens far too often to repeat that.
     private let usesBeamSearch: Bool
@@ -75,12 +88,6 @@ public final class WhisperTranscriber: @unchecked Sendable {
         self.configuration = configuration
         self.isReproducible = isReproducible
         usesBeamSearch = configuration.usesBeamSearchDecoding
-        parakeetEngine =
-            VerifiedModelCatalog.model(
-                filename: configuration.modelURL.lastPathComponent
-            )?.runtime == .parakeetCoreML
-                ? ParakeetTranscriberEngine(modelURL: configuration.modelURL)
-                : nil
         whisper_log_set({ _, _, _ in }, nil)
     }
 
@@ -100,27 +107,14 @@ public final class WhisperTranscriber: @unchecked Sendable {
     /// absorb it. None of that work depends on what was said, so none of it
     /// belongs on the critical path.
     ///
-    /// The Parakeet runtime already does this in
-    /// `ParakeetTranscriberEngine.init` — load, then a throwaway decode of
-    /// silence, because CoreML's first prediction is expensive. This brings the
-    /// whisper path to the same footing, using the same trick: a real decode of
-    /// one second of silence, which exercises mel, encoder and decoder and then
-    /// reports no speech.
+    /// Whisper pays that cost with a real decode of one second of silence,
+    /// which exercises mel, encoder and decoder and then reports no speech.
     ///
     /// - Important: `context` is unguarded mutable state, so this must run on
     ///   the same serial queue as every decode. Callers use
     ///   `AppDelegate.transcriptionQueue`.
     public func warmUp() {
         guard !hasWarmedUp else {
-            return
-        }
-        // Parakeet *starts* warming at construction but does not finish there:
-        // the load runs in a detached task, so a decode arriving first simply
-        // waits for it. Measured, that wait was the whole of an 8.41s first
-        // decode against 0.03s for the second.
-        if let parakeetEngine {
-            parakeetEngine.warmUp()
-            hasWarmedUp = true
             return
         }
         guard (try? loadedContext()) != nil else {
@@ -155,14 +149,6 @@ public final class WhisperTranscriber: @unchecked Sendable {
         }
         let activeProfile =
             languageProfile ?? configuration.languageProfile
-        if let parakeetEngine {
-            return try transcribeWithParakeet(
-                samples: samples,
-                activeProfile: activeProfile,
-                initialPrompt: initialPrompt,
-                engine: parakeetEngine
-            )
-        }
         let contextPrompt = NextDictationContext.sanitized(
             initialPrompt ?? ""
         )
@@ -342,9 +328,6 @@ public final class WhisperTranscriber: @unchecked Sendable {
         guard !samples.isEmpty else {
             throw TranscriptionError.invalidAudio
         }
-        if parakeetEngine != nil {
-            return ("en", 1)
-        }
         let context = try loadedContext()
         let padded = WhisperDecoding.withLeadInSilence(samples)
         let threads = ProcessorTopology.decodeThreadCount
@@ -370,60 +353,6 @@ public final class WhisperTranscriber: @unchecked Sendable {
             throw TranscriptionError.runtimeFailed
         }
         return (String(cString: name), probabilities[Int(identifier)])
-    }
-
-    private func transcribeWithParakeet(
-        samples: [Float],
-        activeProfile: LanguageProfile,
-        initialPrompt: String?,
-        engine: ParakeetTranscriberEngine
-    ) throws -> TranscriptionResult {
-        guard activeProfile.isCompatible(with: .english) else {
-            throw TranscriptionError.runtimeFailed
-        }
-        // Parakeet Unified has no decoder-prompt API. ZenVoice still applies
-        // its local correction vocabulary after decoding.
-        _ = initialPrompt
-        let processingStartedAt = Date()
-        let decoded: ParakeetDecodedResult
-        do {
-            decoded = try engine.transcribe(samples: samples)
-        } catch {
-            throw TranscriptionError.runtimeFailed
-        }
-        let structured = decoded.segments.isEmpty
-            ? decoded.text
-            : SpokenStructure.text(
-                from: decoded.segments,
-                silences: SpokenStructure.silences(in: samples)
-            )
-        var runawayWordsCut = 0
-        let cleanedTranscript = structured
-            .components(separatedBy: "\n\n")
-            .map { paragraph -> String in
-                let collapse =
-                    TranscriptRepetition.collapsingRunawayReporting(paragraph)
-                runawayWordsCut += collapse.wordsCut
-                return cleaner.clean(collapse.text)
-            }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n\n")
-        guard !cleanedTranscript.isEmpty else {
-            throw TranscriptionError.noSpeech
-        }
-        return TranscriptionResult(
-            rawTranscript: decoded.text.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            ),
-            finalTranscript: cleanedTranscript,
-            correctionCount: 0,
-            isPartial: false,
-            modelID: configuration.modelID,
-            processingDurationSeconds:
-                Date().timeIntervalSince(processingStartedAt),
-            segments: decoded.segments,
-            runawayWordsCut: runawayWordsCut
-        )
     }
 
     private func loadedContext() throws -> OpaquePointer {

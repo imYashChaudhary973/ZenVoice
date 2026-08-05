@@ -152,19 +152,13 @@ that window rather than the whole database.
 
 ### Models and configuration
 
-- Whisper GGML files and Parakeet CoreML bundles remain in the user's local
-  Application Support directory.
+- Whisper GGML files remain in the user's local Application Support directory.
 - A developer can override the selected model with a local environment
   variable; ZenVoice does not execute a model-supplied program.
 - Model downloads are fixed to reviewed HTTPS sources, immutable revisions,
   expected sizes, and SHA-256 digests before installation. ZenVoice constructs
-  every download URL itself, including one per file for the Parakeet CoreML
-  bundle, and installs only after the whole download verifies.
-- A multi-file bundle must match its pinned manifest exactly — same files, no
-  extra or symlinked entries, same sizes, same digests — and is staged and
-  atomically swapped into place rather than written over in position.
-- The `whisper.cpp` XCFramework is checksum-pinned and the FluidAudio source
-  dependency is revision-pinned; both run in process.
+  every download URL itself and installs only after the whole download verifies.
+- The `whisper.cpp` XCFramework is checksum-pinned; it runs in process.
 - No API key or online account is required.
 
 ## macOS permissions
@@ -206,8 +200,7 @@ Local-first does not mean risk-free:
 - Apple Development signing gives local builds a stable macOS identity but is
   not appropriate for public distribution.
 
-The project now records its release security review, third-party notices, and
-automated readiness checks. Public release remains blocked until the owner
-chooses a project licence and distribution policy, signs the exact artifact
-with Developer ID, completes Apple notarization, and finishes the manual
-privacy and clean-device QA checklist.
+The project records its release security review, third-party notices, and
+automated readiness checks. Public release remains blocked until the signed
+artifact passes Apple notarization and the manual privacy and clean-device QA
+checklist is completed.

@@ -1,12 +1,12 @@
 # Third-Party Notices
 
-ZenVoice embeds the `whisper.cpp` and FluidAudio runtimes and lets the user
-download reviewed speech model weights from a verified in-app catalogue.
-ZenVoice does not bundle model weights in the repository or application.
+ZenVoice embeds the `whisper.cpp` runtime and lets the user download reviewed
+speech model weights from a verified in-app catalogue. ZenVoice does not bundle
+model weights in the repository or application.
 
 This notice records the reviewed upstream source, pinned runtime revision, and
 applicable licence text. It is not a licence for ZenVoice itself. ZenVoice is
-proprietary, source-visible software governed by [`LICENSE`](LICENSE); the
+licensed under the Apache License, Version 2.0 (see [`LICENSE`](LICENSE)); the
 third-party components below remain under their own licences.
 
 ## whisper.cpp
@@ -40,159 +40,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-
-## FluidAudio
-
-- Project: `FluidInference/FluidAudio`
-- Source revision: `88d6d8166880dee1ac7c32c80f8e10cd782f8ca8`
-- Source: <https://github.com/FluidInference/FluidAudio>
-- Licence: Apache License 2.0 (see [Apache License 2.0](#apache-license-20))
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not
-use this runtime except in compliance with the License. Unless required by
-applicable law or agreed to in writing, software distributed under the License
-is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-KIND, either express or implied. See the License for the specific language
-governing permissions and limitations under the License.
-
-ZenVoice links the whole `FluidAudio` library product, so the components below
-are compiled into the ZenVoice executable and are redistributed with it. They
-are listed separately because their licences carry their own attribution
-requirements.
-
-### NemoTextProcessing (`text-processing-rs`)
-
-Statically linked binary target used for NeMo text normalization.
-
-- Project: `FluidInference/text-processing-rs`
-- Release: `v0.3.0`
-- Artifact: `NemoTextProcessing.xcframework.zip`
-- SwiftPM checksum:
-  `76d0ee9a32b1ee2193231299180ca9bc4fc7e98794e771b3d55d66498352d85f`
-- Source: <https://github.com/FluidInference/text-processing-rs>
-- Licence: Apache License 2.0 (see [Apache License 2.0](#apache-license-20))
-
-That artifact statically links the following works:
-
-- **NVIDIA NeMo Text Processing** — compiled weighted-FST grammars and
-  text-normalization fixtures, pinned commit
-  `1f1263579fe57ba7ed783cad3dddee710fcc5064`.
-  <https://github.com/NVIDIA/NeMo-text-processing>. Apache License 2.0.
-  Copyright (c) NVIDIA CORPORATION & AFFILIATES.
-- **rustfst** — loads and executes the compiled OpenFST grammars.
-  <https://github.com/Garvys/rustfst>. MIT OR Apache-2.0.
-  Copyright (c) Alexandre Caulier and the rustfst contributors.
-- **flate2** — decompresses the bundled gzipped grammars at load time.
-  <https://github.com/rust-lang/flate2-rs>. MIT OR Apache-2.0.
-  Copyright (c) Alex Crichton and the flate2 contributors.
-- **Additional transitive Rust crates** reached through `rustfst` and
-  `flate2` — for example `nom`, `miniz_oxide`, `bitflags`, and `anyhow` — each
-  under MIT and/or Apache-2.0.
-
-### fastcluster
-
-Hierarchical clustering routines reached through `FastClusterWrapper`.
-
-- Project: `fastcluster`
-- Source: <https://danifold.net>
-- Licence: BSD 2-Clause
-
-This licence requires that binary redistributions reproduce the following
-notice, which is why it appears here in full.
-
-```text
-Copyright:
-  * Until package version 1.1.23: © 2011 Daniel Müllner <https://danifold.net>
-  * All changes from version 1.1.24 on: © Google Inc. <https://www.google.com>
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-  * Redistributions of source code must retain the above copyright notice,
-    this list of conditions and the following disclaimer.
-  * Redistributions in binary form must reproduce the above copyright notice,
-    this list of conditions and the following disclaimer in the documentation
-    and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGE.
-```
-
-### VBx
-
-Speaker-clustering code derived from the VBx project.
-
-- Project: VBx
-- Licence: Apache License 2.0 (see [Apache License 2.0](#apache-license-20))
-- Attribution: Copyright 2021-2024 BUT Speech@FIT (original VBx project)
-
-## NVIDIA Parakeet Unified EN 0.6B CoreML model
-
-- Model creator: NVIDIA
-- Upstream model:
-  [`nvidia/parakeet-unified-en-0.6b`](https://huggingface.co/nvidia/parakeet-unified-en-0.6b)
-- CoreML conversion:
-  [`FluidInference/parakeet-unified-en-0.6b-coreml`](https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml)
-- Download revision: `4252711f6f060f9a2f91e5f081a806d7f45eebd8`
-- Variant: offline CoreML encoder, INT8 weights
-- Licence: NVIDIA Open Model License — see the unresolved conflict below
-- Licence text:
-  <https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/>
-
-**Licensed by NVIDIA Corporation under the NVIDIA Open Model License.**
-
-The Parakeet model is provided by NVIDIA and converted to Core ML by
-FluidInference. ZenVoice downloads the reviewed conversion directly to the
-user's Mac and verifies its pinned file manifest before use. ZenVoice does not
-redistribute the model weights. No endorsement by NVIDIA or FluidInference is
-implied.
-
-### Unresolved licence conflict
-
-The upstream sources disagree about which NVIDIA model this conversion derives
-from, and the two candidates are not under the same licence. Checked
-2026-08-02:
-
-| Source | States |
-|---|---|
-| The downloaded bundle's own `config.json` and `metadata.json`, at pinned revision `4252711f…` | `model_id: nvidia/parakeet-unified-en-0.6b` |
-| FluidAudio `Sources/FluidAudio/ASR/Parakeet/Unified/UnifiedMelExtractor.swift`, at pinned revision `88d6d816…` | reproduces the preprocessor "exactly as configured in `nvidia/parakeet-unified-en-0.6b` (`model_config.yaml`)" |
-| FluidAudio `Sources/FluidAudio/ASR/Parakeet/Unified/UnifiedConfig.swift`, same revision | matches "the conversion pipeline in mobius `models/stt/parakeet-unified-en-0.6b/coreml`" |
-| [`nvidia/parakeet-unified-en-0.6b`](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | "Use of the model is governed by the NVIDIA Open Model License Agreement" |
-| [`FluidInference/parakeet-unified-en-0.6b-coreml`](https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml) model card | frontmatter `license: cc-by-4.0` and `base_model: [nvidia/parakeet-tdt-0.6b-v2]` |
-| [`nvidia/parakeet-tdt-0.6b-v2`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) | "Use of this model is governed by the CC-BY-4.0 license" |
-
-Three independent artifacts point at the **unified** model as the thing that was
-actually converted: the downloaded bundle's own metadata, and two places in
-FluidAudio's pinned source that name `nvidia/parakeet-unified-en-0.6b` and its
-conversion pipeline directly. One field points elsewhere — the model card's
-`base_model` — and on Hugging Face that field commonly records ancestry rather
-than the immediate conversion input. If NVIDIA's unified model is itself derived
-from `parakeet-tdt-0.6b-v2`, both statements are true at once and only the
-governing licence is in question.
-
-ZenVoice therefore records the NVIDIA Open Model License. It matches what the
-artifact says it is, it is corroborated by the converter's own code, and it is
-the stricter of the two terms. ZenVoice previously recorded CC-BY-4.0 by taking
-the model card's declaration at face value; nothing in the artifact supports
-that.
-
-Both candidate licences permit commercial use, redistribution and derivative
-works with attribution, so this choice affects which notice is required rather
-than whether the model may be used, and ZenVoice does not redistribute the
-weights in any case. Publisher confirmation would settle the ancestry question
-but is no longer the only evidence available; see
-[`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md).
 
 ## OpenAI Whisper model weights
 
@@ -243,6 +90,23 @@ applicable law or agreed to in writing, software distributed under the License
 is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND, either express or implied. See the License for the specific language
 governing permissions and limitations under the License.
+
+## Retired NVIDIA Parakeet Unified EN 0.6B CoreML model
+
+The Parakeet CoreML model was previously offered through a closed-source
+`FluidAudio` runtime. It has been retired from ZenVoice and is no longer
+downloaded, installed, or executed by the application. The retired catalogue
+entry remains resolvable only so that any previously installed selection does
+not turn into "no model installed" for users who already had it on disk.
+
+- Model creator: NVIDIA
+- Upstream model:
+  [`nvidia/parakeet-unified-en-0.6b`](https://huggingface.co/nvidia/parakeet-unified-en-0.6b)
+- CoreML conversion:
+  [`FluidInference/parakeet-unified-en-0.6b-coreml`](https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml)
+- Licence: NVIDIA Open Model License
+- Licence text:
+  <https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/>
 
 ## Apache License 2.0
 
@@ -358,20 +222,20 @@ redistributions to be accompanied by a copy of the licence.
 
       (d) If the Work includes a "NOTICE" text file as part of its
           distribution, then any Derivative Works that You distribute
-          must include a readable copy of the attribution notices
-          contained within such NOTICE file, excluding those notices
-          that do not pertain to any part of the Derivative Works,
-          in at least one of the following places: within a NOTICE text
-          file distributed as part of the Derivative Works; within the
-          Source form or documentation, if provided along with the
-          Derivative Works; or, within a display generated by the
-          Derivative Works, if and wherever such third-party notices
-          normally appear. The contents of the NOTICE file are for
-          informational purposes only and do not modify the License.
-          You may add Your own attribution notices within Derivative Works
-          that You distribute, alongside or as an addendum to the NOTICE
-          text from the Work, provided that such additional attribution
-          notices cannot be construed as modifying the License.
+          must include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
 
       You may add Your own copyright statement to Your modifications and
       may provide additional or different license terms and conditions
