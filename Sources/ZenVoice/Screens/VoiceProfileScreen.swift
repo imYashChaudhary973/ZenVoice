@@ -26,9 +26,9 @@ struct VoiceProfileScreen: View {
 
     var body: some View {
         ZenScreen(
-            title: "Voice Profile",
+            title: "Your Words",
             subtitle:
-                "ZenVoice learns the words you correct — nothing else."
+                "Vocabulary and spelling corrections ZenVoice remembers for you."
         ) {
             if let error = viewModel.errorMessage {
                 ZenBanner(

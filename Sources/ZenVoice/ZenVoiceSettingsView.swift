@@ -549,7 +549,11 @@ struct ZenVoiceSettingsView: View {
                 applicationProfileViewModel: applicationProfileViewModel
             )
         case .history:
-            HistoryScreen(viewModel: historyViewModel)
+            HistoryContainerScreen(
+                historyViewModel: historyViewModel,
+                audioHistoryViewModel: audioHistoryViewModel,
+                insightsViewModel: insightsViewModel
+            )
         case .privacy:
             PrivacyScreen(
                 viewModel: viewModel,

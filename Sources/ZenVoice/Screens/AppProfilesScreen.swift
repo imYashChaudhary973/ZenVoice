@@ -47,9 +47,9 @@ struct AppProfilesScreen: View {
 
     var body: some View {
         ZenScreen(
-            title: "App Profiles",
+            title: "Per-App Rules",
             subtitle:
-                "Different apps, different behavior. Overrides apply only where you set them."
+                "Overrides for specific apps — language, formatting, and voice commands."
         ) {
             applicationProfilesCard
 

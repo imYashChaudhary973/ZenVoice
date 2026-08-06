@@ -75,12 +75,32 @@ struct PersonalScreen: View {
             title: "Personal",
             subtitle: "Your words and per-app rules."
         ) {
-            VoiceProfileScreen(viewModel: voiceProfileViewModel)
-            AppProfilesScreen(
+            YourWordsScreen(viewModel: voiceProfileViewModel)
+            PerAppRulesScreen(
                 viewModel: viewModel,
                 applicationProfileViewModel: applicationProfileViewModel
             )
         }
+    }
+}
+
+private struct YourWordsScreen: View {
+    @ObservedObject var viewModel: VoiceProfileViewModel
+
+    var body: some View {
+        VoiceProfileScreen(viewModel: viewModel)
+    }
+}
+
+private struct PerAppRulesScreen: View {
+    @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var applicationProfileViewModel: ApplicationProfileViewModel
+
+    var body: some View {
+        AppProfilesScreen(
+            viewModel: viewModel,
+            applicationProfileViewModel: applicationProfileViewModel
+        )
     }
 }
 
