@@ -162,6 +162,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var historyViewModel: HistoryViewModel!
     private var audioHistoryViewModel: AudioHistoryViewModel!
     private var cloudAIViewModel: CloudAIViewModel!
+    private var cloudPreviewWindowController:
+        CloudAIPreviewWindowController?
+
+    private func processCloudEnhancement(
+        localProcessed: ProcessedTranscription,
+        formattingMode: TranscriptFormattingMode
+    ) async -> ProcessedTranscription {
+        guard formattingMode == .cloud, cloudAIViewModel.isReady else {
+            return localProcessed
+        }
+        return await withCheckedContinuation { continuation in
+            let controller = CloudAIPreviewWindowController(
+                original: localProcessed.result.finalTranscript,
+                keyStore: makeCloudAIKeyStore()
+            ) { [weak self] acceptedText in
+                self?.cloudPreviewWindowController = nil
+                guard let acceptedText else {
+                    continuation.resume(returning: localProcessed)
+                    return
+                }
+                let cloudResult = TranscriptionResult(
+                    rawTranscript: localProcessed.result.rawTranscript,
+                    finalTranscript: acceptedText,
+                    correctionCount: localProcessed.result.correctionCount,
+                    isPartial: localProcessed.result.isPartial,
+                    modelID: localProcessed.result.modelID,
+                    processingDurationSeconds: localProcessed
+                        .result.processingDurationSeconds,
+                    runawayWordsCut: localProcessed.result.runawayWordsCut
+                )
+                continuation.resume(
+                    returning: ProcessedTranscription(
+                        result: cloudResult,
+                        correctionUsages: localProcessed.correctionUsages
+                    )
+                )
+            }
+            self.cloudPreviewWindowController = controller
+            controller.show()
+        }
+    }
+
     private var updatesViewModel: UpdatesViewModel!
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
@@ -1500,7 +1542,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         recordedAudio: recordedAudio,
                         historyID: historyID,
                         insertionText: "",
-                        hasPriorInsertion: true
+                        hasPriorInsertion: true,
+                        formattingMode: behavior.formattingMode
                     )
                 }
             }
@@ -1580,19 +1623,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             )
                             : nil
                 )
-                await MainActor.run {
+                let cloudProcessed = await Task { @MainActor [weak self] in
+                    guard let self else { return processed }
+                    return await self.processCloudEnhancement(
+                        localProcessed: processed,
+                        formattingMode: behavior.formattingMode
+                    )
+                }.value
+                await MainActor.run { [weak self] in
                     guard let self else { return }
                     guard !insertedPreview.isEmpty else {
                         self.complete(
-                            processed: processed,
+                            processed: cloudProcessed,
                             recordedAudio: recordedAudio,
-                            historyID: historyID
+                            historyID: historyID,
+                            formattingMode: behavior.formattingMode
                         )
                         return
                     }
                     _ = self.inserter.replaceTextBeforeCaret(
                         insertedPreview,
-                        with: processed.result.finalTranscript + " "
+                        with: cloudProcessed.result.finalTranscript + " "
                     )
                     // Whether or not the swap succeeded, preview text is
                     // already on screen. Inserting again would give the user
@@ -1600,11 +1651,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     // failure on its own — so the accurate transcript is
                     // recorded in history and nothing further is typed.
                     self.complete(
-                        processed: processed,
+                        processed: cloudProcessed,
                         recordedAudio: recordedAudio,
                         historyID: historyID,
                         insertionText: "",
-                        hasPriorInsertion: true
+                        hasPriorInsertion: true,
+                        formattingMode: behavior.formattingMode
                     )
                 }
             } catch {
@@ -1625,7 +1677,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         recordedAudio: recordedAudio,
                         historyID: historyID,
                         insertionText: insertedPreview.isEmpty ? nil : "",
-                        hasPriorInsertion: !insertedPreview.isEmpty
+                        hasPriorInsertion: !insertedPreview.isEmpty,
+                        formattingMode: behavior.formattingMode
                     )
                 }
             }
@@ -2135,9 +2188,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?,
         insertionText: String? = nil,
-        hasPriorInsertion: Bool = false
+        hasPriorInsertion: Bool = false,
+        formattingMode: TranscriptFormattingMode? = nil
     ) {
         let result = processed.result
+        let resolvedFormattingMode = formattingMode ?? activeDictationBehavior.formattingMode
         transcribingHistoryID = nil
         resetActiveDictationBehavior()
         ModelBenchmarkStore.record(
@@ -2190,8 +2245,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         state.phase = .inserting
 
-        let enhanced = enhanceForMode(result.finalTranscript)
-        let textToInsert = insertionText ?? enhanced
+        let textToInsert: String
+        if let insertionText {
+            textToInsert = insertionText
+        } else if resolvedFormattingMode == .cloud {
+            textToInsert = result.finalTranscript
+        } else {
+            textToInsert = enhanceForMode(
+                result.finalTranscript,
+                formattingMode: resolvedFormattingMode
+            )
+        }
 
         switch state.mode {
         case .command:
@@ -2327,8 +2391,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         TranscriptFormattingPreferences.load().zenIntelligenceMode
     }
 
-    private func enhanceForMode(_ transcript: String) -> String {
-        let mode = activeDictationBehavior.formattingMode.zenIntelligenceMode
+    private func enhanceForMode(
+        _ transcript: String,
+        formattingMode: TranscriptFormattingMode? = nil
+    ) -> String {
+        let mode = (formattingMode ?? activeDictationBehavior.formattingMode)
+            .zenIntelligenceMode
         guard mode != .off else { return transcript }
         let result = ZenIntelligenceEngine().enhance(
             transcript,

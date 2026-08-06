@@ -128,7 +128,10 @@ Phase 5 shipped a settings-only preview. It is not usable during dictation.
       and response parser.
 - [ ] Verify Groq and OpenAI against live endpoints. Neither has ever run against
       a real provider — current confidence is fixture-level only.
-- [ ] Make refinement reachable from the dictation flow, not only from settings.
+- [x] Make refinement reachable from the dictation flow, not only from settings.
+      `CloudAIPreviewWindowController` is presented from `finishRecording()` when
+      the active formatting mode is Cloud; Accept inserts the enhanced transcript,
+      Discard / error / close keeps the local transcript.
 - [x] Per-provider model lists instead of a free-text model field.
 - [x] Surface failures without losing the local transcript.
 
