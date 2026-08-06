@@ -21,21 +21,6 @@ import ZenVoiceStorage
 /// system. Each placeholder will be replaced by a proper combined view in the
 /// screen-rebuild pass.
 
-struct DictationScreen: View {
-    @ObservedObject var viewModel: SettingsViewModel
-
-    var body: some View {
-        ZenScreen(
-            title: "Dictation",
-            subtitle: "Shortcut, microphone, and live overlay — all in one place."
-        ) {
-            ShortcutsScreen(viewModel: viewModel)
-            AudioScreen(viewModel: viewModel)
-            OverlayScreen(viewModel: viewModel)
-        }
-    }
-}
-
 struct LanguagesAndModelsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
