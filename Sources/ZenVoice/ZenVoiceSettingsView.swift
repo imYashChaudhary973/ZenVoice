@@ -36,6 +36,7 @@ struct ZenVoiceSettingsView: View {
         case zenIntelligence = "ZenIntelligence"
         case commandMode = "Command Mode"
         case writeMode = "Write Mode"
+        case overlay = "Overlay"
         case voiceProfile = "Voice Profile"
         case appProfiles = "App Profiles"
         case history = "History"
@@ -64,6 +65,8 @@ struct ZenVoiceSettingsView: View {
                 return "command"
             case .writeMode:
                 return "pencil.and.outline"
+            case .overlay:
+                return "rectangle.on.rectangle"
             case .voiceProfile:
                 return "quote.bubble"
             case .appProfiles:
@@ -85,7 +88,7 @@ struct ZenVoiceSettingsView: View {
         static let groups: [(title: String?, sections: [Section])] = [
             (nil, [.home]),
             ("Dictation", [.shortcuts, .audio, .languages, .refine]),
-            ("Intelligence & Control", [.zenIntelligence, .commandMode, .writeMode]),
+            ("Intelligence & Control", [.zenIntelligence, .commandMode, .writeMode, .overlay]),
             ("Personal", [.voiceProfile, .appProfiles]),
             ("Your data", [.history, .insights]),
             ("System", [.models, .privacy, .help])
@@ -240,6 +243,8 @@ struct ZenVoiceSettingsView: View {
             return "voice control command shortcuts system actions"
         case .writeMode:
             return "rewrite compose selection accessibility read"
+        case .overlay:
+            return "overlay live preview pill notch zenbar position"
         case .voiceProfile:
             return "corrections rules words phrases learning"
         case .appProfiles:
@@ -552,6 +557,8 @@ struct ZenVoiceSettingsView: View {
             CommandModeScreen(viewModel: viewModel)
         case .writeMode:
             WriteModeScreen(viewModel: viewModel)
+        case .overlay:
+            OverlayScreen(viewModel: viewModel)
         case .history:
             HistoryScreen(viewModel: historyViewModel)
         case .insights:

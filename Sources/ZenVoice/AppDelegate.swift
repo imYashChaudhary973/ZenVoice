@@ -140,8 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var startStopMenuItem: NSMenuItem!
     private var zenBarMenuItem: NSMenuItem!
     private var statusMessageMenuItem: NSMenuItem!
+    private var livePreviewMenuItem: NSMenuItem!
     private var languageMenuItem: NSMenuItem!
-    private var zenBarController: ZenBarPanelController!
+    private var zenBarController: OverlayPanelController!
     private var escapeMonitors: [Any] = []
     private var globalHotKey: GlobalHotKey?
     private var pasteLastGlobalHotKey: GlobalHotKey?
@@ -507,6 +508,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             state.showsZenVoiceAtAllTimes ? .on : .off
         menu.addItem(zenBarMenuItem)
 
+        livePreviewMenuItem = NSMenuItem(
+            title: "Show Live Preview Overlay",
+            action: #selector(toggleLivePreviewOverlay),
+            keyEquivalent: ""
+        )
+        livePreviewMenuItem.target = self
+        livePreviewMenuItem.state =
+            OverlayPreferences.loadLivePreviewEnabled() ? .on : .off
+        menu.addItem(livePreviewMenuItem)
+
         statusMessageMenuItem = NSMenuItem(
             title: "Show Status Message",
             action: #selector(toggleStatusMessage),
@@ -559,7 +570,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureZenBar() {
-        zenBarController = ZenBarPanelController(
+        makeOverlayController()
+        state.$phase
+            .combineLatest(state.$showsZenVoiceAtAllTimes)
+            .sink { [weak self] phase, showsAtAllTimes in
+                self?.updateZenBarPresentation(
+                    phase: phase,
+                    showsAtAllTimes: showsAtAllTimes
+                )
+                self?.updateEscapeToCancel(phase: phase)
+            }
+            .store(in: &stateObservers)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(overlayPreferencesChanged),
+            name: OverlayPreferences.didChangeNotification,
+            object: nil
+        )
+    }
+
+    /// Builds the overlay panel for the currently selected overlay kind.
+    ///
+    /// Separate from ``configureZenBar()`` because the panel is rebuilt whenever
+    /// the selection changes, while the state subscription is set up only once.
+    private func makeOverlayController() {
+        zenBarController = OverlayPanelController(
+            kind: resolvedOverlayKind(),
             state: state,
             toggleRecording: { [weak self] in
                 self?.toggleRecording()
@@ -577,16 +613,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.state.mode = mode
             }
         )
-        state.$phase
-            .combineLatest(state.$showsZenVoiceAtAllTimes)
-            .sink { [weak self] phase, showsAtAllTimes in
-                self?.updateZenBarPresentation(
-                    phase: phase,
-                    showsAtAllTimes: showsAtAllTimes
-                )
-                self?.updateEscapeToCancel(phase: phase)
-            }
-            .store(in: &stateObservers)
     }
 
     private func configureHotKey() {
@@ -2822,13 +2848,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.open(url)
     }
 
+    /// Menu-bar toggle for the live-preview overlay. Saving the preference
+    /// posts the change notification, which rebuilds the overlay panel.
+    @objc private func toggleLivePreviewOverlay() {
+        let enabled = !OverlayPreferences.loadLivePreviewEnabled()
+        OverlayPreferences.saveLivePreviewEnabled(enabled)
+        livePreviewMenuItem?.state = enabled ? .on : .off
+        settingsViewModel?.syncOverlayPreferences()
+    }
+
     @objc private func toggleStatusMessage() {
         state.toggleStatusMessage()
         statusMessageMenuItem.state = state.showsStatusMessage ? .on : .off
     }
 
     @objc private func screenConfigurationChanged() {
-        zenBarController.positionAtBottomCenter()
+        zenBarController.reposition()
+    }
+
+    /// Rebuilds the overlay panel when the user picks a different overlay kind
+    /// or toggles live previews off. The panel's kind is fixed at construction,
+    /// so a change means building a new one and restoring its visibility.
+    @objc private func overlayPreferencesChanged() {
+        guard !zenBarController.matches(
+            kind: resolvedOverlayKind(),
+            reduceMotion: OverlayPreferences.loadReduceMotion()
+        ) else {
+            return
+        }
+        zenBarController.hide()
+        makeOverlayController()
+        updateZenBarPresentation(
+            phase: state.phase,
+            showsAtAllTimes: state.showsZenVoiceAtAllTimes
+        )
+    }
+
+    /// The overlay to present: the user's selection when live previews are
+    /// enabled, otherwise ZenBar.
+    private func resolvedOverlayKind() -> OverlayKind {
+        guard OverlayPreferences.loadLivePreviewEnabled() else {
+            return .zenBar
+        }
+        return OverlayPreferences.loadActiveOverlay()
     }
 
     @objc private func quit() {

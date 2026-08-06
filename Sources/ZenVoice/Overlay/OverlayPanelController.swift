@@ -16,8 +16,14 @@ import AppKit
 import SwiftUI
 import ZenVoiceCore
 
+/// A generic container for any ZenVoice overlay.
+///
+/// Phase 4 extends the original ZenBar panel into a family of overlays:
+/// ZenBar (bottom-center), and live-preview variants sized for the notch or
+/// top-center. This controller keeps the existing ZenBar behavior intact and
+/// adds the ability to host other overlay kinds.
 @MainActor
-final class ZenBarPanelController {
+final class OverlayPanelController {
     private static let overlayCollectionBehavior:
         NSWindow.CollectionBehavior = [
             .canJoinAllSpaces,
@@ -26,20 +32,23 @@ final class ZenBarPanelController {
             .ignoresCycle
         ]
 
-    /// Entering a native full-screen space animates for roughly three quarters
-    /// of a second, and `activeSpaceDidChangeNotification` fires while that is
-    /// still running — early enough that the outgoing space is often still the
-    /// one in front. Re-asserting once at that instant puts the panel back on
-    /// the space being left behind, so the checks are spread across the
-    /// animation and stop as soon as the panel is confirmed to have made it.
     private static let reassertDelays: [TimeInterval] = [0.15, 0.4, 0.9, 1.6]
 
+    private let kind: OverlayKind
+    /// The Reduce Motion value this panel's content was built with. The value
+    /// is baked into the hosted view's environment, so a change means the
+    /// panel has to be rebuilt.
+    private let reduceMotion: Bool
     private let panel: NSPanel
     private var isShowing = false
     private var spaceObserver: NSObjectProtocol?
     private var reassertWorkItems: [DispatchWorkItem] = []
+    private var hostingView: NSHostingView<AnyView>?
 
+    /// Creates a panel controller for the given overlay kind. The closures are
+    /// forwarded to the overlay content view.
     init(
+        kind: OverlayKind,
         state: AppState,
         toggleRecording: @escaping () -> Void,
         cancelRecording: @escaping () -> Void,
@@ -47,17 +56,14 @@ final class ZenBarPanelController {
         dismissError: @escaping () -> Void,
         setMode: @escaping (ZenBarMode) -> Void
     ) {
-        // Sized to hold the widest bar state plus the margin its shadow needs.
-        // The panel clips its hosting view, so at the old 550x68 the shadow —
-        // 18pt of blur pushed 8pt downward, against 12pt of margin — was simply
-        // cut off along the bottom edge.
+        self.kind = kind
+        reduceMotion = OverlayPreferences.loadReduceMotion()
+
         let frame = NSRect(
             x: 0,
             y: 0,
-            width: ZenBarView.maximumBarWidth
-                + (ZenBarView.shadowInset * 2),
-            height: ZenBarView.barHeight
-                + (ZenBarView.shadowInset * 2)
+            width: kind.defaultSize.width,
+            height: kind.defaultSize.height
         )
         panel = NSPanel(
             contentRect: frame,
@@ -69,16 +75,14 @@ final class ZenBarPanelController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
-        // `.statusBar` (25) sits below the levels some apps use for their
-        // full-screen and presentation windows. `.screenSaver` clears those
-        // with room to spare while still staying under the shielding level,
-        // so the bar never covers system alerts or the menu bar.
         panel.level = .screenSaver
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = Self.overlayCollectionBehavior
-        panel.contentView = NSHostingView(
-            rootView: ZenBarView(
+
+        let content = AnyView(
+            overlayContent(
+                kind: kind,
                 state: state,
                 toggleRecording: toggleRecording,
                 cancelRecording: cancelRecording,
@@ -86,7 +90,11 @@ final class ZenBarPanelController {
                 dismissError: dismissError,
                 setMode: setMode
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         )
+        let host = NSHostingView(rootView: content)
+        hostingView = host
+        panel.contentView = host
 
         observeActiveSpaceChanges()
     }
@@ -100,14 +108,17 @@ final class ZenBarPanelController {
         }
     }
 
+    var overlayKind: OverlayKind { kind }
+
+    /// Whether the panel already matches the given presentation preferences.
+    func matches(kind: OverlayKind, reduceMotion: Bool) -> Bool {
+        self.kind == kind && self.reduceMotion == reduceMotion
+    }
+
     func show() {
         isShowing = true
-        // Re-ordering is what moves the panel between spaces, but it blinks
-        // the bar out for a frame. show() runs on every phase change of a
-        // dictation, so pay that cost only when the panel is not already on
-        // the space in front.
         if isPanelOnActiveSpace() {
-            positionAtBottomCenter()
+            positionOverlay()
             panel.orderFrontRegardless()
         } else {
             presentOnActiveSpace()
@@ -121,22 +132,67 @@ final class ZenBarPanelController {
         panel.orderOut(nil)
     }
 
-    /// The window server binds a window to a space when the window is ordered
-    /// in, and `orderFrontRegardless()` on a panel it still considers ordered
-    /// in is a no-op — the binding is never reconsidered. That is why the bar
-    /// stayed stranded on the desktop space once a browser or terminal moved
-    /// to its own full-screen space. Ordering the panel out first is what
-    /// forces the decision to be made again, against the space in front now.
+    /// Repositions the overlay without changing its visibility.
+    func reposition() {
+        guard isShowing else { return }
+        positionOverlay()
+    }
+
+    /// Rebuilds the panel size to match the current overlay kind's default.
+    func resizeToDefault() {
+        let size = kind.defaultSize
+        var frame = panel.frame
+        frame.size.width = size.width
+        frame.size.height = size.height
+        panel.setFrame(frame, display: true, animate: false)
+        if isShowing {
+            positionOverlay()
+        }
+    }
+
+    private func overlayContent(
+        kind: OverlayKind,
+        state: AppState,
+        toggleRecording: @escaping () -> Void,
+        cancelRecording: @escaping () -> Void,
+        finishRecording: @escaping () -> Void,
+        dismissError: @escaping () -> Void,
+        setMode: @escaping (ZenBarMode) -> Void
+    ) -> some View {
+        switch kind {
+        case .zenBar:
+            return AnyView(
+                ZenBarView(
+                    state: state,
+                    toggleRecording: toggleRecording,
+                    cancelRecording: cancelRecording,
+                    finishRecording: finishRecording,
+                    dismissError: dismissError,
+                    setMode: setMode
+                )
+            )
+        case .livePreviewPill,
+             .livePreviewMedium,
+             .livePreviewLarge:
+            return AnyView(
+                LivePreviewOverlayView(
+                    kind: kind,
+                    state: state,
+                    reduceMotion: reduceMotion,
+                    cancelRecording: cancelRecording,
+                    finishRecording: finishRecording
+                )
+            )
+        }
+    }
+
     private func presentOnActiveSpace() {
         panel.orderOut(nil)
         panel.collectionBehavior = Self.overlayCollectionBehavior
-        positionAtBottomCenter()
+        positionOverlay()
         panel.orderFrontRegardless()
     }
 
-    /// Switching spaces — including entering or leaving another app's
-    /// full-screen space — can leave the panel behind on the space it was
-    /// ordered into. Re-assert it against the space that is now active.
     private func observeActiveSpaceChanges() {
         spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification,
@@ -149,8 +205,6 @@ final class ZenBarPanelController {
         }
     }
 
-    /// Re-orders the panel only when it is genuinely missing from the space in
-    /// front, so an ordinary desktop switch does not flicker the bar.
     private func scheduleSpaceReassertions() {
         cancelPendingReassertions()
         guard isShowing else {
@@ -184,10 +238,6 @@ final class ZenBarPanelController {
         reassertWorkItems.removeAll()
     }
 
-    /// `CGWindowListCopyWindowInfo` with `.optionOnScreenOnly` reports only the
-    /// windows on the space that is currently in front, so matching the panel's
-    /// window number against that list is the one dependable way to tell
-    /// whether the bar actually followed the user across.
     private func isPanelOnActiveSpace() -> Bool {
         let windowNumber = panel.windowNumber
         guard windowNumber > 0 else {
@@ -206,7 +256,8 @@ final class ZenBarPanelController {
         }
     }
 
-    func positionAtBottomCenter() {
+    /// Positions the overlay based on its kind.
+    private func positionOverlay() {
         guard let screen = screenForFrontmostApplication()
             ?? screenContainingMouse()
             ?? NSScreen.main
@@ -214,13 +265,19 @@ final class ZenBarPanelController {
             return
         }
 
+        switch kind {
+        case .zenBar:
+            positionAtBottomCenter(screen: screen)
+        case .livePreviewPill,
+             .livePreviewMedium,
+             .livePreviewLarge:
+            positionAtTopCenterOrNotch(screen: screen)
+        }
+    }
+
+    private func positionAtBottomCenter(screen: NSScreen) {
         let visibleFrame = screen.visibleFrame
         let x = visibleFrame.midX - panel.frame.width / 2
-        // The bar itself stays where it has always sat, 18pt above the visible
-        // frame. Only the panel around it grew, to give the shadow room, so the
-        // origin drops by that margin — and is then clamped so the panel never
-        // leaves the display when the Dock is hidden and `visibleFrame` already
-        // reaches the bottom edge.
         let barBottomMargin: CGFloat = 18
         let y = max(
             screen.frame.minY,
@@ -229,12 +286,71 @@ final class ZenBarPanelController {
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
-    /// `CGWindowListCopyWindowInfo` reports bounds in Core Graphics global
-    /// coordinates (origin top-left of the primary display, y growing down),
-    /// while `NSScreen.frame` is AppKit global coordinates (origin bottom-left,
-    /// y growing up). Comparing the two directly only appears to work on a
-    /// single display, where both ranges happen to coincide; with a second
-    /// display attached it picks the wrong screen.
+    /// Positions the panel near the notch when present, otherwise top-center.
+    ///
+    /// A notched display reports a non-zero `safeAreaInsets.top` and exposes the
+    /// usable strips beside the camera housing as `auxiliaryTopLeftArea` and
+    /// `auxiliaryTopRightArea`. The pill is small enough to sit in one of those
+    /// strips; the taller variants clear the housing entirely and sit below it.
+    private func positionAtTopCenterOrNotch(screen: NSScreen) {
+        let frame = screen.frame
+        let panelWidth = panel.frame.width
+        let panelHeight = panel.frame.height
+        let topMargin: CGFloat = 8
+
+        guard let notch = notchMetrics(for: screen) else {
+            // No notch: center at the top of the display, below the menu bar.
+            let y = screen.visibleFrame.maxY - panelHeight - topMargin
+            panel.setFrameOrigin(
+                NSPoint(x: frame.midX - panelWidth / 2, y: y)
+            )
+            return
+        }
+
+        // Below the camera housing for anything taller than the menu bar strip.
+        let belowNotchY = frame.maxY - notch.safeAreaTop - panelHeight
+            - topMargin
+
+        if kind == .livePreviewPill,
+           let strip = widestAuxiliaryArea(for: screen),
+           strip.width >= panelWidth {
+            // The pill fits beside the notch, vertically centered in the strip.
+            let x = min(
+                max(strip.minX, strip.midX - panelWidth / 2),
+                strip.maxX - panelWidth
+            )
+            let y = strip.midY - panelHeight / 2
+            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            return
+        }
+
+        panel.setFrameOrigin(
+            NSPoint(x: frame.midX - panelWidth / 2, y: belowNotchY)
+        )
+    }
+
+    /// Safe-area facts for a screen, or nil when the screen has no notch.
+    private func notchMetrics(
+        for screen: NSScreen
+    ) -> (safeAreaTop: CGFloat, hasAuxiliaryAreas: Bool)? {
+        let safeAreaTop = screen.safeAreaInsets.top
+        guard safeAreaTop > 0 else {
+            return nil
+        }
+        let hasAuxiliaryAreas = screen.auxiliaryTopLeftArea != nil
+            || screen.auxiliaryTopRightArea != nil
+        return (safeAreaTop, hasAuxiliaryAreas)
+    }
+
+    /// The larger of the two strips flanking the camera housing.
+    private func widestAuxiliaryArea(for screen: NSScreen) -> NSRect? {
+        let areas = [
+            screen.auxiliaryTopLeftArea,
+            screen.auxiliaryTopRightArea
+        ].compactMap { $0 }
+        return areas.max { $0.width < $1.width }
+    }
+
     private func convertToAppKit(_ rect: CGRect) -> CGRect {
         guard let primary = NSScreen.screens.first else {
             return rect

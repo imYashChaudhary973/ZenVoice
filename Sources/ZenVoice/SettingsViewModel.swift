@@ -103,6 +103,9 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var commandModeManifest: CommandManifest
     @Published private(set) var writeModeSubMode: WriteModeSubMode
     @Published private(set) var writeModeDefaultPrompt: String
+    @Published private(set) var activeOverlayKind: OverlayKind
+    @Published private(set) var livePreviewOverlayEnabled: Bool
+    @Published private(set) var overlayReduceMotion: Bool
     @Published var nextDictationContext = ""
 
     private let applyShortcut:
@@ -168,6 +171,9 @@ final class SettingsViewModel: ObservableObject {
             ?? CommandModeEngine.defaultManifest
         writeModeSubMode = WriteModePreferences.loadSubMode()
         writeModeDefaultPrompt = WriteModePreferences.defaultPrompt()
+        activeOverlayKind = OverlayPreferences.loadActiveOverlay()
+        livePreviewOverlayEnabled = OverlayPreferences.loadLivePreviewEnabled()
+        overlayReduceMotion = OverlayPreferences.loadReduceMotion()
         selectedMicrophoneUID =
             MicrophonePreferences.selectedDeviceUID()
         refreshMicrophones()
@@ -372,6 +378,31 @@ final class SettingsViewModel: ObservableObject {
         let trimmed = NextDictationContext.sanitized(prompt)
         WriteModePreferences.saveDefaultPrompt(trimmed)
         writeModeDefaultPrompt = trimmed
+    }
+
+    func setActiveOverlayKind(_ kind: OverlayKind) {
+        OverlayPreferences.saveActiveOverlay(kind)
+        activeOverlayKind = kind
+    }
+
+    func setLivePreviewOverlayEnabled(_ enabled: Bool) {
+        OverlayPreferences.saveLivePreviewEnabled(enabled)
+        livePreviewOverlayEnabled = enabled
+    }
+
+    func setOverlayReduceMotion(_ reduce: Bool) {
+        OverlayPreferences.saveReduceMotion(reduce)
+        overlayReduceMotion = reduce
+    }
+
+    /// Reloads overlay preferences from storage.
+    ///
+    /// The menu bar can toggle the live-preview overlay while the settings
+    /// window is open; this keeps the Overlay screen in step with it.
+    func syncOverlayPreferences() {
+        activeOverlayKind = OverlayPreferences.loadActiveOverlay()
+        livePreviewOverlayEnabled = OverlayPreferences.loadLivePreviewEnabled()
+        overlayReduceMotion = OverlayPreferences.loadReduceMotion()
     }
 
     func setInputLanguage(_ code: String) {
