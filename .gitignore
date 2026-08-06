@@ -8,7 +8,8 @@ Screenshot *.heic
 /Style Personal messages-*.png
 /clipboard-*.png
 /clipboard-*.heic
-.claude/settings.local.json
+/clipboard-*.jpg
+.claude/
 PrivateBenchmarks/
 
 # Local evaluation corpora are fetched on demand and never belong in git.
