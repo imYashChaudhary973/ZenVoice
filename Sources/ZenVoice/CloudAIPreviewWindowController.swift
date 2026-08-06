@@ -215,6 +215,7 @@ struct CloudAIDictationPreviewView: View {
 @MainActor
 final class CloudAIPreviewWindowController: NSWindowController {
     private let onComplete: (String?) -> Void
+    private var hasCompleted = false
 
     init(
         original: String,
@@ -222,10 +223,6 @@ final class CloudAIPreviewWindowController: NSWindowController {
         onComplete: @escaping (String?) -> Void
     ) {
         self.onComplete = onComplete
-        let viewModel = CloudAIDictationPreviewViewModel(
-            original: original,
-            keyStore: keyStore
-        )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 420),
             styleMask: [.titled, .closable],
@@ -234,16 +231,19 @@ final class CloudAIPreviewWindowController: NSWindowController {
         )
         window.title = "Cloud Enhancement Preview"
         window.isReleasedWhenClosed = false
+        super.init(window: window)
+        let viewModel = CloudAIDictationPreviewViewModel(
+            original: original,
+            keyStore: keyStore
+        )
         window.contentViewController = NSHostingController(
             rootView: CloudAIDictationPreviewView(
                 viewModel: viewModel,
-                onComplete: { [weak window] text in
-                    window?.close()
-                    onComplete(text)
+                onComplete: { [weak self] text in
+                    self?.complete(text)
                 }
             )
         )
-        super.init(window: window)
         window.delegate = self
         window.center()
     }
@@ -257,12 +257,19 @@ final class CloudAIPreviewWindowController: NSWindowController {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    private func complete(_ text: String?) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        window?.close()
+        onComplete(text)
+    }
 }
 
 extension CloudAIPreviewWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // If the user closes the window without choosing, keep the local
         // transcript so nothing is lost.
-        onComplete(nil)
+        complete(nil)
     }
 }
