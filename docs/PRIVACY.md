@@ -154,6 +154,44 @@ that window rather than the whole database.
 - The former downloadable refinement-model path was measured and removed; no
   refinement weights are downloaded or loaded by the current application.
 
+### Cloud AI Enhancement
+
+- **This is the only ZenVoice feature that can send your text off this Mac.**
+  It is off by default and does nothing until you both enable it and supply
+  your own provider API key.
+- What is sent: the finished transcript text and your prompt.
+- What is never sent: audio, the application you dictated into (bundle
+  identifier or name), the next-dictation context, transcript history,
+  insights, voice-profile data, correction rules, and any device or install
+  identifier.
+- Requests go directly from your Mac to the provider you chose, authenticated
+  with your key. ZenVoice operates no proxy and holds no vendor account, so
+  there is no ZenVoice-side record of the request or its content.
+- The endpoint must be HTTPS. Choosing the custom provider lets you point at a
+  self-hosted or local model so the text stays on infrastructure you control.
+- Your API key is stored in the macOS Keychain, never in preferences and never
+  in the transcript database. Turning the feature off deletes it.
+- Enhanced text is shown next to the original and is applied only when you
+  accept it. A failed request leaves the local transcript untouched.
+- Once you opt in, your transcript text is subject to the chosen provider's
+  retention and training policies, which ZenVoice cannot control or promise
+  anything about.
+- Full rationale in [ADR 0011](decisions/0011-cloud-ai-enhancement.md).
+
+### Updates
+
+- ZenVoice is distributed directly rather than through the Mac App Store, so
+  updates are verified against a signed release feed.
+- The updater is currently inert: public distribution is deferred, and no
+  release feed is configured for this build.
+- An update check sends only what fetching a static URL requires — no install
+  identifier, no usage data, no transcript or audio content.
+- Checks happen only when automatic checking is enabled or you ask explicitly.
+- The feed is signed with Ed25519 and verified against a key built into the
+  app; the downloaded archive's SHA-256 must match the signed feed. Any
+  verification failure rejects the update and changes nothing.
+- Full rationale in [ADR 0012](decisions/0012-auto-updates.md).
+
 ### ZenIntelligence
 
 - ZenIntelligence is an opt-in, local post-processing layer that runs after

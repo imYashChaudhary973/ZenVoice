@@ -43,6 +43,8 @@ struct ZenVoiceSettingsView: View {
         case audioHistory = "Audio History"
         case insights = "Insights"
         case models = "Models"
+        case cloudAI = "Cloud AI"
+        case updates = "Updates"
         case privacy = "Privacy"
         case help = "Help & FAQ"
 
@@ -80,6 +82,10 @@ struct ZenVoiceSettingsView: View {
                 return "chart.bar.xaxis"
             case .models:
                 return "cpu"
+            case .cloudAI:
+                return "cloud"
+            case .updates:
+                return "arrow.triangle.2.circlepath"
             case .privacy:
                 return "hand.raised"
             case .help:
@@ -94,13 +100,15 @@ struct ZenVoiceSettingsView: View {
             ("Intelligence & Control", [.zenIntelligence, .commandMode, .writeMode, .overlay]),
             ("Personal", [.voiceProfile, .appProfiles]),
             ("Your data", [.history, .audioHistory, .insights]),
-            ("System", [.models, .privacy, .help])
+            ("System", [.models, .cloudAI, .updates, .privacy, .help])
         ]
     }
 
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
+    @ObservedObject var cloudAIViewModel: CloudAIViewModel
+    @ObservedObject var updatesViewModel: UpdatesViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
@@ -261,6 +269,10 @@ struct ZenVoiceSettingsView: View {
             return "stats wpm words streak charts activity"
         case .models:
             return "speech whisper parakeet download verify tier"
+        case .cloudAI:
+            return "cloud openai groq api key provider enhance remote"
+        case .updates:
+            return "update sparkle feed signature beta channel version"
         case .privacy:
             return "permissions data delete encrypted inventory"
         case .help:
@@ -551,6 +563,10 @@ struct ZenVoiceSettingsView: View {
             AudioScreen(viewModel: viewModel)
         case .models:
             ModelsScreen(viewModel: modelManagerViewModel)
+        case .cloudAI:
+            CloudAIScreen(viewModel: cloudAIViewModel)
+        case .updates:
+            UpdatesScreen(viewModel: updatesViewModel)
         case .languages:
             LanguagesScreen(viewModel: viewModel)
         case .refine:
