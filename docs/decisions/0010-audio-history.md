@@ -1,4 +1,4 @@
-# ADR 0009 — Audio History: Optional Local Recording Archive
+# ADR 0010 — Audio History: Optional Local Recording Archive
 
 ## Status
 

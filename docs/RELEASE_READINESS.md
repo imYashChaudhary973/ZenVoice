@@ -104,9 +104,11 @@ ZenVoice is internal-use-first.
 
 Build the app, then run:
 
-```bash
+```zsh
 ./Scripts/check-release-readiness.sh
 ```
+
+Run it through `./` or with an explicit `zsh`; the script is zsh, not bash.
 
 The command is expected to fail for development builds and for any build made
 while public distribution is deferred. It passes only after the project licence

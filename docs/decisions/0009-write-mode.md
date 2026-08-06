@@ -1,4 +1,4 @@
-# ADR 0008 — Write Mode: Inline Compose and Rewrite
+# ADR 0009 — Write Mode: Inline Compose and Rewrite
 
 ## Status
 
@@ -59,6 +59,6 @@ Write Mode is an opt-in mode switch in ZenBar alongside Dictation and Command.
 
 ## Related decisions
 
-- ADR 0006 — ZenIntelligence
-- ADR 0007 — Command Mode
+- ADR 0007 — ZenIntelligence
+- ADR 0008 — Command Mode
 - `docs/PHASE_3.md`

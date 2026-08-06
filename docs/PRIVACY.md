@@ -65,7 +65,7 @@ that window rather than the whole database.
   duration, size, language, model, target app, category. Transcript text is
   excluded unless the user explicitly turns it on for that export.
 - Audio never leaves the Mac unless the user exports it themselves.
-- Full rationale in [ADR 0009](decisions/0009-audio-history.md).
+- Full rationale in [ADR 0010](decisions/0010-audio-history.md).
 
 ### Transcripts
 

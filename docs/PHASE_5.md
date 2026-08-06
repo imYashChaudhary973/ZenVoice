@@ -23,7 +23,7 @@
 
 ### 1. Cloud AI Enhancement
 
-- [ ] Write `docs/decisions/0009-cloud-ai-enhancement.md`.
+- [ ] Write `docs/decisions/0011-cloud-ai-enhancement.md`.
 - [ ] Define the privacy model explicitly:
   - Off by default.
   - User must add their own API key for the provider.
@@ -41,7 +41,7 @@
 
 ### 2. Auto-Updates
 
-- [ ] Write `docs/decisions/0010-auto-updates.md`.
+- [ ] Write `docs/decisions/0012-auto-updates.md`.
 - [ ] Evaluate update frameworks:
   - Sparkle (native, widely used)
   - Squirrel (Electron-based, less relevant)

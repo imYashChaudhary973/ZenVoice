@@ -1,4 +1,4 @@
-# ADR 0007 — Command Mode: Voice Control Trust Boundaries
+# ADR 0008 — Command Mode: Voice Control Trust Boundaries
 
 ## Status
 

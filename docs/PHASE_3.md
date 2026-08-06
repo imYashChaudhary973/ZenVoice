@@ -8,9 +8,9 @@
 
 ## Deliverables
 
-1. ADR `0006-zenintelligence.md` — on-device AI scope and privacy model
-2. ADR `0007-command-mode.md` — voice control trust boundaries
-3. ADR `0008-write-mode.md` — inline compose and rewrite behavior
+1. ADR `0007-zenintelligence.md` — on-device AI scope and privacy model
+2. ADR `0008-command-mode.md` — voice control trust boundaries
+3. ADR `0009-write-mode.md` — inline compose and rewrite behavior
 4. `ZenIntelligence` local enhancement engine
 5. Command Mode execution: apps, Shortcuts, system actions, scripts
 6. Write Mode: compose inline and rewrite selected text
@@ -27,7 +27,7 @@
 
 ### 1. ZenIntelligence
 
-- [x] Write `docs/decisions/0006-zenintelligence.md`.
+- [x] Write `docs/decisions/0007-zenintelligence.md`.
 - [x] Define `ZenIntelligenceMode`: `.off`, `.format`, `.contextAware`.
 - [x] Create `Sources/ZenVoiceCore/ZenIntelligence.swift`.
 - [x] Select a small on-device model approach:
@@ -43,7 +43,7 @@
 
 ### 2. Command Mode
 
-- [x] Write `docs/decisions/0007-command-mode.md`.
+- [x] Write `docs/decisions/0008-command-mode.md`.
 - [x] Extend Phase 1 scaffold into full execution:
   - `LaunchApp(bundleID:)` via `NSWorkspace`
   - `RunShortcut(name:)` via `Shortcuts` framework if available, otherwise open Shortcuts app
@@ -61,7 +61,7 @@
 
 ### 3. Write Mode
 
-- [x] Write `docs/decisions/0008-write-mode.md`.
+- [x] Write `docs/decisions/0009-write-mode.md`.
 - [x] Create `Sources/ZenVoiceCore/WriteModeEngine.swift`.
 - [x] Two sub-modes:
   - **Compose**: insert at caret (same as normal dictation, but explicitly labeled as Write Mode).

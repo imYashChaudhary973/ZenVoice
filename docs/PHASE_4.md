@@ -53,7 +53,7 @@ check suites pass. Manual live-QA items remain open.
 ### 4. Audio History
 
 - [x] Write a short ADR or update `docs/decisions/0001-local-data-and-model-governance.md`.
-  Written as [ADR 0009](decisions/0009-audio-history.md).
+  Written as [ADR 0010](decisions/0010-audio-history.md).
 - [x] Extend `DictationVault` with an `audio_archive` table/metadata.
 - [x] Store full recordings only when the user opts in.
 - [x] Budget controls:

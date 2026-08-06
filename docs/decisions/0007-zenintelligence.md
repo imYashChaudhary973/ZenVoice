@@ -1,4 +1,4 @@
-# ADR 0006 — ZenIntelligence: On-Device AI Enhancement
+# ADR 0007 — ZenIntelligence: On-Device AI Enhancement
 
 ## Status
 

@@ -194,9 +194,14 @@ non-sensitive fixture speech because normal history settings still apply.
 Development packaging is intentionally different from public distribution.
 After building, inspect the current gate:
 
-```bash
+```zsh
 ./Scripts/check-release-readiness.sh
 ```
+
+> Every script in `Scripts/` is zsh and uses zsh-only parameter expansions such
+> as `${0:A:h:h}`. Invoke them through `./` so the shebang applies, or with an
+> explicit `zsh`. Running one as `bash Scripts/…` fails immediately with an
+> unhelpful `A: unbound variable`.
 
 The command is expected to report blockers for private development builds. See
 [Release Readiness](RELEASE_READINESS.md),
