@@ -110,7 +110,7 @@ struct VerifiedModelDownloader {
         )
     }
 
-    private func download(
+    fileprivate func download(
         sourceURL: URL,
         sourceRevision: String,
         filename: String,
@@ -268,6 +268,7 @@ struct VerifiedModelDownloader {
 @MainActor
 final class ModelManagerViewModel: ObservableObject {
     let models = VerifiedModelCatalog.models
+    let engines = VerifiedEngineCatalog.engines
     let hardwareProfile: HardwareProfile
 
     @Published private(set) var installedModelIDs: Set<String> = []
@@ -280,6 +281,7 @@ final class ModelManagerViewModel: ObservableObject {
         [String: ModelBenchmarkSummary] = [:]
     @Published private(set) var selectedEngineID: String?
     @Published private(set) var engineAvailabilities: [EngineAvailability] = []
+    @Published private(set) var installedEngineIDs: Set<String> = []
     @Published var errorMessage: String?
 
     private let downloader: VerifiedModelDownloader
@@ -292,6 +294,7 @@ final class ModelManagerViewModel: ObservableObject {
     private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
     private var enginePrepareTask: Task<Void, Never>?
+    private var engineDownloadTasks: [String: Task<Void, Never>] = [:]
 
     init(
         downloader: VerifiedModelDownloader = VerifiedModelDownloader(),
@@ -316,6 +319,7 @@ final class ModelManagerViewModel: ObservableObject {
     func refresh() {
         verificationTask?.cancel()
         refreshBenchmarks()
+        refreshEngineInstallStatus()
         isVerifying = true
         // Retired models are hidden from the catalogue, not invalidated.
         // Verify them too so an existing selection keeps working until the
@@ -356,8 +360,44 @@ final class ModelManagerViewModel: ObservableObject {
             } else {
                 self?.selectedModelID = ModelSelectionPreferences.load()?.id
             }
+            self?.refreshEngineInstallStatus()
             self?.isVerifying = false
         }
+    }
+
+    func refreshEngineInstallStatus() {
+        var installed: Set<String> = []
+        for engine in engines {
+            let isInstalled: Bool
+            switch engine.descriptor.id {
+            case EngineIdentifiers.parakeetTDTv3:
+                let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory(
+                    fileManager: fileManager
+                )
+                let modelURL = modelsDirectory?
+                    .appendingPathComponent(
+                        ParakeetTDTv3Engine.modelFilename,
+                        isDirectory: false
+                    )
+                isInstalled = modelURL.map {
+                    fileManager.fileExists(atPath: $0.path)
+                } ?? false
+            case EngineIdentifiers.cohereTranscribe:
+                let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory(
+                    fileManager: fileManager
+                )
+                let engine = modelsDirectory.map {
+                    CohereTranscribeEngine(modelsDirectory: $0)
+                }
+                isInstalled = engine?.isAvailable ?? false
+            default:
+                isInstalled = engine.descriptor.requiresDownload == false
+            }
+            if isInstalled {
+                installed.insert(engine.descriptor.id)
+            }
+        }
+        installedEngineIDs = installed
     }
 
     func refreshEngineSelection() {
@@ -365,6 +405,21 @@ final class ModelManagerViewModel: ObservableObject {
         selectedEngineID = SelectedEnginePreferences.load(for: profile)
         engineAvailabilities =
             engineRegistryProvider()?.availability(for: profile) ?? []
+    }
+
+    func engineRecommendation() -> EngineRecommendation? {
+        guard let registry = engineRegistryProvider() else {
+            return nil
+        }
+        return EngineRecommendationEngine.recommendation(
+            for: LanguagePreferences.load(),
+            hardware: hardwareProfile,
+            registry: registry
+        )
+    }
+
+    func isRecommendedEngine(_ engineID: String) -> Bool {
+        engineRecommendation()?.preferredEngineID == engineID
     }
 
     func selectEngine(_ engineID: String) {
@@ -671,9 +726,186 @@ final class ModelManagerViewModel: ObservableObject {
         )
     }
 
+    func isEngineDownloading(_ engine: VerifiedEngine) -> Bool {
+        engineDownloadTasks[engine.descriptor.id]?.isCancelled == false
+    }
+
+    func downloadEngine(_ engine: VerifiedEngine) {
+        guard engineDownloadTasks[engine.descriptor.id] == nil else {
+            return
+        }
+        errorMessage = nil
+        engineDownloadTasks[engine.descriptor.id] = Task { [weak self] in
+            defer {
+                self?.engineDownloadTasks.removeValue(
+                    forKey: engine.descriptor.id
+                )
+                self?.refreshEngineInstallStatus()
+                self?.refreshEngineSelection()
+            }
+            do {
+                switch engine.descriptor.id {
+                case EngineIdentifiers.parakeetFlash:
+                    try await self?.downloadParakeetFlash()
+                case EngineIdentifiers.parakeetTDTv2:
+                    try await self?.downloadParakeetTDTv2()
+                case EngineIdentifiers.parakeetTDTv3:
+                    try await self?.downloadParakeetTDTv3()
+                case EngineIdentifiers.nemotronSpeechUltraFast,
+                     EngineIdentifiers.nemotronSpeechMultilingual:
+                    try await self?.downloadNemotronModel()
+                case EngineIdentifiers.cohereTranscribe:
+                    try await self?.downloadCohereModel()
+                default:
+                    break
+                }
+            } catch is CancellationError {
+                // Explicit user cancellation is handled by the UI.
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func downloadParakeetFlash() async throws {
+        try await downloadEngineModel(
+            engineID: EngineIdentifiers.parakeetFlash,
+            filename: ParakeetFlashEngine.modelFilename
+        )
+    }
+
+    private func downloadParakeetTDTv2() async throws {
+        try await downloadEngineModel(
+            engineID: EngineIdentifiers.parakeetTDTv2,
+            filename: ParakeetTDTv2Engine.modelFilename
+        )
+    }
+
+    private func downloadParakeetTDTv3() async throws {
+        try await downloadEngineModel(
+            engineID: EngineIdentifiers.parakeetTDTv3,
+            filename: ParakeetTDTv3Engine.modelFilename
+        )
+    }
+
+    private func downloadNemotronModel() async throws {
+        try await downloadEngineModel(
+            engineID: EngineIdentifiers.nemotronSpeechMultilingual,
+            filename: NemotronEngineConstants.modelFilename
+        )
+    }
+
+    private func downloadCohereModel() async throws {
+        let base =
+            "https://huggingface.co/cstr/cohere-transcribe-onnx-int8/resolve/main/"
+        let engine = VerifiedEngineCatalog.engine(
+            id: EngineIdentifiers.cohereTranscribe
+        )
+        guard let sourceRevision = engine?.sourceRevision else {
+            throw VerifiedModelDownloadError.invalidSource
+        }
+        let directory = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereEncoderFilename,
+            sourceURL: URL(string: base + "cohere-encoder.int8.onnx?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereEncoderSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereEncoderSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereDecoderFilename,
+            sourceURL: URL(string: base + "cohere-decoder.int8.onnx?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereDecoderSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereDecoderSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereTokenizerFilename,
+            sourceURL: URL(string: base + "tokens.txt?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereTokenizerSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereTokenizerSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereEncoderDataFilename,
+            sourceURL: URL(string: base + "cohere-encoder.int8.onnx.data?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereEncoderDataSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereEncoderDataSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereDecoderDataFilename,
+            sourceURL: URL(string: base + "cohere-decoder.int8.onnx.data?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereDecoderDataSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereDecoderDataSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+    }
+
+    private func downloadCohereFile(
+        filename: String,
+        sourceURL: URL,
+        expectedSize: Int64,
+        expectedSHA256: String,
+        sourceRevision: String,
+        destinationDirectory: URL
+    ) async throws {
+        let (_, progress) =
+            AsyncStream<VerifiedModelDownloadPhase>.makeStream()
+        defer { progress.finish() }
+        _ = try await downloader.download(
+            sourceURL: sourceURL,
+            sourceRevision: sourceRevision,
+            filename: filename,
+            expectedSize: expectedSize,
+            expectedSHA256: expectedSHA256,
+            destinationDirectory: destinationDirectory,
+            progress: progress
+        )
+    }
+
+    private func downloadEngineModel(
+        engineID: String,
+        filename: String
+    ) async throws {
+        guard let engine = VerifiedEngineCatalog.engine(id: engineID),
+              let sourceURL = engine.downloadURL,
+              let sha256 = engine.sha256,
+              let fileSize = engine.fileSizeBytes,
+              let sourceRevision = engine.sourceRevision
+        else {
+            throw VerifiedModelDownloadError.invalidSource
+        }
+        let directory = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        let (_, progress) =
+            AsyncStream<VerifiedModelDownloadPhase>.makeStream()
+        defer { progress.finish() }
+        _ = try await downloader.download(
+            sourceURL: sourceURL,
+            sourceRevision: sourceRevision,
+            filename: filename,
+            expectedSize: fileSize,
+            expectedSHA256: sha256,
+            destinationDirectory: directory,
+            progress: progress
+        )
+    }
+
     deinit {
         downloadTask?.cancel()
         verificationTask?.cancel()
+        engineDownloadTasks.values.forEach { $0.cancel() }
     }
 
     @discardableResult

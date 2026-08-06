@@ -77,7 +77,8 @@ send discovery down its legacy fallback path. Anything already installed keeps
 working, and the Models screen offers to reclaim the disk.
 
 The Parakeet model was retired because it required the closed-source FluidAudio
-runtime. ZenVoice now uses `whisper.cpp` as its only local speech engine.
+runtime. ZenVoice now uses `whisper.cpp`, Apple Speech, `parakeet.cpp`, and
+ONNX Runtime as its local speech runtimes.
 
 The catalogue metadata was verified against the official Hugging Face API on
 2026-07-26 at the pinned revision. Any model revision or file replacement
@@ -94,24 +95,48 @@ format, licence, attribution, and privacy posture.
 | --- | --- | --- | --- | --- | --- | --- |
 | Whisper | `whisper` | Required | No | whisper.cpp GGML | MIT | Active |
 | Apple Speech | `appleSpeech` | None | No | SFSpeechRecognizer (on-device) | Apple Software License | Active |
-| Parakeet TDT v2 | `parakeetTDT` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
-| Parakeet TDT v3 | `parakeetTDT` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
-| Parakeet Flash | `parakeetFlash` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
-| Nemotron Speech 3.5 Ultra Fast | `nemotronSpeech` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
-| Nemotron 3.5 Multilingual | `nemotronSpeech` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
-| Cohere Transcribe | `cohereTranscribe` | None | Yes | Cloud API | Cohere Terms of Service | Reserved (Phase 5, opt-in) |
+| Parakeet TDT v2 | `parakeetTDT` | Required | No | GGUF (parakeet.cpp v0.5.0) | CC-BY-4.0 | Active |
+| Parakeet TDT v3 | `parakeetTDT` | Required | No | GGUF (parakeet.cpp v0.5.0) | CC-BY-4.0 | Active |
+| Parakeet Flash | `parakeetFlash` | Required | No | GGUF (parakeet.cpp v0.5.0, streaming) | CC-BY-4.0 | Active (Beta) |
+| Nemotron Speech 3.5 Ultra Fast | `nemotronSpeech` | Required | No | GGUF (parakeet.cpp v0.5.0, streaming) | OpenMDW-1.1 | Active |
+| Nemotron 3.5 Multilingual | `nemotronSpeech` | Required | No | GGUF (parakeet.cpp v0.5.0) | OpenMDW-1.1 | Active |
+| Cohere Transcribe | `cohereTranscribe` | Required | No | ONNX INT8 (encoder-decoder, CoreML provider) | Apache-2.0 | Active (Beta / High Accuracy) |
 
-Reserved engines fix the identifier and family now so later phases can add
-runtime implementations and download logic without renaming user preferences
-or changing the catalogue schema. The source repositories above are the
-intended upstreams; revision, size, and SHA-256 will be pinned when the engine
-is activated.
+### Active GGUF downloads
+
+All NVIDIA engines ship as quantized GGUF files converted for `parakeet.cpp`.
+They are downloaded from the community mirror
+[`mudler/parakeet-cpp-gguf`](https://huggingface.co/mudler/parakeet-cpp-gguf)
+using the same pinned-URL + size + SHA-256 contract as Whisper.
+
+| Engine | Upstream | GGUF filename | Size | SHA-256 |
+| --- | --- | --- | ---:|:---|
+| Parakeet TDT v2 | `nvidia/parakeet-tdt-0.6b-v2` | `tdt-0.6b-v2-q8_0.gguf` | 903,835,936 B | `2027e2e1a4dc60ccdd8558f93b15e7c0db4ef8895b4e82e889f3a6275d8119c6` |
+| Parakeet TDT v3 | `nvidia/parakeet-tdt-0.6b-v3` | `tdt-0.6b-v3-q8_0.gguf` | 940,663,680 B | `4d69a4a6683f4f2d952bad794c1357ca6eb628027695b4699c5a9ad4cd07d757` |
+| Parakeet Flash | `nvidia/parakeet_realtime_eou_120m-v1` | `realtime_eou_120m-v1-q8_0.gguf` | 176,001,472 B | `62616b914d6f5a683a5dea672df055b57de5c49dddf871b8b44b9c814dc3d896` |
+| Nemotron Speech 3.5 Ultra Fast | `nvidia/nemotron-3.5-asr-streaming-0.6b` | `nemotron-3.5-asr-streaming-0.6b-q8_0.gguf` | 983,696,512 B | `ba2f13eccd4a5245be728f77e6149bd6a4fdcdd133ff2e08ac6005bcef7a99f1` |
+| Nemotron 3.5 Multilingual | `nvidia/nemotron-3.5-asr-streaming-0.6b` (same checkpoint) | `nemotron-3.5-asr-streaming-0.6b-q8_0.gguf` | 983,696,512 B | `ba2f13eccd4a5245be728f77e6149bd6a4fdcdd133ff2e08ac6005bcef7a99f1` |
+
+### Active ONNX downloads
+
+Cohere Transcribe ships as three verified files from
+[`cstr/cohere-transcribe-onnx-int8`](https://huggingface.co/cstr/cohere-transcribe-onnx-int8):
+
+| File | Size | SHA-256 |
+|---|---|---:|:---|
+| `cohere-encoder.int8.onnx` | 6,164,263 B | `27ef3d3a2352c972fa4831ae680d52937a2d4e5d62910060f140b13e2f4ccd2b` |
+| `cohere-encoder.int8.onnx.data` | 2,839,314,432 B | `0a6ebd1efbaeef6d15106e33671ce73067cad862bbb20f5e2dfbcd56695fbb76` |
+| `cohere-decoder.int8.onnx` | 530,119 B | `4be3bdfe855b751985dd2b53d39cca66967bdcb656a138753daf12c451900358` |
+| `cohere-decoder.int8.onnx.data` | 222,937,088 B | `8e4d5d7ea5092cf0779b711c65dfef9ecd2b88df951c6c7aa334df345c2eb4d8` |
+| `tokens.txt` | 207,437 B | `013ede043ae2480e3a9205cc34550d9686100cc682bacc90f702facdfbb93035` |
+
+Total Cohere bundle size is approximately 3.07 GB; the `.onnx` files are small
+graphs and the weights live in the `.onnx.data` external data files.
 
 Apple Speech is configured with `requiresOnDeviceRecognition = true`, so
-audio never leaves the Mac. Whisper and the planned NVIDIA engines run
-entirely on-device using downloaded weights. Cohere Transcribe is the only
-engine that sends audio off-device, and it requires explicit opt-in plus an
-API key in Phase 5.
+audio never leaves the Mac. Whisper, the NVIDIA engines, and Cohere Transcribe
+run entirely on-device using downloaded weights. Cohere's cloud API remains an
+optional later path that requires explicit opt-in and an API key.
 
 ## Which model gets recommended
 
@@ -185,7 +210,9 @@ The reproducible M5 comparison across seven installed models, eight languages,
 multiple voices, speaking rates, memory, and real Hinglish is recorded in
 [LANGUAGE_MODEL_BENCHMARK_2026-07-26.md](LANGUAGE_MODEL_BENCHMARK_2026-07-26.md).
 
-## Bundled runtime
+## Bundled runtimes
+
+### whisper.cpp
 
 ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
 
@@ -197,7 +224,30 @@ ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
   `8c3ecbe73f48b0cb9318fc3058264f951ab336fd530e82c4ccdd2298d1311a4c`
 - Licence: MIT
 
-Swift Package Manager verifies that checksum before exposing the binary target.
-The packaged app embeds and signs `whisper.framework`. ZenVoice calls its C API
-in-process and retains one model context until the selected model changes or
-the application exits.
+### parakeet.cpp
+
+ZenVoice vendors `parakeet.cpp` v0.5.0 as a binary XCFramework for the NVIDIA
+Parakeet and Nemotron engines:
+
+- Source: [`mudler/parakeet.cpp`](https://github.com/mudler/parakeet.cpp)
+- Release: `v0.5.0`
+- Runtime licence: MIT
+- Local binary target: `vendor/parakeet.xcframework`
+- Build: universal `libparakeet.dylib` packaged with `xcodebuild -create-xcframework`
+
+Swift Package Manager exposes the `parakeet` binary target from
+`Package.swift`. The app embeds and signs the framework. ZenVoice calls its flat
+C API in-process through `Sources/ZenVoiceRuntime/ParakeetBridge.swift`.
+
+### ONNX Runtime
+
+ZenVoice links ONNX Runtime through the Swift Package Manager release for the
+Cohere Transcribe engine:
+
+- Source: [`microsoft/onnxruntime-swift-package-manager`](https://github.com/microsoft/onnxruntime-swift-package-manager)
+- Swift product: `onnxruntime`
+- Swift module: `OnnxRuntimeBindings`
+- Licence: ONNX Runtime licence (MIT for the open-source runtime)
+
+The CoreML execution provider is enabled when available; otherwise CPU execution
+is used as a fallback.

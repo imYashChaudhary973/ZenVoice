@@ -22,7 +22,7 @@ import ZenVoiceCore
 /// and the engine only reports itself available for locales that support
 /// on-device recognition on this machine.
 public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
-    public static let engineID = "apple-speech"
+    public static let engineID = EngineIdentifiers.appleSpeech
 
     public var descriptor: EngineDescriptor {
         let locales = Self.supportedLocales()

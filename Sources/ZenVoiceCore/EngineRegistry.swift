@@ -185,7 +185,7 @@ public struct EngineRegistry: Sendable {
         )
     }
 
-    private func isCompatible(
+    func isCompatible(
         engine: any SpeechEngine,
         profile: LanguageProfile
     ) -> Bool {

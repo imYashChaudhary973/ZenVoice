@@ -22,7 +22,7 @@ import whisper
 /// adds the engine protocol on top. Model discovery, verification, and language
 /// compatibility remain in `ZenVoiceConfiguration`.
 public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
-    public static let engineID = "whisper"
+    public static let engineID = EngineIdentifiers.whisper
 
     public var descriptor: EngineDescriptor {
         EngineDescriptor(

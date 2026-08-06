@@ -13,6 +13,9 @@
 // limitations under the License.
 
 import Foundation
+#if os(macOS)
+import Speech
+#endif
 import ZenVoiceCore
 import ZenVoiceRuntime
 
@@ -118,6 +121,143 @@ private func discoverConfiguration() -> ZenVoiceConfiguration {
     }
 }
 
+private func makeEngineRegistry(
+    configuration: ZenVoiceConfiguration
+) -> EngineRegistry {
+    let whisper = WhisperSpeechEngine(configuration: configuration)
+    var engines: [any SpeechEngine] = [whisper]
+    #if os(macOS)
+    // Apple Speech requires an app target with the Speech Recognition
+    // entitlement and an interactive authorization prompt. Including it in a
+    // headless executable target can abort the process, so only add it when
+    // the harness is already authorized. The multi-engine benchmark still
+    // exercises Whisper and will automatically include Parakeet/Nemotron
+    // engines once they are wired into EngineRegistry.
+    if SFSpeechRecognizer.authorizationStatus() == .authorized {
+        engines.append(AppleSpeechEngine())
+    }
+    if let parakeetFlash = makeParakeetFlashEngine() {
+        engines.append(parakeetFlash)
+    }
+    if let parakeetTDTv2 = makeParakeetTDTv2Engine() {
+        engines.append(parakeetTDTv2)
+    }
+    if let parakeetTDTv3 = makeParakeetTDTv3Engine() {
+        engines.append(parakeetTDTv3)
+    }
+    if let nemotronUltraFast = makeNemotronSpeechUltraFastEngine() {
+        engines.append(nemotronUltraFast)
+    }
+    if let nemotronMultilingual = makeNemotronSpeechMultilingualEngine() {
+        engines.append(nemotronMultilingual)
+    }
+    if let cohere = makeCohereTranscribeEngine() {
+        engines.append(cohere)
+    }
+    #endif
+    let temporary = EngineRegistry(engines: engines)
+    let fallbackOrder = EngineRecommendationEngine.fallbackOrder(
+        for: LanguageProfile.english,
+        hardware: HardwareProfile.current(),
+        registry: temporary
+    )
+    return EngineRegistry(
+        engines: engines,
+        fallbackOrder: fallbackOrder
+    )
+}
+
+private func makeParakeetFlashEngine() -> ParakeetFlashEngine? {
+    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+    guard let modelsDirectory else {
+        return nil
+    }
+    let modelURL = modelsDirectory
+        .appendingPathComponent(
+            ParakeetFlashEngine.modelFilename,
+            isDirectory: false
+        )
+    guard FileManager.default.fileExists(atPath: modelURL.path) else {
+        return nil
+    }
+    return ParakeetFlashEngine(modelURL: modelURL)
+}
+
+private func makeParakeetTDTv2Engine() -> ParakeetTDTv2Engine? {
+    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+    guard let modelsDirectory else {
+        return nil
+    }
+    let modelURL = modelsDirectory
+        .appendingPathComponent(
+            ParakeetTDTv2Engine.modelFilename,
+            isDirectory: false
+        )
+    guard FileManager.default.fileExists(atPath: modelURL.path) else {
+        return nil
+    }
+    return ParakeetTDTv2Engine(modelURL: modelURL)
+}
+
+private func makeNemotronSpeechUltraFastEngine()
+    -> NemotronSpeechUltraFastEngine? {
+    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+    guard let modelsDirectory else {
+        return nil
+    }
+    let modelURL = modelsDirectory
+        .appendingPathComponent(
+            NemotronEngineConstants.modelFilename,
+            isDirectory: false
+        )
+    guard FileManager.default.fileExists(atPath: modelURL.path) else {
+        return nil
+    }
+    return NemotronSpeechUltraFastEngine(modelURL: modelURL)
+}
+
+private func makeNemotronSpeechMultilingualEngine()
+    -> NemotronSpeechMultilingualEngine? {
+    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+    guard let modelsDirectory else {
+        return nil
+    }
+    let modelURL = modelsDirectory
+        .appendingPathComponent(
+            NemotronEngineConstants.modelFilename,
+            isDirectory: false
+        )
+    guard FileManager.default.fileExists(atPath: modelURL.path) else {
+        return nil
+    }
+    return NemotronSpeechMultilingualEngine(modelURL: modelURL)
+}
+
+private func makeParakeetTDTv3Engine() -> ParakeetTDTv3Engine? {
+    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+    guard let modelsDirectory else {
+        return nil
+    }
+    let modelURL = modelsDirectory
+        .appendingPathComponent(
+            ParakeetTDTv3Engine.modelFilename,
+            isDirectory: false
+        )
+    guard FileManager.default.fileExists(atPath: modelURL.path) else {
+        return nil
+    }
+    return ParakeetTDTv3Engine(modelURL: modelURL)
+}
+
+private func makeCohereTranscribeEngine() -> CohereTranscribeEngine? {
+    guard let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+    else {
+        return nil
+    }
+    let engine = CohereTranscribeEngine(modelsDirectory: modelsDirectory)
+    return engine.isAvailable ? engine : nil
+}
+
 private func runRealSpeechSmoke() -> Bool {
     guard let corpusPath = environment["ZENVOICE_ACCURACY_CORPUS"] else {
         fail("ZENVOICE_ACCURACY_SMOKE requires ZENVOICE_ACCURACY_CORPUS")
@@ -165,6 +305,99 @@ private func runRealSpeechSmoke() -> Bool {
         )
     }
     report("ZenVoiceAccuracyChecks smoke passed.")
+    return true
+}
+
+private func measureEngines(
+    clips: [Fixtures.Clip],
+    languageProfile: LanguageProfile,
+    gain: Float,
+    noise: Float
+) -> Bool {
+    let configuration = discoverConfiguration()
+    let registry = makeEngineRegistry(configuration: configuration)
+    let available = registry.availability(for: languageProfile)
+        .filter { $0.isAvailable }
+    guard !available.isEmpty else {
+        report("  multi-engine benchmark: no engines available")
+        return true
+    }
+
+    var engineResults: [String: Scoring.Result] = [:]
+    var engineSeconds: [String: TimeInterval] = [:]
+    var engineErrors: [String: String] = [:]
+
+    let semaphore = DispatchSemaphore(value: 0)
+    Task.detached {
+        for availability in available {
+            guard let engine = registry.resolve(
+                for: languageProfile,
+                selectedID: availability.engine.id
+            ) else {
+                continue
+            }
+            var total = Scoring.Result.zero
+            var seconds: TimeInterval = 0
+            do {
+                try await engine.prepare()
+            } catch {
+                engineErrors[availability.engine.displayName] =
+                    "prepare failed: \(error.localizedDescription)"
+                continue
+            }
+            for clip in clips {
+                let degraded = Fixtures.degraded(
+                    (try? Fixtures.samples(at: clip.url)) ?? [],
+                    gain: gain,
+                    noise: noise
+                )
+                guard !degraded.isEmpty else { continue }
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "zenvoice-engine-\(availability.engine.id)"
+                            + "-\(clip.name).wav"
+                    )
+                try? Fixtures.write(samples: degraded, to: tempURL)
+
+                let start = Date()
+                let transcript = (
+                    try? await engine.transcribe(
+                        audioURL: tempURL,
+                        languageProfile: languageProfile,
+                        initialPrompt: nil
+                    )
+                )?.finalTranscript ?? ""
+                seconds += Date().timeIntervalSince(start)
+
+                let score = Scoring.wordErrorRate(
+                    reference: clip.sentence.text,
+                    hypothesis: transcript
+                )
+                total = total + score
+            }
+            engineResults[availability.engine.displayName] = total
+            engineSeconds[availability.engine.displayName] = seconds
+        }
+        semaphore.signal()
+    }
+    semaphore.wait()
+
+    report()
+    report("  multi-engine benchmark")
+    report("  " + String(repeating: "-", count: 60))
+    for (name, result) in engineResults.sorted(by: { $0.key < $1.key }) {
+        let seconds = engineSeconds[name] ?? 0
+        report(
+            "  "
+                + name.padding(toLength: 28, withPad: " ", startingAt: 0)
+                + result.percentage.leftPadded(to: 7)
+                + String(format: "%8.2fs", seconds)
+        )
+    }
+    for (name, error) in engineErrors.sorted(by: { $0.key < $1.key }) {
+        report("  \(name): \(error)")
+    }
+    report()
     return true
 }
 
@@ -576,6 +809,15 @@ private func measure() -> Bool {
         )
     )
     report()
+
+    if flag("ZENVOICE_ACCURACY_MULTIENGINE") {
+        _ = measureEngines(
+            clips: clips,
+            languageProfile: .english,
+            gain: gain,
+            noise: noise
+        )
+    }
 
     // ---- refinement pipeline ----
     //

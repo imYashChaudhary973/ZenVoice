@@ -492,6 +492,44 @@ enum Fixtures {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
+    /// Writes 16 kHz mono float32 samples to a WAV file.
+    static func write(
+        samples: [Float],
+        to url: URL,
+        sampleRate: Double = 16_000
+    ) throws {
+        let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: sampleRate,
+            channels: 1,
+            interleaved: false
+        )
+        guard let format else {
+            throw FixtureError.synthesisUnavailable(
+                "Could not create target audio format"
+            )
+        }
+        let file = try AVAudioFile(
+            forWriting: url,
+            settings: format.settings,
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: AVAudioFrameCount(samples.count)
+        ), let channel = buffer.floatChannelData?.pointee else {
+            throw FixtureError.synthesisUnavailable(
+                "Could not allocate audio buffer"
+            )
+        }
+        for (index, sample) in samples.enumerated() {
+            channel[index] = sample
+        }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        try file.write(from: buffer)
+    }
+
     /// Reads audio as 16 kHz mono float32, converting if necessary.
     ///
     /// Fixtures are already in that format, but recordings supplied by a person

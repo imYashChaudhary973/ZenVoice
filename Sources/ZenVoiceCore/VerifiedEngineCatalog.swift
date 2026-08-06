@@ -54,21 +54,55 @@ public struct VerifiedEngine: Equatable, Sendable {
 /// shown in the UI as available, but their descriptors, licences, and provenance
 /// are recorded here so the roadmap has a single source of truth.
 public enum VerifiedEngineCatalog {
-    /// Engines that can be selected in Phase 1.
+    /// Engines that can be selected in Phase 1 and Phase 2a.
     public static let engines: [VerifiedEngine] = [
-        appleSpeech()
-    ]
-
-    /// Engines planned for later phases. Their IDs and families are fixed so
-    /// Phase 2/3/5 code can refer to them without changing this file.
-    public static let reservedEngines: [VerifiedEngine] = [
+        appleSpeech(),
+        parakeetFlash(),
         parakeetTDTv2(),
         parakeetTDTv3(),
-        parakeetFlash(),
         nemotronSpeechUltraFast(),
         nemotronSpeechMultilingual(),
         cohereTranscribe()
     ]
+
+    /// Engines planned for later phases. Their IDs and families are fixed so
+    /// Phase 2/3/5 code can refer to them without changing this file.
+    public static let reservedEngines: [VerifiedEngine] = []
+
+    /// GGUF filename shared by both Nemotron engine entries.
+    public static let nemotronModelFilename =
+        "nemotron-3.5-asr-streaming-0.6b-q8_0.gguf"
+    public static let cohereEncoderFilename =
+        "cohere-encoder.int8.onnx"
+    public static let cohereDecoderFilename =
+        "cohere-decoder.int8.onnx"
+    public static let cohereTokenizerFilename =
+        "tokens.txt"
+    public static let cohereEncoderSHA256 =
+        "27ef3d3a2352c972fa4831ae680d52937a2d4e5d62910060f140b13e2f4ccd2b"
+    public static let cohereEncoderSizeBytes: Int64 = 6_164_263
+    public static let cohereDecoderSHA256 =
+        "4be3bdfe855b751985dd2b53d39cca66967bdcb656a138753daf12c451900358"
+    public static let cohereDecoderSizeBytes: Int64 = 530_119
+    public static let cohereTokenizerSHA256 =
+        "013ede043ae2480e3a9205cc34550d9686100cc682bacc90f702facdfbb93035"
+    public static let cohereTokenizerSizeBytes: Int64 = 207_437
+    public static let cohereEncoderDataFilename =
+        "cohere-encoder.int8.onnx.data"
+    public static let cohereEncoderDataSHA256 =
+        "0a6ebd1efbaeef6d15106e33671ce73067cad862bbb20f5e2dfbcd56695fbb76"
+    public static let cohereEncoderDataSizeBytes: Int64 = 2_839_314_432
+    public static let cohereDecoderDataFilename =
+        "cohere-decoder.int8.onnx.data"
+    public static let cohereDecoderDataSHA256 =
+        "8e4d5d7ea5092cf0779b711c65dfef9ecd2b88df951c6c7aa334df345c2eb4d8"
+    public static let cohereDecoderDataSizeBytes: Int64 = 222_937_088
+    public static let cohereBundleSizeBytes: Int64 =
+        cohereEncoderSizeBytes
+            + cohereEncoderDataSizeBytes
+            + cohereDecoderSizeBytes
+            + cohereDecoderDataSizeBytes
+            + cohereTokenizerSizeBytes
 
     /// Everything, offered or reserved.
     public static var allEngines: [VerifiedEngine] {
@@ -117,25 +151,28 @@ public enum VerifiedEngineCatalog {
                 supportedLanguages: [],
                 requiresDownload: true,
                 requiresInternet: false,
-                format: "Core ML / ONNX",
+                format: "GGUF (parakeet.cpp v0.5.0)",
                 publisher: "NVIDIA",
-                license: "NVIDIA Open Model License",
-                licenseURL:
-                    "https://www.nvidia.com/en-us/agreements/enterprise-software/"
-                    + "nvidia-open-model-license/",
+                license: "CC-BY-4.0",
+                licenseURL: "https://creativecommons.org/licenses/by/4.0/",
                 attribution:
-                    "Parakeet TDT by NVIDIA. Runtime integration planned for "
-                    + "Phase 2.",
+                    "Parakeet TDT 0.6B v2 by NVIDIA. English-only. Runtime: "
+                    + "parakeet.cpp v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
                 privacyNote:
-                    "Planned on-device engine. No audio leaves the Mac."
+                    "On-device engine. No audio leaves the Mac."
             ),
             runtimeIdentifier: "nvidia.parakeet.tdt.v2",
             sourceRepository:
                 "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2",
-            sourceRevision: nil,
-            downloadURL: nil,
-            sha256: nil,
-            fileSizeBytes: nil
+            sourceRevision: "main",
+            downloadURL: URL(
+                string:
+                    "https://huggingface.co/mudler/parakeet-cpp-gguf/"
+                    + "resolve/main/tdt-0.6b-v2-q8_0.gguf?download=true"
+            ),
+            sha256:
+                "2027e2e1a4dc60ccdd8558f93b15e7c0db4ef8895b4e82e889f3a6275d8119c6",
+            fileSizeBytes: 903_835_936
         )
     }
 
@@ -148,25 +185,29 @@ public enum VerifiedEngineCatalog {
                 supportedLanguages: [],
                 requiresDownload: true,
                 requiresInternet: false,
-                format: "Core ML / ONNX",
+                format: "GGUF (parakeet.cpp v0.5.0)",
                 publisher: "NVIDIA",
-                license: "NVIDIA Open Model License",
-                licenseURL:
-                    "https://www.nvidia.com/en-us/agreements/enterprise-software/"
-                    + "nvidia-open-model-license/",
+                license: "CC-BY-4.0",
+                licenseURL: "https://creativecommons.org/licenses/by/4.0/",
                 attribution:
-                    "Parakeet TDT by NVIDIA. Runtime integration planned for "
-                    + "Phase 2.",
+                    "Parakeet TDT 0.6B v3 by NVIDIA. Multilingual (25 "
+                    + "European languages). Runtime: parakeet.cpp (MIT) v0.5.0 "
+                    + "with Metal on Apple Silicon and CPU fallback on Intel.",
                 privacyNote:
-                    "Planned on-device engine. No audio leaves the Mac."
+                    "On-device engine. No audio leaves the Mac."
             ),
             runtimeIdentifier: "nvidia.parakeet.tdt.v3",
             sourceRepository:
-                "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
-            sourceRevision: nil,
-            downloadURL: nil,
-            sha256: nil,
-            fileSizeBytes: nil
+                "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+            sourceRevision: "main",
+            downloadURL: URL(
+                string:
+                    "https://huggingface.co/mudler/parakeet-cpp-gguf/"
+                    + "resolve/main/tdt-0.6b-v3-q8_0.gguf?download=true"
+            ),
+            sha256:
+                "4d69a4a6683f4f2d952bad794c1357ca6eb628027695b4699c5a9ad4cd07d757",
+            fileSizeBytes: 940_663_680
         )
     }
 
@@ -174,30 +215,34 @@ public enum VerifiedEngineCatalog {
         VerifiedEngine(
             descriptor: EngineDescriptor(
                 id: "parakeet-flash",
-                displayName: "Parakeet Flash",
+                displayName: "Parakeet Flash (Beta)",
                 family: .parakeetFlash,
                 supportedLanguages: [],
                 requiresDownload: true,
                 requiresInternet: false,
-                format: "Core ML / ONNX",
+                format: "GGUF (parakeet.cpp v0.5.0, streaming)",
                 publisher: "NVIDIA",
-                license: "NVIDIA Open Model License",
-                licenseURL:
-                    "https://www.nvidia.com/en-us/agreements/enterprise-software/"
-                    + "nvidia-open-model-license/",
+                license: "CC-BY-4.0",
+                licenseURL: "https://creativecommons.org/licenses/by/4.0/",
                 attribution:
-                    "Parakeet Flash by NVIDIA. Runtime integration planned for "
-                    + "Phase 2.",
+                    "Parakeet Realtime EOU 120M v1 by NVIDIA. Cache-aware "
+                    + "streaming model. Runtime: parakeet.cpp v0.5.0 (MIT) by "
+                    + "Ettore Di Giacinto / LocalAI.",
                 privacyNote:
-                    "Planned on-device engine. No audio leaves the Mac."
+                    "On-device engine. No audio leaves the Mac."
             ),
             runtimeIdentifier: "nvidia.parakeet.flash",
             sourceRepository:
-                "https://huggingface.co/nvidia/parakeet-rnn-v2",
-            sourceRevision: nil,
-            downloadURL: nil,
-            sha256: nil,
-            fileSizeBytes: nil
+                "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
+            sourceRevision: "main",
+            downloadURL: URL(
+                string:
+                    "https://huggingface.co/mudler/parakeet-cpp-gguf/"
+                    + "resolve/main/realtime_eou_120m-v1-q8_0.gguf?download=true"
+            ),
+            sha256:
+                "62616b914d6f5a683a5dea672df055b57de5c49dddf871b8b44b9c814dc3d896",
+            fileSizeBytes: 176_001_472
         )
     }
 
@@ -210,25 +255,30 @@ public enum VerifiedEngineCatalog {
                 supportedLanguages: [],
                 requiresDownload: true,
                 requiresInternet: false,
-                format: "Core ML / ONNX",
+                format: "GGUF (parakeet.cpp v0.5.0, streaming)",
                 publisher: "NVIDIA",
-                license: "NVIDIA Open Model License",
-                licenseURL:
-                    "https://www.nvidia.com/en-us/agreements/enterprise-software/"
-                    + "nvidia-open-model-license/",
+                license: "OpenMDW-1.1",
+                licenseURL: "https://openmdw.ai/license/1-1/",
                 attribution:
-                    "Nemotron Speech 3.5 by NVIDIA. Runtime integration planned "
-                    + "for Phase 2.",
+                    "Nemotron 3.5 ASR Streaming 0.6B by NVIDIA. Cache-aware "
+                    + "streaming model with 40 locales. Runtime: parakeet.cpp "
+                    + "v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
                 privacyNote:
-                    "Planned on-device engine. No audio leaves the Mac."
+                    "On-device engine. No audio leaves the Mac."
             ),
             runtimeIdentifier: "nvidia.nemotron.speech.ultra.fast",
             sourceRepository:
-                "https://huggingface.co/nvidia/Nemotron-Speech-3.5-Ultra-Fast",
-            sourceRevision: nil,
-            downloadURL: nil,
-            sha256: nil,
-            fileSizeBytes: nil
+                "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
+            sourceRevision: "main",
+            downloadURL: URL(
+                string:
+                    "https://huggingface.co/mudler/parakeet-cpp-gguf/"
+                    + "resolve/main/nemotron-3.5-asr-streaming-0.6b-q8_0.gguf"
+                    + "?download=true"
+            ),
+            sha256:
+                "ba2f13eccd4a5245be728f77e6149bd6a4fdcdd133ff2e08ac6005bcef7a99f1",
+            fileSizeBytes: 983_696_512
         )
     }
 
@@ -241,25 +291,32 @@ public enum VerifiedEngineCatalog {
                 supportedLanguages: [],
                 requiresDownload: true,
                 requiresInternet: false,
-                format: "Core ML / ONNX",
+                format: "GGUF (parakeet.cpp v0.5.0)",
                 publisher: "NVIDIA",
-                license: "NVIDIA Open Model License",
-                licenseURL:
-                    "https://www.nvidia.com/en-us/agreements/enterprise-software/"
-                    + "nvidia-open-model-license/",
+                license: "OpenMDW-1.1",
+                licenseURL: "https://openmdw.ai/license/1-1/",
                 attribution:
-                    "Nemotron 3.5 Multilingual by NVIDIA. Runtime integration "
-                    + "planned for Phase 2.",
+                    "Same upstream checkpoint as Nemotron Speech 3.5 Ultra Fast "
+                    + "(nvidia/nemotron-3.5-asr-streaming-0.6b), run in "
+                    + "offline/whole-file mode for 40-locale multilingual "
+                    + "transcription. Runtime: parakeet.cpp v0.5.0 (MIT) by "
+                    + "Ettore Di Giacinto / LocalAI.",
                 privacyNote:
-                    "Planned on-device engine. No audio leaves the Mac."
+                    "On-device engine. No audio leaves the Mac."
             ),
             runtimeIdentifier: "nvidia.nemotron.speech.multilingual",
             sourceRepository:
-                "https://huggingface.co/nvidia/Nemotron-Speech-3.5-Multilingual",
-            sourceRevision: nil,
-            downloadURL: nil,
-            sha256: nil,
-            fileSizeBytes: nil
+                "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
+            sourceRevision: "main",
+            downloadURL: URL(
+                string:
+                    "https://huggingface.co/mudler/parakeet-cpp-gguf/"
+                    + "resolve/main/nemotron-3.5-asr-streaming-0.6b-q8_0.gguf"
+                    + "?download=true"
+            ),
+            sha256:
+                "ba2f13eccd4a5245be728f77e6149bd6a4fdcdd133ff2e08ac6005bcef7a99f1",
+            fileSizeBytes: 983_696_512
         )
     }
 
@@ -269,26 +326,41 @@ public enum VerifiedEngineCatalog {
                 id: "cohere-transcribe",
                 displayName: "Cohere Transcribe",
                 family: .cohereTranscribe,
-                supportedLanguages: [],
-                requiresDownload: false,
-                requiresInternet: true,
-                format: "Cloud API",
+                supportedLanguages: cohereSupportedLanguages(),
+                requiresDownload: true,
+                requiresInternet: false,
+                format: "ONNX INT8 (encoder-decoder)",
                 publisher: "Cohere",
-                license: "Cohere Terms of Service",
-                licenseURL: "https://cohere.com/terms",
+                license: "Apache-2.0",
+                licenseURL:
+                    "https://www.apache.org/licenses/LICENSE-2.0.html",
                 attribution:
-                    "Cohere Transcribe cloud API. Optional enhancement planned "
-                    + "for Phase 5; requires explicit opt-in and an API key.",
+                    "Cohere Transcribe 03-2026 by Cohere Labs. 2B parameter "
+                    + "Conformer encoder-decoder, 14 languages. INT8 ONNX "
+                    + "export by cstr/cohere-transcribe-onnx-int8. Weights are "
+                    + "Apache-2.0. Optional cloud API remains Phase 5.",
                 privacyNote:
-                    "Cloud engine: audio leaves this Mac only with explicit "
-                    + "opt-in."
+                    "On-device engine using ONNX Runtime with optional CoreML "
+                    + "provider. No audio leaves the Mac."
             ),
-            runtimeIdentifier: "cohere.transcribe.api",
-            sourceRepository: nil,
-            sourceRevision: nil,
-            downloadURL: nil,
-            sha256: nil,
-            fileSizeBytes: nil
+            runtimeIdentifier: "cohere.transcribe.onnx",
+            sourceRepository:
+                "https://huggingface.co/cstr/cohere-transcribe-onnx-int8",
+            sourceRevision: "main",
+            downloadURL: URL(
+                string:
+                    "https://huggingface.co/cstr/cohere-transcribe-onnx-int8/"
+                    + "resolve/main/cohere-encoder.int8.onnx?download=true"
+            ),
+            sha256: cohereEncoderSHA256,
+            fileSizeBytes: cohereEncoderSizeBytes
         )
+    }
+
+    private static func cohereSupportedLanguages() -> [SupportedLanguage] {
+        [
+            "en", "de", "fr", "it", "es", "pt", "nl", "pl", "el",
+            "ar", "ja", "zh", "vi", "ko"
+        ].compactMap { LanguageCatalog.language(code: $0) }
     }
 }
