@@ -51,20 +51,6 @@ struct LanguagesAndModelsScreen: View {
     }
 }
 
-struct FormattingScreen: View {
-    @ObservedObject var viewModel: SettingsViewModel
-
-    var body: some View {
-        ZenScreen(
-            title: "Formatting",
-            subtitle: "Shape your words after they are transcribed."
-        ) {
-            InstantRefineScreen(viewModel: viewModel)
-            ZenIntelligenceScreen(viewModel: viewModel)
-        }
-    }
-}
-
 struct CommandsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 

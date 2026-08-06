@@ -536,7 +536,10 @@ struct ZenVoiceSettingsView: View {
                 modelManagerViewModel: modelManagerViewModel
             )
         case .formatting:
-            FormattingScreen(viewModel: viewModel)
+            FormattingScreen(
+                viewModel: viewModel,
+                cloudAIViewModel: cloudAIViewModel
+            )
         case .commands:
             CommandsScreen(viewModel: viewModel)
         case .personal:

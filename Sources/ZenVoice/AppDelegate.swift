@@ -95,7 +95,7 @@ private struct ProcessedTranscription {
 private struct ActiveDictationBehavior: Sendable {
     let languageProfile: LanguageProfile
     let correctionScope: CorrectionLanguageScope
-    let refinementMode: InstantRefineMode
+    let formattingMode: TranscriptFormattingMode
     let voiceCommandsEnabled: Bool
     let context: String
 
@@ -104,7 +104,7 @@ private struct ActiveDictationBehavior: Sendable {
         return ActiveDictationBehavior(
             languageProfile: languageProfile,
             correctionScope: languageProfile.correctionScope,
-            refinementMode: InstantRefinePreferences.load(),
+            formattingMode: TranscriptFormattingPreferences.load(),
             voiceCommandsEnabled: false,
             context: ""
         )
@@ -1352,12 +1352,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             preferredVocabulary = []
         }
+        let profileFormattingMode: TranscriptFormattingMode? =
+            profile.map { profile in
+                TranscriptFormattingMode.from(
+                    instantRefine: profile.refinementMode,
+                    zenIntelligence: profile.zenIntelligenceMode
+                )
+            }
         return ActiveDictationBehavior(
             languageProfile: languageProfile,
             correctionScope: correctionScope,
-            refinementMode:
-                profile?.refinementMode
-                ?? InstantRefinePreferences.load(),
+            formattingMode:
+                profileFormattingMode
+                ?? TranscriptFormattingPreferences.load(),
             voiceCommandsEnabled:
                 profile?.voiceCommandsEnabled
                 ?? LocalVoiceCommandPreferences.isEnabled(),
@@ -1561,7 +1568,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let refinement =
                     TranscriptRefinement.refine(
                         result.finalTranscript,
-                        mode: behavior.refinementMode,
+                        mode: behavior.formattingMode.instantRefineMode,
                         languageCode:
                             behavior.languageProfile
                                 .inputLanguageCode,
@@ -1653,7 +1660,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let refinement = TranscriptRefinement.refine(
             result.finalTranscript,
-            mode: behavior.refinementMode,
+            mode: behavior.formattingMode.instantRefineMode,
             languageCode: behavior.languageProfile.inputLanguageCode,
 
             voiceCommandsEnabled: behavior.voiceCommandsEnabled
@@ -1705,7 +1712,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 )
                 let refinement = TranscriptRefinement.refine(
                     result.finalTranscript,
-                    mode: behavior.refinementMode,
+                    mode: behavior.formattingMode.instantRefineMode,
                     languageCode: behavior.languageProfile.inputLanguageCode,
 
                     voiceCommandsEnabled: behavior.voiceCommandsEnabled
@@ -1914,7 +1921,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let refinement =
                     TranscriptRefinement.refine(
                         result.finalTranscript,
-                        mode: behavior.refinementMode,
+                        mode: behavior.formattingMode.instantRefineMode,
                         languageCode:
                             behavior.languageProfile
                                 .inputLanguageCode,
@@ -2323,19 +2330,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func activeZenIntelligenceMode() -> ZenIntelligenceMode {
-        let global = ZenIntelligencePreferences.load()
-        guard let bundleID = NSWorkspace.shared.frontmostApplication?
-            .bundleIdentifier,
-              let profile = ApplicationProfilePreferences.profile(
-                for: bundleID
-              ) else {
-            return global
-        }
-        return profile.zenIntelligenceMode ?? global
+        TranscriptFormattingPreferences.load().zenIntelligenceMode
     }
 
     private func enhanceForMode(_ transcript: String) -> String {
-        let mode = activeZenIntelligenceMode()
+        let mode = activeDictationBehavior.formattingMode.zenIntelligenceMode
         guard mode != .off else { return transcript }
         let result = ZenIntelligenceEngine().enhance(
             transcript,
@@ -2791,9 +2790,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let applicationProfile = ApplicationProfilePreferences.profile(
             for: record.targetBundleID
         )
-        let instantRefineMode =
-            applicationProfile?.refinementMode
-            ?? InstantRefinePreferences.load()
+        let formattingMode = applicationProfile.map { profile in
+            TranscriptFormattingMode.from(
+                instantRefine: profile.refinementMode,
+                zenIntelligence: profile.zenIntelligenceMode
+            )
+        } ?? TranscriptFormattingPreferences.load()
         let voiceCommandsEnabled =
             applicationProfile?.voiceCommandsEnabled
             ?? LocalVoiceCommandPreferences.isEnabled()
@@ -2808,7 +2810,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let refinement =
                     TranscriptRefinement.refine(
                         result.finalTranscript,
-                        mode: instantRefineMode,
+                        mode: formattingMode.instantRefineMode,
                         languageCode:
                             recordedLanguageProfile.inputLanguageCode,
                         voiceCommandsEnabled: voiceCommandsEnabled
