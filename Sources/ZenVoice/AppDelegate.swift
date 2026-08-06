@@ -118,7 +118,7 @@ private extension LanguageProfile {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let state = AppState()
     private let recorder = AudioRecorder()
     private let inserter = TextInserter()
@@ -140,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var startStopMenuItem: NSMenuItem!
     private var zenBarMenuItem: NSMenuItem!
     private var statusMessageMenuItem: NSMenuItem!
+    private var todayUsageMenuItem: NSMenuItem!
     private var livePreviewMenuItem: NSMenuItem!
     private var languageMenuItem: NSMenuItem!
     private var zenBarController: OverlayPanelController!
@@ -502,6 +503,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+        menu.delegate = self
+
+        // Today's usage, refreshed each time the menu opens.
+        todayUsageMenuItem = NSMenuItem(
+            title: TodayUsageInsight.empty.pillSummary,
+            action: nil,
+            keyEquivalent: ""
+        )
+        todayUsageMenuItem.isEnabled = false
+        menu.addItem(todayUsageMenuItem)
+
+        menu.addItem(.separator())
 
         let openItem = NSMenuItem(
             title: "Open ZenVoice…",
@@ -2888,6 +2901,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             zenBarController.hide()
         }
         zenBarMenuItem?.state = showsAtAllTimes ? .on : .off
+    }
+
+    /// Recomputes today's usage as the menu opens, so the pill is current
+    /// without polling insights on a timer.
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshTodayUsagePill()
+    }
+
+    private func refreshTodayUsagePill() {
+        let today = (try? dictationVault?.insights().today) ?? nil
+        let summary = (today ?? .empty).pillSummary
+        todayUsageMenuItem?.title = summary
+        statusItem?.button?.toolTip = "ZenVoice — \(summary)"
     }
 
     @objc private func requestAccessibilityPermission() {

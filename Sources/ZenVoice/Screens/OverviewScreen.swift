@@ -43,6 +43,7 @@ struct OverviewScreen: View {
 
     private var homeGrid: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+            todayUsageCard
             statusOverview
             HStack(alignment: .top, spacing: 16) {
                 quickActionsPanel
@@ -51,6 +52,78 @@ struct OverviewScreen: View {
                     .frame(width: 300)
             }
         }
+    }
+
+    /// Today's dictation totals. Private Dictation is excluded upstream —
+    /// private recordings are never persisted, so they never reach insights.
+    private var todayUsageCard: some View {
+        let today = insightsViewModel.snapshot.today
+        return ZenPanel {
+            HStack(spacing: 0) {
+                todayStat(
+                    "Today",
+                    value: "\(today.wordCount)",
+                    caption: today.wordCount == 1 ? "word" : "words"
+                )
+                Divider().overlay(ZenDesign.Semantic.border)
+                todayStat(
+                    "Dictations",
+                    value: "\(today.dictationCount)",
+                    caption: today.dictationCount == 1 ? "session" : "sessions"
+                )
+                Divider().overlay(ZenDesign.Semantic.border)
+                todayStat(
+                    "Time",
+                    value: formattedDuration(today.durationSeconds),
+                    caption: "spoken"
+                )
+                Divider().overlay(ZenDesign.Semantic.border)
+                todayStat(
+                    "Top app",
+                    value: today.topApplicationName ?? "—",
+                    caption: today.hasActivity ? "most words" : "no activity"
+                )
+            }
+            .padding(.vertical, 14)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("Today's usage. \(today.pillSummary)."))
+    }
+
+    private func todayStat(
+        _ label: String,
+        value: String,
+        caption: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label.uppercased())
+                .font(.system(size: 9.5, weight: .semibold))
+                .tracking(1.5)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            Text(value)
+                .font(ZenDesign.Typography.bodyStrong)
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Text(caption)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+    }
+
+    private func formattedDuration(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        if total < 60 {
+            return "\(total)s"
+        }
+        let minutes = total / 60
+        if minutes < 60 {
+            return "\(minutes)m"
+        }
+        return "\(minutes / 60)h \(minutes % 60)m"
     }
 
     private var statusOverview: some View {

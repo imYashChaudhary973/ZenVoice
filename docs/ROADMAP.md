@@ -59,6 +59,9 @@ pipeline remain prepared but inactive.
 - [x] Add cancel and recover-last-dictation actions
 - [ ] Improve automated and manual lifecycle coverage
 - [x] Add stable partial-transcript preview and guarded commit-on-pause insertion
+- [x] Add a notch-aware, configurable live transcription overlay
+- [x] Add optional local Audio History with size and age budgets and ZIP export
+- [x] Add today-usage stats on Home and in the menu bar
 
 ## Later: multilingual and distribution readiness
 

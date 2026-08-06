@@ -1567,6 +1567,77 @@ private func checkAudioHistoryPreferenceDefaults() throws {
     )
 }
 
+private func checkTodayUsageInsight() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let now = Date(timeIntervalSince1970: 1_721_865_600)
+    let today = calendar.startOfDay(for: now)
+    let yesterday = today.addingTimeInterval(-24 * 60 * 60)
+
+    let events = [
+        DictationInsightEvent(
+            startedAt: today,
+            durationSeconds: 30,
+            wordCount: 40,
+            correctionCount: 0,
+            targetBundleID: "com.apple.Notes",
+            targetAppName: "Notes",
+            category: .notes
+        ),
+        DictationInsightEvent(
+            startedAt: today.addingTimeInterval(600),
+            durationSeconds: 30,
+            wordCount: 10,
+            correctionCount: 0,
+            targetBundleID: "com.apple.TextEdit",
+            targetAppName: "TextEdit",
+            category: .documents
+        ),
+        DictationInsightEvent(
+            startedAt: yesterday,
+            durationSeconds: 120,
+            wordCount: 500,
+            correctionCount: 0,
+            targetBundleID: "com.apple.Notes",
+            targetAppName: "Notes",
+            category: .notes
+        )
+    ]
+
+    let snapshot = LocalInsightsSnapshot.calculate(
+        events: events,
+        now: now,
+        calendar: calendar
+    )
+    try require(
+        snapshot.today.dictationCount == 2,
+        "today counted dictations from other days"
+    )
+    try require(snapshot.today.wordCount == 50, "today word count is wrong")
+    try require(
+        snapshot.today.durationSeconds == 60,
+        "today duration is wrong"
+    )
+    try require(
+        snapshot.today.topApplicationName == "Notes",
+        "today top app is wrong"
+    )
+    try require(
+        snapshot.today.pillSummary == "50 words today",
+        "today pill summary is wrong"
+    )
+
+    let empty = LocalInsightsSnapshot.calculate(
+        events: [],
+        now: now,
+        calendar: calendar
+    )
+    try require(
+        !empty.today.hasActivity,
+        "an empty day reported activity"
+    )
+}
+
 do {
     try checkEncryptedStorage()
     try checkRecoveryExpiry()
@@ -1589,7 +1660,8 @@ do {
     try checkAudioArchiveBudgets()
     try checkAudioArchiveExport()
     try checkAudioHistoryPreferenceDefaults()
-    print("ZenVoiceStorageChecks: 21 checks passed")
+    try checkTodayUsageInsight()
+    print("ZenVoiceStorageChecks: 22 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

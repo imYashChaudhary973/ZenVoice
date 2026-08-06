@@ -65,6 +65,49 @@ public struct DailyActivityInsight: Identifiable, Sendable {
     public let wordCount: Int
 }
 
+/// Usage for the current calendar day.
+///
+/// Private Dictation never reaches this calculation: private recordings are
+/// discarded rather than persisted, so they are absent from the event list the
+/// snapshot is built from.
+public struct TodayUsageInsight: Sendable {
+    public let dictationCount: Int
+    public let wordCount: Int
+    public let durationSeconds: TimeInterval
+    public let topApplicationName: String?
+
+    public static let empty = TodayUsageInsight(
+        dictationCount: 0,
+        wordCount: 0,
+        durationSeconds: 0,
+        topApplicationName: nil
+    )
+
+    public init(
+        dictationCount: Int,
+        wordCount: Int,
+        durationSeconds: TimeInterval,
+        topApplicationName: String?
+    ) {
+        self.dictationCount = dictationCount
+        self.wordCount = wordCount
+        self.durationSeconds = durationSeconds
+        self.topApplicationName = topApplicationName
+    }
+
+    /// Whether anything has been dictated today.
+    public var hasActivity: Bool { dictationCount > 0 }
+
+    /// A compact summary suitable for a menu-bar pill, e.g. "128 words today".
+    public var pillSummary: String {
+        guard hasActivity else {
+            return "No dictations today"
+        }
+        let unit = wordCount == 1 ? "word" : "words"
+        return "\(wordCount) \(unit) today"
+    }
+}
+
 public struct LocalInsightsSnapshot: Sendable {
     public let dictationCount: Int
     public let totalWordCount: Int
@@ -77,6 +120,7 @@ public struct LocalInsightsSnapshot: Sendable {
     public let categories: [CategoryInsight]
     public let topApplications: [ApplicationInsight]
     public let recentActivity: [DailyActivityInsight]
+    public let today: TodayUsageInsight
 
     public static let empty = LocalInsightsSnapshot(
         dictationCount: 0,
@@ -89,7 +133,8 @@ public struct LocalInsightsSnapshot: Sendable {
         longestStreakDays: 0,
         categories: [],
         topApplications: [],
-        recentActivity: []
+        recentActivity: [],
+        today: .empty
     )
 
     public static func calculate(
@@ -177,6 +222,36 @@ public struct LocalInsightsSnapshot: Sendable {
             )
         }
 
+        let todayEvents = events.filter {
+            calendar.isDate($0.startedAt, inSameDayAs: today)
+        }
+        let todayAppGroups: [String: [DictationInsightEvent]] = Dictionary(
+            grouping: todayEvents.filter { $0.targetBundleID != nil },
+            by: { $0.targetBundleID ?? "" }
+        )
+        var todayAppTotals: [(name: String, words: Int)] = []
+        for (bundleID, values) in todayAppGroups {
+            let name = values.compactMap(\.targetAppName).first ?? bundleID
+            let words = values.reduce(0) { $0 + $1.wordCount }
+            todayAppTotals.append((name: name, words: words))
+        }
+        todayAppTotals.sort { first, second in
+            if first.words == second.words {
+                return first.name < second.name
+            }
+            return first.words > second.words
+        }
+        let todayTopApplication = todayAppTotals.first?.name
+
+        let todayUsage = TodayUsageInsight(
+            dictationCount: todayEvents.count,
+            wordCount: todayEvents.reduce(0) { $0 + $1.wordCount },
+            durationSeconds: todayEvents.reduce(0) {
+                $0 + $1.durationSeconds
+            },
+            topApplicationName: todayTopApplication
+        )
+
         return LocalInsightsSnapshot(
             dictationCount: events.count,
             totalWordCount: totalWords,
@@ -188,7 +263,8 @@ public struct LocalInsightsSnapshot: Sendable {
             longestStreakDays: longestStreak,
             categories: categories,
             topApplications: Array(applications.prefix(5)),
-            recentActivity: activity
+            recentActivity: activity,
+            today: todayUsage
         )
     }
 
