@@ -25,11 +25,11 @@
 
 ### 1. Architecture decision record
 
-- [ ] Write `docs/decisions/0005-multi-engine-architecture.md`.
-- [ ] Define `SpeechEngine` protocol.
-- [ ] Define `EngineDescriptor` (metadata: ID, display name, supported languages, format, runtime family, license, provenance).
-- [ ] Define `EngineRegistry` and selection rules (language profile → preferred engine → fallback engine).
-- [ ] Document fail-closed behavior: if an engine fails, fall back to the next engine in the user’s preference list, then to Whisper.
+- [x] Write `docs/decisions/0005-multi-engine-architecture.md`.
+- [x] Define `SpeechEngine` protocol.
+- [x] Define `EngineDescriptor` (metadata: ID, display name, supported languages, format, runtime family, license, provenance).
+- [x] Define `EngineRegistry` and selection rules (language profile → preferred engine → fallback engine).
+- [x] Document fail-closed behavior: if an engine fails, fall back to the next engine in the user’s preference list, then to Whisper.
 
 ### 2. SpeechEngine protocol and registry
 
@@ -49,61 +49,61 @@ public protocol SpeechEngine: Sendable {
 }
 ```
 
-- [ ] Create `Sources/ZenVoiceCore/SpeechEngine.swift`.
-- [ ] Create `Sources/ZenVoiceCore/EngineRegistry.swift`.
-- [ ] Add `SelectedEnginePreferences` for persisting the user’s engine choice per language capability.
+- [x] Create `Sources/ZenVoiceCore/SpeechEngine.swift`.
+- [x] Create `Sources/ZenVoiceCore/EngineRegistry.swift`.
+- [x] Add `SelectedEnginePreferences` for persisting the user’s engine choice per language capability.
 
 ### 3. Refactor Whisper behind the protocol
 
-- [ ] Move `WhisperTranscriber` logic into a `WhisperSpeechEngine` conforming to `SpeechEngine`.
-- [ ] Keep `WhisperTranscriber` as the low-level `whisper.cpp` wrapper.
-- [ ] Update `AppDelegate` / dictation lifecycle to call the active engine instead of calling Whisper directly.
-- [ ] Ensure model download, loading, and decoding still work exactly as before.
+- [x] Move `WhisperTranscriber` logic into a `WhisperSpeechEngine` conforming to `SpeechEngine`.
+- [x] Keep `WhisperTranscriber` as the low-level `whisper.cpp` wrapper.
+- [x] Update `AppDelegate` / dictation lifecycle to call the active engine instead of calling Whisper directly.
+- [x] Ensure model download, loading, and decoding still work exactly as before.
 
 ### 4. Apple Speech engine
 
-- [ ] Create `Sources/ZenVoiceCore/AppleSpeechEngine.swift`.
-- [ ] Use `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`.
-- [ ] Check `supportsOnDeviceRecognition` for the requested locale; fail closed if unavailable.
-- [ ] Convert the recorded 16 kHz mono WAV to the format `SFSpeechRecognizer` accepts.
-- [ ] Return `TranscriptionResult` compatible with the rest of the pipeline.
-- [ ] Add privacy note: audio never leaves the Mac when on-device mode is enforced.
+- [x] Create `Sources/ZenVoiceCore/AppleSpeechEngine.swift`.
+- [x] Use `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`.
+- [x] Check `supportsOnDeviceRecognition` for the requested locale; fail closed if unavailable.
+- [x] Convert the recorded 16 kHz mono WAV to the format `SFSpeechRecognizer` accepts.
+- [x] Return `TranscriptionResult` compatible with the rest of the pipeline.
+- [x] Add privacy note: audio never leaves the Mac when on-device mode is enforced.
 
 ### 5. Verified model catalogue refresh
 
-- [ ] Extend `VerifiedModel` (or create `VerifiedEngine`) to describe:
+- [x] Extend `VerifiedModel` (or create `VerifiedEngine`) to describe:
   - engine family (`whisper`, `appleSpeech`, `parakeetTDT`, `parakeetFlash`, `nemotron`, `cohere`)
   - runtime identifier
   - download source / checksum / revision
   - license and attribution
-- [ ] Add Apple Speech as an engine entry with no download.
-- [ ] Add retired/reserved entries for Parakeet TDT v2/v3/Flash, Nemotron variants, and Cohere so later phases can fill them in without changing schema.
-- [ ] Update `docs/MODEL_CATALOG.md` with engine table and license/provenance requirements.
-- [ ] Update `THIRD_PARTY_NOTICES.md` if new runtime licenses are introduced (none for Apple Speech).
+- [x] Add Apple Speech as an engine entry with no download.
+- [x] Add retired/reserved entries for Parakeet TDT v2/v3/Flash, Nemotron variants, and Cohere so later phases can fill them in without changing schema.
+- [x] Update `docs/MODEL_CATALOG.md` with engine table and license/provenance requirements.
+- [x] Update `THIRD_PARTY_NOTICES.md` if new runtime licenses are introduced (none for Apple Speech).
 
 ### 6. Engine selection UI
 
-- [ ] Add an **Engine** section to the Models screen.
-- [ ] Show available engines for the active language profile.
-- [ ] Show availability reason if an engine is unavailable (e.g., Apple Speech on-device not supported for this locale).
-- [ ] Default selection remains Whisper until another engine is proven in Phase 2.
-- [ ] Persist selection per `LanguageProfile`.
+- [x] Add an **Engine** section to the Models screen.
+- [x] Show available engines for the active language profile.
+- [x] Show availability reason if an engine is unavailable (e.g., Apple Speech on-device not supported for this locale).
+- [x] Default selection remains Whisper until another engine is proven in Phase 2.
+- [x] Persist selection per `LanguageProfile`.
 
 ### 7. Command Mode scaffold
 
-- [ ] Create `Sources/ZenVoiceCore/CommandModeEngine.swift`.
-- [ ] Define `CommandAction` enum: `.launchApp(bundleID:)`, `.runShortcut(name:)`, `.systemAction(_)`, `.appleScript(String)`, `.shellScript(String)`, `.none`.
-- [ ] Implement deterministic phrase-to-action matching using a local command manifest.
-- [ ] Add `CommandModePreferences` (enabled/disabled, command manifest storage).
-- [ ] Do **not** yet wire to Shortcuts framework or `NSWorkspace`; this phase builds the parser and registry only.
+- [x] Create `Sources/ZenVoiceCore/CommandModeEngine.swift`.
+- [x] Define `CommandAction` enum: `.launchApp(bundleID:)`, `.runShortcut(name:)`, `.systemAction(_)`, `.appleScript(String)`, `.shellScript(String)`, `.none`.
+- [x] Implement deterministic phrase-to-action matching using a local command manifest.
+- [x] Add `CommandModePreferences` (enabled/disabled, command manifest storage).
+- [x] Do **not** yet wire to Shortcuts framework or `NSWorkspace`; this phase builds the parser and registry only.
 
 ### 8. Checks and QA
 
-- [ ] Add `ZenVoiceCoreChecks` tests for:
+- [x] Add `ZenVoiceCoreChecks` tests for:
   - Engine registry selection rules
   - Apple Speech availability mapping
   - Fallback ordering
-- [ ] Ensure `swift build`, `ZenVoiceCoreChecks`, `ZenVoiceStorageChecks` pass.
+- [x] Ensure `swift build`, `ZenVoiceCoreChecks`, `ZenVoiceStorageChecks` pass.
 - [ ] Manual QA:
   - Dictate with Whisper (unchanged behavior).
   - Select Apple Speech and dictate a short English phrase.

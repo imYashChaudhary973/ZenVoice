@@ -1933,3 +1933,234 @@ guard WhisperDecoding.decodeDeadline(audioSeconds: 2) == 15,
 }
 
 print("ZenVoiceCoreChecks: runaway repetition defence passed")
+
+// MARK: - Engine registry checks
+
+struct FakeSpeechEngine: SpeechEngine {
+    let descriptor: EngineDescriptor
+    let languageCapability: ModelLanguageCapability
+    let isAvailable: Bool
+
+    func prepare() async throws {}
+
+    func transcribe(
+        audioURL: URL,
+        languageProfile: LanguageProfile,
+        initialPrompt: String?
+    ) async throws -> TranscriptionResult {
+        TranscriptionResult(
+            rawTranscript: "",
+            finalTranscript: "",
+            correctionCount: 0,
+            modelID: descriptor.id
+        )
+    }
+}
+
+func fakeEngineDescriptor(
+    id: String,
+    capability: ModelLanguageCapability,
+    supportedLanguages: [SupportedLanguage] = [],
+    available: Bool = true
+) -> EngineDescriptor {
+    EngineDescriptor(
+        id: id,
+        displayName: id,
+        family: .whisper,
+        supportedLanguages: supportedLanguages,
+        requiresDownload: false,
+        requiresInternet: false,
+        format: "fake",
+        publisher: "checks",
+        license: "MIT",
+        licenseURL: "",
+        attribution: "",
+        privacyNote: ""
+    )
+}
+
+func fakeEngine(
+    id: String,
+    capability: ModelLanguageCapability,
+    supportedLanguages: [SupportedLanguage] = [],
+    available: Bool = true
+) -> FakeSpeechEngine {
+    FakeSpeechEngine(
+        descriptor: fakeEngineDescriptor(
+            id: id,
+            capability: capability,
+            supportedLanguages: supportedLanguages,
+            available: available
+        ),
+        languageCapability: capability,
+        isAvailable: available
+    )
+}
+
+func failEngineCheck(_ message: String) -> Never {
+    FileHandle.standardError.write(
+        Data("FAIL: \(message)\n".utf8)
+    )
+    exit(1)
+}
+
+let englishProfile = LanguageProfile.english
+let hinglishProfile = LanguageProfile.hinglish
+let autoProfile = LanguageProfile(
+    inputLanguageCode: LanguageProfile.automaticCode,
+    outputMode: .spokenLanguage
+)
+guard let englishLanguage = LanguageCatalog.language(code: "en"),
+      let hindiLanguage = LanguageCatalog.language(code: "hi") else {
+    failEngineCheck("missing test languages")
+}
+
+let englishOnlyEngine = fakeEngine(
+    id: "english-only",
+    capability: .english,
+    supportedLanguages: [englishLanguage]
+)
+let multilingualEngine = fakeEngine(
+    id: "multilingual",
+    capability: .multilingual
+)
+let hindiOnlyEngine = fakeEngine(
+    id: "hindi-only",
+    capability: .multilingual,
+    supportedLanguages: [hindiLanguage]
+)
+let unavailableEngine = fakeEngine(
+    id: "unavailable-multilingual",
+    capability: .multilingual,
+    available: false
+)
+let engineRegistry = EngineRegistry(
+    engines: [englishOnlyEngine, hindiOnlyEngine, multilingualEngine, unavailableEngine],
+    fallbackOrder: [englishOnlyEngine.descriptor.id, hindiOnlyEngine.descriptor.id, multilingualEngine.descriptor.id]
+)
+
+// Saved preference is honored when it is compatible with the profile.
+guard engineRegistry.resolve(
+    for: englishProfile,
+    selectedID: englishOnlyEngine.descriptor.id
+)?.descriptor.id == englishOnlyEngine.descriptor.id else {
+    failEngineCheck("preferred compatible engine was not selected")
+}
+
+// Saved preference is ignored when it is incompatible; fallback wins.
+guard engineRegistry.resolve(
+    for: englishProfile,
+    selectedID: hindiOnlyEngine.descriptor.id
+)?.descriptor.id == englishOnlyEngine.descriptor.id else {
+    failEngineCheck("incompatible preferred engine did not fall back")
+}
+
+// Automatic language profile resolves to the first engine that supports English.
+guard engineRegistry.resolve(
+    for: autoProfile,
+    selectedID: nil
+)?.descriptor.id == englishOnlyEngine.descriptor.id else {
+    failEngineCheck("automatic profile did not resolve to English-capable engine")
+}
+
+// A built-in engine whose supportedLanguages includes English is available for
+// English and unavailable for Hinglish, matching the Apple Speech mapping rule.
+let englishAvailability = engineRegistry.availability(for: englishProfile)
+guard let englishOnlyAvailability = englishAvailability.first(
+    where: { $0.engine.id == englishOnlyEngine.descriptor.id }
+), englishOnlyAvailability.isAvailable else {
+    failEngineCheck("English-only engine should be available for English")
+}
+let hinglishAvailability = engineRegistry.availability(for: hinglishProfile)
+guard let englishOnlyHinglishAvailability = hinglishAvailability.first(
+    where: { $0.engine.id == englishOnlyEngine.descriptor.id }
+), !englishOnlyHinglishAvailability.isAvailable,
+      case .unsupportedLanguage? = englishOnlyHinglishAvailability.reason else {
+    failEngineCheck("English-only engine should be unavailable for Hinglish")
+}
+
+// Fallback ordering is respected even when other engines are available later.
+let firstChoice = fakeEngine(
+    id: "first-choice",
+    capability: .multilingual,
+    available: false
+)
+let secondChoice = fakeEngine(
+    id: "second-choice",
+    capability: .multilingual,
+    available: true
+)
+let thirdChoice = fakeEngine(
+    id: "third-choice",
+    capability: .multilingual,
+    available: true
+)
+let fallbackRegistry = EngineRegistry(
+    engines: [firstChoice, secondChoice, thirdChoice],
+    fallbackOrder: [firstChoice.descriptor.id, secondChoice.descriptor.id]
+)
+guard fallbackRegistry.resolve(
+    for: englishProfile,
+    selectedID: nil
+)?.descriptor.id == secondChoice.descriptor.id else {
+    failEngineCheck("fallback ordering did not skip unavailable first choice")
+}
+
+print("ZenVoiceCoreChecks: engine registry passed")
+
+// MARK: - Command mode checks
+
+let commandModeEngine = CommandModeEngine()
+let commandManifest = CommandModeEngine.defaultManifest
+
+guard commandModeEngine.parse(
+    transcript: "open safari",
+    manifest: commandManifest
+) == .launchApp(bundleID: "com.apple.Safari") else {
+    failEngineCheck("'open safari' did not parse to launch Safari")
+}
+
+guard commandModeEngine.parse(
+    transcript: "please open safari now",
+    manifest: commandManifest
+) == .launchApp(bundleID: "com.apple.Safari") else {
+    failEngineCheck("'please open safari now' did not parse")
+}
+
+guard commandModeEngine.parse(
+    transcript: "copy last transcript",
+    manifest: commandManifest
+) == .systemAction(.copyLastTranscript) else {
+    failEngineCheck("'copy last transcript' did not parse")
+}
+
+guard commandModeEngine.parse(
+    transcript: "just normal dictation text",
+    manifest: commandManifest
+) == .none else {
+    failEngineCheck("plain dictation was misclassified as a command")
+}
+
+guard commandModeEngine.parse(
+    transcript: "open safari",
+    manifest: nil
+) == .none else {
+    failEngineCheck("nil manifest should produce no action")
+}
+
+guard !CommandModePreferences.isEnabled() else {
+    failEngineCheck("command mode should be disabled by default")
+}
+CommandModePreferences.setEnabled(true)
+guard CommandModePreferences.isEnabled() else {
+    failEngineCheck("command mode enable state did not persist")
+}
+CommandModePreferences.saveManifest(commandManifest)
+guard let loadedManifest = CommandModePreferences.loadManifest(),
+      loadedManifest == commandManifest else {
+    failEngineCheck("command manifest did not round-trip through preferences")
+}
+CommandModePreferences.setEnabled(false)
+CommandModePreferences.clearManifest()
+
+print("ZenVoiceCoreChecks: command mode passed")

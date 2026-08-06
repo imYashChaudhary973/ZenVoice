@@ -278,6 +278,8 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var isVerifying = false
     @Published private(set) var benchmarkSummaries:
         [String: ModelBenchmarkSummary] = [:]
+    @Published private(set) var selectedEngineID: String?
+    @Published private(set) var engineAvailabilities: [EngineAvailability] = []
     @Published var errorMessage: String?
 
     private let downloader: VerifiedModelDownloader
@@ -285,24 +287,29 @@ final class ModelManagerViewModel: ObservableObject {
     private let applySelection:
         (VerifiedModel, LanguageProfile) -> Result<Void, Error>
     private let selectionInvalidated: () -> Void
+    private let engineRegistryProvider: () -> EngineRegistry?
     private var downloadTask: Task<Void, Never>?
     private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
+    private var enginePrepareTask: Task<Void, Never>?
 
     init(
         downloader: VerifiedModelDownloader = VerifiedModelDownloader(),
         fileManager: FileManager = .default,
         applySelection: @escaping
             (VerifiedModel, LanguageProfile) -> Result<Void, Error>,
-        selectionInvalidated: @escaping () -> Void
+        selectionInvalidated: @escaping () -> Void,
+        engineRegistryProvider: @escaping () -> EngineRegistry? = { nil }
     ) {
         self.downloader = downloader
         self.fileManager = fileManager
         self.applySelection = applySelection
         self.selectionInvalidated = selectionInvalidated
+        self.engineRegistryProvider = engineRegistryProvider
         hardwareProfile = HardwareProfile.current(fileManager: fileManager)
         selectedModelID = ModelSelectionPreferences.load()?.id
         refreshBenchmarks()
+        refreshEngineSelection()
         refresh()
     }
 
@@ -350,6 +357,67 @@ final class ModelManagerViewModel: ObservableObject {
                 self?.selectedModelID = ModelSelectionPreferences.load()?.id
             }
             self?.isVerifying = false
+        }
+    }
+
+    func refreshEngineSelection() {
+        let profile = LanguagePreferences.load()
+        selectedEngineID = SelectedEnginePreferences.load(for: profile)
+        engineAvailabilities =
+            engineRegistryProvider()?.availability(for: profile) ?? []
+    }
+
+    func selectEngine(_ engineID: String) {
+        let profile = LanguagePreferences.load()
+        guard let availability = engineAvailabilities.first(
+            where: { $0.engine.id == engineID }
+        ) else {
+            return
+        }
+        guard availability.isAvailable else {
+            errorMessage = unavailabilityLabel(for: availability)
+            return
+        }
+        SelectedEnginePreferences.save(engineID, for: profile)
+        selectedEngineID = engineID
+        enginePrepareTask?.cancel()
+        enginePrepareTask = Task { [weak self] in
+            do {
+                try await self?.engineRegistryProvider()?.prepare(
+                    for: profile,
+                    selectedID: engineID
+                )
+            } catch is CancellationError {
+                // User moved on before preparation finished.
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func isSelectedEngine(_ engineID: String) -> Bool {
+        selectedEngineID == engineID
+    }
+
+    private func unavailabilityLabel(for availability: EngineAvailability)
+        -> String {
+        guard let reason = availability.reason else {
+            return "\(availability.engine.displayName) is not available."
+        }
+        let engineName = availability.engine.displayName
+        switch reason {
+        case .unsupportedLanguage(let language):
+            return "\(engineName) does not support \(language)."
+        case .requiresDownload:
+            return "\(engineName) needs its model downloaded first."
+        case .requiresInternet:
+            return "\(engineName) needs an internet connection."
+        case .runtimeNotReady:
+            return "\(engineName) is not ready on this Mac."
+        case .platformNotSupported:
+            return "\(engineName) is not supported on this Mac."
         }
     }
 

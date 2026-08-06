@@ -138,7 +138,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pasteLastGlobalHotKey: GlobalHotKey?
     private var privateModeGlobalHotKey: GlobalHotKey?
     private var holdToDictateController: HoldToDictateController?
-    private var transcriber: WhisperTranscriber?
+    private var engineRegistry: EngineRegistry?
+    private var whisperEngine: WhisperSpeechEngine?
     private var resetWorkItem: DispatchWorkItem?
     private var stateObservers: Set<AnyCancellable> = []
     private var currentHotKeyConfiguration = HotKeyPreferences.load()
@@ -186,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         validateRuntimeIdentity()
-        configureTranscriber()
+        configureEngines()
         configureMenuBar()
         configureZenBar()
         configureHistoryStorage()
@@ -261,12 +262,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    private func configureTranscriber() {
+    private func configureEngines() {
         do {
-            transcriber = WhisperTranscriber(
-                configuration: try ZenVoiceConfiguration.discover()
+            let configuration = try ZenVoiceConfiguration.discover()
+            let whisper = WhisperSpeechEngine(configuration: configuration)
+            whisperEngine = whisper
+            engineRegistry = EngineRegistry(
+                engines: [whisper, AppleSpeechEngine()],
+                fallbackOrder: [AppleSpeechEngine.engineID, WhisperSpeechEngine.engineID]
             )
-            warmUpTranscriber()
+            warmUpEngines()
         } catch {
             state.phase = .error(error.localizedDescription)
         }
@@ -275,15 +280,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Builds the model before the user asks for it.
     ///
     /// Runs on `transcriptionQueue` because that is the serial queue every
-    /// decode uses, and ``WhisperTranscriber/warmUp()`` writes the unguarded
-    /// context. Repeat calls are cheap — the transcriber warms once — so this
-    /// is safe to fire on every route into a dictation.
-    private func warmUpTranscriber() {
-        guard let transcriber else {
+    /// Whisper decode uses, and ``WhisperTranscriber/warmUp()`` writes the
+    /// unguarded context. Repeat calls are cheap — the transcriber warms once
+    /// — so this is safe to fire on every route into a dictation.
+    private func warmUpEngines() {
+        guard let whisperEngine else {
             return
         }
         transcriptionQueue.async {
-            transcriber.warmUp()
+            whisperEngine.transcriber.warmUp()
+        }
+        Task {
+            let profile = LanguagePreferences.load()
+            let selectedID = SelectedEnginePreferences.load(for: profile)
+            try? await engineRegistry?.prepare(
+                for: profile,
+                selectedID: selectedID
+            )
         }
     }
 
@@ -556,8 +569,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             },
             selectionInvalidated: { [weak self] in
-                self?.configureTranscriber()
+                self?.configureEngines()
+                self?.modelManagerViewModel?.refreshEngineSelection()
                 self?.settingsViewModel?.refreshSystemStatus()
+            },
+            engineRegistryProvider: { [weak self] in
+                self?.engineRegistry
             }
         )
         applicationProfileViewModel = ApplicationProfileViewModel()
@@ -844,7 +861,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyLanguageProfile(
         _ profile: LanguageProfile
     ) -> Result<Void, Error> {
-        modelManagerViewModel.selectProfile(profile)
+        let result = modelManagerViewModel.selectProfile(profile)
+        modelManagerViewModel.refreshEngineSelection()
+        return result
     }
 
     private func applyConfiguration(
@@ -855,7 +874,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Verification and candidate construction happen before either
             // preference changes, so a failure cannot leave a mismatched
             // model/profile pair behind.
-            let candidate = try ModelProfileTransition.prepareAndCommit(
+            let whisperEngine = try ModelProfileTransition.prepareAndCommit(
                 model: model,
                 profile: languageProfile
             ) {
@@ -863,15 +882,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     model: model,
                     languageProfile: languageProfile
                 )
-                return WhisperTranscriber(configuration: configuration)
+                return WhisperSpeechEngine(configuration: configuration)
             }
-            transcriber = candidate
-            warmUpTranscriber()
+            self.whisperEngine = whisperEngine
+            engineRegistry = EngineRegistry(
+                engines: [whisperEngine, AppleSpeechEngine()],
+                fallbackOrder: [
+                    AppleSpeechEngine.engineID,
+                    WhisperSpeechEngine.engineID
+                ]
+            )
+            warmUpEngines()
             state.languageProfile = languageProfile
             settingsViewModel?.configurationDidChange(
                 languageProfile: languageProfile
             )
             updateLanguageMenu()
+            modelManagerViewModel.refreshEngineSelection()
             return .success(())
         } catch {
             return .failure(error)
@@ -921,15 +948,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        if transcriber == nil {
-            configureTranscriber()
-            guard transcriber != nil else {
+        if whisperEngine == nil {
+            configureEngines()
+            guard whisperEngine != nil else {
                 return
             }
         }
         // Earliest useful moment: the model finishes building while the user is
         // still talking, rather than after they stop. A no-op once warm.
-        warmUpTranscriber()
+        warmUpEngines()
 
 #if DEBUG
         if recorder.usesDeterministicFixture {
@@ -997,7 +1024,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     language:
                         dictationBehavior.languageProfile
                             .inputLanguageCode,
-                    modelID: transcriber?.modelID ?? "unknown",
+                    modelID: whisperEngine?.modelID ?? "unknown",
                     targetBundleID: targetApplication?.bundleIdentifier,
                     targetAppName: targetApplication?.localizedName,
                     category: category,
@@ -1045,25 +1072,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let languageProfile =
             profile?.languageProfile ?? LanguagePreferences.load()
-        let capability =
-            ModelSelectionPreferences.load()?.languageCapability
-            ?? transcriber?.languageCapability
-            ?? .english
-        guard languageProfile.isCompatible(with: capability) else {
-            if let model = ModelSelectionPreferences.load() {
-                showError(
-                    ModelProfileTransition.incompatibleSelectionMessage(
-                        model: model,
-                        currentProfile: languageProfile
-                    )
-                )
-            } else {
-                showError(
-                    ModelProfileTransition.unavailableMessage(
-                        for: languageProfile
-                    )
-                )
-            }
+        let selectedID = SelectedEnginePreferences.load(for: languageProfile)
+        guard let resolvedEngine = engineRegistry?.resolve(
+            for: languageProfile,
+            selectedID: selectedID
+        ) else {
+            showError(
+                EngineError.noEngineAvailable.localizedDescription
+            )
+            return nil
+        }
+        guard languageProfile.isCompatible(
+            with: resolvedEngine.languageCapability
+        ) else {
+            showError(
+                EngineError.engineUnavailable(
+                    resolvedEngine.descriptor.id
+                ).localizedDescription
+            )
             return nil
         }
         let correctionScope = languageProfile.correctionScope
@@ -1120,7 +1146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? recorder.samples(after: liveCommittedSampleIndex)
             : []
         recorder.releaseCapturedSamples()
-        guard let recordedAudio, let transcriber else {
+        guard let recordedAudio else {
             resetLivePreviewSession()
             showError("No recording was captured.")
             return
@@ -1158,26 +1184,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // verify and swap what was inserted for the better transcript; only
             // if that cannot be done safely does the fragment path stand.
             let insertedText = liveInsertedStableTranscript
-            transcriptionQueue.async { [weak self] in
-                guard let upgrade = self?.wholeRecordingUpgrade(
-                    transcriber: transcriber,
+            let registry = engineRegistry
+            let whisper = whisperEngine
+            Task { [weak self] in
+                guard let registry else {
+                    await MainActor.run {
+                        self?.completeFromSegments(
+                            whisperEngine: whisper,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID,
+                            behavior: behavior,
+                            remainingSamples: remainingSamples,
+                            correctionVault: correctionVault,
+                            appliesCorrectionRules: appliesCorrectionRules
+                        )
+                    }
+                    return
+                }
+                guard let upgrade = await self?.wholeRecordingUpgrade(
+                    registry: registry,
                     recordedAudio: recordedAudio,
                     behavior: behavior,
                     correctionVault: correctionVault,
                     appliesCorrectionRules: appliesCorrectionRules
                 ) else {
-                    self?.completeFromSegments(
-                        transcriber: transcriber,
-                        recordedAudio: recordedAudio,
-                        historyID: historyID,
-                        behavior: behavior,
-                        remainingSamples: remainingSamples,
-                        correctionVault: correctionVault,
-                        appliesCorrectionRules: appliesCorrectionRules
-                    )
+                    await MainActor.run {
+                        self?.completeFromSegments(
+                            whisperEngine: whisper,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID,
+                            behavior: behavior,
+                            remainingSamples: remainingSamples,
+                            correctionVault: correctionVault,
+                            appliesCorrectionRules: appliesCorrectionRules
+                        )
+                    }
                     return
                 }
-                DispatchQueue.main.async {
+                await MainActor.run {
                     guard let self else { return }
                     let replaced = self.inserter.replaceTextBeforeCaret(
                         insertedText + " ",
@@ -1186,7 +1230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     guard replaced == .replaced else {
                         self.transcriptionQueue.async {
                             self.completeFromSegments(
-                                transcriber: transcriber,
+                                whisperEngine: whisper,
                                 recordedAudio: recordedAudio,
                                 historyID: historyID,
                                 behavior: behavior,
@@ -1245,11 +1289,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        transcriptionQueue.async { [weak self] in
+        let registry = engineRegistry
+        let fallbackModelID = whisperEngine?.modelID ?? "unknown"
+        Task { [weak self] in
+            guard let registry else {
+                await MainActor.run {
+                    self?.handleTranscriptionFailure(
+                        EngineError.noEngineAvailable,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID
+                    )
+                }
+                return
+            }
             do {
-                let result = try transcriber.transcribe(
+                let result = try await registry.transcribe(
                     audioURL: recordedAudio.url,
-                    languageProfile: behavior.languageProfile,
+                    profile: behavior.languageProfile,
+                    defaults: RuntimeIdentity.userDefaults(),
                     initialPrompt: behavior.context
                 )
                 let refinement =
@@ -1273,7 +1330,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             )
                             : nil
                 )
-                DispatchQueue.main.async {
+                await MainActor.run {
                     guard let self else { return }
                     guard !insertedPreview.isEmpty else {
                         self.complete(
@@ -1301,10 +1358,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     guard let self else { return }
                     guard let recovered = previewFallback.processed(
-                        modelID: transcriber.modelID
+                        modelID: fallbackModelID
                     ) else {
                         self.handleTranscriptionFailure(
                             error,
@@ -1330,15 +1387,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// Called off the main thread.
     private nonisolated func wholeRecordingUpgrade(
-        transcriber: WhisperTranscriber,
+        registry: EngineRegistry,
         recordedAudio: AudioRecorder.RecordedAudio,
         behavior: ActiveDictationBehavior,
         correctionVault: DictationVault?,
         appliesCorrectionRules: Bool
-    ) -> ProcessedTranscription? {
-        guard let result = try? transcriber.transcribe(
+    ) async -> ProcessedTranscription? {
+        let defaults = RuntimeIdentity.userDefaults()
+        guard let result = try? await registry.transcribe(
             audioURL: recordedAudio.url,
-            languageProfile: behavior.languageProfile,
+            profile: behavior.languageProfile,
+            defaults: defaults,
             initialPrompt: behavior.context
         ) else {
             return nil
@@ -1368,7 +1427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// Called off the main thread.
     private nonisolated func completeFromSegments(
-        transcriber: WhisperTranscriber,
+        whisperEngine: WhisperSpeechEngine?,
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?,
         behavior: ActiveDictationBehavior,
@@ -1377,10 +1436,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appliesCorrectionRules: Bool
     ) {
         let expectsRemainder = remainingSamples.count >= 1_600
+        guard let whisperEngine else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleTranscriptionFailure(
+                    EngineError.noEngineAvailable,
+                    recordedAudio: recordedAudio,
+                    historyID: historyID
+                )
+            }
+            return
+        }
         do {
             let processed: ProcessedTranscription?
             if expectsRemainder {
-                let result = try transcriber.transcribe(
+                let result = try whisperEngine.transcribe(
                     samples: remainingSamples,
                     languageProfile: behavior.languageProfile,
                     initialPrompt: behavior.context
@@ -1573,7 +1642,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard recorder.isRecording,
               !livePreviewInFlight,
-              let transcriber,
+              let whisperEngine,
               let segment = recorder.stableSegment(
                 after: liveCommittedSampleIndex
               ) else {
@@ -1588,7 +1657,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             learningPreferences.appliesCorrectionRules
         transcriptionQueue.async { [weak self] in
             do {
-                let result = try transcriber.transcribe(
+                let result = try whisperEngine.transcribe(
                     samples: segment.samples,
                     languageProfile: behavior.languageProfile,
                     initialPrompt: behavior.context
@@ -1750,7 +1819,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             remainingResult?.finalTranscript ?? "",
             to: liveStableFinalTranscript
         )
-        guard !finalTranscript.isEmpty, let transcriber else {
+        guard !finalTranscript.isEmpty, let whisperEngine else {
             resetLivePreviewSession()
             handleTranscriptionFailure(
                 WhisperTranscriber.TranscriptionError.noSpeech,
@@ -1768,7 +1837,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 + (remainingResult?.correctionCount ?? 0),
             isPartial:
                 remainderWasExpected && remainingResult == nil,
-            modelID: transcriber.modelID,
+            modelID: whisperEngine.modelID,
             processingDurationSeconds:
                 liveStableProcessingDuration
                 + (remainingResult?.processingDurationSeconds ?? 0)
@@ -2187,10 +2256,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             )
         }
-        guard let transcriber else {
+        guard let registry = engineRegistry else {
             return .failure(
                 DictationVaultError.database(
-                    "The local transcription model is unavailable."
+                    "No speech engine is available."
                 )
             )
         }
@@ -2198,13 +2267,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             languageCode: record.language,
             modelID: record.modelID
         )
-        guard recordedLanguageProfile.isCompatible(
-            with: transcriber.languageCapability
-        ) else {
+        let selectedID = SelectedEnginePreferences.load(
+            for: recordedLanguageProfile
+        )
+        guard let resolvedEngine = registry.resolve(
+            for: recordedLanguageProfile,
+            selectedID: selectedID
+        ),
+              recordedLanguageProfile.isCompatible(
+                  with: resolvedEngine.languageCapability
+              ) else {
             return .failure(
                 DictationVaultError.database(
                     "This recording used \(recordedLanguageProfile.displayName). "
-                        + "Select a compatible model before retrying."
+                        + "Select a compatible engine before retrying."
                 )
             )
         }
@@ -2247,11 +2323,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let voiceCommandsEnabled =
             applicationProfile?.voiceCommandsEnabled
             ?? LocalVoiceCommandPreferences.isEnabled()
-        transcriptionQueue.async { [weak self] in
+        Task { [weak self] in
             do {
-                let result = try transcriber.transcribe(
+                let result = try await registry.transcribe(
                     audioURL: audioURL,
-                    languageProfile: recordedLanguageProfile,
+                    profile: recordedLanguageProfile,
+                    defaults: RuntimeIdentity.userDefaults(),
                     initialPrompt: initialPrompt
                 )
                 let refinement =
@@ -2273,7 +2350,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             )
                             : nil
                 )
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self?.completeHistoryRetry(
                         processed: processed,
                         recordedAudio: recordedAudio,
@@ -2281,7 +2358,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self?.handleTranscriptionFailure(
                         error,
                         recordedAudio: recordedAudio,

@@ -1,8 +1,9 @@
 # Third-Party Notices
 
-ZenVoice embeds the `whisper.cpp` runtime and lets the user download reviewed
-speech model weights from a verified in-app catalogue. ZenVoice does not bundle
-model weights in the repository or application.
+ZenVoice embeds the `whisper.cpp` runtime, uses the Apple `Speech` framework
+on-device, and lets the user download reviewed speech model weights from a
+verified in-app catalogue. ZenVoice does not bundle model weights in the
+repository or application.
 
 This notice records the reviewed upstream source, pinned runtime revision, and
 applicable licence text. It is not a licence for ZenVoice itself. ZenVoice is
@@ -40,6 +41,17 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Apple Speech
+
+- Framework: `Speech` (`SFSpeechRecognizer`)
+- Publisher: Apple Inc.
+- Source: <https://developer.apple.com/documentation/speech>
+- Licence: Apple Software License Agreement (see the Xcode and SDKs licence
+  included with your Apple developer tools)
+- Privacy posture: `requiresOnDeviceRecognition = true` is set for every
+  recognition request; audio is processed locally and is not sent to Apple's
+  servers.
 
 ## OpenAI Whisper model weights
 
@@ -90,6 +102,40 @@ applicable law or agreed to in writing, software distributed under the License
 is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND, either express or implied. See the License for the specific language
 governing permissions and limitations under the License.
+
+## Reserved speech engines
+
+The following engines are listed in the verified catalogue but are not yet
+integrated into the active runtime. Identifiers, families, and licences are fixed
+now so that later phases can add implementations without renaming user
+preferences or changing the catalogue schema.
+
+### NVIDIA Parakeet and Nemotron Speech families
+
+- Parakeet TDT v2:
+  [`nvidia/parakeet-tdt-v2`](https://huggingface.co/nvidia/parakeet-tdt-v2)
+- Parakeet TDT v3:
+  [`nvidia/parakeet-tdt-v3`](https://huggingface.co/nvidia/parakeet-tdt-v3)
+- Parakeet Flash:
+  [`nvidia/parakeet-flash`](https://huggingface.co/nvidia/parakeet-flash)
+- Nemotron Speech 3.5 Ultra Fast:
+  [`nvidia/nemotron-speech-3.5-ultra-fast`](https://huggingface.co/nvidia/nemotron-speech-3.5-ultra-fast)
+- Nemotron 3.5 Multilingual:
+  [`nvidia/nemotron-speech-3.5-multilingual`](https://huggingface.co/nvidia/nemotron-speech-3.5-multilingual)
+- Licence: NVIDIA Open Model License
+- Licence text:
+  <https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/>
+
+### Cohere Transcribe
+
+- Service: Cohere Transcribe API
+- Publisher: Cohere Inc.
+- Source: <https://docs.cohere.com/docs/speech-recognition>
+- Licence: Cohere Terms of Use
+- Licence text: <https://cohere.com/terms-of-use>
+- Privacy posture: this is the only planned engine that sends audio off-device.
+  It requires explicit opt-in and a user-supplied API key; it is reserved for
+  Phase 5.
 
 ## Retired NVIDIA Parakeet Unified EN 0.6B CoreML model
 

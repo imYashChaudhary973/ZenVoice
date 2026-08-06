@@ -84,6 +84,35 @@ The catalogue metadata was verified against the official Hugging Face API on
 requires a new review and new checksum; existing entries must not silently
 follow a moving branch.
 
+## Speech engine catalogue
+
+ZenVoice now selects from a multi-engine runtime layer. Each engine is recorded
+with the same provenance requirements as a model: publisher, runtime family,
+format, licence, attribution, and privacy posture.
+
+| Engine | Family | Download | Internet | Format | Licence | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Whisper | `whisper` | Required | No | whisper.cpp GGML | MIT | Active |
+| Apple Speech | `appleSpeech` | None | No | SFSpeechRecognizer (on-device) | Apple Software License | Active |
+| Parakeet TDT v2 | `parakeetTDT` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
+| Parakeet TDT v3 | `parakeetTDT` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
+| Parakeet Flash | `parakeetFlash` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
+| Nemotron Speech 3.5 Ultra Fast | `nemotronSpeech` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
+| Nemotron 3.5 Multilingual | `nemotronSpeech` | Planned | No | Core ML / ONNX | NVIDIA Open Model License | Reserved (Phase 2) |
+| Cohere Transcribe | `cohereTranscribe` | None | Yes | Cloud API | Cohere Terms of Service | Reserved (Phase 5, opt-in) |
+
+Reserved engines fix the identifier and family now so later phases can add
+runtime implementations and download logic without renaming user preferences
+or changing the catalogue schema. The source repositories above are the
+intended upstreams; revision, size, and SHA-256 will be pinned when the engine
+is activated.
+
+Apple Speech is configured with `requiresOnDeviceRecognition = true`, so
+audio never leaves the Mac. Whisper and the planned NVIDIA engines run
+entirely on-device using downloaded weights. Cohere Transcribe is the only
+engine that sends audio off-device, and it requires explicit opt-in plus an
+API key in Phase 5.
+
 ## Which model gets recommended
 
 `ModelRecommendationEngine.recommendedModelID(for:)` names exactly one model per
