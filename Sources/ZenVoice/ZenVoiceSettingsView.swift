@@ -40,6 +40,7 @@ struct ZenVoiceSettingsView: View {
         case voiceProfile = "Voice Profile"
         case appProfiles = "App Profiles"
         case history = "History"
+        case audioHistory = "Audio History"
         case insights = "Insights"
         case models = "Models"
         case privacy = "Privacy"
@@ -73,6 +74,8 @@ struct ZenVoiceSettingsView: View {
                 return "square.grid.2x2"
             case .history:
                 return "clock.arrow.circlepath"
+            case .audioHistory:
+                return "waveform"
             case .insights:
                 return "chart.bar.xaxis"
             case .models:
@@ -90,13 +93,14 @@ struct ZenVoiceSettingsView: View {
             ("Dictation", [.shortcuts, .audio, .languages, .refine]),
             ("Intelligence & Control", [.zenIntelligence, .commandMode, .writeMode, .overlay]),
             ("Personal", [.voiceProfile, .appProfiles]),
-            ("Your data", [.history, .insights]),
+            ("Your data", [.history, .audioHistory, .insights]),
             ("System", [.models, .privacy, .help])
         ]
     }
 
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
+    @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
@@ -251,6 +255,8 @@ struct ZenVoiceSettingsView: View {
             return "application override per-app voice commands"
         case .history:
             return "transcripts recovery inbox dictations search"
+        case .audioHistory:
+            return "audio recordings archive export zip budget playback"
         case .insights:
             return "stats wpm words streak charts activity"
         case .models:
@@ -561,6 +567,8 @@ struct ZenVoiceSettingsView: View {
             OverlayScreen(viewModel: viewModel)
         case .history:
             HistoryScreen(viewModel: historyViewModel)
+        case .audioHistory:
+            AudioHistoryScreen(viewModel: audioHistoryViewModel)
         case .insights:
             InsightsScreen(viewModel: insightsViewModel)
         case .voiceProfile:

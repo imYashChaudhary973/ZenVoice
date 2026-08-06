@@ -20,6 +20,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let window: NSWindow
     private let viewModel: SettingsViewModel
     private let historyViewModel: HistoryViewModel
+    private let audioHistoryViewModel: AudioHistoryViewModel
     private let insightsViewModel: InsightsViewModel
     private let voiceProfileViewModel: VoiceProfileViewModel
     private let modelManagerViewModel: ModelManagerViewModel
@@ -31,6 +32,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     init(
         viewModel: SettingsViewModel,
         historyViewModel: HistoryViewModel,
+        audioHistoryViewModel: AudioHistoryViewModel,
         insightsViewModel: InsightsViewModel,
         voiceProfileViewModel: VoiceProfileViewModel,
         modelManagerViewModel: ModelManagerViewModel,
@@ -42,6 +44,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     ) {
         self.viewModel = viewModel
         self.historyViewModel = historyViewModel
+        self.audioHistoryViewModel = audioHistoryViewModel
         self.insightsViewModel = insightsViewModel
         self.voiceProfileViewModel = voiceProfileViewModel
         self.modelManagerViewModel = modelManagerViewModel
@@ -77,6 +80,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             rootView: ZenVoiceSettingsView(
                 viewModel: viewModel,
                 historyViewModel: historyViewModel,
+                audioHistoryViewModel: audioHistoryViewModel,
                 insightsViewModel: insightsViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,

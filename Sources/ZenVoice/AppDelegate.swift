@@ -159,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyPreferences.loadPrivateMode()
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
+    private var audioHistoryViewModel: AudioHistoryViewModel!
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
@@ -169,6 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private var settingsWindowController: SettingsWindowController!
     private let historyPreferences = HistoryPreferences()
+    private let audioHistoryPreferences = AudioHistoryPreferences()
     private let learningPreferences = LocalLearningPreferences()
     private var dictationVault: DictationVault?
     private var activeHistoryID: UUID?
@@ -440,9 +442,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             try vault.purgeExpiredRecoveryAudio()
             scheduleRecoveryExpiry()
+            enforceAudioHistoryBudgets()
         } catch {
             showError(error.localizedDescription)
         }
+    }
+
+    /// Copies a completed recording into the Audio History archive.
+    ///
+    /// Archiving piggybacks on transcript persistence: the archive row is
+    /// derived from the dictation row, so a dictation that is not persisted —
+    /// Private Dictation, paused history, a one-off suppression — is never
+    /// archived. Must run before the recovery audio is deleted, because that
+    /// file is the archive's source.
+    private func archiveRecordingIfEnabled(historyID: UUID) {
+        guard audioHistoryPreferences.isEnabled,
+              let vault = dictationVault else {
+            return
+        }
+        // A failure to archive must not fail the dictation itself; the
+        // transcript is already stored by this point.
+        try? vault.archiveRecording(id: historyID)
+        enforceAudioHistoryBudgets()
+    }
+
+    /// Applies the age and size budgets to the audio archive.
+    ///
+    /// Runs at launch and after each archived recording, so the archive cannot
+    /// grow past what the user allowed even if the app is never quit.
+    private func enforceAudioHistoryBudgets() {
+        guard audioHistoryPreferences.isEnabled,
+              let vault = dictationVault else {
+            return
+        }
+        let cutoff = Calendar.current.date(
+            byAdding: .day,
+            value: -audioHistoryPreferences.maxAgeDays,
+            to: Date()
+        ) ?? Date.distantPast
+        _ = try? vault.purgeAudioArchive(olderThan: cutoff)
+        _ = try? vault.enforceAudioArchiveSizeBudget(
+            audioHistoryPreferences.maxSizeBytes
+        )
     }
 
     private func configureMenuBar() {
@@ -834,9 +875,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return try self.resolvedVault()
             }
         )
+        audioHistoryViewModel = AudioHistoryViewModel(
+            preferences: audioHistoryPreferences,
+            vaultProvider: { [weak self] in
+                guard let self else {
+                    throw DictationVaultError.database(
+                        "ZenVoice is no longer running."
+                    )
+                }
+                return try self.resolvedVault()
+            }
+        )
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
+            audioHistoryViewModel: audioHistoryViewModel,
             insightsViewModel: insightsViewModel,
             voiceProfileViewModel: voiceProfileViewModel,
             modelManagerViewModel: modelManagerViewModel,
@@ -2069,6 +2122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     correctionCount: result.correctionCount,
                     isPartial: result.isPartial
                 )
+                archiveRecordingIfEnabled(historyID: historyID)
                 try vault.deleteRecoveryAudio(id: historyID)
                 try? vault.recordCorrectionUsage(
                     processed.correctionUsages
@@ -2781,6 +2835,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 correctionCount: result.correctionCount,
                 isPartial: result.isPartial
             )
+            archiveRecordingIfEnabled(historyID: historyID)
             try vault.deleteRecoveryAudio(id: historyID)
             try? vault.recordCorrectionUsage(processed.correctionUsages)
             state.recordSuccessfulDictation(
