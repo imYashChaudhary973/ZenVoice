@@ -29,24 +29,14 @@ enum OverviewDestination {
 struct ZenVoiceSettingsView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case home = "Home"
-        case shortcuts = "Shortcuts"
-        case audio = "Audio"
-        case languages = "Languages"
-        case refine = "Instant Refine"
-        case zenIntelligence = "ZenIntelligence"
-        case commandMode = "Command Mode"
-        case writeMode = "Write Mode"
-        case overlay = "Overlay"
-        case voiceProfile = "Voice Profile"
-        case appProfiles = "App Profiles"
+        case dictation = "Dictation"
+        case languagesAndModels = "Languages & Models"
+        case formatting = "Formatting"
+        case commands = "Commands"
+        case personal = "Personal"
         case history = "History"
-        case audioHistory = "Audio History"
-        case insights = "Insights"
-        case models = "Models"
-        case cloudAI = "Cloud AI"
-        case updates = "Updates"
-        case privacy = "Privacy"
-        case help = "Help & FAQ"
+        case privacy = "Privacy & Data"
+        case help = "Help & About"
 
         var id: String { rawValue }
 
@@ -54,38 +44,18 @@ struct ZenVoiceSettingsView: View {
             switch self {
             case .home:
                 return "house"
-            case .shortcuts:
-                return "command"
-            case .audio:
+            case .dictation:
                 return "mic"
-            case .languages:
+            case .languagesAndModels:
                 return "globe"
-            case .refine:
+            case .formatting:
                 return "wand.and.stars"
-            case .zenIntelligence:
-                return "sparkles"
-            case .commandMode:
+            case .commands:
                 return "command"
-            case .writeMode:
-                return "pencil.and.outline"
-            case .overlay:
-                return "rectangle.on.rectangle"
-            case .voiceProfile:
-                return "quote.bubble"
-            case .appProfiles:
-                return "square.grid.2x2"
+            case .personal:
+                return "person.crop.circle"
             case .history:
                 return "clock.arrow.circlepath"
-            case .audioHistory:
-                return "waveform"
-            case .insights:
-                return "chart.bar.xaxis"
-            case .models:
-                return "cpu"
-            case .cloudAI:
-                return "cloud"
-            case .updates:
-                return "arrow.triangle.2.circlepath"
             case .privacy:
                 return "hand.raised"
             case .help:
@@ -93,14 +63,17 @@ struct ZenVoiceSettingsView: View {
             }
         }
 
-        /// Grouped navigation (DESIGN.md §6).
+        /// Phase 6 navigation: nine entries, no duplicates.
         static let groups: [(title: String?, sections: [Section])] = [
             (nil, [.home]),
-            ("Dictation", [.shortcuts, .audio, .languages, .refine]),
-            ("Intelligence & Control", [.zenIntelligence, .commandMode, .writeMode, .overlay]),
-            ("Personal", [.voiceProfile, .appProfiles]),
-            ("Your data", [.history, .audioHistory, .insights]),
-            ("System", [.models, .cloudAI, .updates, .privacy, .help])
+            ("Dictation", [.dictation]),
+            ("Speech", [.languagesAndModels]),
+            ("Refinement", [.formatting]),
+            ("Control", [.commands]),
+            ("Personal", [.personal]),
+            ("Your data", [.history]),
+            ("Security", [.privacy]),
+            ("Support", [.help])
         ]
     }
 
@@ -140,7 +113,7 @@ struct ZenVoiceSettingsView: View {
                 )
             } else {
                 VStack(spacing: 0) {
-                    ledgerTitleBar
+                    titleBar
                     HStack(spacing: 0) {
                         sidebar
                         content
@@ -200,7 +173,7 @@ struct ZenVoiceSettingsView: View {
                 icon: "cpu",
                 keywords: "model speech download \(model.id)"
             ) {
-                selection = .models
+                selection = .languagesAndModels
             }
         }
         let actions = [
@@ -240,71 +213,79 @@ struct ZenVoiceSettingsView: View {
     private func sectionKeywords(_ section: Section) -> String {
         switch section {
         case .home:
-            return "overview status ready start"
-        case .shortcuts:
-            return "hotkey keybinding hold dictate escape"
-        case .audio:
-            return "microphone input device doctor waveform"
-        case .languages:
-            return "hinglish english multilingual auto detect output"
-        case .refine:
-            return "clean agent prompt filler context commands"
-        case .zenIntelligence:
-            return "ai enhance format context meaning guard local"
-        case .commandMode:
-            return "voice control command shortcuts system actions"
-        case .writeMode:
-            return "rewrite compose selection accessibility read"
-        case .overlay:
-            return "overlay live preview pill notch zenbar position"
-        case .voiceProfile:
-            return "corrections rules words phrases learning"
-        case .appProfiles:
-            return "application override per-app voice commands"
+            return "overview status ready start today usage"
+        case .dictation:
+            return "hotkey microphone audio overlay waveform doctor"
+        case .languagesAndModels:
+            return "language hinglish english multilingual model whisper parakeet"
+        case .formatting:
+            return "refine clean smart cloud filler punctuation format"
+        case .commands:
+            return "command mode voice control write mode rewrite"
+        case .personal:
+            return "your words per-app rules corrections vocabulary"
         case .history:
-            return "transcripts recovery inbox dictations search"
-        case .audioHistory:
-            return "audio recordings archive export zip budget playback"
-        case .insights:
-            return "stats wpm words streak charts activity"
-        case .models:
-            return "speech whisper parakeet download verify tier"
-        case .cloudAI:
-            return "cloud openai groq api key provider enhance remote"
-        case .updates:
-            return "update sparkle feed signature beta channel version"
+            return "transcripts audio recordings insights stats search"
         case .privacy:
             return "permissions data delete encrypted inventory"
         case .help:
-            return "faq questions support cheat sheet about version"
+            return "faq questions support cheat sheet about version update"
         }
     }
 
-    private var ledgerTitleBar: some View {
+    private var titleBar: some View {
         HStack(spacing: ZenDesign.Spacing.sm) {
             HStack(spacing: 7) {
                 ZenBrandMark(size: 22)
                 Text("ZenVoice")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(ZenDesign.Typography.bodyStrong)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
             }
             .frame(width: 224, alignment: .leading)
             .padding(.leading, 12)
 
-            Text("Codebase overview")
-                .font(ZenDesign.Typography.bodyStrong)
-                .foregroundStyle(ZenDesign.Semantic.textPrimary)
-
             HStack(spacing: ZenDesign.Spacing.xs) {
-                badgePill(text: "t3.gg", color: ZenDesign.Semantic.accent)
+                Image(systemName: appState.phase.statusIcon)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(appState.phase.statusTint)
+                Text(appState.phase.label)
+                    .font(ZenDesign.Typography.captionStrong)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
             }
 
             Spacer()
 
             HStack(spacing: ZenDesign.Spacing.xs) {
-                titleAction("plus", label: "Add action", action: { showsCommandPalette = true })
-                titleAction("shippingbox", label: "Open", action: { })
-                titleAction("arrow.up.circle", label: "Commit & push", action: { })
+                titleAction("command", label: "Command palette", action: { showsCommandPalette = true })
+                    .accessibilityLabel("Open command palette")
+                let isListening = appState.phase == .listening
+                Button(action: toggleRecording) {
+                    HStack(spacing: 5) {
+                        Image(systemName: isListening ? "stop.fill" : "mic")
+                            .font(.system(size: 11, weight: .medium))
+                        Text(isListening ? "Stop" : "Dictate")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(ZenDesign.Semantic.textOnAccent)
+                    .padding(.horizontal, 12)
+                    .frame(height: 26)
+                    .background {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.small,
+                            style: .continuous
+                        )
+                        .fill(
+                            isListening
+                                ? ZenDesign.Semantic.danger
+                                : ZenDesign.Semantic.accent
+                        )
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    isListening ? "Stop dictating" : "Start dictating"
+                )
             }
             .padding(.trailing, 12)
         }
@@ -341,18 +322,6 @@ struct ZenVoiceSettingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private func badgePill(text: String, color: Color) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 7)
-            .frame(height: 20)
-            .background {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(color.opacity(0.12))
-            }
     }
 
     private var sidebar: some View {
@@ -543,60 +512,41 @@ struct ZenVoiceSettingsView: View {
                 navigate: { destination in
                     switch destination {
                     case .audio:
-                        selection = .audio
+                        selection = .dictation
                     case .models:
-                        selection = .models
+                        selection = .languagesAndModels
                     case .languages:
-                        selection = .languages
+                        selection = .languagesAndModels
                     case .history:
                         selection = .history
                     case .insights:
-                        selection = .insights
+                        selection = .history
                     case .shortcuts:
-                        selection = .shortcuts
+                        selection = .dictation
                     case .help:
                         selection = .help
                     }
                 }
             )
-        case .audio:
-            AudioScreen(viewModel: viewModel)
-        case .models:
-            ModelsScreen(viewModel: modelManagerViewModel)
-        case .cloudAI:
-            CloudAIScreen(viewModel: cloudAIViewModel)
-        case .updates:
-            UpdatesScreen(viewModel: updatesViewModel)
-        case .languages:
-            LanguagesScreen(viewModel: viewModel)
-        case .refine:
-            InstantRefineScreen(
+        case .dictation:
+            DictationScreen(viewModel: viewModel)
+        case .languagesAndModels:
+            LanguagesAndModelsScreen(
                 viewModel: viewModel,
+                modelManagerViewModel: modelManagerViewModel
             )
-        case .zenIntelligence:
-            ZenIntelligenceScreen(viewModel: viewModel)
-        case .commandMode:
-            CommandModeScreen(viewModel: viewModel)
-        case .writeMode:
-            WriteModeScreen(viewModel: viewModel)
-        case .overlay:
-            OverlayScreen(viewModel: viewModel)
+        case .formatting:
+            FormattingScreen(viewModel: viewModel)
+        case .commands:
+            CommandsScreen(viewModel: viewModel)
+        case .personal:
+            PersonalScreen(
+                viewModel: viewModel,
+                voiceProfileViewModel: voiceProfileViewModel,
+                applicationProfileViewModel: applicationProfileViewModel
+            )
         case .history:
             HistoryScreen(viewModel: historyViewModel)
-        case .audioHistory:
-            AudioHistoryScreen(viewModel: audioHistoryViewModel)
-        case .insights:
-            InsightsScreen(viewModel: insightsViewModel)
-        case .voiceProfile:
-            VoiceProfileScreen(viewModel: voiceProfileViewModel)
-        case .appProfiles:
-            AppProfilesScreen(
-                viewModel: viewModel,
-                applicationProfileViewModel:
-                    applicationProfileViewModel
-            )
-        case .shortcuts:
-            ShortcutsScreen(viewModel: viewModel)
         case .privacy:
             PrivacyScreen(
                 viewModel: viewModel,
@@ -607,14 +557,49 @@ struct ZenVoiceSettingsView: View {
                     modelManagerViewModel,
             )
         case .help:
-            HelpScreen(
+            HelpAndAboutScreen(
                 viewModel: viewModel,
+                updatesViewModel: updatesViewModel,
                 onboardingViewModel: onboardingViewModel,
-                openShortcuts: { selection = .shortcuts }
+                openShortcuts: { selection = .dictation }
             )
         }
     }
 
+}
+
+private extension AppState.Phase {
+    var statusIcon: String {
+        switch self {
+        case .idle:
+            return "circle.fill"
+        case .listening:
+            return "waveform"
+        case .transcribing:
+            return "cpu"
+        case .inserting:
+            return "arrow.down.doc"
+        case .success:
+            return "checkmark.circle.fill"
+        case .error:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    var statusTint: Color {
+        switch self {
+        case .idle:
+            return ZenDesign.Semantic.success
+        case .listening:
+            return ZenDesign.Semantic.accent
+        case .transcribing, .inserting:
+            return ZenDesign.Semantic.warn
+        case .success:
+            return ZenDesign.Semantic.success
+        case .error:
+            return ZenDesign.Semantic.danger
+        }
+    }
 }
 
 struct ErrorBanner: View {
