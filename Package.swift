@@ -27,7 +27,12 @@ let package = Package(
             targets: ["ZenVoiceLanguageBench"]
         )
     ],
-    dependencies: [],
+    dependencies: [
+        .package(
+            url: "https://github.com/microsoft/onnxruntime-swift-package-manager",
+            from: "1.24.2"
+        )
+    ],
     targets: [
         .target(
             name: "ZenVoiceCore"
@@ -44,6 +49,8 @@ let package = Package(
             dependencies: [
                 "ZenVoiceCore",
                 "whisper",
+                "parakeet",
+                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
             ]
         ),
         .executableTarget(
@@ -87,6 +94,10 @@ let package = Package(
             name: "whisper",
             url: "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-v1.9.1-xcframework.zip",
             checksum: "8c3ecbe73f48b0cb9318fc3058264f951ab336fd530e82c4ccdd2298d1311a4c"
+        ),
+        .binaryTarget(
+            name: "parakeet",
+            path: "vendor/parakeet.xcframework"
         )
     ]
 )
