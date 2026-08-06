@@ -14,6 +14,7 @@
 
 import AppKit
 import SwiftUI
+import ZenVoiceCore
 
 @MainActor
 final class ZenBarPanelController {
@@ -43,7 +44,8 @@ final class ZenBarPanelController {
         toggleRecording: @escaping () -> Void,
         cancelRecording: @escaping () -> Void,
         finishRecording: @escaping () -> Void,
-        dismissError: @escaping () -> Void
+        dismissError: @escaping () -> Void,
+        setMode: @escaping (ZenBarMode) -> Void
     ) {
         // Sized to hold the widest bar state plus the margin its shadow needs.
         // The panel clips its hosting view, so at the old 550x68 the shadow —
@@ -81,7 +83,8 @@ final class ZenBarPanelController {
                 toggleRecording: toggleRecording,
                 cancelRecording: cancelRecording,
                 finishRecording: finishRecording,
-                dismissError: dismissError
+                dismissError: dismissError,
+                setMode: setMode
             )
         )
 

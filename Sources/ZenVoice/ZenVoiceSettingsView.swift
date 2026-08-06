@@ -33,6 +33,9 @@ struct ZenVoiceSettingsView: View {
         case audio = "Audio"
         case languages = "Languages"
         case refine = "Instant Refine"
+        case zenIntelligence = "ZenIntelligence"
+        case commandMode = "Command Mode"
+        case writeMode = "Write Mode"
         case voiceProfile = "Voice Profile"
         case appProfiles = "App Profiles"
         case history = "History"
@@ -55,6 +58,12 @@ struct ZenVoiceSettingsView: View {
                 return "globe"
             case .refine:
                 return "wand.and.stars"
+            case .zenIntelligence:
+                return "sparkles"
+            case .commandMode:
+                return "command"
+            case .writeMode:
+                return "pencil.and.outline"
             case .voiceProfile:
                 return "quote.bubble"
             case .appProfiles:
@@ -76,6 +85,7 @@ struct ZenVoiceSettingsView: View {
         static let groups: [(title: String?, sections: [Section])] = [
             (nil, [.home]),
             ("Dictation", [.shortcuts, .audio, .languages, .refine]),
+            ("Intelligence & Control", [.zenIntelligence, .commandMode, .writeMode]),
             ("Personal", [.voiceProfile, .appProfiles]),
             ("Your data", [.history, .insights]),
             ("System", [.models, .privacy, .help])
@@ -224,6 +234,12 @@ struct ZenVoiceSettingsView: View {
             return "hinglish english multilingual auto detect output"
         case .refine:
             return "clean agent prompt filler context commands"
+        case .zenIntelligence:
+            return "ai enhance format context meaning guard local"
+        case .commandMode:
+            return "voice control command shortcuts system actions"
+        case .writeMode:
+            return "rewrite compose selection accessibility read"
         case .voiceProfile:
             return "corrections rules words phrases learning"
         case .appProfiles:
@@ -530,6 +546,12 @@ struct ZenVoiceSettingsView: View {
             InstantRefineScreen(
                 viewModel: viewModel,
             )
+        case .zenIntelligence:
+            ZenIntelligenceScreen(viewModel: viewModel)
+        case .commandMode:
+            CommandModeScreen(viewModel: viewModel)
+        case .writeMode:
+            WriteModeScreen(viewModel: viewModel)
         case .history:
             HistoryScreen(viewModel: historyViewModel)
         case .insights:

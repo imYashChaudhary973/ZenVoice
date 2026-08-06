@@ -122,6 +122,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let state = AppState()
     private let recorder = AudioRecorder()
     private let inserter = TextInserter()
+    private lazy var commandExecutor: CommandModeExecutorImpl = {
+        CommandModeExecutorImpl(
+            inserter: inserter,
+            state: state,
+            pasteLast: { [weak self] in self?.pasteLastTranscript() },
+            showSettings: { [weak self] in self?.settingsWindowController.show() }
+        )
+    }()
+    private lazy var writeReader = WriteModeTextReaderImpl()
     private let transcriptionQueue = DispatchQueue(
         label: "dev.yashchaudhary.ZenVoice.transcription",
         qos: .userInitiated
@@ -563,6 +572,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             dismissError: { [weak self] in
                 self?.dismissZenBarError()
+            },
+            setMode: { [weak self] mode in
+                self?.state.mode = mode
             }
         )
         state.$phase
@@ -1178,9 +1190,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let profile = ApplicationProfilePreferences.profile(
             for: targetBundleIdentifier
         )
-        let languageProfile =
+        let baseLanguageProfile =
             profile?.languageProfile ?? LanguagePreferences.load()
-        let selectedID = SelectedEnginePreferences.load(for: languageProfile)
+        let languageProfile: LanguageProfile
+        if let preferredOutputMode = profile?.preferredOutputMode {
+            languageProfile = LanguageProfile(
+                inputLanguageCode: baseLanguageProfile.inputLanguageCode,
+                outputMode: preferredOutputMode
+            )
+        } else {
+            languageProfile = baseLanguageProfile
+        }
+        let selectedID =
+            profile?.preferredEngineID
+            ?? SelectedEnginePreferences.load(for: languageProfile)
         guard let resolvedEngine = engineRegistry?.resolve(
             for: languageProfile,
             selectedID: selectedID
@@ -2047,7 +2070,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         state.phase = .inserting
 
-        let textToInsert = insertionText ?? result.finalTranscript
+        let enhanced = enhanceForMode(result.finalTranscript)
+        let textToInsert = insertionText ?? enhanced
+
+        switch state.mode {
+        case .command:
+            handleCommandModeTranscript(textToInsert)
+            return
+        case .write:
+            handleWriteModeTranscript(
+                textToInsert,
+                recordedAudio: recordedAudio,
+                historyID: historyID,
+                shouldPersist: shouldPersist,
+                historySaveError: historySaveError
+            )
+            return
+        case .dictation:
+            break
+        }
+
         if textToInsert.isEmpty, hasPriorInsertion {
             if let historyID, shouldPersist, historySaveError == nil {
                 try? resolvedVault().markInsertion(
@@ -2159,6 +2201,211 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func resetActiveDictationBehavior() {
         activeDictationBehavior = .global
         state.languageProfile = LanguagePreferences.load()
+    }
+
+    private func activeZenIntelligenceMode() -> ZenIntelligenceMode {
+        let global = ZenIntelligencePreferences.load()
+        guard let bundleID = NSWorkspace.shared.frontmostApplication?
+            .bundleIdentifier,
+              let profile = ApplicationProfilePreferences.profile(
+                for: bundleID
+              ) else {
+            return global
+        }
+        return profile.zenIntelligenceMode ?? global
+    }
+
+    private func enhanceForMode(_ transcript: String) -> String {
+        let mode = activeZenIntelligenceMode()
+        guard mode != .off else { return transcript }
+        let result = ZenIntelligenceEngine().enhance(
+            transcript,
+            mode: mode,
+            languageCode: state.languageProfile.inputLanguageCode,
+            context: settingsViewModel?.sanitizedNextDictationContext
+        )
+        return result.wasRejected ? transcript : result.text
+    }
+
+    private func handleCommandModeTranscript(_ transcript: String) {
+        guard CommandModePreferences.isEnabled() else {
+            showError("Command Mode is disabled. Enable it in settings.")
+            return
+        }
+        let manifest = CommandModePreferences.loadManifest()
+            ?? CommandModeEngine.defaultManifest
+        let action = CommandModeEngine().parse(
+            transcript: transcript,
+            manifest: manifest
+        )
+        guard action != .none else {
+            showError("No command matched what you said.")
+            return
+        }
+        Task { [weak self] in
+            do {
+                try await self?.commandExecutor.execute(action)
+                await MainActor.run {
+                    self?.state.phase = .success
+                    self?.scheduleIdleReset(after: self?.successResetDelay ?? 1.2)
+                }
+            } catch {
+                await MainActor.run {
+                    self?.showError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func handleWriteModeTranscript(
+        _ transcript: String,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        historyID: UUID?,
+        shouldPersist: Bool,
+        historySaveError: Error?
+    ) {
+        let subMode = activeWriteModeSubMode()
+        switch subMode {
+        case .compose:
+            insertText(
+                transcript,
+                historyID: historyID,
+                shouldPersist: shouldPersist,
+                historySaveError: historySaveError
+            )
+        case .rewrite:
+            Task { [weak self] in
+                await self?.rewriteAndInsert(
+                    prompt: transcript,
+                    historyID: historyID,
+                    shouldPersist: shouldPersist,
+                    historySaveError: historySaveError
+                )
+            }
+        }
+    }
+
+    private func activeWriteModeSubMode() -> WriteModeSubMode {
+        let global = WriteModePreferences.loadSubMode()
+        guard let bundleID = NSWorkspace.shared.frontmostApplication?
+            .bundleIdentifier,
+              let profile = ApplicationProfilePreferences.profile(
+                for: bundleID
+              ) else {
+            return global
+        }
+        return profile.writeModeDefault ?? global
+    }
+
+    private func rewriteAndInsert(
+        prompt: String,
+        historyID: UUID?,
+        shouldPersist: Bool,
+        historySaveError: Error?
+    ) async {
+        let request = WriteModeReadRequest(
+            sourceBundleIdentifier: NSWorkspace.shared.frontmostApplication?
+                .bundleIdentifier,
+            fallbackToClipboard: true
+        )
+        let readResult: WriteModeReadResult
+        do {
+            readResult = try await writeReader.read(request)
+        } catch {
+            await MainActor.run {
+                showError(error.localizedDescription)
+            }
+            return
+        }
+
+        let mode = activeZenIntelligenceMode()
+        let rewrite = WriteModeEngine().rewrite(
+            selectedText: readResult.text,
+            prompt: prompt,
+            mode: mode,
+            languageCode: state.languageProfile.inputLanguageCode
+        )
+
+        await MainActor.run { [rewrite] in
+            if rewrite.wasRejected {
+                showError("Rewrite was rejected to preserve meaning.")
+                return
+            }
+            if rewrite.requiresPreview {
+                // For now, copy the rewritten text to the clipboard so the
+                // user can preview and paste manually. A future UI will show a
+                // diff preview before applying.
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(
+                    rewrite.text,
+                    forType: .string
+                )
+                showError(
+                    "Rewrite copied to clipboard — large change, please preview."
+                )
+                return
+            }
+            insertText(
+                rewrite.text,
+                historyID: historyID,
+                shouldPersist: shouldPersist,
+                historySaveError: historySaveError
+            )
+        }
+    }
+
+    private func insertText(
+        _ text: String,
+        historyID: UUID?,
+        shouldPersist: Bool,
+        historySaveError: Error?
+    ) {
+        if text.isEmpty {
+            state.phase = .success
+            scheduleIdleReset(after: successResetDelay)
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self else { return }
+            switch self.inserter.insert(text) {
+            case .pasted:
+                if let historyID, shouldPersist, historySaveError == nil {
+                    try? self.resolvedVault().markInsertion(
+                        id: historyID,
+                        outcome: .inserted
+                    )
+                }
+                self.state.phase = .success
+            case .copiedOnly:
+                if let historyID, shouldPersist, historySaveError == nil {
+                    try? self.resolvedVault().markInsertion(
+                        id: historyID,
+                        outcome: .copiedOnly
+                    )
+                }
+                self.showError("Copied—enable Accessibility to auto-paste.")
+                return
+            case .blockedBySecureInput:
+                if let historyID, shouldPersist, historySaveError == nil {
+                    try? self.resolvedVault().markInsertion(
+                        id: historyID,
+                        outcome: .copiedOnly
+                    )
+                }
+                self.showError("Copied—\(self.secureInputAdvice())")
+                return
+            }
+            self.historyViewModel?.refresh()
+            self.insightsViewModel?.refresh()
+            self.voiceProfileViewModel?.refresh()
+            self.scheduleIdleReset(after: self.successResetDelay)
+            if let historySaveError {
+                self.showError(
+                    "Inserted, but history was not saved: "
+                    + historySaveError.localizedDescription
+                )
+            }
+        }
     }
 
     private func showError(_ message: String) {

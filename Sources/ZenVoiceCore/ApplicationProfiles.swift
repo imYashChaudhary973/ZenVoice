@@ -22,6 +22,21 @@ public struct ApplicationProfile:
     public var languageProfile: LanguageProfile
     public var refinementMode: InstantRefineMode
     public var voiceCommandsEnabled: Bool
+    /// Engine override for this app. `nil` falls back to the global engine
+    /// preference for the active language profile.
+    public var preferredEngineID: String?
+    /// Output mode override for this app. `nil` uses the output mode inside
+    /// `languageProfile`.
+    public var preferredOutputMode: TranscriptionOutputMode?
+    /// ZenIntelligence mode for this app. `nil` uses the global preference.
+    public var zenIntelligenceMode: ZenIntelligenceMode?
+    /// Command set identifier for this app. `nil` uses the global manifest.
+    public var commandSetID: String?
+    /// Default Write Mode sub-mode for this app. `nil` uses the global
+    /// preference.
+    public var writeModeDefault: WriteModeSubMode?
+    /// Optional custom prompt hints for ZenIntelligence in this app.
+    public var customPromptHints: [String]
 
     public var id: String { bundleIdentifier }
 
@@ -30,13 +45,25 @@ public struct ApplicationProfile:
         applicationName: String,
         languageProfile: LanguageProfile,
         refinementMode: InstantRefineMode,
-        voiceCommandsEnabled: Bool
+        voiceCommandsEnabled: Bool,
+        preferredEngineID: String? = nil,
+        preferredOutputMode: TranscriptionOutputMode? = nil,
+        zenIntelligenceMode: ZenIntelligenceMode? = nil,
+        commandSetID: String? = nil,
+        writeModeDefault: WriteModeSubMode? = nil,
+        customPromptHints: [String] = []
     ) {
         self.bundleIdentifier = bundleIdentifier
         self.applicationName = applicationName
         self.languageProfile = languageProfile
         self.refinementMode = refinementMode
         self.voiceCommandsEnabled = voiceCommandsEnabled
+        self.preferredEngineID = preferredEngineID
+        self.preferredOutputMode = preferredOutputMode
+        self.zenIntelligenceMode = zenIntelligenceMode
+        self.commandSetID = commandSetID
+        self.writeModeDefault = writeModeDefault
+        self.customPromptHints = customPromptHints
     }
 }
 

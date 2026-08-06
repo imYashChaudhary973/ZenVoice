@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import SwiftUI
+import ZenVoiceCore
 
 struct ZenBarView: View {
     /// Room left around the bar for its shadow to land in.
@@ -33,6 +34,7 @@ struct ZenBarView: View {
     let cancelRecording: () -> Void
     let finishRecording: () -> Void
     let dismissError: () -> Void
+    let setMode: (ZenBarMode) -> Void
 
     var body: some View {
         bar
@@ -80,11 +82,18 @@ struct ZenBarView: View {
         case .idle:
             Button(action: toggleRecording) {
                 HStack(spacing: 9) {
-                    brandLogo(size: 22)
-                    Text("Ready")
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(barSecondary)
+                    BrandLogo(size: 22)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(state.mode.displayName)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text("Ready")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    }
                     Spacer()
+                    modeSwitcher
+                    OverlayBarButton(title: "Start", emphasized: true, action: toggleRecording)
                     ZenKbdGroup(combo: "⌃⌥ Space")
                 }
                 .padding(.horizontal, 14)
@@ -92,14 +101,14 @@ struct ZenBarView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Start ZenVoice dictation")
+            .accessibilityLabel("Start ZenVoice \(state.mode.displayName)")
             .accessibilityHint("Press Control Option Space or activate this button.")
 
         case .listening:
             HStack(spacing: 10) {
                 ZenStatusLabel(
                     text: "listening",
-                    tint: barAccent,
+                    tint: ZenDesign.Semantic.accent,
                     pulses: true
                 )
 
@@ -111,7 +120,7 @@ struct ZenBarView: View {
                 if !state.liveTranscriptPreview.isEmpty {
                     Text(state.liveTranscriptPreview)
                         .font(.system(size: 11.5))
-                        .foregroundStyle(barSecondary)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.head)
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -119,9 +128,9 @@ struct ZenBarView: View {
                     Spacer()
                 }
 
-                barButton("Cancel", action: cancelRecording)
-                barButton(
-                    "Finish",
+                OverlayBarButton(title: "Cancel", action: cancelRecording)
+                OverlayBarButton(
+                    title: "Finish",
                     emphasized: true,
                     action: finishRecording
                 )
@@ -151,7 +160,7 @@ struct ZenBarView: View {
             HStack(spacing: 10) {
                 ZenStatusLabel(
                     text: "inserting…",
-                    tint: barSuccess,
+                    tint: ZenDesign.Semantic.success,
                     pulses: true
                 )
                 Spacer()
@@ -165,16 +174,16 @@ struct ZenBarView: View {
                 if let warning = state.lastDecodeWarning {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(barDanger)
+                        .foregroundStyle(ZenDesign.Semantic.danger)
                     Text("inserted — \(warning)")
                         .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(barPrimary)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 } else {
                     ZenStatusLabel(
                         text: successMessage,
-                        tint: barSuccess
+                        tint: ZenDesign.Semantic.success
                     )
                 }
                 Spacer(minLength: 0)
@@ -190,19 +199,19 @@ struct ZenBarView: View {
             HStack(spacing: 9) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(barDanger)
+                    .foregroundStyle(ZenDesign.Semantic.danger)
                 Text(displayedError(message))
                     .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(barPrimary)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 6)
-                barButton(
-                    "Try again",
+                OverlayBarButton(
+                    title: "Try again",
                     emphasized: true,
                     action: toggleRecording
                 )
-                barButton("Dismiss", action: dismissError)
+                OverlayBarButton(title: "Dismiss", action: dismissError)
             }
             .padding(.leading, 14)
             .padding(.trailing, 8)
@@ -211,10 +220,47 @@ struct ZenBarView: View {
         }
     }
 
+    private var modeSwitcher: some View {
+        HStack(spacing: 3) {
+            ForEach(ZenBarMode.allCases, id: \.self) { mode in
+                let isSelected = state.mode == mode
+                Button {
+                    setMode(mode)
+                } label: {
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(
+                            isSelected
+                                ? ZenDesign.Semantic.textPrimary
+                                : ZenDesign.Semantic.textSecondary
+                        )
+                        .frame(width: 28, height: 26)
+                        .background {
+                            RoundedRectangle(
+                                cornerRadius: ZenDesign.Radius.barControl,
+                                style: .continuous
+                            )
+                            .fill(
+                                isSelected
+                                    ? ZenDesign.Semantic.surfaceSunken
+                                    : Color.clear
+                            )
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(mode.displayName)
+                .accessibilityAddTraits(
+                    isSelected ? .isSelected : []
+                )
+            }
+        }
+    }
+
     private var barWidth: CGFloat {
         switch state.phase {
         case .idle:
-            return 320
+            return 380
         case .listening:
             return state.liveTranscriptPreview.isEmpty ? 400 : 560
         case .transcribing, .inserting:
@@ -228,10 +274,10 @@ struct ZenBarView: View {
 
     private var barBackground: some View {
         barShape
-            .fill(barPanel)
+            .fill(ZenDesign.Semantic.surface.opacity(0.96))
             .overlay {
                 barShape
-                    .strokeBorder(barBorder, lineWidth: 1)
+                    .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
                     .overlay {
                         barShape
                             .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
@@ -255,86 +301,8 @@ struct ZenBarView: View {
         }
         return message
     }
-
-    private func barButton(
-        _ title: String,
-        emphasized: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11.5, weight: emphasized ? .semibold : .medium))
-                .foregroundStyle(emphasized ? barAccent : barSecondary)
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .background {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.barControl,
-                        style: .continuous
-                    )
-                    .fill(
-                        emphasized
-                            ? ZenDesign.Semantic.accentMuted
-                            : Color.clear
-                    )
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-    }
-
-    @ViewBuilder
-    private func brandLogo(size: CGFloat) -> some View {
-        if let logo = BrandAssets.zenLogo {
-            Image(nsImage: logo)
-                .resizable()
-                .scaledToFit()
-                .frame(width: size, height: size)
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.small,
-                        style: .continuous
-                    )
-                )
-        } else {
-            Image(systemName: "waveform")
-                .resizable()
-                .foregroundStyle(barAccent)
-                .frame(width: size, height: size)
-        }
-    }
-
-    private var barPanel: Color {
-        ZenDesign.Semantic.surface.opacity(0.96)
-    }
-
-    private var barBorder: Color {
-        ZenDesign.Semantic.borderStrong
-    }
-
-    private var barPrimary: Color {
-        ZenDesign.Semantic.textPrimary
-    }
-
-    private var barSecondary: Color {
-        ZenDesign.Semantic.textSecondary
-    }
-
-    private var barAccent: Color {
-        ZenDesign.Semantic.accent
-    }
-
-    private var barSuccess: Color {
-        ZenDesign.Semantic.success
-    }
-
-    private var barDanger: Color {
-        ZenDesign.Semantic.danger
-    }
 }
 
-/// The one living element in the interface.
 ///
 /// Observes ``AudioLevelModel`` rather than ``AppState`` so that a level
 /// arriving fifteen times a second repaints these bars and nothing else.
@@ -342,7 +310,7 @@ struct ZenBarView: View {
 /// The history is kept here rather than in the model because it is a property
 /// of the drawing, not of the audio: the recorder reports a level, and what a
 /// trailing window of levels should look like is this view's business.
-private struct WaveformView: View {
+struct WaveformView: View {
     @ObservedObject var model: AudioLevelModel
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
@@ -416,7 +384,7 @@ private struct WaveformView: View {
 /// whisper reports no progress, so there is nothing honest to fill a
 /// determinate bar with. What this can truthfully say is "still going", which
 /// is the thing a frozen-looking bar fails to say.
-private struct IndeterminateBar: View {
+struct IndeterminateBar: View {
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
 

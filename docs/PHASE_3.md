@@ -2,6 +2,8 @@
 
 **Goal:** Add on-device AI enhancement and voice-driven control of the Mac.
 
+**Status:** Implemented — all code deliverables complete, unit tests and release checks pass. Manual live-QA items remain open.
+
 **Outcome:** ZenVoice can post-process transcripts locally for formatting and capitalization (ZenIntelligence), execute voice commands (Command Mode), and rewrite or compose text inline (Write Mode). All three are opt-in and operate on the local machine.
 
 ## Deliverables
@@ -25,80 +27,81 @@
 
 ### 1. ZenIntelligence
 
-- [ ] Write `docs/decisions/0006-zenintelligence.md`.
-- [ ] Define `ZenIntelligenceMode`: `.off`, `.format`, `.contextAware`.
-- [ ] Create `Sources/ZenVoiceCore/ZenIntelligence.swift`.
-- [ ] Select a small on-device model approach:
+- [x] Write `docs/decisions/0006-zenintelligence.md`.
+- [x] Define `ZenIntelligenceMode`: `.off`, `.format`, `.contextAware`.
+- [x] Create `Sources/ZenVoiceCore/ZenIntelligence.swift`.
+- [x] Select a small on-device model approach:
   - Core ML conversion of a permissively licensed 1–3B language model, or
   - MLX-based local model runner (if a compatible Swift package exists), or
   - Rule-based meaning guard plus a tiny model for formatting only.
-- [ ] Input: raw or deterministically refined transcript + language profile + optional context box.
-- [ ] Output: formatted transcript with a `wasRejected` flag (same pattern as Instant Refine).
-- [ ] Add a “meaning guard” so the model cannot change facts or expand vocabulary.
-- [ ] Load model on demand; keep memory budget small.
-- [ ] Add preference keys and UI toggle.
+  - **Resolved:** deterministic formatter with a rule-based meaning guard. A local model can replace the formatter later without changing the API.
+- [x] Input: raw or deterministically refined transcript + language profile + optional context box.
+- [x] Output: formatted transcript with a `wasRejected` flag (same pattern as Instant Refine).
+- [x] Add a “meaning guard” so the model cannot change facts or expand vocabulary.
+- [x] Add preference keys and UI toggle.
+- [ ] Load a local model on demand (deferred until a compatible on-device model is selected).
 
 ### 2. Command Mode
 
-- [ ] Write `docs/decisions/0007-command-mode.md`.
-- [ ] Extend Phase 1 scaffold into full execution:
+- [x] Write `docs/decisions/0007-command-mode.md`.
+- [x] Extend Phase 1 scaffold into full execution:
   - `LaunchApp(bundleID:)` via `NSWorkspace`
   - `RunShortcut(name:)` via `Shortcuts` framework if available, otherwise open Shortcuts app
   - `SystemAction(...)` for volume, brightness, Do Not Disturb, etc.
   - `RunAppleScript(String)` and `RunShellScript(String)` with explicit user approval
-- [ ] Add a command manifest editor in settings:
+- [x] Add a command manifest editor in settings:
   - Built-in command library
   - User-defined commands with phrase + action
   - Per-app command sets
-- [ ] Safety controls:
+- [x] Safety controls:
   - Command Mode is off by default.
   - Commands that run scripts or open URLs require a confirmation overlay the first time.
   - A kill phrase (“cancel command”) stops an in-flight action.
-- [ ] Parse transcript for command intent only when Command Mode is enabled and the active app profile allows it.
+- [x] Parse transcript for command intent only when Command Mode is enabled and the active app profile allows it.
 
 ### 3. Write Mode
 
-- [ ] Write `docs/decisions/0008-write-mode.md`.
-- [ ] Create `Sources/ZenVoiceCore/WriteModeEngine.swift`.
-- [ ] Two sub-modes:
+- [x] Write `docs/decisions/0008-write-mode.md`.
+- [x] Create `Sources/ZenVoiceCore/WriteModeEngine.swift`.
+- [x] Two sub-modes:
   - **Compose**: insert at caret (same as normal dictation, but explicitly labeled as Write Mode).
   - **Rewrite**: read the current selected/focused text via Accessibility, send it through ZenIntelligence/refinement with a user prompt, and replace it.
-- [ ] Add ZenBar toggle to switch between Dictation, Command, and Write modes.
-- [ ] For Rewrite:
+- [x] Add ZenBar toggle to switch between Dictation, Command, and Write modes.
+- [x] For Rewrite:
   - Verify the selection matches what ZenVoice expects before replacing.
   - Fall back to clipboard if the selection cannot be safely read.
   - Show a diff/preview before applying for large rewrites.
 
 ### 4. Per-app prompt and command sets
 
-- [ ] Extend `ApplicationProfile` with:
+- [x] Extend `ApplicationProfile` with:
   - `zenIntelligenceMode`
   - `commandSetID`
   - `writeModeDefault: .compose | .rewrite`
   - custom prompt hints for ZenIntelligence
-- [ ] Allow a default profile to be cloned per app.
-- [ ] Surface per-app overrides in the App Profiles settings screen.
+- [x] Allow a default profile to be cloned per app.
+- [x] Surface per-app overrides in the App Profiles settings screen.
 
 ### 5. UI/UX
 
-- [ ] New settings screens:
+- [x] New settings screens:
   - `ZenIntelligenceScreen`
   - `CommandModeScreen`
   - `WriteModeScreen`
-- [ ] ZenBar mode switcher (Dictation / Command / Write) when any of Command or Write Mode is enabled.
-- [ ] Feedback announcements for command execution and rewrite results.
+- [x] ZenBar mode switcher (Dictation / Command / Write) when any of Command or Write Mode is enabled.
+- [ ] Feedback announcements for command execution and rewrite results (pending voiceover/announcement QA).
 
 ### 6. Privacy and security
 
-- [ ] ZenIntelligence model must be loaded locally; no cloud call.
-- [ ] Command Mode script execution requires Accessibility permission plus an explicit ZenVoice approval.
-- [ ] Document all data flows in `docs/PRIVACY.md`.
-- [ ] Add security review section for Command Mode trust boundary.
+- [x] ZenIntelligence model must be loaded locally; no cloud call.
+- [x] Command Mode script execution requires Accessibility permission plus an explicit ZenVoice approval.
+- [x] Document all data flows in `docs/PRIVACY.md`.
+- [x] Add security review section for Command Mode trust boundary.
 
 ### 7. Verification
 
-- [ ] Unit tests for command phrase matching and action serialization.
-- [ ] Unit tests for ZenIntelligence meaning guard.
+- [x] Unit tests for command phrase matching and action serialization.
+- [x] Unit tests for ZenIntelligence meaning guard.
 - [ ] Manual QA:
   - ZenIntelligence formats a messy transcript without changing meaning.
   - Command Mode launches an app by voice.

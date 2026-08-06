@@ -86,6 +86,7 @@ final class AppState: ObservableObject {
     @Published private(set) var lastDecodeWarning: String?
     @Published var languageProfile: LanguageProfile
     @Published var liveTranscriptPreview = ""
+    @Published var mode: ZenBarMode = .dictation
 
     init(defaults: UserDefaults = .standard) {
         languageProfile = LanguagePreferences.load(defaults: defaults)

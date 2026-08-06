@@ -796,7 +796,9 @@ let mailProfile = ApplicationProfile(
         outputMode: .spokenLanguage
     ),
     refinementMode: .agentPrompt,
-    voiceCommandsEnabled: true
+    voiceCommandsEnabled: true,
+    preferredEngineID: EngineIdentifiers.appleSpeech,
+    preferredOutputMode: .englishTranslation
 )
 ApplicationProfilePreferences.save(
     mailProfile,
@@ -808,6 +810,19 @@ guard ApplicationProfilePreferences.profile(
 ) == mailProfile else {
     FileHandle.standardError.write(
         Data("FAIL: application profile did not persist\n".utf8)
+    )
+    exit(1)
+}
+guard let loadedProfile = ApplicationProfilePreferences.profile(
+    for: mailProfile.bundleIdentifier,
+    defaults: applicationDefaults
+),
+      loadedProfile.preferredEngineID == EngineIdentifiers.appleSpeech,
+      loadedProfile.preferredOutputMode == .englishTranslation else {
+    FileHandle.standardError.write(
+        Data(
+            "FAIL: per-app engine or output mode did not persist\n".utf8
+        )
     )
     exit(1)
 }
@@ -2108,6 +2123,85 @@ guard fallbackRegistry.resolve(
 
 print("ZenVoiceCoreChecks: engine registry passed")
 
+// MARK: - Engine recommendation checks
+
+private func fakeEngineWithID(
+    id: String,
+    capability: ModelLanguageCapability,
+    available: Bool = true
+) -> FakeSpeechEngine {
+    FakeSpeechEngine(
+        descriptor: fakeEngineDescriptor(
+            id: id,
+            capability: capability,
+            available: available
+        ),
+        languageCapability: capability,
+        isAvailable: available
+    )
+}
+
+let fakeWhisper = fakeEngineWithID(
+    id: EngineIdentifiers.whisper,
+    capability: .multilingual
+)
+let fakeHinglishWhisper = fakeEngineWithID(
+    id: EngineIdentifiers.whisper,
+    capability: .hinglish
+)
+let fakeAppleSpeech = fakeEngineWithID(
+    id: EngineIdentifiers.appleSpeech,
+    capability: .multilingual
+)
+let recommendationRegistry = EngineRegistry(
+    engines: [fakeWhisper, fakeAppleSpeech]
+)
+
+let englishRec = EngineRecommendationEngine.recommendation(
+    for: .english,
+    hardware: HardwareProfile.current(),
+    registry: recommendationRegistry
+)
+guard let englishRec,
+      englishRec.preferredEngineID == EngineIdentifiers.appleSpeech,
+      englishRec.fallbackEngineIDs == [EngineIdentifiers.whisper] else {
+    failEngineCheck("English recommendation should prefer Apple Speech then Whisper")
+}
+
+let hinglishRegistry = EngineRegistry(
+    engines: [fakeHinglishWhisper, fakeAppleSpeech]
+)
+let hinglishRec = EngineRecommendationEngine.recommendation(
+    for: .hinglish,
+    hardware: HardwareProfile.current(),
+    registry: hinglishRegistry
+)
+guard let hinglishRec,
+      hinglishRec.preferredEngineID == EngineIdentifiers.whisper,
+      hinglishRec.fallbackEngineIDs.isEmpty else {
+    failEngineCheck("Hinglish recommendation should be Whisper only")
+}
+
+let unavailableApple = fakeEngineWithID(
+    id: EngineIdentifiers.appleSpeech,
+    capability: .multilingual,
+    available: false
+)
+let noAppleRegistry = EngineRegistry(
+    engines: [fakeWhisper, unavailableApple]
+)
+let noAppleRec = EngineRecommendationEngine.recommendation(
+    for: .english,
+    hardware: HardwareProfile.current(),
+    registry: noAppleRegistry
+)
+guard let noAppleRec,
+      noAppleRec.preferredEngineID == EngineIdentifiers.whisper else {
+    failEngineCheck("Unavailable Apple Speech should fall back to Whisper")
+}
+
+print("ZenVoiceCoreChecks: engine recommendation passed")
+
 // MARK: - Command mode checks
 
 let commandModeEngine = CommandModeEngine()
@@ -2164,3 +2258,144 @@ CommandModePreferences.setEnabled(false)
 CommandModePreferences.clearManifest()
 
 print("ZenVoiceCoreChecks: command mode passed")
+
+// MARK: - ZenIntelligence checks
+
+let intelligenceEngine = ZenIntelligenceEngine()
+
+let formatResult = intelligenceEngine.enhance(
+    "hello world. this is a test.",
+    mode: .format,
+    languageCode: "en"
+)
+guard formatResult.text == "Hello world. This is a test.",
+      formatResult.wasRejected == false else {
+    failEngineCheck(
+        "ZenIntelligence format did not capitalize: \(formatResult.text)"
+    )
+}
+
+let numberResult = intelligenceEngine.enhance(
+    "my pin is five five five five",
+    mode: .format,
+    languageCode: "en"
+)
+guard numberResult.text.contains("5"),
+      !numberResult.wasRejected else {
+    failEngineCheck(
+        "ZenIntelligence did not format spoken digits: \(numberResult.text)"
+    )
+}
+
+let contextResult = intelligenceEngine.enhance(
+    "and then it crashed",
+    mode: .contextAware,
+    languageCode: "en",
+    context: "I pressed the button"
+)
+guard contextResult.text.lowercased().contains("i pressed the button"),
+      !contextResult.wasRejected else {
+    failEngineCheck(
+        "ZenIntelligence context-aware join failed: \(contextResult.text)"
+    )
+}
+
+let guardResult = intelligenceEngine.enhance(
+    "the quick brown fox",
+    mode: .format,
+    languageCode: "en"
+)
+// The deterministic formatter should not change this text, so the meaning
+// guard passes without changes.
+guard guardResult.text == "the quick brown fox",
+      !guardResult.wasRejected else {
+    failEngineCheck(
+        "ZenIntelligence meaning guard rejected harmless text: \(guardResult.text)"
+    )
+}
+
+let intelligenceSuite = "ZenVoiceCoreChecks.ZenIntelligence.\(UUID().uuidString)"
+guard let intelligenceDefaults = UserDefaults(suiteName: intelligenceSuite) else {
+    failEngineCheck("could not create ZenIntelligence preference fixture")
+}
+defer {
+    intelligenceDefaults.removePersistentDomain(forName: intelligenceSuite)
+}
+guard ZenIntelligencePreferences.load(defaults: intelligenceDefaults) == .off else {
+    failEngineCheck("ZenIntelligence should default to off")
+}
+ZenIntelligencePreferences.save(.contextAware, defaults: intelligenceDefaults)
+guard ZenIntelligencePreferences.load(defaults: intelligenceDefaults) == .contextAware else {
+    failEngineCheck("ZenIntelligence preference did not persist")
+}
+
+print("ZenVoiceCoreChecks: ZenIntelligence passed")
+
+// MARK: - Write Mode checks
+
+let writeEngine = WriteModeEngine()
+let composeResult = writeEngine.compose(transcript: "draft email")
+guard composeResult.text == "draft email",
+      !composeResult.requiresPreview,
+      !composeResult.wasRejected else {
+    failEngineCheck("Write Mode compose did not pass transcript through")
+}
+
+let smallRewrite = writeEngine.rewrite(
+    selectedText: "the cat sat",
+    prompt: "make it formal",
+    mode: .format,
+    languageCode: "en"
+)
+guard !smallRewrite.wasRejected,
+      !smallRewrite.requiresPreview else {
+    failEngineCheck(
+        "small rewrite should not require preview: \(smallRewrite.text)"
+    )
+}
+
+let largeRewrite = writeEngine.rewrite(
+    selectedText: String(repeating: "a", count: 250),
+    prompt: "summarize",
+    mode: .format,
+    languageCode: "en"
+)
+guard largeRewrite.requiresPreview else {
+    failEngineCheck("large rewrite should require preview")
+}
+
+let writeSuite = "ZenVoiceCoreChecks.WriteMode.\(UUID().uuidString)"
+guard let writeDefaults = UserDefaults(suiteName: writeSuite) else {
+    failEngineCheck("could not create Write Mode preference fixture")
+}
+defer {
+    writeDefaults.removePersistentDomain(forName: writeSuite)
+}
+guard WriteModePreferences.loadSubMode(defaults: writeDefaults) == .compose else {
+    failEngineCheck("Write Mode should default to compose")
+}
+WriteModePreferences.saveSubMode(.rewrite, defaults: writeDefaults)
+guard WriteModePreferences.loadSubMode(defaults: writeDefaults) == .rewrite else {
+    failEngineCheck("Write Mode sub-mode preference did not persist")
+}
+
+print("ZenVoiceCoreChecks: Write Mode passed")
+
+// MARK: - Action serialization and approval checks
+
+let action = CommandAction.openURL(URL(string: "https://zenvoice.app")!)
+let actionData = try! JSONEncoder().encode(action)
+let decodedAction = try! JSONDecoder().decode(CommandAction.self, from: actionData)
+guard action == decodedAction else {
+    failEngineCheck("CommandAction did not round-trip through JSON")
+}
+
+guard CommandModeApprovalPreferences.requiresApproval(.openURL(URL(string: "x")!)),
+      CommandModeApprovalPreferences.requiresApproval(.appleScript("")),
+      CommandModeApprovalPreferences.requiresApproval(.shellScript("")),
+      !CommandModeApprovalPreferences.requiresApproval(.systemAction(.mute)),
+      !CommandModeApprovalPreferences.requiresApproval(.launchApp(bundleID: "x")) else {
+    failEngineCheck("CommandModeApprovalPreferences approval boundaries are wrong")
+}
+
+print("ZenVoiceCoreChecks: action serialization and approval passed")

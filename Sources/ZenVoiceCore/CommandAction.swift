@@ -27,6 +27,7 @@ public enum CommandAction: Equatable, Sendable, Codable {
     case systemAction(CommandModeSystemAction)
     case appleScript(String)
     case shellScript(String)
+    case openURL(URL)
 }
 
 /// System-level actions that do not need a third-party identifier.
@@ -40,6 +41,12 @@ public enum CommandModeSystemAction: String, Equatable, Sendable, Codable,
     case showPreferences
     case lockScreen
     case searchSelectedText
+    case increaseVolume
+    case decreaseVolume
+    case mute
+    case increaseBrightness
+    case decreaseBrightness
+    case sleepDisplays
 
     public var displayName: String {
         switch self {
@@ -53,6 +60,18 @@ public enum CommandModeSystemAction: String, Equatable, Sendable, Codable,
             return "Lock screen"
         case .searchSelectedText:
             return "Search selected text"
+        case .increaseVolume:
+            return "Increase volume"
+        case .decreaseVolume:
+            return "Decrease volume"
+        case .mute:
+            return "Mute"
+        case .increaseBrightness:
+            return "Increase brightness"
+        case .decreaseBrightness:
+            return "Decrease brightness"
+        case .sleepDisplays:
+            return "Sleep displays"
         }
     }
 }

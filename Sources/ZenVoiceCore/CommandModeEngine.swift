@@ -122,6 +122,53 @@ public struct CommandModeEngine: Sendable {
                     "look up selected text"
                 ],
                 action: .systemAction(.searchSelectedText)
+            ),
+            CommandMapping(
+                phrases: [
+                    "turn up the volume",
+                    "increase volume",
+                    "volume up"
+                ],
+                action: .systemAction(.increaseVolume)
+            ),
+            CommandMapping(
+                phrases: [
+                    "turn down the volume",
+                    "decrease volume",
+                    "volume down"
+                ],
+                action: .systemAction(.decreaseVolume)
+            ),
+            CommandMapping(
+                phrases: [
+                    "mute",
+                    "mute the volume"
+                ],
+                action: .systemAction(.mute)
+            ),
+            CommandMapping(
+                phrases: [
+                    "increase brightness",
+                    "brightness up",
+                    "turn up brightness"
+                ],
+                action: .systemAction(.increaseBrightness)
+            ),
+            CommandMapping(
+                phrases: [
+                    "decrease brightness",
+                    "brightness down",
+                    "turn down brightness"
+                ],
+                action: .systemAction(.decreaseBrightness)
+            ),
+            CommandMapping(
+                phrases: [
+                    "sleep displays",
+                    "sleep the displays",
+                    "turn off the screen"
+                ],
+                action: .systemAction(.sleepDisplays)
             )
         ])
     }

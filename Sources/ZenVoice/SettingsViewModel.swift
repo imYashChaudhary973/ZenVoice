@@ -98,6 +98,11 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var livePreviewEnabled: Bool
     @Published private(set) var commitOnPauseEnabled: Bool
     @Published private(set) var voiceCommandsEnabled: Bool
+    @Published private(set) var zenIntelligenceMode: ZenIntelligenceMode
+    @Published private(set) var commandModeEnabled: Bool
+    @Published private(set) var commandModeManifest: CommandManifest
+    @Published private(set) var writeModeSubMode: WriteModeSubMode
+    @Published private(set) var writeModeDefaultPrompt: String
     @Published var nextDictationContext = ""
 
     private let applyShortcut:
@@ -156,6 +161,13 @@ final class SettingsViewModel: ObservableObject {
             LiveDictationPreferences.isCommitOnPauseEnabled()
         voiceCommandsEnabled =
             LocalVoiceCommandPreferences.isEnabled()
+        zenIntelligenceMode = ZenIntelligencePreferences.load()
+        commandModeEnabled = CommandModePreferences.isEnabled()
+        commandModeManifest =
+            CommandModePreferences.loadManifest()
+            ?? CommandModeEngine.defaultManifest
+        writeModeSubMode = WriteModePreferences.loadSubMode()
+        writeModeDefaultPrompt = WriteModePreferences.defaultPrompt()
         selectedMicrophoneUID =
             MicrophonePreferences.selectedDeviceUID()
         refreshMicrophones()
@@ -329,6 +341,37 @@ final class SettingsViewModel: ObservableObject {
     func setVoiceCommandsEnabled(_ enabled: Bool) {
         LocalVoiceCommandPreferences.setEnabled(enabled)
         voiceCommandsEnabled = enabled
+    }
+
+    func setZenIntelligenceMode(_ mode: ZenIntelligenceMode) {
+        ZenIntelligencePreferences.save(mode)
+        zenIntelligenceMode = mode
+    }
+
+    func setCommandModeEnabled(_ enabled: Bool) {
+        CommandModePreferences.setEnabled(enabled)
+        commandModeEnabled = enabled
+    }
+
+    func setCommandModeManifest(_ manifest: CommandManifest) {
+        CommandModePreferences.saveManifest(manifest)
+        commandModeManifest = manifest
+    }
+
+    func resetCommandModeManifest() {
+        CommandModePreferences.clearManifest()
+        commandModeManifest = CommandModeEngine.defaultManifest
+    }
+
+    func setWriteModeSubMode(_ mode: WriteModeSubMode) {
+        WriteModePreferences.saveSubMode(mode)
+        writeModeSubMode = mode
+    }
+
+    func setWriteModeDefaultPrompt(_ prompt: String) {
+        let trimmed = NextDictationContext.sanitized(prompt)
+        WriteModePreferences.saveDefaultPrompt(trimmed)
+        writeModeDefaultPrompt = trimmed
     }
 
     func setInputLanguage(_ code: String) {

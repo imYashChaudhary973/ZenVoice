@@ -121,6 +121,62 @@ final class ApplicationProfileViewModel: ObservableObject {
         save(updated)
     }
 
+    func setPreferredEngineID(
+        _ engineID: String?,
+        for profile: ApplicationProfile
+    ) {
+        var updated = profile
+        updated.preferredEngineID = engineID
+        save(updated)
+    }
+
+    func setPreferredOutputMode(
+        _ outputMode: TranscriptionOutputMode?,
+        for profile: ApplicationProfile
+    ) {
+        var updated = profile
+        updated.preferredOutputMode = outputMode
+        save(updated)
+    }
+
+    func setZenIntelligenceMode(
+        _ mode: ZenIntelligenceMode?,
+        for profile: ApplicationProfile
+    ) {
+        var updated = profile
+        updated.zenIntelligenceMode = mode
+        save(updated)
+    }
+
+    func setCommandSetID(
+        _ commandSetID: String?,
+        for profile: ApplicationProfile
+    ) {
+        var updated = profile
+        updated.commandSetID = commandSetID
+        save(updated)
+    }
+
+    func setWriteModeDefault(
+        _ mode: WriteModeSubMode?,
+        for profile: ApplicationProfile
+    ) {
+        var updated = profile
+        updated.writeModeDefault = mode
+        save(updated)
+    }
+
+    func setCustomPromptHints(
+        _ hints: [String],
+        for profile: ApplicationProfile
+    ) {
+        var updated = profile
+        updated.customPromptHints = hints
+            .map { NextDictationContext.sanitized($0) }
+            .filter { !$0.isEmpty }
+        save(updated)
+    }
+
     func remove(_ profile: ApplicationProfile) {
         ApplicationProfilePreferences.remove(
             bundleIdentifier: profile.bundleIdentifier
