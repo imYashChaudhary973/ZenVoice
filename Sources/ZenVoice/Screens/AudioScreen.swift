@@ -215,7 +215,7 @@ struct AudioScreen: View {
                             Spacer()
                             Text("16 kHz · mono · local")
                         }
-                        .font(ZenDesign.Typography.monoSmall)
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(
                             ZenDesign.Semantic.textTertiary
                         )

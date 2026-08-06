@@ -145,7 +145,7 @@ struct OverlayScreen: View {
                         .fill(ZenDesign.Semantic.accent)
                         .frame(width: 6, height: 6)
                     Text("listening")
-                        .font(ZenDesign.Typography.mono)
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     Spacer()
                 }

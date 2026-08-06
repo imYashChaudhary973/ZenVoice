@@ -120,7 +120,7 @@ struct WriteModeScreen: View {
                     Text(
                         "\(viewModel.writeModeDefaultPrompt.count) characters"
                     )
-                    .font(ZenDesign.Typography.monoSmall)
+                    .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
                 .padding(ZenDesign.Spacing.md)

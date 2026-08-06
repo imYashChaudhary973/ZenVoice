@@ -132,7 +132,7 @@ struct InsightsScreen: View {
                                 )
                                 .lowercased()
                             )
-                            .font(ZenDesign.Typography.monoSmall)
+                            .font(ZenDesign.Typography.caption)
                             .foregroundStyle(ZenDesign.Semantic.textTertiary)
                         }
                         .frame(maxWidth: .infinity)

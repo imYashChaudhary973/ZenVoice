@@ -43,7 +43,7 @@ result was usable. Three specific things went wrong:
 - [x] Replace the title bar with something a dictation app needs: current status,
       the dictation shortcut, and a single primary action.
 - [x] Audit every screen for controls wired to `{ }` or to no-op handlers.
-- [ ] Audit for other reference-design leftovers ("ledger" naming, devtool
+- [x] Audit for other reference-design leftovers ("ledger" naming, devtool
       metaphors, monospace where it carries no meaning).
 
 ### 2. Information architecture
@@ -103,7 +103,8 @@ muted    #98A2B8   secondary
       one secondary, one destructive. Equal sizing within any row.
 - [x] Metrics: large semibold numerals with a small caption beneath, as in the
       reference dashboards.
-- [ ] Remove monospace except where it carries meaning (shortcuts, model IDs).
+- [x] Remove monospace except where it carries meaning (shortcuts, model IDs,
+      language codes, bundle IDs, revision/checksum metadata).
 - [x] Light mode derived from the same tokens, not hand-tuned separately.
 
 ### 4. Screen rebuild

@@ -170,7 +170,7 @@ struct VoiceProfileScreen: View {
                             Text(
                                 "used \(rule.usageCount)×"
                             )
-                            .font(ZenDesign.Typography.monoSmall)
+                            .font(ZenDesign.Typography.caption)
                             .foregroundStyle(
                                 ZenDesign.Semantic.textTertiary
                             )
@@ -311,7 +311,7 @@ struct VoiceProfileScreen: View {
                                         .minimumScaleFactor(0.9)
                                     Text("\(item.count)")
                                         .font(
-                                            ZenDesign.Typography.monoSmall
+                                            ZenDesign.Typography.caption
                                         )
                                         .foregroundStyle(
                                             ZenDesign.Semantic.textTertiary
@@ -369,7 +369,7 @@ struct VoiceProfileScreen: View {
                                         .lineLimit(1)
                                     Spacer()
                                     Text("×\(item.count)")
-                                        .font(ZenDesign.Typography.monoSmall)
+                                        .font(ZenDesign.Typography.caption)
                                         .foregroundStyle(
                                             ZenDesign.Semantic.textTertiary
                                         )

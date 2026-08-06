@@ -222,7 +222,7 @@ struct HelpScreen: View {
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     Spacer()
                     Text("\(filteredFAQs.count) of \(Self.faqs.count)")
-                        .font(ZenDesign.Typography.monoSmall)
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
 
@@ -305,7 +305,7 @@ struct HelpScreen: View {
                         .font(ZenDesign.Typography.bodyStrong)
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     Text(aboutDetail)
-                        .font(ZenDesign.Typography.monoSmall)
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
                 Spacer()

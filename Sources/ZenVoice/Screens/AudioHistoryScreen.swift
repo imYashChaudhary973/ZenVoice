@@ -243,7 +243,7 @@ struct AudioHistoryScreen: View {
             Spacer()
 
             Text(durationLabel(record.durationSeconds))
-                .font(ZenDesign.Typography.monoSmall)
+                .font(ZenDesign.Typography.caption)
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
 
             Text(
@@ -252,7 +252,7 @@ struct AudioHistoryScreen: View {
                     countStyle: .binary
                 )
             )
-            .font(ZenDesign.Typography.monoSmall)
+            .font(ZenDesign.Typography.caption)
             .foregroundStyle(ZenDesign.Semantic.textTertiary)
             .frame(width: 70, alignment: .trailing)
 

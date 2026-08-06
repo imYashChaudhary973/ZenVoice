@@ -229,7 +229,7 @@ struct ZenCommandPalette: View {
             hint(keys: ["esc"], label: "close")
             Spacer()
             Text("\(matches.count) results")
-                .font(ZenDesign.Typography.monoSmall)
+                .font(ZenDesign.Typography.caption)
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)
         }
         .padding(.horizontal, ZenDesign.Spacing.md)

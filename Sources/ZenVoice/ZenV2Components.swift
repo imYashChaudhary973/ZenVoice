@@ -454,7 +454,7 @@ struct ZenMeterRow: View {
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 Spacer()
                 Text("\(percent)%")
-                    .font(ZenDesign.Typography.mono)
+                    .font(ZenDesign.Typography.metricCaption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
             }
             GeometryReader { proxy in
@@ -752,7 +752,7 @@ struct ZenStatusLabel: View {
                 .frame(width: 6, height: 6)
                 .opacity(dimmed ? 0.35 : 1)
             Text(text.lowercased())
-                .font(ZenDesign.Typography.mono)
+                .font(ZenDesign.Typography.caption)
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
                 .lineLimit(1)
         }

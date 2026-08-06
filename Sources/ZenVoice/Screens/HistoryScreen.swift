@@ -457,7 +457,7 @@ private struct HistoryRecordRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text(record.startedAt.formatted(date: .omitted, time: .shortened))
-                        .font(ZenDesign.Typography.monoSmall)
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                     if let appName = record.targetAppName {
                         Text(appName)
@@ -489,7 +489,7 @@ private struct HistoryRecordRow: View {
                         "\(record.wordCount) words · "
                             + "\(Int(record.wordsPerMinute.rounded())) wpm"
                     )
-                    .font(ZenDesign.Typography.monoSmall)
+                    .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
             }

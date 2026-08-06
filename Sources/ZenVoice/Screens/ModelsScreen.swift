@@ -554,7 +554,7 @@ struct ModelsScreen: View {
                             ? "verifying checksum…"
                             : "\(Int(((viewModel.downloadProgress ?? 0) * 100).rounded()))% of \(model.formattedFileSize)"
                     )
-                    .font(ZenDesign.Typography.monoSmall)
+                    .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
                     Button("Cancel", action: viewModel.cancelDownload)
                         .buttonStyle(.plain)
