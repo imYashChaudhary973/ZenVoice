@@ -87,10 +87,10 @@ struct UpdatesScreen: View {
 
     var body: some View {
         ZenScreen(
-            title: "Updates",
+            title: "About",
             subtitle:
-                "ZenVoice is distributed directly rather than through the Mac "
-                + "App Store, so updates are verified against a signed feed."
+                "ZenVoice \(viewModel.installedVersion). Distributed directly "
+                + "and verified against a signed feed."
         ) {
             if !viewModel.isFeedConfigured {
                 deferredNotice

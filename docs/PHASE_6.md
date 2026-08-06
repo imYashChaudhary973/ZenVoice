@@ -1,6 +1,6 @@
 # Phase 6 — Product & Interface
 
-**Status:** Planned — 2026-08-06. No implementation yet.
+**Status:** In progress — 2026-08-06.
 
 **Goal:** Make ZenVoice look and behave like a product rather than a pile of
 features. Consolidate overlapping capabilities, replace the visual system, and
@@ -38,11 +38,11 @@ result was usable. Three specific things went wrong:
 
 ### 1. Remove borrowed and dead UI
 
-- [ ] Delete `"Codebase overview"`, the `t3.gg` badge pill, and the **Open** and
+- [x] Delete `"Codebase overview"`, the `t3.gg` badge pill, and the **Open** and
       **Commit & push** title actions from `ZenVoiceSettingsView.ledgerTitleBar`.
-- [ ] Replace the title bar with something a dictation app needs: current status,
+- [x] Replace the title bar with something a dictation app needs: current status,
       the dictation shortcut, and a single primary action.
-- [ ] Audit every screen for controls wired to `{ }` or to no-op handlers.
+- [x] Audit every screen for controls wired to `{ }` or to no-op handlers.
 - [ ] Audit for other reference-design leftovers ("ledger" naming, devtool
       metaphors, monospace where it carries no meaning).
 
@@ -62,20 +62,20 @@ Current: 19 entries across 6 groups. Target: 9.
 | **Privacy & Data** | Privacy |
 | **Help & About** | Help, Updates |
 
-- [ ] Merge Instant Refine and ZenIntelligence into **Formatting** with a single
+- [x] Merge Instant Refine and ZenIntelligence into **Formatting** with a single
       ladder: **Off → Clean → Smart → Cloud**. Today's `off/clean/agentPrompt`
       and `off/format/contextAware` are two ladders for one job.
-- [ ] Retire the `ZenIntelligence` name. Nothing behind it is intelligent yet;
+- [x] Retire the `ZenIntelligence` name. Nothing behind it is intelligent yet;
       the "Smart" rung is reserved for when something is. Update ADR 0007 to say
       so rather than leaving the claim standing.
-- [ ] Rename the two profile surfaces so they stop reading as duplicates. They
+- [x] Rename the two profile surfaces so they stop reading as duplicates. They
       are genuinely different — Voice Profile is *your vocabulary and
       corrections*, App Profiles are *per-application overrides* — but the names
       invite the confusion. Proposed: **Your Words** and **Per-App Rules**.
-- [ ] Fold Audio History into History as a tab; it is a view of the same data.
-- [ ] Fold Updates into Help & About. It is inert and does not warrant top-level
+- [x] Fold Audio History into History as a tab; it is a view of the same data.
+- [x] Fold Updates into Help & About. It is inert and does not warrant top-level
       navigation.
-- [ ] Migrate persisted preference keys for anything renamed, so existing
+- [x] Migrate persisted preference keys for anything renamed, so existing
       installs keep their settings.
 
 ### 3. Design system
@@ -92,24 +92,24 @@ text     #E8EBF5   primary
 muted    #98A2B8   secondary
 ```
 
-- [ ] Rewrite `ZenDesignTokens.swift`: palette above, card radius 14 (from 4),
+- [x] Rewrite `ZenDesignTokens.swift`: palette above, card radius 14 (from 4),
       one spacing scale, one type scale.
-- [ ] Card component: 14px radius, 1px hairline border, generous internal padding.
-- [ ] Tinted icon chips — icon over a translucent accent-tinted rounded square,
+- [x] Card component: 14px radius, 1px hairline border, generous internal padding.
+- [x] Tinted icon chips — icon over a translucent accent-tinted rounded square,
       consistent 28×28.
-- [ ] Sidebar: pill-shaped active state, single icon size, consistent label
+- [x] Sidebar: pill-shaped active state, single icon size, consistent label
       baseline.
-- [ ] Buttons: fixed height, consistent horizontal padding, one primary style,
+- [x] Buttons: fixed height, consistent horizontal padding, one primary style,
       one secondary, one destructive. Equal sizing within any row.
-- [ ] Metrics: large semibold numerals with a small caption beneath, as in the
+- [x] Metrics: large semibold numerals with a small caption beneath, as in the
       reference dashboards.
 - [ ] Remove monospace except where it carries meaning (shortcuts, model IDs).
-- [ ] Light mode derived from the same tokens, not hand-tuned separately.
+- [x] Light mode derived from the same tokens, not hand-tuned separately.
 
 ### 4. Screen rebuild
 
-- [ ] Home — status, today usage as large numerals, quick actions.
-- [ ] Dictation, Languages & Models, Formatting, Commands, Personal, History,
+- [x] Home — status, today usage as large numerals, quick actions.
+- [x] Dictation, Languages & Models, Formatting, Commands, Personal, History,
       Privacy & Data, Help & About.
 - [ ] Alignment pass: every screen on the same grid, labels on a shared baseline,
       controls right-aligned consistently.
@@ -119,7 +119,7 @@ muted    #98A2B8   secondary
 
 Phase 5 shipped a settings-only preview. It is not usable during dictation.
 
-- [ ] **Add Anthropic (Claude).** This is not a base-URL change: the Messages API
+- [x] **Add Anthropic (Claude).** This is not a base-URL change: the Messages API
       uses `POST /v1/messages`, an `x-api-key` header rather than
       `Authorization: Bearer`, a required `anthropic-version` header, a required
       `max_tokens`, a top-level `system` field, and returns `content[0].text`
@@ -129,24 +129,24 @@ Phase 5 shipped a settings-only preview. It is not usable during dictation.
 - [ ] Verify Groq and OpenAI against live endpoints. Neither has ever run against
       a real provider — current confidence is fixture-level only.
 - [ ] Make refinement reachable from the dictation flow, not only from settings.
-- [ ] Per-provider model lists instead of a free-text model field.
-- [ ] Surface failures without losing the local transcript.
+- [x] Per-provider model lists instead of a free-text model field.
+- [x] Surface failures without losing the local transcript.
 
 ### 6. Evaluation corpus
 
 The goal is measurement, not training. Today's fixtures do not represent real
 dictation.
 
-- [ ] Define what "real dictation" means here: spontaneous speech, self-
+- [x] Define what "real dictation" means here: spontaneous speech, self-
       corrections, filler words, varied mics and rooms — not read audiobook prose.
-- [ ] Source licence-clean audio. Existing `Scripts/build-librispeech-corpus.py`
+- [x] Source licence-clean audio. Existing `Scripts/build-librispeech-corpus.py`
       covers read speech; conversational corpora (Common Voice, AMI, or
       self-recorded) are needed for the dictation case. Record provenance and
       licence for each source.
-- [ ] Extend `ZenVoiceAccuracyChecks` to report per-engine WER on the new corpus.
+- [x] Extend `ZenVoiceAccuracyChecks` to report per-engine WER on the new corpus.
 - [ ] Baseline every installed engine so engine recommendation rests on measured
       accuracy rather than hardware heuristics.
-- [ ] Keep corpora out of git (`/Datasets/` is already ignored); fetch on demand.
+- [x] Keep corpora out of git (`/Datasets/` is already ignored); fetch on demand.
 
 ## Sequencing
 
