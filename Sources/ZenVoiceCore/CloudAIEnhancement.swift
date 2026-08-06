@@ -60,13 +60,44 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
     public var defaultModel: String? {
         switch self {
         case .openAI:
-            return "gpt-4o-mini"
+            return knownModels.first
         case .groq:
-            return "llama-3.3-70b-versatile"
+            return knownModels.first
         case .anthropic:
-            return "claude-3-5-sonnet-20241022"
+            return knownModels.first
         case .custom:
             return nil
+        }
+    }
+
+    /// Models ZenVoice knows how to address for this provider. Custom endpoints
+    /// leave the field open; everything else gets a picker so the user cannot
+    /// paste a model ID that the provider does not support.
+    public var knownModels: [String] {
+        switch self {
+        case .openAI:
+            return [
+                "gpt-4o-mini",
+                "gpt-4o",
+                "gpt-4.1-mini",
+                "gpt-4.1",
+            ]
+        case .groq:
+            return [
+                "llama-3.3-70b-versatile",
+                "llama-3.1-8b-instant",
+                "mixtral-8x7b-32768",
+                "gemma2-9b-it",
+            ]
+        case .anthropic:
+            return [
+                "claude-3-5-sonnet-20241022",
+                "claude-3-5-haiku-20241022",
+                "claude-3-opus-20240229",
+                "claude-3-7-sonnet-20250219",
+            ]
+        case .custom:
+            return []
         }
     }
 

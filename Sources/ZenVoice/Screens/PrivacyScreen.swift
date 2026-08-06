@@ -29,7 +29,7 @@ struct PrivacyScreen: View {
 
     var body: some View {
         ZenScreen(
-            title: "Privacy",
+            title: "Privacy & Data",
             subtitle: "What ZenVoice keeps, and where."
         ) {
             dictationPrivacy

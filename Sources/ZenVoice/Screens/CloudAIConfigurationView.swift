@@ -15,17 +15,16 @@
 import SwiftUI
 import ZenVoiceCore
 
-struct CloudAIScreen: View {
+/// Cloud AI controls without a screen wrapper.
+///
+/// `FormattingScreen` inlines this directly so the provider, key, prompt, and
+/// preview live under the single Formatting title instead of nesting a second
+/// `ZenScreen` scaffold.
+struct CloudAIConfigurationView: View {
     @ObservedObject var viewModel: CloudAIViewModel
 
     var body: some View {
-        ZenScreen(
-            title: "Cloud AI Enhancement",
-            subtitle:
-                "Optionally send a finished transcript to a hosted model for "
-                + "cleanup. Off by default — this is the only ZenVoice feature "
-                + "that can send your text off this Mac."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             enableSection
             if viewModel.configuration.isEnabled {
                 providerSection
@@ -91,20 +90,37 @@ struct CloudAIScreen: View {
                         }
                     }
 
+                    if viewModel.configuration.provider.knownModels.isEmpty {
+                        TextField(
+                            "Model",
+                            text: Binding(
+                                get: { viewModel.configuration.model },
+                                set: { viewModel.setModel($0) }
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
+                    } else {
+                        Picker(
+                            "Model",
+                            selection: Binding(
+                                get: { viewModel.configuration.model },
+                                set: { viewModel.setModel($0) }
+                            )
+                        ) {
+                            ForEach(
+                                viewModel.configuration.provider.knownModels,
+                                id: \.self
+                            ) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                    }
+
                     TextField(
                         "Base URL",
                         text: Binding(
                             get: { viewModel.configuration.baseURL },
                             set: { viewModel.setBaseURL($0) }
-                        )
-                    )
-                    .textFieldStyle(.roundedBorder)
-
-                    TextField(
-                        "Model",
-                        text: Binding(
-                            get: { viewModel.configuration.model },
-                            set: { viewModel.setModel($0) }
                         )
                     )
                     .textFieldStyle(.roundedBorder)

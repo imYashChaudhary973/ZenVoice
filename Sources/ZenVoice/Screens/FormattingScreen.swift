@@ -58,9 +58,7 @@ struct FormattingScreen: View {
             }
 
             if mode == .cloud {
-                ZenSection(title: "Cloud provider") {
-                    CloudAIScreen(viewModel: cloudAIViewModel)
-                }
+                CloudAIConfigurationView(viewModel: cloudAIViewModel)
             }
 
             if mode != .cloud {
