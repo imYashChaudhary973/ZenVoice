@@ -1553,6 +1553,14 @@ private func measure() -> Bool {
                     segmented: corpusSegmented
                 )
             }
+            if flag("ZENVOICE_ACCURACY_MULTIENGINE") {
+                _ = measureEngines(
+                    clips: corpus,
+                    languageProfile: corpusProfile,
+                    gain: 1,
+                    noise: 0
+                )
+            }
         }
     }
 
