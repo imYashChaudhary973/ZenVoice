@@ -796,7 +796,7 @@ let mailProfile = ApplicationProfile(
         inputLanguageCode: "es",
         outputMode: .spokenLanguage
     ),
-    refinementMode: .agentPrompt,
+    formattingMode: .clean,
     voiceCommandsEnabled: true,
     preferredEngineID: EngineIdentifiers.appleSpeech,
     preferredOutputMode: .englishTranslation

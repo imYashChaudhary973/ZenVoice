@@ -76,10 +76,10 @@ struct HelpScreen: View {
         ),
         ZenFAQ(
             id: 7,
-            question: "What does Instant Refine actually change?",
+            question: "What does Formatting actually change?",
             answer:
-                "Clean removes fillers, repeated words, and spoken restarts — never meaning. Agent Prompt formats your speech as a structured prompt. Both options run entirely on this Mac.",
-            tags: "refine clean agent rewrite grammar"
+                "Off keeps the raw transcript. Clean removes fillers, repeated words, and spoken restarts — never meaning. Smart adds capitalisation, number formatting, and spacing. Cloud sends the transcript to a provider you choose, with your own key, for enhancement.",
+            tags: "refine clean smart cloud rewrite grammar"
         ),
         ZenFAQ(
             id: 8,

@@ -1352,13 +1352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             preferredVocabulary = []
         }
-        let profileFormattingMode: TranscriptFormattingMode? =
-            profile.map { profile in
-                TranscriptFormattingMode.from(
-                    instantRefine: profile.refinementMode,
-                    zenIntelligence: profile.zenIntelligenceMode
-                )
-            }
+        let profileFormattingMode = profile?.formattingMode
         return ActiveDictationBehavior(
             languageProfile: languageProfile,
             correctionScope: correctionScope,
@@ -2790,12 +2784,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let applicationProfile = ApplicationProfilePreferences.profile(
             for: record.targetBundleID
         )
-        let formattingMode = applicationProfile.map { profile in
-            TranscriptFormattingMode.from(
-                instantRefine: profile.refinementMode,
-                zenIntelligence: profile.zenIntelligenceMode
-            )
-        } ?? TranscriptFormattingPreferences.load()
+        let formattingMode = applicationProfile?.formattingMode
+            ?? TranscriptFormattingPreferences.load()
         let voiceCommandsEnabled =
             applicationProfile?.voiceCommandsEnabled
             ?? LocalVoiceCommandPreferences.isEnabled()

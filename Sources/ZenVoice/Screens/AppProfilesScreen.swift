@@ -76,7 +76,7 @@ struct AppProfilesScreen: View {
                                 ZenDesign.Semantic.textPrimary
                             )
                         Text(
-                            "Automatically choose language, refinement, and local voice commands for a target app."
+                            "Automatically choose language, formatting, and local voice commands for a target app."
                         )
                         .font(.system(size: 12))
                         .foregroundStyle(
@@ -149,8 +149,8 @@ struct AppProfilesScreen: View {
                             .addSelectedApplication(
                                 languageProfile:
                                     viewModel.languageProfile,
-                                refinementMode:
-                                    viewModel.instantRefineMode
+                                formattingMode:
+                                    TranscriptFormattingPreferences.load()
                             )
                     }
                     .buttonStyle(ZenPrimaryButtonStyle())
@@ -236,12 +236,12 @@ struct AppProfilesScreen: View {
                 .frame(maxWidth: .infinity)
 
                 Picker(
-                    "Refinement",
+                    "Formatting",
                     selection: Binding(
-                        get: { profile.refinementMode },
+                        get: { profile.formattingMode },
                         set: {
                             applicationProfileViewModel
-                                .setRefinementMode(
+                                .setFormattingMode(
                                     $0,
                                     for: profile
                                 )
@@ -249,7 +249,7 @@ struct AppProfilesScreen: View {
                     )
                 ) {
                     ForEach(
-                        InstantRefineMode.allCases,
+                        TranscriptFormattingMode.allCases,
                         id: \.self
                     ) { mode in
                         Text(mode.displayName).tag(mode)
@@ -324,29 +324,6 @@ struct AppProfilesScreen: View {
             }
 
             HStack(spacing: 10) {
-                Picker(
-                    "ZenIntelligence",
-                    selection: Binding(
-                        get: { profile.zenIntelligenceMode },
-                        set: {
-                            applicationProfileViewModel
-                                .setZenIntelligenceMode(
-                                    $0,
-                                    for: profile
-                                )
-                        }
-                    )
-                ) {
-                    ForEach(
-                        zenIntelligenceModeOptions,
-                        id: \.id
-                    ) { option in
-                        Text(option.name)
-                            .tag(option.id as ZenIntelligenceMode?)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
                 Picker(
                     "Command set",
                     selection: Binding(
@@ -432,14 +409,6 @@ struct AppProfilesScreen: View {
         [(id: TranscriptionOutputMode?, name: String)] {
         [(nil, "Use language default")]
             + TranscriptionOutputMode.allCases.map {
-                ($0, $0.displayName)
-            }
-    }
-
-    private var zenIntelligenceModeOptions:
-        [(id: ZenIntelligenceMode?, name: String)] {
-        [(nil, "Use global ZenIntelligence")]
-            + ZenIntelligenceMode.allCases.map {
                 ($0, $0.displayName)
             }
     }

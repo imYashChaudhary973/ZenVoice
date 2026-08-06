@@ -20,7 +20,7 @@ public struct ApplicationProfile:
     public let bundleIdentifier: String
     public var applicationName: String
     public var languageProfile: LanguageProfile
-    public var refinementMode: InstantRefineMode
+    public var formattingMode: TranscriptFormattingMode
     public var voiceCommandsEnabled: Bool
     /// Engine override for this app. `nil` falls back to the global engine
     /// preference for the active language profile.
@@ -28,14 +28,12 @@ public struct ApplicationProfile:
     /// Output mode override for this app. `nil` uses the output mode inside
     /// `languageProfile`.
     public var preferredOutputMode: TranscriptionOutputMode?
-    /// ZenIntelligence mode for this app. `nil` uses the global preference.
-    public var zenIntelligenceMode: ZenIntelligenceMode?
     /// Command set identifier for this app. `nil` uses the global manifest.
     public var commandSetID: String?
     /// Default Write Mode sub-mode for this app. `nil` uses the global
     /// preference.
     public var writeModeDefault: WriteModeSubMode?
-    /// Optional custom prompt hints for ZenIntelligence in this app.
+    /// Optional custom prompt hints for formatting in this app.
     public var customPromptHints: [String]
 
     public var id: String { bundleIdentifier }
@@ -44,11 +42,10 @@ public struct ApplicationProfile:
         bundleIdentifier: String,
         applicationName: String,
         languageProfile: LanguageProfile,
-        refinementMode: InstantRefineMode,
+        formattingMode: TranscriptFormattingMode,
         voiceCommandsEnabled: Bool,
         preferredEngineID: String? = nil,
         preferredOutputMode: TranscriptionOutputMode? = nil,
-        zenIntelligenceMode: ZenIntelligenceMode? = nil,
         commandSetID: String? = nil,
         writeModeDefault: WriteModeSubMode? = nil,
         customPromptHints: [String] = []
@@ -56,14 +53,97 @@ public struct ApplicationProfile:
         self.bundleIdentifier = bundleIdentifier
         self.applicationName = applicationName
         self.languageProfile = languageProfile
-        self.refinementMode = refinementMode
+        self.formattingMode = formattingMode
         self.voiceCommandsEnabled = voiceCommandsEnabled
         self.preferredEngineID = preferredEngineID
         self.preferredOutputMode = preferredOutputMode
-        self.zenIntelligenceMode = zenIntelligenceMode
         self.commandSetID = commandSetID
         self.writeModeDefault = writeModeDefault
         self.customPromptHints = customPromptHints
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case bundleIdentifier
+        case applicationName
+        case languageProfile
+        case formattingMode
+        case voiceCommandsEnabled
+        case preferredEngineID
+        case preferredOutputMode
+        case commandSetID
+        case writeModeDefault
+        case customPromptHints
+        // Legacy keys kept only for one-time decode migration.
+        case refinementMode
+        case zenIntelligenceMode
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bundleIdentifier = try container.decode(
+            String.self, forKey: .bundleIdentifier
+        )
+        applicationName = try container.decode(
+            String.self, forKey: .applicationName
+        )
+        languageProfile = try container.decode(
+            LanguageProfile.self, forKey: .languageProfile
+        )
+        voiceCommandsEnabled = try container.decode(
+            Bool.self, forKey: .voiceCommandsEnabled
+        )
+        preferredEngineID = try container.decodeIfPresent(
+            String.self, forKey: .preferredEngineID
+        )
+        preferredOutputMode = try container.decodeIfPresent(
+            TranscriptionOutputMode.self, forKey: .preferredOutputMode
+        )
+        commandSetID = try container.decodeIfPresent(
+            String.self, forKey: .commandSetID
+        )
+        writeModeDefault = try container.decodeIfPresent(
+            WriteModeSubMode.self, forKey: .writeModeDefault
+        )
+        customPromptHints = try container.decode(
+            [String].self, forKey: .customPromptHints
+        )
+
+        if let mode = try? container.decode(
+            TranscriptFormattingMode.self, forKey: .formattingMode
+        ) {
+            formattingMode = mode
+        } else {
+            let instantRefine = try container.decode(
+                InstantRefineMode.self, forKey: .refinementMode
+            )
+            let zenIntelligence = try container.decodeIfPresent(
+                ZenIntelligenceMode.self, forKey: .zenIntelligenceMode
+            )
+            formattingMode = TranscriptFormattingMode.from(
+                instantRefine: instantRefine,
+                zenIntelligence: zenIntelligence
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(bundleIdentifier, forKey: .bundleIdentifier)
+        try container.encode(applicationName, forKey: .applicationName)
+        try container.encode(languageProfile, forKey: .languageProfile)
+        try container.encode(formattingMode, forKey: .formattingMode)
+        try container.encode(voiceCommandsEnabled, forKey: .voiceCommandsEnabled)
+        try container.encodeIfPresent(
+            preferredEngineID, forKey: .preferredEngineID
+        )
+        try container.encodeIfPresent(
+            preferredOutputMode, forKey: .preferredOutputMode
+        )
+        try container.encodeIfPresent(commandSetID, forKey: .commandSetID)
+        try container.encodeIfPresent(
+            writeModeDefault, forKey: .writeModeDefault
+        )
+        try container.encode(customPromptHints, forKey: .customPromptHints)
     }
 }
 

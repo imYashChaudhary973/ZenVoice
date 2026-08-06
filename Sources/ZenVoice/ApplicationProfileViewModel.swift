@@ -71,7 +71,7 @@ final class ApplicationProfileViewModel: ObservableObject {
 
     func addSelectedApplication(
         languageProfile: LanguageProfile,
-        refinementMode: InstantRefineMode
+        formattingMode: TranscriptFormattingMode
     ) {
         guard let selectedApplicationID,
               let application = runningApplications.first(where: {
@@ -85,7 +85,7 @@ final class ApplicationProfileViewModel: ObservableObject {
             bundleIdentifier: application.bundleIdentifier,
             applicationName: application.name,
             languageProfile: languageProfile,
-            refinementMode: refinementMode,
+            formattingMode: formattingMode,
             voiceCommandsEnabled:
                 LocalVoiceCommandPreferences.isEnabled()
         )
@@ -103,12 +103,12 @@ final class ApplicationProfileViewModel: ObservableObject {
         save(updated)
     }
 
-    func setRefinementMode(
-        _ mode: InstantRefineMode,
+    func setFormattingMode(
+        _ mode: TranscriptFormattingMode,
         for profile: ApplicationProfile
     ) {
         var updated = profile
-        updated.refinementMode = mode
+        updated.formattingMode = mode
         save(updated)
     }
 
@@ -136,15 +136,6 @@ final class ApplicationProfileViewModel: ObservableObject {
     ) {
         var updated = profile
         updated.preferredOutputMode = outputMode
-        save(updated)
-    }
-
-    func setZenIntelligenceMode(
-        _ mode: ZenIntelligenceMode?,
-        for profile: ApplicationProfile
-    ) {
-        var updated = profile
-        updated.zenIntelligenceMode = mode
         save(updated)
     }
 

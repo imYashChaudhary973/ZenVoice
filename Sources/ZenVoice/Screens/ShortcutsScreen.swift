@@ -222,7 +222,7 @@ struct ShortcutsScreen: View {
                 ZenRow(
                     icon: "captions.bubble",
                     title: "ZenBar controls",
-                    subtitle: "Cancel or finish a dictation from the bar itself — no shortcut needed. Live preview options live in Instant Refine."
+                    subtitle: "Cancel or finish a dictation from the bar itself — no shortcut needed. Live preview options live in Formatting."
                 )
             }
         }

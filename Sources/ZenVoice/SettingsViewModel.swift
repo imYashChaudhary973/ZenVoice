@@ -85,7 +85,6 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var microphoneStatus: PermissionStatus = .needsAccess
     @Published private(set) var accessibilityStatus: PermissionStatus = .needsAccess
     @Published private(set) var isLocalModelReady = false
-    @Published private(set) var instantRefineMode: InstantRefineMode
     @Published private(set) var languageProfile: LanguageProfile
     @Published var languageError: String?
     @Published private(set) var microphones: [MicrophoneDevice] = []
@@ -98,7 +97,6 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var livePreviewEnabled: Bool
     @Published private(set) var commitOnPauseEnabled: Bool
     @Published private(set) var voiceCommandsEnabled: Bool
-    @Published private(set) var zenIntelligenceMode: ZenIntelligenceMode
     @Published private(set) var commandModeEnabled: Bool
     @Published private(set) var commandModeManifest: CommandManifest
     @Published private(set) var writeModeSubMode: WriteModeSubMode
@@ -156,7 +154,7 @@ final class SettingsViewModel: ObservableObject {
         self.applyZenBarPreference = applyZenBarPreference
         self.applyLanguageProfile = applyLanguageProfile
         self.canRunAudioDoctor = canRunAudioDoctor
-        instantRefineMode = InstantRefinePreferences.load()
+        _ = TranscriptFormattingPreferences.load()
         languageProfile = LanguagePreferences.load()
         livePreviewEnabled =
             LiveDictationPreferences.isPreviewEnabled()
@@ -164,7 +162,6 @@ final class SettingsViewModel: ObservableObject {
             LiveDictationPreferences.isCommitOnPauseEnabled()
         voiceCommandsEnabled =
             LocalVoiceCommandPreferences.isEnabled()
-        zenIntelligenceMode = ZenIntelligencePreferences.load()
         commandModeEnabled = CommandModePreferences.isEnabled()
         commandModeManifest =
             CommandModePreferences.loadManifest()
@@ -315,11 +312,6 @@ final class SettingsViewModel: ObservableObject {
         applyZenBarPreference(enabled)
     }
 
-    func setInstantRefineMode(_ mode: InstantRefineMode) {
-        instantRefineMode = mode
-        InstantRefinePreferences.save(mode)
-    }
-
     func setLivePreviewEnabled(_ enabled: Bool) {
         LiveDictationPreferences.setPreviewEnabled(enabled)
         livePreviewEnabled =
@@ -347,11 +339,6 @@ final class SettingsViewModel: ObservableObject {
     func setVoiceCommandsEnabled(_ enabled: Bool) {
         LocalVoiceCommandPreferences.setEnabled(enabled)
         voiceCommandsEnabled = enabled
-    }
-
-    func setZenIntelligenceMode(_ mode: ZenIntelligenceMode) {
-        ZenIntelligencePreferences.save(mode)
-        zenIntelligenceMode = mode
     }
 
     func setCommandModeEnabled(_ enabled: Bool) {

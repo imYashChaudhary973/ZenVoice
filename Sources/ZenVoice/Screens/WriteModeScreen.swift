@@ -57,7 +57,7 @@ struct WriteModeScreen: View {
                             .font(ZenDesign.Typography.bodyStrong)
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         Text(
-                            "In Rewrite, ZenVoice reads the current selection using Accessibility (or the clipboard as a fallback), applies your prompt through ZenIntelligence, and shows a preview when the change is large."
+                            "In Rewrite, ZenVoice reads the current selection using Accessibility (or the clipboard as a fallback), applies your prompt through the Smart formatting rung, and shows a preview when the change is large."
                         )
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
