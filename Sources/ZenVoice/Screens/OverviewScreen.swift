@@ -45,7 +45,7 @@ struct OverviewScreen: View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             todayUsageCard
             statusOverview
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: ZenDesign.Spacing.lg) {
                 quickActionsPanel
                     .frame(minWidth: 260, maxWidth: .infinity)
                 homeSideColumn
@@ -54,21 +54,21 @@ struct OverviewScreen: View {
         }
     }
 
-    /// Today's dictation totals. Private Dictation is excluded upstream —
-    /// private recordings are never persisted, so they never reach insights.
+    // MARK: - Today's usage
+
     private var todayUsageCard: some View {
         let today = insightsViewModel.snapshot.today
         return ZenPanel {
             HStack(spacing: 0) {
                 todayStat(
-                    "Today",
-                    value: "\(today.wordCount)",
-                    caption: today.wordCount == 1 ? "word" : "words"
+                    "Words",
+                    value: formattedCount(today.wordCount),
+                    caption: today.wordCount == 1 ? "today" : "today"
                 )
                 Divider().overlay(ZenDesign.Semantic.border)
                 todayStat(
                     "Dictations",
-                    value: "\(today.dictationCount)",
+                    value: formattedCount(today.dictationCount),
                     caption: today.dictationCount == 1 ? "session" : "sessions"
                 )
                 Divider().overlay(ZenDesign.Semantic.border)
@@ -84,7 +84,7 @@ struct OverviewScreen: View {
                     caption: today.hasActivity ? "most words" : "no activity"
                 )
             }
-            .padding(.vertical, 14)
+            .padding(.vertical, ZenDesign.Spacing.md)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("Today's usage. \(today.pillSummary)."))
@@ -95,13 +95,12 @@ struct OverviewScreen: View {
         value: String,
         caption: String
     ) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
             Text(label.uppercased())
-                .font(.system(size: 9.5, weight: .semibold))
-                .tracking(1.5)
+                .font(ZenDesign.Typography.metricCaption)
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)
             Text(value)
-                .font(ZenDesign.Typography.bodyStrong)
+                .font(ZenDesign.Typography.metric)
                 .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -111,7 +110,11 @@ struct OverviewScreen: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, ZenDesign.Spacing.md)
+    }
+
+    private func formattedCount(_ count: Int) -> String {
+        String(count)
     }
 
     private func formattedDuration(_ seconds: TimeInterval) -> String {
@@ -126,14 +129,14 @@ struct OverviewScreen: View {
         return "\(minutes / 60)h \(minutes % 60)m"
     }
 
+    // MARK: - Status
+
     private var statusOverview: some View {
         ZenPanel {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(ZenDesign.Semantic.success)
-                        .frame(width: 8, height: 8)
-                    Text("Ready to dictate")
+                HStack(spacing: ZenDesign.Spacing.sm) {
+                    statusDot
+                    Text(statusTitle)
                         .font(ZenDesign.Typography.bodyStrong)
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     Spacer()
@@ -141,7 +144,7 @@ struct OverviewScreen: View {
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
-                .padding(.bottom, 12)
+                .padding(.bottom, ZenDesign.Spacing.sm)
 
                 HStack(spacing: 0) {
                     statusItem("Shortcut", value: viewModel.currentShortcut.displayName, isKeycap: true)
@@ -152,11 +155,47 @@ struct OverviewScreen: View {
                     Divider().overlay(ZenDesign.Semantic.border)
                     statusItem("Model", value: modelDisplayName)
                 }
-                .frame(height: 52)
+                .frame(height: 54)
                 .background(ZenDesign.Semantic.surfaceRaised)
                 .clipShape(RoundedRectangle(cornerRadius: ZenDesign.Radius.small, style: .continuous))
             }
             .padding(ZenDesign.Spacing.md)
+        }
+    }
+
+    private var statusTitle: String {
+        switch appState.phase {
+        case .idle:
+            return "Ready to dictate"
+        case .listening:
+            return "Listening"
+        case .transcribing:
+            return "Transcribing"
+        case .inserting:
+            return "Inserting"
+        case .success:
+            return "Inserted"
+        case .error(let message):
+            return message
+        }
+    }
+
+    private var statusDot: some View {
+        Circle()
+            .fill(statusTint)
+            .frame(width: 8, height: 8)
+    }
+
+    private var statusTint: Color {
+        switch appState.phase {
+        case .idle, .success:
+            return ZenDesign.Semantic.success
+        case .listening:
+            return ZenDesign.Semantic.accent
+        case .transcribing, .inserting:
+            return ZenDesign.Semantic.warn
+        case .error:
+            return ZenDesign.Semantic.danger
         }
     }
 
@@ -178,8 +217,10 @@ struct OverviewScreen: View {
         .padding(.horizontal, ZenDesign.Spacing.md)
     }
 
+    // MARK: - Side column
+
     private var homeSideColumn: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: ZenDesign.Spacing.md) {
             permissionsPanel
             recentActivityPanel
             if historyViewModel.recoveryCount > 0 {
@@ -190,9 +231,9 @@ struct OverviewScreen: View {
 
     private var quickActionsPanel: some View {
         ZenPanel {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                 miniTitle("Actions")
-                HStack(spacing: 10) {
+                HStack(spacing: ZenDesign.Spacing.sm) {
                     Button(action: startDictation) {
                         Label("Start dictating", systemImage: "mic")
                             .fixedSize()
@@ -222,7 +263,7 @@ struct OverviewScreen: View {
                     granted: viewModel.accessibilityStatus == .allowed
                 )
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, ZenDesign.Spacing.sm)
         }
     }
 
@@ -231,11 +272,8 @@ struct OverviewScreen: View {
         title: String,
         granted: Bool
     ) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                .frame(width: 16)
+        HStack(spacing: ZenDesign.Spacing.sm) {
+            tintedIconChip(icon, tint: granted ? ZenDesign.Semantic.success : ZenDesign.Semantic.warn)
             Text(title)
                 .font(ZenDesign.Typography.body)
                 .foregroundStyle(ZenDesign.Semantic.textPrimary)
@@ -246,8 +284,8 @@ struct OverviewScreen: View {
                 systemImage: granted ? "checkmark" : nil
             )
         }
-        .padding(.horizontal, 14)
-        .frame(height: 34)
+        .padding(.horizontal, ZenDesign.Spacing.md)
+        .frame(height: 40)
     }
 
     private var recentActivityPanel: some View {
@@ -259,32 +297,18 @@ struct OverviewScreen: View {
                     Text("Your latest dictations will appear here.")
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 12)
+                        .padding(.horizontal, ZenDesign.Spacing.md)
+                        .padding(.bottom, ZenDesign.Spacing.sm)
                 } else {
                     ForEach(recent) { record in
                         Button {
                             navigate(.history)
                         } label: {
-                            HStack(spacing: 9) {
-                                Image(systemName: "text.bubble")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(
-                                        ZenDesign.Semantic.textSecondary
-                                    )
-                                    .frame(width: 24, height: 24)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(
-                                                ZenDesign.Semantic
-                                                    .surfaceRaised
-                                            )
-                                    }
+                            HStack(spacing: ZenDesign.Spacing.sm) {
+                                tintedIconChip("text.bubble", tint: ZenDesign.Semantic.accent)
                                 Text(record.targetAppName ?? "Unknown app")
                                     .font(ZenDesign.Typography.body)
-                                    .foregroundStyle(
-                                        ZenDesign.Semantic.textPrimary
-                                    )
+                                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
                                     .lineLimit(1)
                                 Spacer()
                                 Text(
@@ -292,38 +316,46 @@ struct OverviewScreen: View {
                                         .relative(presentation: .named)
                                     )
                                 )
-                                .font(ZenDesign.Typography.monoSmall)
-                                .foregroundStyle(
-                                    ZenDesign.Semantic.textTertiary
-                                )
+                                .font(ZenDesign.Typography.caption)
+                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
                                 .lineLimit(1)
                             }
-                            .padding(.horizontal, 14)
-                            .frame(height: 34)
+                            .padding(.horizontal, ZenDesign.Spacing.md)
+                            .frame(height: 36)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, ZenDesign.Spacing.sm)
         }
+    }
+
+    private func tintedIconChip(_ systemImage: String, tint: Color) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(tint)
+            .frame(width: 28, height: 28)
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(tint.opacity(0.12))
+            }
     }
 
     private func miniTitle(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(.system(size: 9.5, weight: .semibold))
+            .font(ZenDesign.Typography.sectionTitle)
             .tracking(1.5)
             .foregroundStyle(ZenDesign.Semantic.textTertiary)
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-            .padding(.bottom, 7)
+            .padding(.horizontal, ZenDesign.Spacing.md)
+            .padding(.top, ZenDesign.Spacing.sm)
+            .padding(.bottom, ZenDesign.Spacing.xs)
     }
 
     private var recoveryNote: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 12, weight: .medium))
+        HStack(spacing: ZenDesign.Spacing.sm) {
+            tintedIconChip("exclamationmark.triangle", tint: ZenDesign.Semantic.warn)
             Text("\(historyViewModel.recoveryCount) items waiting in Recovery")
                 .font(ZenDesign.Typography.captionStrong)
                 .lineLimit(1)
@@ -335,8 +367,8 @@ struct OverviewScreen: View {
             .font(ZenDesign.Typography.captionStrong)
         }
         .foregroundStyle(ZenDesign.Semantic.warn)
-        .padding(.horizontal, 14)
-        .frame(height: 42)
+        .padding(.horizontal, ZenDesign.Spacing.md)
+        .frame(height: 44)
         .background {
             RoundedRectangle(cornerRadius: ZenDesign.Radius.medium)
                 .fill(ZenDesign.Semantic.warnMuted)
@@ -364,5 +396,4 @@ struct OverviewScreen: View {
         }
         return model.displayName
     }
-
 }
