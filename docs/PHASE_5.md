@@ -2,9 +2,11 @@
 
 **Status:** Code deliverables complete — Cloud AI Enhancement and the signed-feed
 updater are implemented, `swift build` and all check suites pass. Section 3
-(distribution gates) is **blocked**, not skipped: it needs Developer ID signing,
-notarization, clean-device QA, and the outstanding pricing decision. Manual QA
-against a live provider endpoint and a real signed feed is also open.
+(distribution gates) is **blocked**, not skipped: it needs a Developer ID
+signing run, notarization credentials, and clean-device QA. Manual QA against a
+live provider endpoint and a real signed feed is also open. Pricing is *not* a
+blocker — it was settled on 2026-08-05 as open-source direct download, free
+(see `docs/RELEASE_READINESS.md`).
 
 **Goal:** Prepare the optional updater and cloud-AI enhancement paths, and complete any remaining release gates if a future shipping decision is made.
 
@@ -66,8 +68,8 @@ against a live provider endpoint and a real signed feed is also open.
 ### 3. Distribution gates (when shipping is reconsidered)
 
 - [ ] **Blocked** — complete the deferred items from `docs/RELEASE_READINESS.md`.
-  Needs a Developer ID signing run, notarization credentials, a clean Mac, and
-  the pricing decision. None of these are code work:
+  Needs a Developer ID signing run, notarization credentials, and a clean Mac.
+  None of these are code work:
   - Developer ID Application signing
   - Hardened Runtime
   - `notarytool` submission and stapling
@@ -133,5 +135,5 @@ against a live provider endpoint and a real signed feed is also open.
 
 Section 3 and the manual QA in section 5 are not code tasks. They require a
 Developer ID signing run, notarization credentials, a clean Mac for install QA,
-a live provider endpoint, a real signed release feed, and the pricing decision
-that gates public distribution. They are left unchecked rather than marked done.
+a live provider endpoint, and a real signed release feed. They are left
+unchecked rather than marked done.
