@@ -4,6 +4,28 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+### Project direction
+
+- ZenVoice is now internal-use-first. Public shipping is deferred until the
+  product has matured through regular personal use and a deliberate future
+  shipping decision is made. The release checklist and signing pipeline remain
+  prepared but inactive.
+
+### Changed
+
+- Re-licensed ZenVoice under the Apache License, Version 2.0.
+- Removed the closed-source FluidAudio dependency and the Parakeet CoreML
+  runtime. ZenVoice now uses `whisper.cpp` as its only local speech engine.
+- Retired the Parakeet Unified EN CoreML model from the active catalogue; it
+  remains resolvable so existing installations do not break.
+- Updated English model recommendations on Apple Silicon to Whisper Large v3
+  Turbo.
+
+### Removed
+
+- FluidAudio package dependency and all Parakeet/CoreML runtime code.
+- Multi-file bundle download, manifest digest, and bundle verification logic.
+
 ## [0.2.0] - 2026-08-03
 
 First build distributed outside the author's machine, as an invitation-only
@@ -77,11 +99,13 @@ but no earlier version has been tested; see
 - Added Reduce Motion support and explicit success announcements to ZenBar
 - Added the NVIDIA Parakeet CoreML runtime through the revision-pinned
   FluidAudio dependency, and made it the recommended English path
+  _(removed in a later release; see Unreleased)_
 - Added a ZenBar warning when the decoder repeats itself, so a looped
   transcript is visible rather than silently pasted
 - Added the Developer ID pipeline: secure-timestamped signing, a notarization
   and stapling script, and a distribution archive with a printed SHA-256
-- Added `LICENSE`, making ZenVoice proprietary, source-visible software
+- Added `LICENSE` as proprietary, source-visible software
+  _(later re-licensed as Apache-2.0; see Unreleased)_
 
 ### Removed
 
@@ -135,9 +159,11 @@ but no earlier version has been tested; see
 - Fixed the Parakeet bundle being fetched from a moving branch while the
   catalogue recorded a pinned revision. Each file is now downloaded from that
   revision, checked against an exact manifest, and installed atomically.
+  _(the Parakeet path was later removed entirely; see Unreleased)_
 - Fixed third-party notices omitting components compiled into the shipped
   binary, including fastcluster, whose licence requires its notice in binary
   redistributions.
+  _(those components left with the FluidAudio removal; see Unreleased)_
 - Fixed a signing-identity check that rejected a valid Developer ID signature,
   and a matching one that could sign a release without a secure timestamp.
 

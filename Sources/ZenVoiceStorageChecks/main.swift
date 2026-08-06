@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import Foundation
 import SQLite3
 import ZenVoiceStorage
@@ -1295,6 +1309,335 @@ private func checkLivePartialRecovery() throws {
     )
 }
 
+/// Archives a dictation and returns its archive ID.
+private func archiveFixtureRecording(
+    fixture: VaultFixture,
+    startedAt: Date,
+    audioBytes: Int,
+    appName: String = "TextEdit"
+) throws -> UUID {
+    let id = UUID()
+    let archiveID = UUID()
+    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    try Data(repeating: 0x41, count: audioBytes).write(to: audioURL)
+    try fixture.vault.begin(
+        DictationDraft(
+            id: id,
+            startedAt: startedAt,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: "com.apple.TextEdit",
+            targetAppName: appName,
+            recoveryAudioURL: audioURL
+        )
+    )
+    try fixture.vault.storeTranscript(
+        id: id,
+        rawTranscript: "raw text",
+        finalTranscript: "final text",
+        correctionCount: 0,
+        isPartial: false
+    )
+    try fixture.vault.archiveRecording(id: id, archiveID: archiveID)
+    return archiveID
+}
+
+private func checkAudioArchiveLifecycle() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let archiveID = try archiveFixtureRecording(
+        fixture: fixture,
+        startedAt: Date(timeIntervalSince1970: 100_000),
+        audioBytes: 2_048
+    )
+
+    try require(
+        try fixture.vault.audioArchiveCount() == 1,
+        "archive row was not written"
+    )
+    try require(
+        try fixture.vault.audioArchiveTotalSize() == 2_048,
+        "archive size was not recorded"
+    )
+
+    guard let record = try fixture.vault.audioArchive(id: archiveID) else {
+        throw CheckError.failed("archived record could not be read back")
+    }
+    try require(
+        record.targetAppName == "TextEdit",
+        "archive metadata was not carried over from the dictation"
+    )
+    try require(
+        FileManager.default.fileExists(atPath: record.audioURL.path),
+        "archived audio file is missing"
+    )
+
+    // The archive copies the audio; the recovery file stays put until the
+    // caller deletes it.
+    try fixture.vault.deleteAudioArchive(id: archiveID)
+    try require(
+        try fixture.vault.audioArchiveCount() == 0,
+        "archive row survived deletion"
+    )
+    try require(
+        !FileManager.default.fileExists(atPath: record.audioURL.path),
+        "archived audio file survived deletion"
+    )
+}
+
+private func checkAudioArchiveBudgets() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    let old = now.addingTimeInterval(-60 * 24 * 60 * 60)
+
+    _ = try archiveFixtureRecording(
+        fixture: fixture,
+        startedAt: old,
+        audioBytes: 1_024
+    )
+    let recentID = try archiveFixtureRecording(
+        fixture: fixture,
+        startedAt: now,
+        audioBytes: 1_024
+    )
+
+    let purged = try fixture.vault.purgeAudioArchive(
+        olderThan: now.addingTimeInterval(-30 * 24 * 60 * 60)
+    )
+    try require(purged == 1, "age purge removed the wrong number of archives")
+    try require(
+        try fixture.vault.audioArchive(id: recentID) != nil,
+        "age purge deleted a recording inside the window"
+    )
+
+    // Two 1 KiB recordings against a 1.5 KiB budget: the oldest goes.
+    _ = try archiveFixtureRecording(
+        fixture: fixture,
+        startedAt: now.addingTimeInterval(60),
+        audioBytes: 1_024
+    )
+    let evicted = try fixture.vault.enforceAudioArchiveSizeBudget(1_536)
+    try require(evicted == 1, "size budget evicted the wrong count")
+    try require(
+        try fixture.vault.audioArchiveTotalSize() <= 1_536,
+        "archive stayed over its size budget"
+    )
+
+    let deletedAll = try fixture.vault.deleteAllAudioArchives()
+    try require(deletedAll == 1, "delete-all returned the wrong count")
+    try require(
+        try fixture.vault.audioArchiveCount() == 0,
+        "archives survived delete-all"
+    )
+}
+
+/// Extracts `manifest.json` from an export ZIP using the system `unzip`, so the
+/// assertions run against what a user would actually find in the file.
+private func unzippedManifest(from archiveURL: URL) throws -> String {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+    process.arguments = [
+        "-p",
+        archiveURL.path,
+        "ZenVoiceAudioHistory/manifest.json"
+    ]
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = FileHandle.nullDevice
+    try process.run()
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+
+    guard process.terminationStatus == 0, !data.isEmpty else {
+        throw CheckError.failed(
+            "manifest.json could not be read from the export"
+        )
+    }
+    return String(decoding: data, as: UTF8.self)
+}
+
+private func checkAudioArchiveExport() throws {
+    let fixture = try VaultFixture()
+    defer { fixture.cleanup() }
+
+    _ = try archiveFixtureRecording(
+        fixture: fixture,
+        startedAt: Date(timeIntervalSince1970: 500_000),
+        audioBytes: 512
+    )
+    let records = try fixture.vault.audioArchiveRecent()
+    try require(records.count == 1, "expected one archived record")
+
+    let destination = fixture.directoryURL
+        .appendingPathComponent("export.zip")
+    try AudioArchiveExporter.export(
+        records: records,
+        to: destination,
+        transcriptProvider: { _ in "secret transcript" }
+    )
+    try require(
+        FileManager.default.fileExists(atPath: destination.path),
+        "export archive was not written"
+    )
+
+    // Transcripts are opt-in. Read the manifest back out of the ZIP rather
+    // than scanning the compressed bytes, which would pass even on a leak.
+    let defaultManifest = try unzippedManifest(from: destination)
+    try require(
+        defaultManifest.contains("\"includesTranscripts\" : false"),
+        "default export did not record that transcripts were excluded"
+    )
+    try require(
+        !defaultManifest.contains("secret transcript"),
+        "transcript text leaked into a default export"
+    )
+    try require(
+        defaultManifest.contains("\"language\" : \"en\""),
+        "export manifest is missing capture metadata"
+    )
+
+    let withTranscripts = fixture.directoryURL
+        .appendingPathComponent("export-transcripts.zip")
+    try AudioArchiveExporter.export(
+        records: records,
+        options: AudioArchiveExportOptions(includeTranscripts: true),
+        to: withTranscripts,
+        transcriptProvider: { _ in "secret transcript" }
+    )
+    let optedInManifest = try unzippedManifest(from: withTranscripts)
+    try require(
+        optedInManifest.contains("secret transcript"),
+        "opt-in export did not include the transcript"
+    )
+
+    // An empty selection is refused rather than producing an empty archive.
+    do {
+        try AudioArchiveExporter.export(
+            records: [],
+            to: fixture.directoryURL.appendingPathComponent("empty.zip")
+        )
+        throw CheckError.failed("empty export was accepted")
+    } catch let checkError as CheckError {
+        throw checkError
+    } catch {
+        // Expected.
+    }
+}
+
+private func checkAudioHistoryPreferenceDefaults() throws {
+    let suiteName = "ZenVoiceChecks.audioHistory.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        throw CheckError.failed("could not create a defaults suite")
+    }
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let preferences = AudioHistoryPreferences(defaults: defaults)
+    try require(!preferences.isEnabled, "audio history was not off by default")
+    try require(
+        !preferences.hasMadeChoice,
+        "audio history claimed a choice had been made"
+    )
+    try require(
+        preferences.maxSizeBytes
+            == AudioHistoryPreferences.defaultMaxSizeBytes,
+        "default size cap is wrong"
+    )
+    try require(
+        preferences.maxAgeDays == AudioHistoryPreferences.defaultMaxAgeDays,
+        "default age cap is wrong"
+    )
+
+    // The size cap is clamped so the archive cannot be set to a useless size.
+    preferences.maxSizeBytes = 1
+    try require(
+        preferences.maxSizeBytes
+            == AudioHistoryPreferences.minimumMaxSizeBytes,
+        "size cap was not clamped to the minimum"
+    )
+    preferences.maxAgeDays = 0
+    try require(preferences.maxAgeDays == 1, "age cap was not clamped")
+
+    preferences.isEnabled = true
+    try require(
+        preferences.hasMadeChoice,
+        "enabling audio history did not record an explicit choice"
+    )
+}
+
+private func checkTodayUsageInsight() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let now = Date(timeIntervalSince1970: 1_721_865_600)
+    let today = calendar.startOfDay(for: now)
+    let yesterday = today.addingTimeInterval(-24 * 60 * 60)
+
+    let events = [
+        DictationInsightEvent(
+            startedAt: today,
+            durationSeconds: 30,
+            wordCount: 40,
+            correctionCount: 0,
+            targetBundleID: "com.apple.Notes",
+            targetAppName: "Notes",
+            category: .notes
+        ),
+        DictationInsightEvent(
+            startedAt: today.addingTimeInterval(600),
+            durationSeconds: 30,
+            wordCount: 10,
+            correctionCount: 0,
+            targetBundleID: "com.apple.TextEdit",
+            targetAppName: "TextEdit",
+            category: .documents
+        ),
+        DictationInsightEvent(
+            startedAt: yesterday,
+            durationSeconds: 120,
+            wordCount: 500,
+            correctionCount: 0,
+            targetBundleID: "com.apple.Notes",
+            targetAppName: "Notes",
+            category: .notes
+        )
+    ]
+
+    let snapshot = LocalInsightsSnapshot.calculate(
+        events: events,
+        now: now,
+        calendar: calendar
+    )
+    try require(
+        snapshot.today.dictationCount == 2,
+        "today counted dictations from other days"
+    )
+    try require(snapshot.today.wordCount == 50, "today word count is wrong")
+    try require(
+        snapshot.today.durationSeconds == 60,
+        "today duration is wrong"
+    )
+    try require(
+        snapshot.today.topApplicationName == "Notes",
+        "today top app is wrong"
+    )
+    try require(
+        snapshot.today.pillSummary == "50 words today",
+        "today pill summary is wrong"
+    )
+
+    let empty = LocalInsightsSnapshot.calculate(
+        events: [],
+        now: now,
+        calendar: calendar
+    )
+    try require(
+        !empty.today.hasActivity,
+        "an empty day reported activity"
+    )
+}
+
 do {
     try checkEncryptedStorage()
     try checkRecoveryExpiry()
@@ -1313,7 +1656,12 @@ do {
     try checkEncryptedVoiceProfile()
     try checkLocalLearningPreferences()
     try checkLivePartialRecovery()
-    print("ZenVoiceStorageChecks: 17 checks passed")
+    try checkAudioArchiveLifecycle()
+    try checkAudioArchiveBudgets()
+    try checkAudioArchiveExport()
+    try checkAudioHistoryPreferenceDefaults()
+    try checkTodayUsageInsight()
+    print("ZenVoiceStorageChecks: 22 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

@@ -152,6 +152,10 @@ rm -rf "$app_dir"
 mkdir -p "$contents_dir/MacOS" "$contents_dir/Resources" "$frameworks_dir"
 cp "$project_dir/.build/release/ZenVoice" "$contents_dir/MacOS/ZenVoice"
 cp -R "$project_dir/.build/release/whisper.framework" "$frameworks_dir/"
+# The Parakeet engines link @rpath/libparakeet.dylib. Without this copy the
+# bundle builds and signs cleanly but dyld refuses to start it, so the failure
+# only shows up when the installed app is launched.
+cp "$project_dir/.build/release/libparakeet.dylib" "$frameworks_dir/"
 install_name_tool \
     -add_rpath "@executable_path/../Frameworks" \
     "$contents_dir/MacOS/ZenVoice"
@@ -182,6 +186,12 @@ if [[ -n "$signing_identity" ]]; then
         --force \
         --options runtime \
         "$timestamp_flag" \
+        --sign "$signing_identity" \
+        "$frameworks_dir/libparakeet.dylib"
+    codesign \
+        --force \
+        --options runtime \
+        "$timestamp_flag" \
         --entitlements "$entitlements_path" \
         --sign "$signing_identity" \
         "$app_dir"
@@ -196,6 +206,11 @@ else
         --options runtime \
         --sign - \
         "$frameworks_dir/whisper.framework"
+    codesign \
+        --force \
+        --options runtime \
+        --sign - \
+        "$frameworks_dir/libparakeet.dylib"
     codesign \
         --force \
         --options runtime \

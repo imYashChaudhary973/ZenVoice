@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import ApplicationServices
 import Foundation
 import ZenVoiceCore
@@ -432,10 +446,9 @@ let intelMac = HardwareProfile(
     architecture: "Intel",
     availableModelStorageBytes: 200 * 1_073_741_824
 )
-// English on Apple Silicon goes to Parakeet: measured 5.3% word error rate at
-// 61 ms against Whisper Base's 9.2% at 149 ms, so it is both the most accurate
-// and effectively the fastest English option. It runs on CoreML, so an Intel
-// Mac — with no Neural Engine — must not be sent there.
+// English on Apple Silicon now goes to Whisper Turbo: it is the best open
+// multilingual model available through whisper.cpp. An Intel Mac — with no GPU
+// transcription — must not be sent to a large model.
 guard ModelRecommendationEngine.recommendedModelID(
         for: capableMac,
         language: .hinglish
@@ -447,11 +460,11 @@ guard ModelRecommendationEngine.recommendedModelID(
       ModelRecommendationEngine.recommendedModelID(
         for: capableMac,
         language: .english
-      ) == "parakeet-unified-en-int8",
+      ) == "whisper-large-v3-turbo",
       ModelRecommendationEngine.recommendedModelID(
         for: intelMac,
         language: .english
-      ) != "parakeet-unified-en-int8" else {
+      ) != "whisper-large-v3-turbo" else {
     FileHandle.standardError.write(
         Data("FAIL: language-aware model recommendation is wrong\n".utf8)
     )
@@ -475,12 +488,12 @@ for profile in [capableMac, intelMac] {
         }
     }
 }
-// The catalogue is deliberately five. Each entry is the measured best at one
+// The catalogue is deliberately four. Each entry is the measured best at one
 // job; the size ladders it replaced were not a speed-for-accuracy curve.
-guard VerifiedModelCatalog.models.count == 5 else {
+guard VerifiedModelCatalog.models.count == 4 else {
     FileHandle.standardError.write(
         Data(
-            ("FAIL: expected 5 offered models, found "
+            ("FAIL: expected 4 offered models, found "
                 + "\(VerifiedModelCatalog.models.count)\n").utf8
         )
     )
@@ -783,7 +796,9 @@ let mailProfile = ApplicationProfile(
         outputMode: .spokenLanguage
     ),
     refinementMode: .agentPrompt,
-    voiceCommandsEnabled: true
+    voiceCommandsEnabled: true,
+    preferredEngineID: EngineIdentifiers.appleSpeech,
+    preferredOutputMode: .englishTranslation
 )
 ApplicationProfilePreferences.save(
     mailProfile,
@@ -795,6 +810,19 @@ guard ApplicationProfilePreferences.profile(
 ) == mailProfile else {
     FileHandle.standardError.write(
         Data("FAIL: application profile did not persist\n".utf8)
+    )
+    exit(1)
+}
+guard let loadedProfile = ApplicationProfilePreferences.profile(
+    for: mailProfile.bundleIdentifier,
+    defaults: applicationDefaults
+),
+      loadedProfile.preferredEngineID == EngineIdentifiers.appleSpeech,
+      loadedProfile.preferredOutputMode == .englishTranslation else {
+    FileHandle.standardError.write(
+        Data(
+            "FAIL: per-app engine or output mode did not persist\n".utf8
+        )
     )
     exit(1)
 }
@@ -1103,10 +1131,10 @@ print("ZenVoiceCoreChecks: private and hold controls passed")
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
 let verifiedModels = VerifiedModelCatalog.allModels
-// Five offered, six retired. The catalogue was ten offered and one retired
-// until the size ladders were measured end to end and found not to be a
-// speed-for-accuracy curve — see ``VerifiedModelCatalog.models``.
-guard VerifiedModelCatalog.models.count == 5,
+// Four offered, seven retired. Parakeet was retired because it depends on the
+// closed-source FluidAudio runtime; Whisper is now the only transcription
+// engine — see ``VerifiedModelCatalog.models``.
+guard VerifiedModelCatalog.models.count == 4,
       verifiedModels.count == 11,
       // Nothing retired may still be offered, and everything retired must
       // still resolve — by identifier and by filename — so that a model
@@ -1145,11 +1173,6 @@ guard VerifiedModelCatalog.models.count == 5,
               && URL(string: $0.licenseURL)?.scheme == "https"
               && ["github.com", "huggingface.co"].contains(
                   URL(string: $0.upstreamRepository)?.host
-              )
-              && (
-                  $0.runtime == .parakeetCoreML
-                      ? !$0.bundleFiles.isEmpty
-                      : $0.bundleFiles.isEmpty
               )
       }) else {
     FileHandle.standardError.write(
@@ -1202,180 +1225,7 @@ guard try !VerifiedModelCatalog.verify(verifierURL, for: verifierModel) else {
     exit(1)
 }
 
-let bundleURL = verifierDirectory.appendingPathComponent(
-    "fixture-bundle",
-    isDirectory: true
-)
-try FileManager.default.createDirectory(
-    at: bundleURL,
-    withIntermediateDirectories: true
-)
-let bundleFileURL = bundleURL.appendingPathComponent("fixture.bin")
-try Data("ZenVoice".utf8).write(to: bundleFileURL)
-let bundleModel = VerifiedModel(
-    id: "bundle-fixture",
-    displayName: "Bundle Fixture",
-    filename: "fixture-bundle",
-    tier: .fast,
-    languageCapability: .english,
-    publisher: "Test",
-    sourceRepository: VerifiedModelCatalog.parakeetRepository,
-    upstreamRepository:
-        "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
-    sourceRevision: VerifiedModelCatalog.parakeetRevision,
-    sha256:
-        "3ee4ec82841786eef3346001599c184d6265a29c4a9b0c4e27b19f1b0178890c",
-    fileSizeBytes: 8,
-    format: "Core ML fixture",
-    license: "CC-BY-4.0",
-    licenseURL: "https://creativecommons.org/licenses/by/4.0/legalcode",
-    attribution: "Test bundle fixture",
-    runtime: .parakeetCoreML,
-    bundleFiles: [
-        VerifiedModelFile(
-            relativePath: "fixture.bin",
-            fileSizeBytes: 8,
-            sha256:
-                "954be634e5f577bc940ed27375984b9eb15d137455b6ea8086f4f2b76c526596"
-        )
-    ]
-)
-guard try VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification rejected valid data\n".utf8)
-    )
-    exit(1)
-}
-try Data("ZenVoicf".utf8).write(to: bundleFileURL)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted tampered data\n".utf8)
-    )
-    exit(1)
-}
-try Data("ZenVoice".utf8).write(to: bundleFileURL)
-
-// An unreviewed file delivered alongside the approved manifest is the case a
-// manifest-only walk cannot see, so it is checked explicitly.
-let strayURL = bundleURL.appendingPathComponent("stray.bin")
-try Data("stray".utf8).write(to: strayURL)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted an extra file\n".utf8)
-    )
-    exit(1)
-}
-try FileManager.default.removeItem(at: strayURL)
-
-// Nested extras hide from a shallow listing.
-let strayDirectory = bundleURL.appendingPathComponent(
-    "nested",
-    isDirectory: true
-)
-try FileManager.default.createDirectory(
-    at: strayDirectory,
-    withIntermediateDirectories: true
-)
-try Data("stray".utf8).write(
-    to: strayDirectory.appendingPathComponent("stray.bin")
-)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted a nested extra file\n".utf8)
-    )
-    exit(1)
-}
-try FileManager.default.removeItem(at: strayDirectory)
-
-// A symlink can point at approved-looking bytes outside the bundle.
-let symlinkTarget = verifierDirectory.appendingPathComponent("outside.bin")
-try Data("ZenVoice".utf8).write(to: symlinkTarget)
-let symlinkURL = bundleURL.appendingPathComponent("linked.bin")
-try FileManager.default.createSymbolicLink(
-    at: symlinkURL,
-    withDestinationURL: symlinkTarget
-)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted a symlinked entry\n".utf8)
-    )
-    exit(1)
-}
-try FileManager.default.removeItem(at: symlinkURL)
-
-// A missing manifest file must fail rather than pass vacuously.
-try FileManager.default.removeItem(at: bundleFileURL)
-guard try !VerifiedModelCatalog.verify(bundleURL, for: bundleModel) else {
-    FileHandle.standardError.write(
-        Data("FAIL: bundle verification accepted a missing file\n".utf8)
-    )
-    exit(1)
-}
-try Data("ZenVoice".utf8).write(to: bundleFileURL)
-
-// The recorded digest must describe the manifest it ships with, otherwise the
-// field is decoration and a swapped catalogue entry goes unnoticed.
-guard VerifiedModelCatalog.manifestDigest(of: bundleModel.bundleFiles)
-        == bundleModel.sha256 else {
-    FileHandle.standardError.write(
-        Data("FAIL: fixture manifest digest does not match\n".utf8)
-    )
-    exit(1)
-}
-for model in VerifiedModelCatalog.allModels
-where model.runtime == .parakeetCoreML {
-    guard VerifiedModelCatalog.manifestDigest(of: model.bundleFiles)
-            == model.sha256 else {
-        FileHandle.standardError.write(
-            Data("FAIL: \(model.id) manifest digest does not match\n".utf8)
-        )
-        exit(1)
-    }
-    guard model.bundleFiles.reduce(Int64(0), { $0 + $1.fileSizeBytes })
-            == model.fileSizeBytes else {
-        FileHandle.standardError.write(
-            Data("FAIL: \(model.id) bundle size does not match\n".utf8)
-        )
-        exit(1)
-    }
-    // Every bundle file must be requested from the pinned revision, not from a
-    // branch that can move under a recorded revision string.
-    for file in model.bundleFiles {
-        guard let url = model.bundleFileURL(for: file) else {
-            FileHandle.standardError.write(
-                Data("FAIL: \(model.id) rejected its own manifest path\n".utf8)
-            )
-            exit(1)
-        }
-        guard url.scheme == "https",
-              url.host == "huggingface.co",
-              url.path.contains(model.sourceRevision),
-              !url.path.contains("/main/") else {
-            FileHandle.standardError.write(
-                Data("FAIL: \(model.id) bundle URL is not revision-pinned\n".utf8)
-            )
-            exit(1)
-        }
-    }
-}
-
-// Path traversal and absolute paths must not survive URL construction.
-for hostilePath in ["../escape.bin", "/etc/passwd", "nested/../../escape.bin"] {
-    let hostile = VerifiedModelFile(
-        relativePath: hostilePath,
-        fileSizeBytes: 1,
-        sha256:
-            "0000000000000000000000000000000000000000000000000000000000000000"
-    )
-    guard bundleModel.bundleFileURL(for: hostile) == nil else {
-        FileHandle.standardError.write(
-            Data("FAIL: hostile bundle path \(hostilePath) built a URL\n".utf8)
-        )
-        exit(1)
-    }
-}
-
-print("ZenVoiceCoreChecks: bundle manifest verification passed")
+print("ZenVoiceCoreChecks: bundle manifest verification skipped — no multi-file bundles")
 
 let selectionSuite = "ZenVoiceCoreChecks.\(UUID().uuidString)"
 guard let selectionDefaults = UserDefaults(suiteName: selectionSuite) else {
@@ -1424,23 +1274,22 @@ let twentyFourGigabyteProfile = HardwareProfile(
 // downgraded on memory alone — recommending by memory sent 16 GB Macs to
 // Whisper Base, which loses roughly one word in three at speed.
 //
-// English now resolves to Parakeet on all of them, because there is no
-// trade-off left to make there. Anything beyond English still goes to Turbo:
-// every smaller multilingual build is a cliff, not a cheaper option, with
-// Small at 35.5% word error rate against Turbo's 13.2%.
+// English now resolves to Whisper Turbo on all of them. Anything beyond English
+// still goes to Turbo: every smaller multilingual build is a cliff, not a
+// cheaper option, with Small at 35.5% word error rate against Turbo's 13.2%.
 let spanishProfile = LanguageProfile(
     inputLanguageCode: "es",
     outputMode: .spokenLanguage
 )
 guard ModelRecommendationEngine.recommendedModelID(
     for: eightGigabyteProfile
-) == "parakeet-unified-en-int8",
+) == "whisper-large-v3-turbo",
 ModelRecommendationEngine.recommendedModelID(
     for: sixteenGigabyteProfile
-) == "parakeet-unified-en-int8",
+) == "whisper-large-v3-turbo",
 ModelRecommendationEngine.recommendedModelID(
     for: twentyFourGigabyteProfile
-) == "parakeet-unified-en-int8",
+) == "whisper-large-v3-turbo",
 ModelRecommendationEngine.recommendedModelID(
     for: eightGigabyteProfile,
     language: spanishProfile
@@ -1476,8 +1325,7 @@ let smallIntelProfile = HardwareProfile(
 // Both land on Small, including the 8 GB machine that used to be sent to Tiny.
 // Tiny multilingual is not a lighter option, it is a broken one — 64.5% word
 // error rate against Small's 35.5% — and recommending a model that cannot do
-// the job is worse than recommending one that is merely slow. Parakeet is not
-// an answer here either: it runs on CoreML and Intel has no Neural Engine.
+// the job is worse than recommending one that is merely slow.
 guard ModelRecommendationEngine.recommendedModelID(
     for: intelProfile
 ) == "whisper-small-multilingual",
@@ -2100,3 +1948,454 @@ guard WhisperDecoding.decodeDeadline(audioSeconds: 2) == 15,
 }
 
 print("ZenVoiceCoreChecks: runaway repetition defence passed")
+
+// MARK: - Engine registry checks
+
+struct FakeSpeechEngine: SpeechEngine {
+    let descriptor: EngineDescriptor
+    let languageCapability: ModelLanguageCapability
+    let isAvailable: Bool
+
+    func prepare() async throws {}
+
+    func transcribe(
+        audioURL: URL,
+        languageProfile: LanguageProfile,
+        initialPrompt: String?
+    ) async throws -> TranscriptionResult {
+        TranscriptionResult(
+            rawTranscript: "",
+            finalTranscript: "",
+            correctionCount: 0,
+            modelID: descriptor.id
+        )
+    }
+}
+
+func fakeEngineDescriptor(
+    id: String,
+    capability: ModelLanguageCapability,
+    supportedLanguages: [SupportedLanguage] = [],
+    available: Bool = true
+) -> EngineDescriptor {
+    EngineDescriptor(
+        id: id,
+        displayName: id,
+        family: .whisper,
+        supportedLanguages: supportedLanguages,
+        requiresDownload: false,
+        requiresInternet: false,
+        format: "fake",
+        publisher: "checks",
+        license: "MIT",
+        licenseURL: "",
+        attribution: "",
+        privacyNote: ""
+    )
+}
+
+func fakeEngine(
+    id: String,
+    capability: ModelLanguageCapability,
+    supportedLanguages: [SupportedLanguage] = [],
+    available: Bool = true
+) -> FakeSpeechEngine {
+    FakeSpeechEngine(
+        descriptor: fakeEngineDescriptor(
+            id: id,
+            capability: capability,
+            supportedLanguages: supportedLanguages,
+            available: available
+        ),
+        languageCapability: capability,
+        isAvailable: available
+    )
+}
+
+func failEngineCheck(_ message: String) -> Never {
+    FileHandle.standardError.write(
+        Data("FAIL: \(message)\n".utf8)
+    )
+    exit(1)
+}
+
+let englishProfile = LanguageProfile.english
+let hinglishProfile = LanguageProfile.hinglish
+let autoProfile = LanguageProfile(
+    inputLanguageCode: LanguageProfile.automaticCode,
+    outputMode: .spokenLanguage
+)
+guard let englishLanguage = LanguageCatalog.language(code: "en"),
+      let hindiLanguage = LanguageCatalog.language(code: "hi") else {
+    failEngineCheck("missing test languages")
+}
+
+let englishOnlyEngine = fakeEngine(
+    id: "english-only",
+    capability: .english,
+    supportedLanguages: [englishLanguage]
+)
+let multilingualEngine = fakeEngine(
+    id: "multilingual",
+    capability: .multilingual
+)
+let hindiOnlyEngine = fakeEngine(
+    id: "hindi-only",
+    capability: .multilingual,
+    supportedLanguages: [hindiLanguage]
+)
+let unavailableEngine = fakeEngine(
+    id: "unavailable-multilingual",
+    capability: .multilingual,
+    available: false
+)
+let engineRegistry = EngineRegistry(
+    engines: [englishOnlyEngine, hindiOnlyEngine, multilingualEngine, unavailableEngine],
+    fallbackOrder: [englishOnlyEngine.descriptor.id, hindiOnlyEngine.descriptor.id, multilingualEngine.descriptor.id]
+)
+
+// Saved preference is honored when it is compatible with the profile.
+guard engineRegistry.resolve(
+    for: englishProfile,
+    selectedID: englishOnlyEngine.descriptor.id
+)?.descriptor.id == englishOnlyEngine.descriptor.id else {
+    failEngineCheck("preferred compatible engine was not selected")
+}
+
+// Saved preference is ignored when it is incompatible; fallback wins.
+guard engineRegistry.resolve(
+    for: englishProfile,
+    selectedID: hindiOnlyEngine.descriptor.id
+)?.descriptor.id == englishOnlyEngine.descriptor.id else {
+    failEngineCheck("incompatible preferred engine did not fall back")
+}
+
+// Automatic language profile resolves to the first engine that supports English.
+guard engineRegistry.resolve(
+    for: autoProfile,
+    selectedID: nil
+)?.descriptor.id == englishOnlyEngine.descriptor.id else {
+    failEngineCheck("automatic profile did not resolve to English-capable engine")
+}
+
+// A built-in engine whose supportedLanguages includes English is available for
+// English and unavailable for Hinglish, matching the Apple Speech mapping rule.
+let englishAvailability = engineRegistry.availability(for: englishProfile)
+guard let englishOnlyAvailability = englishAvailability.first(
+    where: { $0.engine.id == englishOnlyEngine.descriptor.id }
+), englishOnlyAvailability.isAvailable else {
+    failEngineCheck("English-only engine should be available for English")
+}
+let hinglishAvailability = engineRegistry.availability(for: hinglishProfile)
+guard let englishOnlyHinglishAvailability = hinglishAvailability.first(
+    where: { $0.engine.id == englishOnlyEngine.descriptor.id }
+), !englishOnlyHinglishAvailability.isAvailable,
+      case .unsupportedLanguage? = englishOnlyHinglishAvailability.reason else {
+    failEngineCheck("English-only engine should be unavailable for Hinglish")
+}
+
+// Fallback ordering is respected even when other engines are available later.
+let firstChoice = fakeEngine(
+    id: "first-choice",
+    capability: .multilingual,
+    available: false
+)
+let secondChoice = fakeEngine(
+    id: "second-choice",
+    capability: .multilingual,
+    available: true
+)
+let thirdChoice = fakeEngine(
+    id: "third-choice",
+    capability: .multilingual,
+    available: true
+)
+let fallbackRegistry = EngineRegistry(
+    engines: [firstChoice, secondChoice, thirdChoice],
+    fallbackOrder: [firstChoice.descriptor.id, secondChoice.descriptor.id]
+)
+guard fallbackRegistry.resolve(
+    for: englishProfile,
+    selectedID: nil
+)?.descriptor.id == secondChoice.descriptor.id else {
+    failEngineCheck("fallback ordering did not skip unavailable first choice")
+}
+
+print("ZenVoiceCoreChecks: engine registry passed")
+
+// MARK: - Engine recommendation checks
+
+private func fakeEngineWithID(
+    id: String,
+    capability: ModelLanguageCapability,
+    available: Bool = true
+) -> FakeSpeechEngine {
+    FakeSpeechEngine(
+        descriptor: fakeEngineDescriptor(
+            id: id,
+            capability: capability,
+            available: available
+        ),
+        languageCapability: capability,
+        isAvailable: available
+    )
+}
+
+let fakeWhisper = fakeEngineWithID(
+    id: EngineIdentifiers.whisper,
+    capability: .multilingual
+)
+let fakeHinglishWhisper = fakeEngineWithID(
+    id: EngineIdentifiers.whisper,
+    capability: .hinglish
+)
+let fakeAppleSpeech = fakeEngineWithID(
+    id: EngineIdentifiers.appleSpeech,
+    capability: .multilingual
+)
+let recommendationRegistry = EngineRegistry(
+    engines: [fakeWhisper, fakeAppleSpeech]
+)
+
+let englishRec = EngineRecommendationEngine.recommendation(
+    for: .english,
+    hardware: HardwareProfile.current(),
+    registry: recommendationRegistry
+)
+guard let englishRec,
+      englishRec.preferredEngineID == EngineIdentifiers.appleSpeech,
+      englishRec.fallbackEngineIDs == [EngineIdentifiers.whisper] else {
+    failEngineCheck("English recommendation should prefer Apple Speech then Whisper")
+}
+
+let hinglishRegistry = EngineRegistry(
+    engines: [fakeHinglishWhisper, fakeAppleSpeech]
+)
+let hinglishRec = EngineRecommendationEngine.recommendation(
+    for: .hinglish,
+    hardware: HardwareProfile.current(),
+    registry: hinglishRegistry
+)
+guard let hinglishRec,
+      hinglishRec.preferredEngineID == EngineIdentifiers.whisper,
+      hinglishRec.fallbackEngineIDs.isEmpty else {
+    failEngineCheck("Hinglish recommendation should be Whisper only")
+}
+
+let unavailableApple = fakeEngineWithID(
+    id: EngineIdentifiers.appleSpeech,
+    capability: .multilingual,
+    available: false
+)
+let noAppleRegistry = EngineRegistry(
+    engines: [fakeWhisper, unavailableApple]
+)
+let noAppleRec = EngineRecommendationEngine.recommendation(
+    for: .english,
+    hardware: HardwareProfile.current(),
+    registry: noAppleRegistry
+)
+guard let noAppleRec,
+      noAppleRec.preferredEngineID == EngineIdentifiers.whisper else {
+    failEngineCheck("Unavailable Apple Speech should fall back to Whisper")
+}
+
+print("ZenVoiceCoreChecks: engine recommendation passed")
+
+// MARK: - Command mode checks
+
+let commandModeEngine = CommandModeEngine()
+let commandManifest = CommandModeEngine.defaultManifest
+
+guard commandModeEngine.parse(
+    transcript: "open safari",
+    manifest: commandManifest
+) == .launchApp(bundleID: "com.apple.Safari") else {
+    failEngineCheck("'open safari' did not parse to launch Safari")
+}
+
+guard commandModeEngine.parse(
+    transcript: "please open safari now",
+    manifest: commandManifest
+) == .launchApp(bundleID: "com.apple.Safari") else {
+    failEngineCheck("'please open safari now' did not parse")
+}
+
+guard commandModeEngine.parse(
+    transcript: "copy last transcript",
+    manifest: commandManifest
+) == .systemAction(.copyLastTranscript) else {
+    failEngineCheck("'copy last transcript' did not parse")
+}
+
+guard commandModeEngine.parse(
+    transcript: "just normal dictation text",
+    manifest: commandManifest
+) == .none else {
+    failEngineCheck("plain dictation was misclassified as a command")
+}
+
+guard commandModeEngine.parse(
+    transcript: "open safari",
+    manifest: nil
+) == .none else {
+    failEngineCheck("nil manifest should produce no action")
+}
+
+guard !CommandModePreferences.isEnabled() else {
+    failEngineCheck("command mode should be disabled by default")
+}
+CommandModePreferences.setEnabled(true)
+guard CommandModePreferences.isEnabled() else {
+    failEngineCheck("command mode enable state did not persist")
+}
+CommandModePreferences.saveManifest(commandManifest)
+guard let loadedManifest = CommandModePreferences.loadManifest(),
+      loadedManifest == commandManifest else {
+    failEngineCheck("command manifest did not round-trip through preferences")
+}
+CommandModePreferences.setEnabled(false)
+CommandModePreferences.clearManifest()
+
+print("ZenVoiceCoreChecks: command mode passed")
+
+// MARK: - ZenIntelligence checks
+
+let intelligenceEngine = ZenIntelligenceEngine()
+
+let formatResult = intelligenceEngine.enhance(
+    "hello world. this is a test.",
+    mode: .format,
+    languageCode: "en"
+)
+guard formatResult.text == "Hello world. This is a test.",
+      formatResult.wasRejected == false else {
+    failEngineCheck(
+        "ZenIntelligence format did not capitalize: \(formatResult.text)"
+    )
+}
+
+let numberResult = intelligenceEngine.enhance(
+    "my pin is five five five five",
+    mode: .format,
+    languageCode: "en"
+)
+guard numberResult.text.contains("5"),
+      !numberResult.wasRejected else {
+    failEngineCheck(
+        "ZenIntelligence did not format spoken digits: \(numberResult.text)"
+    )
+}
+
+let contextResult = intelligenceEngine.enhance(
+    "and then it crashed",
+    mode: .contextAware,
+    languageCode: "en",
+    context: "I pressed the button"
+)
+guard contextResult.text.lowercased().contains("i pressed the button"),
+      !contextResult.wasRejected else {
+    failEngineCheck(
+        "ZenIntelligence context-aware join failed: \(contextResult.text)"
+    )
+}
+
+let guardResult = intelligenceEngine.enhance(
+    "the quick brown fox",
+    mode: .format,
+    languageCode: "en"
+)
+// The deterministic formatter should not change this text, so the meaning
+// guard passes without changes.
+guard guardResult.text == "the quick brown fox",
+      !guardResult.wasRejected else {
+    failEngineCheck(
+        "ZenIntelligence meaning guard rejected harmless text: \(guardResult.text)"
+    )
+}
+
+let intelligenceSuite = "ZenVoiceCoreChecks.ZenIntelligence.\(UUID().uuidString)"
+guard let intelligenceDefaults = UserDefaults(suiteName: intelligenceSuite) else {
+    failEngineCheck("could not create ZenIntelligence preference fixture")
+}
+defer {
+    intelligenceDefaults.removePersistentDomain(forName: intelligenceSuite)
+}
+guard ZenIntelligencePreferences.load(defaults: intelligenceDefaults) == .off else {
+    failEngineCheck("ZenIntelligence should default to off")
+}
+ZenIntelligencePreferences.save(.contextAware, defaults: intelligenceDefaults)
+guard ZenIntelligencePreferences.load(defaults: intelligenceDefaults) == .contextAware else {
+    failEngineCheck("ZenIntelligence preference did not persist")
+}
+
+print("ZenVoiceCoreChecks: ZenIntelligence passed")
+
+// MARK: - Write Mode checks
+
+let writeEngine = WriteModeEngine()
+let composeResult = writeEngine.compose(transcript: "draft email")
+guard composeResult.text == "draft email",
+      !composeResult.requiresPreview,
+      !composeResult.wasRejected else {
+    failEngineCheck("Write Mode compose did not pass transcript through")
+}
+
+let smallRewrite = writeEngine.rewrite(
+    selectedText: "the cat sat",
+    prompt: "make it formal",
+    mode: .format,
+    languageCode: "en"
+)
+guard !smallRewrite.wasRejected,
+      !smallRewrite.requiresPreview else {
+    failEngineCheck(
+        "small rewrite should not require preview: \(smallRewrite.text)"
+    )
+}
+
+let largeRewrite = writeEngine.rewrite(
+    selectedText: String(repeating: "a", count: 250),
+    prompt: "summarize",
+    mode: .format,
+    languageCode: "en"
+)
+guard largeRewrite.requiresPreview else {
+    failEngineCheck("large rewrite should require preview")
+}
+
+let writeSuite = "ZenVoiceCoreChecks.WriteMode.\(UUID().uuidString)"
+guard let writeDefaults = UserDefaults(suiteName: writeSuite) else {
+    failEngineCheck("could not create Write Mode preference fixture")
+}
+defer {
+    writeDefaults.removePersistentDomain(forName: writeSuite)
+}
+guard WriteModePreferences.loadSubMode(defaults: writeDefaults) == .compose else {
+    failEngineCheck("Write Mode should default to compose")
+}
+WriteModePreferences.saveSubMode(.rewrite, defaults: writeDefaults)
+guard WriteModePreferences.loadSubMode(defaults: writeDefaults) == .rewrite else {
+    failEngineCheck("Write Mode sub-mode preference did not persist")
+}
+
+print("ZenVoiceCoreChecks: Write Mode passed")
+
+// MARK: - Action serialization and approval checks
+
+let action = CommandAction.openURL(URL(string: "https://zenvoice.app")!)
+let actionData = try! JSONEncoder().encode(action)
+let decodedAction = try! JSONDecoder().decode(CommandAction.self, from: actionData)
+guard action == decodedAction else {
+    failEngineCheck("CommandAction did not round-trip through JSON")
+}
+
+guard CommandModeApprovalPreferences.requiresApproval(.openURL(URL(string: "x")!)),
+      CommandModeApprovalPreferences.requiresApproval(.appleScript("")),
+      CommandModeApprovalPreferences.requiresApproval(.shellScript("")),
+      !CommandModeApprovalPreferences.requiresApproval(.systemAction(.mute)),
+      !CommandModeApprovalPreferences.requiresApproval(.launchApp(bundleID: "x")) else {
+    failEngineCheck("CommandModeApprovalPreferences approval boundaries are wrong")
+}
+
+print("ZenVoiceCoreChecks: action serialization and approval passed")

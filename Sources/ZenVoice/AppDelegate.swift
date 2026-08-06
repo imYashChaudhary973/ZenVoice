@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import AppKit
 import AVFoundation
 import Combine
@@ -104,10 +118,19 @@ private extension LanguageProfile {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let state = AppState()
     private let recorder = AudioRecorder()
     private let inserter = TextInserter()
+    private lazy var commandExecutor: CommandModeExecutorImpl = {
+        CommandModeExecutorImpl(
+            inserter: inserter,
+            state: state,
+            pasteLast: { [weak self] in self?.pasteLastTranscript() },
+            showSettings: { [weak self] in self?.settingsWindowController.show() }
+        )
+    }()
+    private lazy var writeReader = WriteModeTextReaderImpl()
     private let transcriptionQueue = DispatchQueue(
         label: "dev.yashchaudhary.ZenVoice.transcription",
         qos: .userInitiated
@@ -117,14 +140,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var startStopMenuItem: NSMenuItem!
     private var zenBarMenuItem: NSMenuItem!
     private var statusMessageMenuItem: NSMenuItem!
+    private var todayUsageMenuItem: NSMenuItem!
+    private var livePreviewMenuItem: NSMenuItem!
     private var languageMenuItem: NSMenuItem!
-    private var zenBarController: ZenBarPanelController!
+    private var zenBarController: OverlayPanelController!
     private var escapeMonitors: [Any] = []
     private var globalHotKey: GlobalHotKey?
     private var pasteLastGlobalHotKey: GlobalHotKey?
     private var privateModeGlobalHotKey: GlobalHotKey?
     private var holdToDictateController: HoldToDictateController?
-    private var transcriber: WhisperTranscriber?
+    private var engineRegistry: EngineRegistry?
+    private var whisperEngine: WhisperSpeechEngine?
     private var resetWorkItem: DispatchWorkItem?
     private var stateObservers: Set<AnyCancellable> = []
     private var currentHotKeyConfiguration = HotKeyPreferences.load()
@@ -134,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyPreferences.loadPrivateMode()
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
+    private var audioHistoryViewModel: AudioHistoryViewModel!
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
@@ -144,6 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     private var settingsWindowController: SettingsWindowController!
     private let historyPreferences = HistoryPreferences()
+    private let audioHistoryPreferences = AudioHistoryPreferences()
     private let learningPreferences = LocalLearningPreferences()
     private var dictationVault: DictationVault?
     private var activeHistoryID: UUID?
@@ -171,7 +199,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        configureTranscriber()
+        validateRuntimeIdentity()
+        configureEngines()
         configureMenuBar()
         configureZenBar()
         configureHistoryStorage()
@@ -246,29 +275,155 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    private func configureTranscriber() {
+    private func configureEngines() {
         do {
-            transcriber = WhisperTranscriber(
-                configuration: try ZenVoiceConfiguration.discover()
+            let configuration = try ZenVoiceConfiguration.discover()
+            let whisper = WhisperSpeechEngine(configuration: configuration)
+            whisperEngine = whisper
+            engineRegistry = makeEngineRegistry(whisper: whisper)
+            warmUpEngines()
+        } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
+            // ZenVoice can still offer Apple Speech and Parakeet even when no
+            // Whisper model is installed yet. Defer the error message until
+            // dictation actually starts without an available engine.
+            let whisper = WhisperSpeechEngine(
+                configuration: ZenVoiceConfiguration(
+                    modelURL: URL(fileURLWithPath: "/dev/null")
+                )
             )
-            warmUpTranscriber()
+            whisperEngine = whisper
+            engineRegistry = makeEngineRegistry(whisper: whisper)
         } catch {
             state.phase = .error(error.localizedDescription)
         }
     }
 
+    private func makeEngineRegistry(whisper: WhisperSpeechEngine) -> EngineRegistry {
+        let apple = AppleSpeechEngine()
+        let parakeetFlash = makeParakeetFlashEngine()
+        let parakeetTDTv2 = makeParakeetTDTv2Engine()
+        let parakeetTDTv3 = makeParakeetTDTv3Engine()
+        let nemotronUltraFast = makeNemotronSpeechUltraFastEngine()
+        let nemotronMultilingual = makeNemotronSpeechMultilingualEngine()
+        let cohere = makeCohereTranscribeEngine()
+        var engines: [any SpeechEngine] = [whisper, apple]
+        if let parakeetFlash {
+            engines.append(parakeetFlash)
+        }
+        if let parakeetTDTv2 {
+            engines.append(parakeetTDTv2)
+        }
+        if let parakeetTDTv3 {
+            engines.append(parakeetTDTv3)
+        }
+        if let nemotronUltraFast {
+            engines.append(nemotronUltraFast)
+        }
+        if let nemotronMultilingual {
+            engines.append(nemotronMultilingual)
+        }
+        if let cohere {
+            engines.append(cohere)
+        }
+        let temporary = EngineRegistry(engines: engines)
+        let fallbackOrder = EngineRecommendationEngine.fallbackOrder(
+            for: LanguagePreferences.load(),
+            hardware: HardwareProfile.current(),
+            registry: temporary
+        )
+        return EngineRegistry(
+            engines: engines,
+            fallbackOrder: fallbackOrder
+        )
+    }
+
+    private func makeParakeetFlashEngine() -> ParakeetFlashEngine? {
+        makeEngineIfModelExists(
+            filename: ParakeetFlashEngine.modelFilename
+        ) { url in
+            ParakeetFlashEngine(modelURL: url)
+        }
+    }
+
+    private func makeParakeetTDTv2Engine() -> ParakeetTDTv2Engine? {
+        makeEngineIfModelExists(
+            filename: ParakeetTDTv2Engine.modelFilename
+        ) { url in
+            ParakeetTDTv2Engine(modelURL: url)
+        }
+    }
+
+    private func makeParakeetTDTv3Engine() -> ParakeetTDTv3Engine? {
+        makeEngineIfModelExists(
+            filename: ParakeetTDTv3Engine.modelFilename
+        ) { url in
+            ParakeetTDTv3Engine(modelURL: url)
+        }
+    }
+
+    private func makeNemotronSpeechUltraFastEngine()
+        -> NemotronSpeechUltraFastEngine? {
+        makeEngineIfModelExists(
+            filename: NemotronEngineConstants.modelFilename
+        ) { url in
+            NemotronSpeechUltraFastEngine(modelURL: url)
+        }
+    }
+
+    private func makeNemotronSpeechMultilingualEngine()
+        -> NemotronSpeechMultilingualEngine? {
+        makeEngineIfModelExists(
+            filename: NemotronEngineConstants.modelFilename
+        ) { url in
+            NemotronSpeechMultilingualEngine(modelURL: url)
+        }
+    }
+
+    private func makeCohereTranscribeEngine() -> CohereTranscribeEngine? {
+        guard let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+        else {
+            return nil
+        }
+        let engine = CohereTranscribeEngine(modelsDirectory: modelsDirectory)
+        return engine.isAvailable ? engine : nil
+    }
+
+    private func makeEngineIfModelExists<Engine: SpeechEngine>(
+        filename: String,
+        factory: (URL) -> Engine
+    ) -> Engine? {
+        let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+        guard let modelsDirectory else {
+            return nil
+        }
+        let modelURL = modelsDirectory
+            .appendingPathComponent(filename, isDirectory: false)
+        guard FileManager.default.fileExists(atPath: modelURL.path) else {
+            return nil
+        }
+        return factory(modelURL)
+    }
+
     /// Builds the model before the user asks for it.
     ///
     /// Runs on `transcriptionQueue` because that is the serial queue every
-    /// decode uses, and ``WhisperTranscriber/warmUp()`` writes the unguarded
-    /// context. Repeat calls are cheap — the transcriber warms once — so this
-    /// is safe to fire on every route into a dictation.
-    private func warmUpTranscriber() {
-        guard let transcriber else {
+    /// Whisper decode uses, and ``WhisperTranscriber/warmUp()`` writes the
+    /// unguarded context. Repeat calls are cheap — the transcriber warms once
+    /// — so this is safe to fire on every route into a dictation.
+    private func warmUpEngines() {
+        guard let whisperEngine else {
             return
         }
         transcriptionQueue.async {
-            transcriber.warmUp()
+            whisperEngine.transcriber.warmUp()
+        }
+        Task {
+            let profile = LanguagePreferences.load()
+            let selectedID = SelectedEnginePreferences.load(for: profile)
+            try? await engineRegistry?.prepare(
+                for: profile,
+                selectedID: selectedID
+            )
         }
     }
 
@@ -280,16 +435,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // records and paste-last can recover them after relaunch.
                 historyPreferences.isHistoryEnabled = true
             }
-            let vault = try DictationVault.live()
+            let policy = try RuntimeIdentity.policy()
+            let vault = try DictationVault.live(policy: policy)
             dictationVault = vault
             try vault.recoverInterrupted(
                 retainAudio: historyPreferences.retainsFailedAudio
             )
             try vault.purgeExpiredRecoveryAudio()
             scheduleRecoveryExpiry()
+            enforceAudioHistoryBudgets()
         } catch {
             showError(error.localizedDescription)
         }
+    }
+
+    /// Copies a completed recording into the Audio History archive.
+    ///
+    /// Archiving piggybacks on transcript persistence: the archive row is
+    /// derived from the dictation row, so a dictation that is not persisted —
+    /// Private Dictation, paused history, a one-off suppression — is never
+    /// archived. Must run before the recovery audio is deleted, because that
+    /// file is the archive's source.
+    private func archiveRecordingIfEnabled(historyID: UUID) {
+        guard audioHistoryPreferences.isEnabled,
+              let vault = dictationVault else {
+            return
+        }
+        // A failure to archive must not fail the dictation itself; the
+        // transcript is already stored by this point.
+        try? vault.archiveRecording(id: historyID)
+        enforceAudioHistoryBudgets()
+    }
+
+    /// Applies the age and size budgets to the audio archive.
+    ///
+    /// Runs at launch and after each archived recording, so the archive cannot
+    /// grow past what the user allowed even if the app is never quit.
+    private func enforceAudioHistoryBudgets() {
+        guard audioHistoryPreferences.isEnabled,
+              let vault = dictationVault else {
+            return
+        }
+        let cutoff = Calendar.current.date(
+            byAdding: .day,
+            value: -audioHistoryPreferences.maxAgeDays,
+            to: Date()
+        ) ?? Date.distantPast
+        _ = try? vault.purgeAudioArchive(olderThan: cutoff)
+        _ = try? vault.enforceAudioArchiveSizeBudget(
+            audioHistoryPreferences.maxSizeBytes
+        )
     }
 
     private func configureMenuBar() {
@@ -308,6 +503,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+        menu.delegate = self
+
+        // Today's usage, refreshed each time the menu opens.
+        todayUsageMenuItem = NSMenuItem(
+            title: TodayUsageInsight.empty.pillSummary,
+            action: nil,
+            keyEquivalent: ""
+        )
+        todayUsageMenuItem.isEnabled = false
+        menu.addItem(todayUsageMenuItem)
+
+        menu.addItem(.separator())
 
         let openItem = NSMenuItem(
             title: "Open ZenVoice…",
@@ -354,6 +561,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         zenBarMenuItem.state =
             state.showsZenVoiceAtAllTimes ? .on : .off
         menu.addItem(zenBarMenuItem)
+
+        livePreviewMenuItem = NSMenuItem(
+            title: "Show Live Preview Overlay",
+            action: #selector(toggleLivePreviewOverlay),
+            keyEquivalent: ""
+        )
+        livePreviewMenuItem.target = self
+        livePreviewMenuItem.state =
+            OverlayPreferences.loadLivePreviewEnabled() ? .on : .off
+        menu.addItem(livePreviewMenuItem)
 
         statusMessageMenuItem = NSMenuItem(
             title: "Show Status Message",
@@ -407,7 +624,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureZenBar() {
-        zenBarController = ZenBarPanelController(
+        makeOverlayController()
+        state.$phase
+            .combineLatest(state.$showsZenVoiceAtAllTimes)
+            .sink { [weak self] phase, showsAtAllTimes in
+                self?.updateZenBarPresentation(
+                    phase: phase,
+                    showsAtAllTimes: showsAtAllTimes
+                )
+                self?.updateEscapeToCancel(phase: phase)
+            }
+            .store(in: &stateObservers)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(overlayPreferencesChanged),
+            name: OverlayPreferences.didChangeNotification,
+            object: nil
+        )
+    }
+
+    /// Builds the overlay panel for the currently selected overlay kind.
+    ///
+    /// Separate from ``configureZenBar()`` because the panel is rebuilt whenever
+    /// the selection changes, while the state subscription is set up only once.
+    private func makeOverlayController() {
+        zenBarController = OverlayPanelController(
+            kind: resolvedOverlayKind(),
             state: state,
             toggleRecording: { [weak self] in
                 self?.toggleRecording()
@@ -420,18 +662,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             dismissError: { [weak self] in
                 self?.dismissZenBarError()
+            },
+            setMode: { [weak self] mode in
+                self?.state.mode = mode
             }
         )
-        state.$phase
-            .combineLatest(state.$showsZenVoiceAtAllTimes)
-            .sink { [weak self] phase, showsAtAllTimes in
-                self?.updateZenBarPresentation(
-                    phase: phase,
-                    showsAtAllTimes: showsAtAllTimes
-                )
-                self?.updateEscapeToCancel(phase: phase)
-            }
-            .store(in: &stateObservers)
     }
 
     private func configureHotKey() {
@@ -540,8 +775,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             },
             selectionInvalidated: { [weak self] in
-                self?.configureTranscriber()
+                self?.configureEngines()
+                self?.modelManagerViewModel?.refreshEngineSelection()
                 self?.settingsViewModel?.refreshSystemStatus()
+            },
+            engineRegistryProvider: { [weak self] in
+                self?.engineRegistry
             }
         )
         applicationProfileViewModel = ApplicationProfileViewModel()
@@ -649,9 +888,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return try self.resolvedVault()
             }
         )
+        audioHistoryViewModel = AudioHistoryViewModel(
+            preferences: audioHistoryPreferences,
+            vaultProvider: { [weak self] in
+                guard let self else {
+                    throw DictationVaultError.database(
+                        "ZenVoice is no longer running."
+                    )
+                }
+                return try self.resolvedVault()
+            }
+        )
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
+            audioHistoryViewModel: audioHistoryViewModel,
             insightsViewModel: insightsViewModel,
             voiceProfileViewModel: voiceProfileViewModel,
             modelManagerViewModel: modelManagerViewModel,
@@ -828,7 +1079,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyLanguageProfile(
         _ profile: LanguageProfile
     ) -> Result<Void, Error> {
-        modelManagerViewModel.selectProfile(profile)
+        let result = modelManagerViewModel.selectProfile(profile)
+        modelManagerViewModel.refreshEngineSelection()
+        return result
     }
 
     private func applyConfiguration(
@@ -839,7 +1092,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Verification and candidate construction happen before either
             // preference changes, so a failure cannot leave a mismatched
             // model/profile pair behind.
-            let candidate = try ModelProfileTransition.prepareAndCommit(
+            let whisperEngine = try ModelProfileTransition.prepareAndCommit(
                 model: model,
                 profile: languageProfile
             ) {
@@ -847,15 +1100,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     model: model,
                     languageProfile: languageProfile
                 )
-                return WhisperTranscriber(configuration: configuration)
+                return WhisperSpeechEngine(configuration: configuration)
             }
-            transcriber = candidate
-            warmUpTranscriber()
+            self.whisperEngine = whisperEngine
+            engineRegistry = makeEngineRegistry(whisper: whisperEngine)
+            warmUpEngines()
             state.languageProfile = languageProfile
             settingsViewModel?.configurationDidChange(
                 languageProfile: languageProfile
             )
             updateLanguageMenu()
+            modelManagerViewModel.refreshEngineSelection()
             return .success(())
         } catch {
             return .failure(error)
@@ -905,15 +1160,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        if transcriber == nil {
-            configureTranscriber()
-            guard transcriber != nil else {
+        if whisperEngine == nil {
+            configureEngines()
+            guard whisperEngine != nil else {
                 return
             }
         }
         // Earliest useful moment: the model finishes building while the user is
         // still talking, rather than after they stop. A no-op once warm.
-        warmUpTranscriber()
+        warmUpEngines()
 
 #if DEBUG
         if recorder.usesDeterministicFixture {
@@ -981,7 +1236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     language:
                         dictationBehavior.languageProfile
                             .inputLanguageCode,
-                    modelID: transcriber?.modelID ?? "unknown",
+                    modelID: whisperEngine?.modelID ?? "unknown",
                     targetBundleID: targetApplication?.bundleIdentifier,
                     targetAppName: targetApplication?.localizedName,
                     category: category,
@@ -1027,27 +1282,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let profile = ApplicationProfilePreferences.profile(
             for: targetBundleIdentifier
         )
-        let languageProfile =
+        let baseLanguageProfile =
             profile?.languageProfile ?? LanguagePreferences.load()
-        let capability =
-            ModelSelectionPreferences.load()?.languageCapability
-            ?? transcriber?.languageCapability
-            ?? .english
-        guard languageProfile.isCompatible(with: capability) else {
-            if let model = ModelSelectionPreferences.load() {
-                showError(
-                    ModelProfileTransition.incompatibleSelectionMessage(
-                        model: model,
-                        currentProfile: languageProfile
-                    )
-                )
-            } else {
-                showError(
-                    ModelProfileTransition.unavailableMessage(
-                        for: languageProfile
-                    )
-                )
-            }
+        let languageProfile: LanguageProfile
+        if let preferredOutputMode = profile?.preferredOutputMode {
+            languageProfile = LanguageProfile(
+                inputLanguageCode: baseLanguageProfile.inputLanguageCode,
+                outputMode: preferredOutputMode
+            )
+        } else {
+            languageProfile = baseLanguageProfile
+        }
+        let selectedID =
+            profile?.preferredEngineID
+            ?? SelectedEnginePreferences.load(for: languageProfile)
+        guard let resolvedEngine = engineRegistry?.resolve(
+            for: languageProfile,
+            selectedID: selectedID
+        ) else {
+            showError(
+                EngineError.noEngineAvailable.localizedDescription
+            )
+            return nil
+        }
+        guard languageProfile.isCompatible(
+            with: resolvedEngine.languageCapability
+        ) else {
+            showError(
+                EngineError.engineUnavailable(
+                    resolvedEngine.descriptor.id
+                ).localizedDescription
+            )
             return nil
         }
         let correctionScope = languageProfile.correctionScope
@@ -1104,7 +1369,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? recorder.samples(after: liveCommittedSampleIndex)
             : []
         recorder.releaseCapturedSamples()
-        guard let recordedAudio, let transcriber else {
+        guard let recordedAudio else {
             resetLivePreviewSession()
             showError("No recording was captured.")
             return
@@ -1142,26 +1407,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // verify and swap what was inserted for the better transcript; only
             // if that cannot be done safely does the fragment path stand.
             let insertedText = liveInsertedStableTranscript
-            transcriptionQueue.async { [weak self] in
-                guard let upgrade = self?.wholeRecordingUpgrade(
-                    transcriber: transcriber,
+            let registry = engineRegistry
+            let whisper = whisperEngine
+            Task { [weak self] in
+                guard let registry else {
+                    await MainActor.run {
+                        self?.completeFromSegments(
+                            whisperEngine: whisper,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID,
+                            behavior: behavior,
+                            remainingSamples: remainingSamples,
+                            correctionVault: correctionVault,
+                            appliesCorrectionRules: appliesCorrectionRules
+                        )
+                    }
+                    return
+                }
+                guard let upgrade = await self?.wholeRecordingUpgrade(
+                    registry: registry,
                     recordedAudio: recordedAudio,
                     behavior: behavior,
                     correctionVault: correctionVault,
                     appliesCorrectionRules: appliesCorrectionRules
                 ) else {
-                    self?.completeFromSegments(
-                        transcriber: transcriber,
-                        recordedAudio: recordedAudio,
-                        historyID: historyID,
-                        behavior: behavior,
-                        remainingSamples: remainingSamples,
-                        correctionVault: correctionVault,
-                        appliesCorrectionRules: appliesCorrectionRules
-                    )
+                    await MainActor.run {
+                        self?.completeFromSegments(
+                            whisperEngine: whisper,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID,
+                            behavior: behavior,
+                            remainingSamples: remainingSamples,
+                            correctionVault: correctionVault,
+                            appliesCorrectionRules: appliesCorrectionRules
+                        )
+                    }
                     return
                 }
-                DispatchQueue.main.async {
+                await MainActor.run {
                     guard let self else { return }
                     let replaced = self.inserter.replaceTextBeforeCaret(
                         insertedText + " ",
@@ -1170,7 +1453,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     guard replaced == .replaced else {
                         self.transcriptionQueue.async {
                             self.completeFromSegments(
-                                transcriber: transcriber,
+                                whisperEngine: whisper,
                                 recordedAudio: recordedAudio,
                                 historyID: historyID,
                                 behavior: behavior,
@@ -1229,11 +1512,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        transcriptionQueue.async { [weak self] in
+        let registry = engineRegistry
+        let fallbackModelID = whisperEngine?.modelID ?? "unknown"
+        Task { [weak self] in
+            guard let registry else {
+                await MainActor.run {
+                    self?.handleTranscriptionFailure(
+                        EngineError.noEngineAvailable,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID
+                    )
+                }
+                return
+            }
             do {
-                let result = try transcriber.transcribe(
+                let result = try await registry.transcribe(
                     audioURL: recordedAudio.url,
-                    languageProfile: behavior.languageProfile,
+                    profile: behavior.languageProfile,
+                    defaults: RuntimeIdentity.userDefaults(),
                     initialPrompt: behavior.context
                 )
                 let refinement =
@@ -1257,7 +1553,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             )
                             : nil
                 )
-                DispatchQueue.main.async {
+                await MainActor.run {
                     guard let self else { return }
                     guard !insertedPreview.isEmpty else {
                         self.complete(
@@ -1285,10 +1581,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     guard let self else { return }
                     guard let recovered = previewFallback.processed(
-                        modelID: transcriber.modelID
+                        modelID: fallbackModelID
                     ) else {
                         self.handleTranscriptionFailure(
                             error,
@@ -1314,15 +1610,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// Called off the main thread.
     private nonisolated func wholeRecordingUpgrade(
-        transcriber: WhisperTranscriber,
+        registry: EngineRegistry,
         recordedAudio: AudioRecorder.RecordedAudio,
         behavior: ActiveDictationBehavior,
         correctionVault: DictationVault?,
         appliesCorrectionRules: Bool
-    ) -> ProcessedTranscription? {
-        guard let result = try? transcriber.transcribe(
+    ) async -> ProcessedTranscription? {
+        let defaults = RuntimeIdentity.userDefaults()
+        guard let result = try? await registry.transcribe(
             audioURL: recordedAudio.url,
-            languageProfile: behavior.languageProfile,
+            profile: behavior.languageProfile,
+            defaults: defaults,
             initialPrompt: behavior.context
         ) else {
             return nil
@@ -1352,7 +1650,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// Called off the main thread.
     private nonisolated func completeFromSegments(
-        transcriber: WhisperTranscriber,
+        whisperEngine: WhisperSpeechEngine?,
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?,
         behavior: ActiveDictationBehavior,
@@ -1361,10 +1659,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appliesCorrectionRules: Bool
     ) {
         let expectsRemainder = remainingSamples.count >= 1_600
+        guard let whisperEngine else {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleTranscriptionFailure(
+                    EngineError.noEngineAvailable,
+                    recordedAudio: recordedAudio,
+                    historyID: historyID
+                )
+            }
+            return
+        }
         do {
             let processed: ProcessedTranscription?
             if expectsRemainder {
-                let result = try transcriber.transcribe(
+                let result = try whisperEngine.transcribe(
                     samples: remainingSamples,
                     languageProfile: behavior.languageProfile,
                     initialPrompt: behavior.context
@@ -1557,7 +1865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard recorder.isRecording,
               !livePreviewInFlight,
-              let transcriber,
+              let whisperEngine,
               let segment = recorder.stableSegment(
                 after: liveCommittedSampleIndex
               ) else {
@@ -1572,7 +1880,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             learningPreferences.appliesCorrectionRules
         transcriptionQueue.async { [weak self] in
             do {
-                let result = try transcriber.transcribe(
+                let result = try whisperEngine.transcribe(
                     samples: segment.samples,
                     languageProfile: behavior.languageProfile,
                     initialPrompt: behavior.context
@@ -1734,7 +2042,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             remainingResult?.finalTranscript ?? "",
             to: liveStableFinalTranscript
         )
-        guard !finalTranscript.isEmpty, let transcriber else {
+        guard !finalTranscript.isEmpty, let whisperEngine else {
             resetLivePreviewSession()
             handleTranscriptionFailure(
                 WhisperTranscriber.TranscriptionError.noSpeech,
@@ -1752,7 +2060,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 + (remainingResult?.correctionCount ?? 0),
             isPartial:
                 remainderWasExpected && remainingResult == nil,
-            modelID: transcriber.modelID,
+            modelID: whisperEngine.modelID,
             processingDurationSeconds:
                 liveStableProcessingDuration
                 + (remainingResult?.processingDurationSeconds ?? 0)
@@ -1827,6 +2135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     correctionCount: result.correctionCount,
                     isPartial: result.isPartial
                 )
+                archiveRecordingIfEnabled(historyID: historyID)
                 try vault.deleteRecoveryAudio(id: historyID)
                 try? vault.recordCorrectionUsage(
                     processed.correctionUsages
@@ -1854,7 +2163,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         state.phase = .inserting
 
-        let textToInsert = insertionText ?? result.finalTranscript
+        let enhanced = enhanceForMode(result.finalTranscript)
+        let textToInsert = insertionText ?? enhanced
+
+        switch state.mode {
+        case .command:
+            handleCommandModeTranscript(textToInsert)
+            return
+        case .write:
+            handleWriteModeTranscript(
+                textToInsert,
+                recordedAudio: recordedAudio,
+                historyID: historyID,
+                shouldPersist: shouldPersist,
+                historySaveError: historySaveError
+            )
+            return
+        case .dictation:
+            break
+        }
+
         if textToInsert.isEmpty, hasPriorInsertion {
             if let historyID, shouldPersist, historySaveError == nil {
                 try? resolvedVault().markInsertion(
@@ -1957,7 +2285,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let dictationVault {
             return dictationVault
         }
-        let vault = try DictationVault.live()
+        let policy = try RuntimeIdentity.policy()
+        let vault = try DictationVault.live(policy: policy)
         dictationVault = vault
         return vault
     }
@@ -1965,6 +2294,211 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func resetActiveDictationBehavior() {
         activeDictationBehavior = .global
         state.languageProfile = LanguagePreferences.load()
+    }
+
+    private func activeZenIntelligenceMode() -> ZenIntelligenceMode {
+        let global = ZenIntelligencePreferences.load()
+        guard let bundleID = NSWorkspace.shared.frontmostApplication?
+            .bundleIdentifier,
+              let profile = ApplicationProfilePreferences.profile(
+                for: bundleID
+              ) else {
+            return global
+        }
+        return profile.zenIntelligenceMode ?? global
+    }
+
+    private func enhanceForMode(_ transcript: String) -> String {
+        let mode = activeZenIntelligenceMode()
+        guard mode != .off else { return transcript }
+        let result = ZenIntelligenceEngine().enhance(
+            transcript,
+            mode: mode,
+            languageCode: state.languageProfile.inputLanguageCode,
+            context: settingsViewModel?.sanitizedNextDictationContext
+        )
+        return result.wasRejected ? transcript : result.text
+    }
+
+    private func handleCommandModeTranscript(_ transcript: String) {
+        guard CommandModePreferences.isEnabled() else {
+            showError("Command Mode is disabled. Enable it in settings.")
+            return
+        }
+        let manifest = CommandModePreferences.loadManifest()
+            ?? CommandModeEngine.defaultManifest
+        let action = CommandModeEngine().parse(
+            transcript: transcript,
+            manifest: manifest
+        )
+        guard action != .none else {
+            showError("No command matched what you said.")
+            return
+        }
+        Task { [weak self] in
+            do {
+                try await self?.commandExecutor.execute(action)
+                await MainActor.run {
+                    self?.state.phase = .success
+                    self?.scheduleIdleReset(after: self?.successResetDelay ?? 1.2)
+                }
+            } catch {
+                await MainActor.run {
+                    self?.showError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func handleWriteModeTranscript(
+        _ transcript: String,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        historyID: UUID?,
+        shouldPersist: Bool,
+        historySaveError: Error?
+    ) {
+        let subMode = activeWriteModeSubMode()
+        switch subMode {
+        case .compose:
+            insertText(
+                transcript,
+                historyID: historyID,
+                shouldPersist: shouldPersist,
+                historySaveError: historySaveError
+            )
+        case .rewrite:
+            Task { [weak self] in
+                await self?.rewriteAndInsert(
+                    prompt: transcript,
+                    historyID: historyID,
+                    shouldPersist: shouldPersist,
+                    historySaveError: historySaveError
+                )
+            }
+        }
+    }
+
+    private func activeWriteModeSubMode() -> WriteModeSubMode {
+        let global = WriteModePreferences.loadSubMode()
+        guard let bundleID = NSWorkspace.shared.frontmostApplication?
+            .bundleIdentifier,
+              let profile = ApplicationProfilePreferences.profile(
+                for: bundleID
+              ) else {
+            return global
+        }
+        return profile.writeModeDefault ?? global
+    }
+
+    private func rewriteAndInsert(
+        prompt: String,
+        historyID: UUID?,
+        shouldPersist: Bool,
+        historySaveError: Error?
+    ) async {
+        let request = WriteModeReadRequest(
+            sourceBundleIdentifier: NSWorkspace.shared.frontmostApplication?
+                .bundleIdentifier,
+            fallbackToClipboard: true
+        )
+        let readResult: WriteModeReadResult
+        do {
+            readResult = try await writeReader.read(request)
+        } catch {
+            await MainActor.run {
+                showError(error.localizedDescription)
+            }
+            return
+        }
+
+        let mode = activeZenIntelligenceMode()
+        let rewrite = WriteModeEngine().rewrite(
+            selectedText: readResult.text,
+            prompt: prompt,
+            mode: mode,
+            languageCode: state.languageProfile.inputLanguageCode
+        )
+
+        await MainActor.run { [rewrite] in
+            if rewrite.wasRejected {
+                showError("Rewrite was rejected to preserve meaning.")
+                return
+            }
+            if rewrite.requiresPreview {
+                // For now, copy the rewritten text to the clipboard so the
+                // user can preview and paste manually. A future UI will show a
+                // diff preview before applying.
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(
+                    rewrite.text,
+                    forType: .string
+                )
+                showError(
+                    "Rewrite copied to clipboard — large change, please preview."
+                )
+                return
+            }
+            insertText(
+                rewrite.text,
+                historyID: historyID,
+                shouldPersist: shouldPersist,
+                historySaveError: historySaveError
+            )
+        }
+    }
+
+    private func insertText(
+        _ text: String,
+        historyID: UUID?,
+        shouldPersist: Bool,
+        historySaveError: Error?
+    ) {
+        if text.isEmpty {
+            state.phase = .success
+            scheduleIdleReset(after: successResetDelay)
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self else { return }
+            switch self.inserter.insert(text) {
+            case .pasted:
+                if let historyID, shouldPersist, historySaveError == nil {
+                    try? self.resolvedVault().markInsertion(
+                        id: historyID,
+                        outcome: .inserted
+                    )
+                }
+                self.state.phase = .success
+            case .copiedOnly:
+                if let historyID, shouldPersist, historySaveError == nil {
+                    try? self.resolvedVault().markInsertion(
+                        id: historyID,
+                        outcome: .copiedOnly
+                    )
+                }
+                self.showError("Copied—enable Accessibility to auto-paste.")
+                return
+            case .blockedBySecureInput:
+                if let historyID, shouldPersist, historySaveError == nil {
+                    try? self.resolvedVault().markInsertion(
+                        id: historyID,
+                        outcome: .copiedOnly
+                    )
+                }
+                self.showError("Copied—\(self.secureInputAdvice())")
+                return
+            }
+            self.historyViewModel?.refresh()
+            self.insightsViewModel?.refresh()
+            self.voiceProfileViewModel?.refresh()
+            self.scheduleIdleReset(after: self.successResetDelay)
+            if let historySaveError {
+                self.showError(
+                    "Inserted, but history was not saved: "
+                    + historySaveError.localizedDescription
+                )
+            }
+        }
     }
 
     private func showError(_ message: String) {
@@ -1977,6 +2511,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         resetWorkItem?.cancel()
         state.phase = .idle
         updateStartStopMenuTitle()
+    }
+
+    /// Refuses to run if the bundle identifier is missing, empty, or foreign.
+    ///
+    /// This is the fail-closed gate for the production Application Support path,
+    /// UserDefaults suite, and Keychain namespace. It must run before any
+    /// production storage is initialized.
+    private func validateRuntimeIdentity() {
+        do {
+            _ = try RuntimeIdentity.policy()
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "ZenVoice cannot start"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .critical
+            alert.addButton(withTitle: "Quit")
+            alert.runModal()
+            NSApp.terminate(nil)
+        }
     }
 
     /// A plain "inserted" needs a moment; a distrust warning needs long
@@ -2151,10 +2704,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             )
         }
-        guard let transcriber else {
+        guard let registry = engineRegistry else {
             return .failure(
                 DictationVaultError.database(
-                    "The local transcription model is unavailable."
+                    "No speech engine is available."
                 )
             )
         }
@@ -2162,13 +2715,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             languageCode: record.language,
             modelID: record.modelID
         )
-        guard recordedLanguageProfile.isCompatible(
-            with: transcriber.languageCapability
-        ) else {
+        let selectedID = SelectedEnginePreferences.load(
+            for: recordedLanguageProfile
+        )
+        guard let resolvedEngine = registry.resolve(
+            for: recordedLanguageProfile,
+            selectedID: selectedID
+        ),
+              recordedLanguageProfile.isCompatible(
+                  with: resolvedEngine.languageCapability
+              ) else {
             return .failure(
                 DictationVaultError.database(
                     "This recording used \(recordedLanguageProfile.displayName). "
-                        + "Select a compatible model before retrying."
+                        + "Select a compatible engine before retrying."
                 )
             )
         }
@@ -2211,11 +2771,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let voiceCommandsEnabled =
             applicationProfile?.voiceCommandsEnabled
             ?? LocalVoiceCommandPreferences.isEnabled()
-        transcriptionQueue.async { [weak self] in
+        Task { [weak self] in
             do {
-                let result = try transcriber.transcribe(
+                let result = try await registry.transcribe(
                     audioURL: audioURL,
-                    languageProfile: recordedLanguageProfile,
+                    profile: recordedLanguageProfile,
+                    defaults: RuntimeIdentity.userDefaults(),
                     initialPrompt: initialPrompt
                 )
                 let refinement =
@@ -2237,7 +2798,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                             )
                             : nil
                 )
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self?.completeHistoryRetry(
                         processed: processed,
                         recordedAudio: recordedAudio,
@@ -2245,7 +2806,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self?.handleTranscriptionFailure(
                         error,
                         recordedAudio: recordedAudio,
@@ -2287,6 +2848,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 correctionCount: result.correctionCount,
                 isPartial: result.isPartial
             )
+            archiveRecordingIfEnabled(historyID: historyID)
             try vault.deleteRecoveryAudio(id: historyID)
             try? vault.recordCorrectionUsage(processed.correctionUsages)
             state.recordSuccessfulDictation(
@@ -2341,6 +2903,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         zenBarMenuItem?.state = showsAtAllTimes ? .on : .off
     }
 
+    /// Recomputes today's usage as the menu opens, so the pill is current
+    /// without polling insights on a timer.
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshTodayUsagePill()
+    }
+
+    private func refreshTodayUsagePill() {
+        let today = (try? dictationVault?.insights().today) ?? nil
+        let summary = (today ?? .empty).pillSummary
+        todayUsageMenuItem?.title = summary
+        statusItem?.button?.toolTip = "ZenVoice — \(summary)"
+    }
+
     @objc private func requestAccessibilityPermission() {
         inserter.requestAccessibilityPermission()
     }
@@ -2354,13 +2929,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.open(url)
     }
 
+    /// Menu-bar toggle for the live-preview overlay. Saving the preference
+    /// posts the change notification, which rebuilds the overlay panel.
+    @objc private func toggleLivePreviewOverlay() {
+        let enabled = !OverlayPreferences.loadLivePreviewEnabled()
+        OverlayPreferences.saveLivePreviewEnabled(enabled)
+        livePreviewMenuItem?.state = enabled ? .on : .off
+        settingsViewModel?.syncOverlayPreferences()
+    }
+
     @objc private func toggleStatusMessage() {
         state.toggleStatusMessage()
         statusMessageMenuItem.state = state.showsStatusMessage ? .on : .off
     }
 
     @objc private func screenConfigurationChanged() {
-        zenBarController.positionAtBottomCenter()
+        zenBarController.reposition()
+    }
+
+    /// Rebuilds the overlay panel when the user picks a different overlay kind
+    /// or toggles live previews off. The panel's kind is fixed at construction,
+    /// so a change means building a new one and restoring its visibility.
+    @objc private func overlayPreferencesChanged() {
+        guard !zenBarController.matches(
+            kind: resolvedOverlayKind(),
+            reduceMotion: OverlayPreferences.loadReduceMotion()
+        ) else {
+            return
+        }
+        zenBarController.hide()
+        makeOverlayController()
+        updateZenBarPresentation(
+            phase: state.phase,
+            showsAtAllTimes: state.showsZenVoiceAtAllTimes
+        )
+    }
+
+    /// The overlay to present: the user's selection when live previews are
+    /// enabled, otherwise ZenBar.
+    private func resolvedOverlayKind() -> OverlayKind {
+        guard OverlayPreferences.loadLivePreviewEnabled() else {
+            return .zenBar
+        }
+        return OverlayPreferences.loadActiveOverlay()
     }
 
     @objc private func quit() {

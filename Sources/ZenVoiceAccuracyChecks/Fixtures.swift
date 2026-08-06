@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import AVFoundation
 import Foundation
 
@@ -476,6 +490,44 @@ enum Fixtures {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    /// Writes 16 kHz mono float32 samples to a WAV file.
+    static func write(
+        samples: [Float],
+        to url: URL,
+        sampleRate: Double = 16_000
+    ) throws {
+        let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: sampleRate,
+            channels: 1,
+            interleaved: false
+        )
+        guard let format else {
+            throw FixtureError.synthesisUnavailable(
+                "Could not create target audio format"
+            )
+        }
+        let file = try AVAudioFile(
+            forWriting: url,
+            settings: format.settings,
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: AVAudioFrameCount(samples.count)
+        ), let channel = buffer.floatChannelData?.pointee else {
+            throw FixtureError.synthesisUnavailable(
+                "Could not allocate audio buffer"
+            )
+        }
+        for (index, sample) in samples.enumerated() {
+            channel[index] = sample
+        }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        try file.write(from: buffer)
     }
 
     /// Reads audio as 16 kHz mono float32, converting if necessary.

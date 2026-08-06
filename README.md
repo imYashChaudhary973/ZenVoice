@@ -13,7 +13,7 @@
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-111111">
   <img alt="Swift 5.10" src="https://img.shields.io/badge/Swift-5.10-F05138">
   <img alt="Local-first" src="https://img.shields.io/badge/Privacy-Local--first-C5A36A">
-  <img alt="Private alpha" src="https://img.shields.io/badge/Status-Private_Alpha-5865F2">
+  <img alt="Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-1abc9c.svg">
 </p>
 
 ZenVoice is a native macOS app inspired by the speed of modern voice dictation
@@ -23,14 +23,10 @@ clear controls and live system status. There are no accounts, subscriptions,
 analytics, or cloud transcription services in the current application.
 
 > [!IMPORTANT]
-> ZenVoice is currently a private personal project. It is proprietary,
-> source-visible software governed by [LICENSE](LICENSE). Direct distribution
-> is the selected release channel; the first distributed build will be an
-> invitation-only private beta, free to its users for an initial one to three
-> month period. There is no trial timer, licence key, or account system in the
-> application. ZenVoice builds for macOS 14 or newer, but the beta is certified
-> only on the macOS versions it has actually been tested on; invitations are
-> limited to those.
+> ZenVoice is open-source software licensed under the Apache License, Version
+> 2.0 (see [LICENSE](LICENSE)). The project welcomes contributions; see
+> [Contributing](CONTRIBUTING.md). ZenVoice builds for macOS 14 or newer.
+> There is no account system, subscription, or cloud transcription service.
 
 ## What works today
 
@@ -80,7 +76,7 @@ analytics, or cloud transcription services in the current application.
 - Meaning-preserving cleanup for fillers, repeated words, spoken restarts, and
   explicit prompt layout commands.
 - Visible model-download percentage with reliable cancellation.
-- Local English transcription through Parakeet/CoreML or `whisper.cpp`.
+- Local transcription through `whisper.cpp`.
 - Compact ZenBar feedback for ready, listening, processing, success, and error
   states.
 - A live waveform driven by real microphone loudness.
@@ -96,7 +92,7 @@ analytics, or cloud transcription services in the current application.
 Hotkey
   → local microphone recording
   → app profile + optional one-shot context
-  → selected local speech runtime (Parakeet/CoreML or whisper.cpp)
+  → selected local whisper.cpp model
   → conservative transcript cleanup
   → deterministic local refinement
   → macOS clipboard and active-app paste
@@ -113,12 +109,23 @@ Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
   [Release Readiness](docs/RELEASE_READINESS.md).
 - Apple Silicon Mac
 - Swift 5.10 or newer
-- Internet access on the first build for the pinned local speech runtimes
+- Internet access on the first build for the pinned `whisper.cpp` XCFramework
 - A verified, compatible model downloaded from ZenVoice's Models screen
 
-## Quick start
+## Install
 
-Build and launch:
+A signed, notarized release will be available from GitHub Releases once the
+release checklist is complete. After the first release you can install with:
+
+```bash
+brew install --cask zenvoice/tap/zenvoice
+```
+
+Or download the latest `ZenVoice-distribution.zip` from the
+[Releases](https://github.com/zenvoice/ZenVoice/releases) page, unzip it, and
+move `ZenVoice.app` to `/Applications`.
+
+## Build from source
 
 ```bash
 ./Scripts/build-app.sh
@@ -134,10 +141,8 @@ Without Accessibility permission, ZenVoice still copies the transcript to the
 clipboard.
 
 Open **Models** to download a checksum-verified English, multilingual, or
-Hinglish-specialist model. ZenVoice uses the verified Parakeet CoreML bundle
-for its English recommendation and `whisper.cpp` GGML models for multilingual,
-Hinglish, and fallback paths. The pinned `whisper.cpp` and FluidAudio runtimes
-are bundled in the app; Homebrew is not required.
+Hinglish-specialist `whisper.cpp` GGML model. The pinned `whisper.cpp`
+XCFramework is bundled in the app; Homebrew is not required.
 
 Open **Languages** to choose English, Hinglish, automatic detection, or another
 spoken language. Non-English profiles require a compatible multilingual or
@@ -190,11 +195,11 @@ Model provenance, licences, revisions, and checksums are documented in
 .
 ├── Resources/           Brand assets and application metadata
 ├── Scripts/             Repeatable packaging utilities
-├── Sources/
-│   ├── ZenVoice/        macOS application and ZenBar
-│   ├── ZenVoiceCore/    reusable local processing logic
-│   ├── ZenVoiceRuntime/ persistent local Whisper and Parakeet integration
-│   ├── ZenVoiceStorage/ encrypted history and recovery storage
+  ├── Sources/
+  │   ├── ZenVoice/        macOS application and ZenBar
+  │   ├── ZenVoiceCore/    reusable local processing logic
+  │   ├── ZenVoiceRuntime/ persistent local whisper.cpp integration
+  │   ├── ZenVoiceStorage/ encrypted history and recovery storage
 │   ├── ZenVoiceRuntimeChecks/
 │   ├── ZenVoiceStorageChecks/
 │   └── ZenVoiceCoreChecks/
@@ -215,6 +220,7 @@ Model provenance, licences, revisions, and checksums are documented in
 - [Microphones and Audio Doctor](docs/AUDIO.md)
 - [Live Dictation](docs/LIVE_DICTATION.md)
 - [Release Readiness](docs/RELEASE_READINESS.md)
+- [Phased Development Plan](docs/PHASED_PLAN.md)
 - [M9 Security Review](docs/SECURITY_REVIEW.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -224,12 +230,16 @@ Model provenance, licences, revisions, and checksums are documented in
 
 ## Project direction
 
-The immediate goal is a dependable personal dictation tool. ZenVoice already
-offers explicit multilingual profiles; current work focuses on measured
-language quality, local context, lower transcription latency, expanded
-settings, and distribution readiness.
+ZenVoice is being built first for our own daily use. The immediate goal is to
+make it the best possible personal dictation tool: reliable, low-latency,
+multilingual, and respectful of privacy.
 
-ZenVoice is proprietary, source-visible software under [LICENSE](LICENSE).
-Direct download of a Developer-ID-signed and notarized build is the selected
-distribution path. Passing CI does not make a build publicly releasable; the
-manual release gates must also be completed.
+Public shipping is explicitly deferred. ZenVoice is open-source under the Apache
+License, Version 2.0, and the distribution path (Developer-ID-signed direct
+download via GitHub Releases, with an optional Homebrew cask) is already
+prepared. That path will only be activated once the product has matured through
+regular personal use and a deliberate future shipping decision is made.
+
+Until then, passing CI and completing the manual release gates are not
+claims of public availability. The current release checklist is retained in
+[Release Readiness](docs/RELEASE_READINESS.md) for when shipping is reconsidered.

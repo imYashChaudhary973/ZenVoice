@@ -22,7 +22,8 @@ that window rather than the whole database.
 - Audio Doctor records an explicit three-second local fixture, validates its
   signal and format, deletes it immediately, and creates no History record.
 - Read in-process by the selected bundled local speech runtime.
-- Deleted after successful transcription.
+- Deleted after successful transcription, unless Audio History is enabled — see
+  below.
 - Deleted immediately when a recording is cancelled.
 - When local history and failed-audio recovery are enabled, audio from a failed
   or interrupted transcription may remain in private Application Support
@@ -41,6 +42,30 @@ that window rather than the whole database.
   its temporary directory when history is disabled.
 - Users can delete all retained recovery audio independently from the Privacy
   inventory after a destructive-action confirmation.
+
+### Audio History
+
+- Off by default. Nothing is archived until the user turns it on, and the
+  setting records whether an explicit choice has been made.
+- When enabled, the full recording is copied into private Application Support
+  storage (`AudioHistory/`) after the transcript is stored.
+- Archived audio is **not encrypted**. Transcripts are encrypted; whole
+  recordings are not. The archive is protected by private directory
+  permissions, by being opt-in, and by the size and age budgets below. This is
+  stated in the Audio History screen as well as here.
+- Archives are separate from encrypted transcript history and have their own
+  storage, table, budgets, and delete controls.
+- Two budgets bound the archive, both user-configurable: total size (default
+  2 GB, minimum 100 MB) and age (default 30 days, minimum 1 day). Cleanup runs
+  at launch and after each archived recording, deleting the oldest first.
+- Archiving follows transcript persistence, so Private Dictation, paused
+  history, and suppressed dictations are never archived.
+- Recordings can be played back, deleted individually, or deleted all at once.
+- Export produces a ZIP of the audio plus a metadata manifest — timestamp,
+  duration, size, language, model, target app, category. Transcript text is
+  excluded unless the user explicitly turns it on for that export.
+- Audio never leaves the Mac unless the user exports it themselves.
+- Full rationale in [ADR 0010](decisions/0010-audio-history.md).
 
 ### Transcripts
 
@@ -61,8 +86,9 @@ that window rather than the whole database.
 - When history is enabled, ZenVoice stores the target application's bundle
   identifier and display name.
 - Application profiles store only the bundle identifier, display name,
-  language choice, refinement mode, and voice-command toggle in local
-  preferences.
+  language choice, refinement mode, ZenIntelligence mode, Command Mode command
+  set, Write Mode default sub-mode, custom prompt hints, and voice-command
+  toggle in local preferences.
 - The optional next-dictation context is bounded to 500 characters, held only
   in memory, and cleared when recording starts. It is not stored in History,
   preferences, logs, or analytics.
@@ -128,6 +154,48 @@ that window rather than the whole database.
 - The former downloadable refinement-model path was measured and removed; no
   refinement weights are downloaded or loaded by the current application.
 
+### ZenIntelligence
+
+- ZenIntelligence is an opt-in, local post-processing layer that runs after
+  Instant Refine.
+- Format mode uses deterministic local rules for capitalization, spoken-digit
+  conversion, punctuation spacing, and whitespace cleanup.
+- Context Aware mode may use the same bounded 500-character next-dictation
+  context described under Application context. That context is held in memory,
+  is not persisted, and is only used to join sentence fragments conservatively.
+- A local meaning guard rejects candidates that invent words, change numeric
+  values, or alter facts.
+- No transcript or context is sent to a remote model, API, or analytics service.
+
+### Command Mode
+
+- Command Mode is an opt-in per-app and global feature that converts matching
+  voice phrases into local actions.
+- The command manifest and per-app command-set choices are stored in local
+  preferences.
+- Phrases are matched by deterministic local rules; no audio or transcript is
+  sent to a server.
+- System actions such as volume, mute, brightness, display sleep, lock screen,
+  application launch, and AppleScript invocation are executed through local macOS
+  APIs (`CoreAudio`, `IOKit`, `CGEvent`, `NSWorkspace`, `Process`).
+- Destructive or system-affecting actions require explicit approval in the ZenBar
+  before they run.
+- Approved command actions are recorded only in the same local History record as
+  a normal dictation; no separate command log is kept.
+
+### Write Mode
+
+- Write Mode is an opt-in per-app mode for composing new text or rewriting
+  text that is already selected in the target application.
+- Reading the current selection uses Accessibility APIs or the system
+  clipboard as a fallback. The source text is held in memory only long enough to
+  produce the rewrite or replacement and is not stored in History unless the
+  final result is saved as a normal dictation.
+- Composed or rewritten text is shown in a preview before insertion when a
+  preview threshold is configured.
+- Insertion uses the same Accessibility path as standard dictation insertion.
+- No text is sent to a remote service.
+
 ### Live dictation
 
 - Live phrase samples stay in memory and are processed by the same selected
@@ -152,19 +220,13 @@ that window rather than the whole database.
 
 ### Models and configuration
 
-- Whisper GGML files and Parakeet CoreML bundles remain in the user's local
-  Application Support directory.
+- Whisper GGML files remain in the user's local Application Support directory.
 - A developer can override the selected model with a local environment
   variable; ZenVoice does not execute a model-supplied program.
 - Model downloads are fixed to reviewed HTTPS sources, immutable revisions,
   expected sizes, and SHA-256 digests before installation. ZenVoice constructs
-  every download URL itself, including one per file for the Parakeet CoreML
-  bundle, and installs only after the whole download verifies.
-- A multi-file bundle must match its pinned manifest exactly — same files, no
-  extra or symlinked entries, same sizes, same digests — and is staged and
-  atomically swapped into place rather than written over in position.
-- The `whisper.cpp` XCFramework is checksum-pinned and the FluidAudio source
-  dependency is revision-pinned; both run in process.
+  every download URL itself and installs only after the whole download verifies.
+- The `whisper.cpp` XCFramework is checksum-pinned; it runs in process.
 - No API key or online account is required.
 
 ## macOS permissions
@@ -206,8 +268,7 @@ Local-first does not mean risk-free:
 - Apple Development signing gives local builds a stable macOS identity but is
   not appropriate for public distribution.
 
-The project now records its release security review, third-party notices, and
-automated readiness checks. Public release remains blocked until the owner
-chooses a project licence and distribution policy, signs the exact artifact
-with Developer ID, completes Apple notarization, and finishes the manual
-privacy and clean-device QA checklist.
+The project records its release security review, third-party notices, and
+automated readiness checks. Public release remains blocked until the signed
+artifact passes Apple notarization and the manual privacy and clean-device QA
+checklist is completed.

@@ -1,6 +1,53 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import SwiftUI
 import ZenVoiceCore
 import ZenVoiceStorage
+
+private enum EngineGroup: String, CaseIterable {
+    case builtIn
+    case local
+    case cloud
+
+    var displayName: String {
+        switch self {
+        case .builtIn:
+            return "Built-in"
+        case .local:
+            return "Local models"
+        case .cloud:
+            return "Cloud"
+        }
+    }
+
+    func contains(_ family: EngineFamily) -> Bool {
+        switch self {
+        case .builtIn:
+            return family == .appleSpeech
+        case .local:
+            return [
+                .whisper,
+                .parakeetTDT,
+                .parakeetFlash,
+                .nemotronSpeech
+            ].contains(family)
+        case .cloud:
+            return family == .cohereTranscribe
+        }
+    }
+}
 
 struct ModelsScreen: View {
     @ObservedObject var viewModel: ModelManagerViewModel
@@ -54,6 +101,52 @@ struct ModelsScreen: View {
                         icon: "target",
                         detail: "Strongest results · multilingual"
                     )
+                }
+            }
+
+            ZenSection(
+                title: "Speech engine",
+                caption: "Runtime that transcribes the current language"
+            ) {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                    if viewModel.engineAvailabilities.isEmpty {
+                        HStack(spacing: 9) {
+                            ProgressView().controlSize(.small)
+                            Text("Loading engines…")
+                                .font(ZenDesign.Typography.caption)
+                                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        }
+                    } else {
+                        ForEach(engineGroups, id: \.self) { group in
+                            let availabilities = engineAvailabilities(
+                                in: group
+                            )
+                            if !availabilities.isEmpty {
+                                VStack(alignment: .leading, spacing: 7) {
+                                    Text(group.displayName)
+                                        .font(
+                                            ZenDesign.Typography.captionStrong
+                                        )
+                                        .foregroundStyle(
+                                            ZenDesign.Semantic.textSecondary
+                                        )
+                                    ZenPanel {
+                                        ForEach(
+                                            availabilities,
+                                            id: \.engine.id
+                                        ) { availability in
+                                            if availability.engine.id
+                                                != availabilities.first?
+                                                .engine.id {
+                                                ZenPanelDivider()
+                                            }
+                                            engineRow(availability)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -188,6 +281,136 @@ struct ModelsScreen: View {
 
     private func formattedBytes(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    private func engineRow(_ availability: EngineAvailability) -> some View {
+        let isSelected = viewModel.isSelectedEngine(availability.engine.id)
+        let isAvailable = availability.isAvailable
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: ZenDesign.Spacing.sm) {
+                Image(systemName: engineIcon(for: availability.engine.family))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .frame(width: 32, height: 32)
+                    .background {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(ZenDesign.Semantic.surfaceRaised)
+                    }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 7) {
+                        Text(availability.engine.displayName)
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(
+                                isAvailable
+                                    ? ZenDesign.Semantic.textPrimary
+                                    : ZenDesign.Semantic.textSecondary
+                            )
+                        if isSelected {
+                            ZenBadge(
+                                text: "In use",
+                                kind: .success,
+                                systemImage: "checkmark"
+                            )
+                        } else if !isAvailable {
+                            ZenBadge(
+                                text: engineStatusLabel(for: availability),
+                                kind: .warn
+                            )
+                        } else if viewModel.isRecommendedEngine(
+                            availability.engine.id
+                        ) {
+                            ZenBadge(
+                                text: "Recommended",
+                                kind: .accent
+                            )
+                        }
+                    }
+                    Text(availability.engine.privacyNote)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: ZenDesign.Spacing.sm)
+
+                if isAvailable, !isSelected {
+                    Button("Use") {
+                        viewModel.selectEngine(availability.engine.id)
+                    }
+                    .buttonStyle(ZenPrimaryButtonStyle(minWidth: 60))
+                } else if !isAvailable,
+                          availability.engine.requiresDownload,
+                          let engine = viewModel.engines.first(where: {
+                              $0.descriptor.id == availability.engine.id
+                          }) {
+                    Button(viewModel.isEngineDownloading(engine)
+                           ? "Downloading…"
+                           : "Download") {
+                        viewModel.downloadEngine(engine)
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle(minWidth: 80))
+                    .disabled(viewModel.isEngineDownloading(engine))
+                }
+            }
+
+            ZenModelMeta(parts: [
+                availability.engine.family.displayName,
+                availability.engine.format,
+                availability.engine.license
+            ])
+            .padding(.leading, 44)
+        }
+        .padding(.horizontal, ZenDesign.Spacing.md)
+        .padding(.vertical, ZenDesign.Spacing.sm)
+    }
+
+    private var engineGroups: [EngineGroup] {
+        EngineGroup.allCases
+    }
+
+    private func engineAvailabilities(
+        in group: EngineGroup
+    ) -> [EngineAvailability] {
+        viewModel.engineAvailabilities.filter {
+            group.contains($0.engine.family)
+        }
+    }
+
+    private func engineIcon(for family: EngineFamily) -> String {
+        switch family {
+        case .appleSpeech:
+            return "apple.logo"
+        case .whisper:
+            return "waveform.circle"
+        case .parakeetTDT, .parakeetFlash:
+            return "bird"
+        case .nemotronSpeech:
+            return "cpu"
+        case .cohereTranscribe:
+            return "cloud"
+        }
+    }
+
+    private func engineStatusLabel(for availability: EngineAvailability)
+        -> String {
+        guard let reason = availability.reason else {
+            return "Unavailable"
+        }
+        switch reason {
+        case .unsupportedLanguage:
+            return "Unsupported language"
+        case .requiresDownload:
+            return "Download required"
+        case .requiresInternet:
+            return "Internet required"
+        case .runtimeNotReady:
+            return "Not ready"
+        case .platformNotSupported:
+            return "Unsupported Mac"
+        }
     }
 
     private func modelRow(

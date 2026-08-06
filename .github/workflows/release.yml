@@ -1,0 +1,116 @@
+name: Release
+
+# Creates a signed, notarized ZenVoice release and publishes it to GitHub
+# Releases. This workflow is triggered manually after the release checklist in
+# docs/RELEASE_READINESS.md is complete.
+#
+# Required repository secrets (add these in GitHub Settings > Secrets and
+# Variables > Actions before running):
+#   ZENVOICE_SIGNING_IDENTITY   - full "Developer ID Application: ..." string
+#   ZENVOICE_APPLE_ID           - Apple ID for notarytool
+#   ZENVOICE_TEAM_ID            - Apple Developer Team ID
+#   ZENVOICE_APP_PASSWORD       - app-specific password for notarytool
+#
+# Optional:
+#   ZENVOICE_HOMEBREW_TAP_TOKEN - GitHub token with repo scope for the tap repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g., 0.3.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Build, sign, notarize, and publish
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            .build/checkouts
+            .build/repositories
+            .build/workspace-state.json
+          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-swiftpm-
+
+      - name: Configure release identity
+        run: |
+          echo "ZENVOICE_SIGNING_IDENTITY=${{ secrets.ZENVOICE_SIGNING_IDENTITY }}" >> "$GITHUB_ENV"
+
+      - name: Build and sign app
+        run: ./Scripts/build-app.sh
+
+      - name: Verify signatures before notarization
+        run: codesign --verify --deep --strict --verbose=2 build/ZenVoice.app
+
+      - name: Notarize app
+        env:
+          ZENVOICE_APPLE_ID: ${{ secrets.ZENVOICE_APPLE_ID }}
+          ZENVOICE_TEAM_ID: ${{ secrets.ZENVOICE_TEAM_ID }}
+          ZENVOICE_APP_PASSWORD: ${{ secrets.ZENVOICE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit \
+            --apple-id "$ZENVOICE_APPLE_ID" \
+            --team-id "$ZENVOICE_TEAM_ID" \
+            --password "$ZENVOICE_APP_PASSWORD" \
+            --wait \
+            build/ZenVoice-notarization-upload.zip
+          xcrun stapler staple build/ZenVoice.app
+          xcrun stapler validate build/ZenVoice.app
+          codesign --verify --deep --strict --verbose=2 build/ZenVoice.app
+          spctl --assess --type execute --verbose=2 build/ZenVoice.app
+
+      - name: Package distribution archive
+        run: |
+          ditto -c -k --keepParent build/ZenVoice.app build/ZenVoice-distribution.zip
+          shasum -a 256 build/ZenVoice-distribution.zip
+
+      - name: Generate release notes
+        env:
+          # Workflow inputs are untrusted. Passing the value through the
+          # environment keeps it out of the shell command GitHub assembles,
+          # so it cannot inject anything into the runner.
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          ./Scripts/generate-release-notes.sh "$VERSION" > build/RELEASE_NOTES.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c95fe14e0d0d351b72f4a6a93d6f7980c3bf4b1c # v2.2.0
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: ZenVoice ${{ github.event.inputs.version }}
+          body_path: build/RELEASE_NOTES.md
+          make_latest: true
+          files: |
+            build/ZenVoice-distribution.zip
+          fail_on_unmatched_files: true
+
+      - name: Prepare Homebrew cask update
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.ZENVOICE_HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [[ -n "$HOMEBREW_TAP_TOKEN" ]]; then
+            ./Scripts/generate-homebrew-cask.rb \
+              --version "$VERSION" \
+              --zip build/ZenVoice-distribution.zip
+          else
+            echo "No HOMEBREW_TAP_TOKEN set; skipping Homebrew cask PR."
+          fi

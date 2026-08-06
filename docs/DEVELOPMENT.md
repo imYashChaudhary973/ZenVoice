@@ -34,20 +34,17 @@ an explicit message when none is installed.
 
 ## Configuration
 
-ZenVoice normally resolves the selected model from its verified catalogue.
-That catalogue includes the Parakeet CoreML bundle for the recommended English
-path and `whisper.cpp` GGML files for multilingual, Hinglish, and fallback
-paths. For `whisper.cpp` development overrides, ZenVoice searches for:
+ZenVoice normally resolves the selected model from its verified catalogue of
+`whisper.cpp` GGML files. For development overrides, ZenVoice searches for:
 
 1. the model selected in ZenVoice's verified catalogue;
 2. `ZENVOICE_MODEL_PATH` as a developer override; then
    `~/Library/Application Support/ZenVoice/Models/ggml-base.en.bin`.
 
-The runtime dependencies are the checksum-pinned `whisper.cpp` v1.9.1
-XCFramework and revision-pinned FluidAudio package declared in `Package.swift`.
-`ZENVOICE_MODEL_PATH` is most useful when launching a `whisper.cpp` development
-model directly from a configured shell. The verified catalogue is recommended
-for the packaged app.
+The only runtime dependency is the checksum-pinned `whisper.cpp` v1.9.1
+XCFramework declared in `Package.swift`. `ZENVOICE_MODEL_PATH` is most useful
+when launching a `whisper.cpp` development model directly from a configured
+shell. The verified catalogue is recommended for the packaged app.
 
 ## Build
 
@@ -68,8 +65,7 @@ The script:
 1. produces a release Swift build;
 2. generates the macOS icon from the source Zen logo;
 3. assembles `build/ZenVoice.app`;
-4. embeds and signs the pinned `whisper.framework`; FluidAudio and the Parakeet
-   integration are linked into the executable by Swift Package Manager;
+4. embeds and signs the pinned `whisper.framework`;
 5. embeds the required Hardened Runtime audio-input entitlement;
 6. signs with the configured identity or the first available Apple Development
    identity.
@@ -198,9 +194,14 @@ non-sensitive fixture speech because normal history settings still apply.
 Development packaging is intentionally different from public distribution.
 After building, inspect the current gate:
 
-```bash
+```zsh
 ./Scripts/check-release-readiness.sh
 ```
+
+> Every script in `Scripts/` is zsh and uses zsh-only parameter expansions such
+> as `${0:A:h:h}`. Invoke them through `./` so the shebang applies, or with an
+> explicit `zsh`. Running one as `bash Scripts/…` fails immediately with an
+> unhelpful `A: unbound variable`.
 
 The command is expected to report blockers for private development builds. See
 [Release Readiness](RELEASE_READINESS.md),
@@ -240,25 +241,10 @@ development builds can use the same list without creating a release record.
 12. Enable Private Dictation, use the same phrase, and confirm the correction
     can still apply but its saved usage count does not change. Disable Private
     Dictation and delete the temporary rule before continuing.
-13. On Apple Silicon, while ZenVoice is idle, install Parakeet and a current
-    multilingual Whisper model, then complete this runtime round trip:
-    - In **Languages**, choose **English**. In **Models**, activate **Parakeet**
-      with **Use** when it is not already active. Confirm its row shows **In
-      use** and **Home → Model** shows **Parakeet**, then complete two
-      consecutive non-sensitive dictations through ZenBar without changing the
-      model or relaunching.
-    - Select the installed multilingual Whisper model, confirm the same **In
-      use** and Home states, and complete two consecutive dictations without
-      changing the model or relaunching.
-    - Switch back to Parakeet and complete another dictation. Selection state
-      alone is not runtime evidence; each target must decode successfully.
-    - With Parakeet still active, choose **Auto-Detect** and confirm a compatible
-      installed multilingual model becomes active and decodes successfully.
-      Return to **Models**, select Parakeet with **Switch & use**, and confirm it
-      commits both Parakeet and **English** without leaving an incompatible
-      pair. Complete another dictation.
-    - Record the exact display names, catalogue IDs, runtime kinds, and results
-      in [Release QA Record](RELEASE_QA_RECORD.md).
+13. On Apple Silicon, while ZenVoice is idle, install a current multilingual
+    Whisper model, then complete two consecutive non-sensitive dictations
+    through ZenBar without changing the model or relaunching. Selection state
+    alone is not runtime evidence; the model must decode successfully.
 14. Open **Insights**, select **Share Highlights**, and verify the preview
     contains only words, WPM, streak, and app count. Confirm no transcript or
     application name appears.

@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import AppKit
 import SwiftUI
 
@@ -6,6 +20,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let window: NSWindow
     private let viewModel: SettingsViewModel
     private let historyViewModel: HistoryViewModel
+    private let audioHistoryViewModel: AudioHistoryViewModel
     private let insightsViewModel: InsightsViewModel
     private let voiceProfileViewModel: VoiceProfileViewModel
     private let modelManagerViewModel: ModelManagerViewModel
@@ -17,6 +32,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     init(
         viewModel: SettingsViewModel,
         historyViewModel: HistoryViewModel,
+        audioHistoryViewModel: AudioHistoryViewModel,
         insightsViewModel: InsightsViewModel,
         voiceProfileViewModel: VoiceProfileViewModel,
         modelManagerViewModel: ModelManagerViewModel,
@@ -28,6 +44,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     ) {
         self.viewModel = viewModel
         self.historyViewModel = historyViewModel
+        self.audioHistoryViewModel = audioHistoryViewModel
         self.insightsViewModel = insightsViewModel
         self.voiceProfileViewModel = voiceProfileViewModel
         self.modelManagerViewModel = modelManagerViewModel
@@ -63,6 +80,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             rootView: ZenVoiceSettingsView(
                 viewModel: viewModel,
                 historyViewModel: historyViewModel,
+                audioHistoryViewModel: audioHistoryViewModel,
                 insightsViewModel: insightsViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,

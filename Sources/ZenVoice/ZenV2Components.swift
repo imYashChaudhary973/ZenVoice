@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import SwiftUI
 
 // MARK: - ZenVoice v2 component vocabulary
@@ -37,25 +51,16 @@ struct ZenBrandMark: View {
     }
 }
 
-/// Ledger screen scaffold: editorial header rule and a responsive content
-/// column that stays compact in a normal window and uses a full-screen canvas.
+/// Graphite screen scaffold: compact header with a hairline and a responsive
+/// content column that uses the full width like the reference devtool UI.
 struct ZenScreen<Content: View>: View {
-    /// Prose stops at a readable measure even when the column does not.
-    ///
-    /// Panels, grids and tables genuinely use the width; a sentence does not.
-    /// At 13pt across the full 1200pt column a line of body text ran to roughly
-    /// 180 characters, about twice a comfortable measure.
-    private static var proseWidth: CGFloat { 640 }
-
     let title: String
     let subtitle: String
     @ViewBuilder let content: Content
 
     var body: some View {
         GeometryReader { proxy in
-            let available = max(
-                0, proxy.size.width - 80
-            )
+            let available = max(0, proxy.size.width - 64)
             let column = min(1_200, available)
 
             ScrollView {
@@ -63,31 +68,28 @@ struct ZenScreen<Content: View>: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(title)
                             .font(ZenDesign.Typography.pageTitle)
-                            .tracking(-0.1)
+                            .tracking(-0.2)
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         Text(subtitle)
                             .font(ZenDesign.Typography.body)
                             .foregroundStyle(ZenDesign.Semantic.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(
-                                maxWidth: Self.proseWidth,
-                                alignment: .leading
-                            )
+                            .frame(maxWidth: 560, alignment: .leading)
                     }
 
                     Rectangle()
-                        .fill(ZenDesign.Semantic.textPrimary)
-                        .frame(height: 2)
+                        .fill(ZenDesign.Semantic.borderStrong)
+                        .frame(height: 1)
                         .padding(.top, 14)
 
                     VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
                         content
                     }
-                    .padding(.top, 26)
+                    .padding(.top, 22)
                 }
                 .frame(maxWidth: column, alignment: .leading)
-                .padding(.horizontal, 40)
-                .padding(.top, 30)
+                .padding(.horizontal, 32)
+                .padding(.top, 24)
                 .padding(.bottom, ZenDesign.Spacing.xxl)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -122,8 +124,8 @@ struct ZenSection<Content: View>: View {
     }
 }
 
-/// Tonal panel. Rows inside are separated with `ZenPanelDivider`; pass
-/// `padding` for free-form content that doesn't use `ZenRow`.
+/// Tonal panel with slightly more elevation, closer to the surfaced cards in
+/// the reference devtool UI.
 struct ZenPanel<Content: View>: View {
     var padding: CGFloat = 0
     @ViewBuilder let content: Content
@@ -146,7 +148,7 @@ struct ZenPanel<Content: View>: View {
                 cornerRadius: ZenDesign.Radius.medium,
                 style: .continuous
             )
-            .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
+            .strokeBorder(ZenDesign.Semantic.border, lineWidth: 1)
         }
     }
 }
@@ -170,13 +172,13 @@ struct ZenRow<Trailing: View>: View {
         HStack(spacing: ZenDesign.Spacing.sm) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(
                         iconTint ?? ZenDesign.Semantic.textSecondary
                     )
                     .frame(width: 28, height: 28)
                     .background {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(
                                 iconBackground
                                     ?? ZenDesign.Semantic.surfaceRaised
@@ -203,7 +205,7 @@ struct ZenRow<Trailing: View>: View {
         }
         .padding(.horizontal, ZenDesign.Spacing.md)
         .padding(.vertical, ZenDesign.Spacing.sm)
-        .frame(minHeight: 52)
+        .frame(minHeight: 48)
     }
 }
 
@@ -418,8 +420,8 @@ struct ZenStatTile: View {
         .padding(ZenDesign.Spacing.md)
         .frame(
             maxWidth: .infinity,
-            minHeight: 92,
-            maxHeight: 92,
+            minHeight: 88,
+            maxHeight: 88,
             alignment: .topLeading
         )
         .background(ZenDesign.Semantic.surface)
@@ -614,9 +616,8 @@ struct ZenChoiceCard: View {
                     Text(title)
                         .font(
                             .system(
-                                size: 14.5,
-                                weight: .semibold,
-                                design: .serif
+                                size: 14,
+                                weight: .semibold
                             )
                         )
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)

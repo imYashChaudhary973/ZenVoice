@@ -1,5 +1,10 @@
 # ZenVoice Private Beta
 
+> **Status: paused.** ZenVoice is currently being refined for internal use and
+> public shipping is deferred. This guide is kept accurate for any future beta,
+> but no invitations are being sent right now. See
+> [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md).
+
 Thank you for testing ZenVoice. This page explains what it does, what it asks
 your Mac for and why, and how to get rid of it cleanly if you decide not to keep
 it.
@@ -83,9 +88,9 @@ take my word for it.
 
 ## First run
 
-1. Open **Models** and download a speech model. **Parakeet** is the recommended
-   English one and the fastest. If you dictate in another language, or in
-   Hinglish, pick the model the screen suggests for it.
+1. Open **Models** and download a speech model. **Whisper Turbo** is the
+   recommended model on Apple Silicon. If you dictate in another language, or
+   in Hinglish, pick the model the screen suggests for it.
 2. Open **Shortcuts** to see or change the dictation shortcut.
 3. Put your cursor somewhere you can type, press the shortcut, say a sentence,
    and press it again.

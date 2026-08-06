@@ -1,6 +1,16 @@
 ## Summary
 
-<!-- What changed and why? -->
+<!-- What changed and why? Keep this under 5 lines. -->
+
+## Concerns touched (check all that apply)
+
+- [ ] Code/runtime (Swift, Package.swift)
+- [ ] License/legal (LICENSE, headers, THIRD_PARTY_NOTICES)
+- [ ] Documentation (README, docs/*.md)
+- [ ] Configuration/CI (.github, Scripts)
+- [ ] Refactoring only (no behavior change)
+
+If more than three are checked, consider splitting this PR.
 
 ## Privacy and security
 

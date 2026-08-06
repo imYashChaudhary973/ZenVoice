@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import CryptoKit
 import Foundation
 
@@ -47,27 +61,6 @@ public enum ModelLanguageCapability: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public enum SpeechModelRuntime: String, Codable, Sendable {
-    case whisperCPP
-    case parakeetCoreML
-}
-
-public struct VerifiedModelFile: Codable, Equatable, Sendable {
-    public let relativePath: String
-    public let fileSizeBytes: Int64
-    public let sha256: String
-
-    public init(
-        relativePath: String,
-        fileSizeBytes: Int64,
-        sha256: String
-    ) {
-        self.relativePath = relativePath
-        self.fileSizeBytes = fileSizeBytes
-        self.sha256 = sha256
-    }
-}
-
 public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
     public let id: String
     public let displayName: String
@@ -84,9 +77,6 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
     public let license: String
     public let licenseURL: String
     public let attribution: String
-    public let runtime: SpeechModelRuntime
-    public let bundleFiles: [VerifiedModelFile]
-
     public init(
         id: String,
         displayName: String,
@@ -102,9 +92,7 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
         format: String,
         license: String,
         licenseURL: String,
-        attribution: String,
-        runtime: SpeechModelRuntime = .whisperCPP,
-        bundleFiles: [VerifiedModelFile] = []
+        attribution: String
     ) {
         self.id = id
         self.displayName = displayName
@@ -121,8 +109,6 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
         self.license = license
         self.licenseURL = licenseURL
         self.attribution = attribution
-        self.runtime = runtime
-        self.bundleFiles = bundleFiles
     }
 
     public var downloadURL: URL {
@@ -131,31 +117,6 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
                 "\(sourceRepository)/resolve/\(sourceRevision)/\(filename)"
                 + "?download=true"
         )!
-    }
-
-    /// Revision-pinned source for one file of a multi-file bundle.
-    ///
-    /// Bundles are fetched file by file from this catalogue's pinned revision
-    /// rather than from a dependency that resolves a moving branch, so the
-    /// recorded `sourceRevision` describes what is actually requested.
-    public func bundleFileURL(for file: VerifiedModelFile) -> URL? {
-        guard !file.relativePath.hasPrefix("/"),
-              !file.relativePath.split(separator: "/").contains("..") else {
-            return nil
-        }
-        let encodedPath = file.relativePath
-            .split(separator: "/", omittingEmptySubsequences: false)
-            .map {
-                $0.addingPercentEncoding(
-                    withAllowedCharacters: .urlPathAllowed
-                ) ?? String($0)
-            }
-            .joined(separator: "/")
-        return URL(
-            string:
-                "\(sourceRepository)/resolve/\(sourceRevision)/\(encodedPath)"
-                + "?download=true"
-        )
     }
 
     public var formattedFileSize: String {
@@ -171,26 +132,17 @@ public enum VerifiedModelCatalog {
         "5359861c739e955e79d9a303bcbc70fb988958b1"
     public static let sourceRepository =
         "https://huggingface.co/ggerganov/whisper.cpp"
-    public static let parakeetRevision =
-        "4252711f6f060f9a2f91e5f081a806d7f45eebd8"
-    public static let parakeetRepository =
-        "https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml"
 
-    /// Five models, each the measured best at one job.
+    /// Four models, each the measured best at one job.
     ///
     /// The catalogue was eleven. Nine of those were rungs on two size ladders —
     /// tiny, base, small, medium — offered on the assumption that model size
     /// buys a smooth speed-for-accuracy trade the user can position themselves
     /// on. Benchmarked end to end, that assumption is wrong in both families.
     ///
-    /// In English there is no trade left to make. Parakeet is simultaneously the
-    /// most accurate and very nearly the fastest thing measured, so every
-    /// English whisper build is dominated outright:
-    ///
-    ///     parakeet      5.3% WER     61 ms
-    ///     base.en       9.2%        149 ms
-    ///     medium.en     6.6%      1,343 ms
-    ///     tiny.en      13.8%         66 ms
+    /// In English the trade is between speed and accuracy. Whisper Turbo is the
+    /// default on Apple Silicon; Whisper Small is the fallback where GPU
+    /// transcription is unavailable.
     ///
     /// In multilingual the trade is a cliff rather than a curve. Anything below
     /// Turbo is not "faster with a little less accuracy", it is unusable:
@@ -208,10 +160,8 @@ public enum VerifiedModelCatalog {
     ///
     /// Nothing here is deleted; see ``retiredModels``.
     public static let models: [VerifiedModel] = [
-        parakeetUnifiedModel(),
-        // The fallback for Intel and small-memory Macs, where Turbo is too slow
-        // and Parakeet has no Neural Engine to run on. Offered as a compromise,
-        // not as a tier.
+        // The fallback for Intel and small-memory Macs, where Turbo is too slow.
+        // Offered as a compromise, not as a tier.
         model(
             id: "whisper-small-multilingual",
             name: "Whisper Small",
@@ -281,17 +231,22 @@ public enum VerifiedModelCatalog {
     ///     whisper-medium-en    2.9% WER against the multilingual build's 2.7%
     ///                          — same 1.5 GB, same speed, slightly worse, and
     ///                          English-only.
-    ///     whisper-tiny-en      13.8% WER at 66 ms. Parakeet is 5.3% at 61 ms:
-    ///                          faster *and* two and a half times better.
-    ///     whisper-base-en      9.2% at 149 ms. Same comparison.
+    ///     whisper-tiny-en      13.8% WER at 66 ms. Retired in favour of larger
+    ///                          whisper models.
+    ///     whisper-base-en      9.2% at 149 ms. Retired in favour of larger
+    ///                          whisper models.
     ///     whisper-small-en     never benchmarked, and bracketed on both sides
-    ///                          by models Parakeet already beats.
+    ///                          by larger whisper models.
     ///     whisper-tiny-ml      64.5% WER. Not usable for dictation.
     ///     whisper-base-ml      55.1% WER, measured for the first time when
     ///                          this cut was made — it had been offered for
     ///                          months without anyone establishing whether it
     ///                          worked. It does not.
+    ///     parakeet-unified-en-int8  Formerly used a closed-source FluidAudio
+    ///                               runtime; retired to keep ZenVoice fully
+    ///                               independent and open-source.
     public static let retiredModels: [VerifiedModel] = [
+        retiredParakeetModel(),
         model(
             id: "whisper-medium-en",
             name: "Whisper Medium",
@@ -407,134 +362,11 @@ public enum VerifiedModelCatalog {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Canonical digest of a bundle's pinned manifest.
-    ///
-    /// A multi-file bundle has no single file to hash, so `VerifiedModel.sha256`
-    /// carries the digest of the manifest itself: every entry sorted by path and
-    /// serialized as `path\nsize\nsha256\n`. Verifying it means a tampered
-    /// *catalogue* is caught too, not only tampered downloads.
-    public static func manifestDigest(
-        of files: [VerifiedModelFile]
-    ) -> String {
-        let canonical = files
-            .sorted { $0.relativePath < $1.relativePath }
-            .map { "\($0.relativePath)\n\($0.fileSizeBytes)\n\($0.sha256)\n" }
-            .joined()
-        return SHA256.hash(data: Data(canonical.utf8))
-            .map { String(format: "%02x", $0) }
-            .joined()
-    }
-
-    /// Every regular file actually present under `root`, relative to it.
-    ///
-    /// Used to reject a bundle that carries the approved files *plus* something
-    /// unreviewed; checking only the manifest entries would accept that.
-    private static func installedRelativePaths(
-        under root: URL,
-        fileManager: FileManager
-    ) throws -> Set<String> {
-        let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        guard let enumerator = fileManager.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
-            options: []
-        ) else {
-            throw CatalogError.unreadableBundle
-        }
-        var found: Set<String> = []
-        for case let url as URL in enumerator {
-            let values = try url.resourceValues(forKeys: [
-                .isRegularFileKey,
-                .isSymbolicLinkKey
-            ])
-            if values.isSymbolicLink == true {
-                throw CatalogError.unexpectedBundleEntry
-            }
-            guard values.isRegularFile == true else {
-                continue
-            }
-            let path = url.standardizedFileURL.path
-            guard path.hasPrefix(prefix) else {
-                throw CatalogError.unexpectedBundleEntry
-            }
-            found.insert(String(path.dropFirst(prefix.count)))
-        }
-        return found
-    }
-
-    public enum CatalogError: Error {
-        case unreadableBundle
-        case unexpectedBundleEntry
-    }
-
     public static func verify(
         _ fileURL: URL,
         for model: VerifiedModel,
         fileManager: FileManager = .default
     ) throws -> Bool {
-        if model.runtime == .parakeetCoreML {
-            let values = try fileURL.resourceValues(forKeys: [
-                .isDirectoryKey
-            ])
-            guard values.isDirectory == true,
-                  !model.bundleFiles.isEmpty,
-                  manifestDigest(of: model.bundleFiles) == model.sha256 else {
-                return false
-            }
-            let bundleRoot = fileURL.standardizedFileURL
-                .resolvingSymlinksInPath()
-            let bundlePrefix = bundleRoot.path + "/"
-
-            // An approved file set plus one unreviewed extra file would pass a
-            // manifest-only walk, so compare the installed tree both ways.
-            let expectedPaths = Set(model.bundleFiles.map(\.relativePath))
-            let installedPaths: Set<String>
-            do {
-                installedPaths = try installedRelativePaths(
-                    under: bundleRoot,
-                    fileManager: fileManager
-                )
-            } catch {
-                return false
-            }
-            guard installedPaths == expectedPaths else {
-                return false
-            }
-
-            for file in model.bundleFiles {
-                guard !file.relativePath.hasPrefix("/"),
-                      !file.relativePath.split(separator: "/").contains("..")
-                else {
-                    return false
-                }
-                let candidate = bundleRoot
-                    .appendingPathComponent(
-                        file.relativePath,
-                        isDirectory: false
-                    )
-                    .standardizedFileURL
-                    .resolvingSymlinksInPath()
-                guard candidate.path.hasPrefix(bundlePrefix) else {
-                    return false
-                }
-                let candidateValues = try candidate.resourceValues(forKeys: [
-                    .isRegularFileKey,
-                    .fileSizeKey,
-                    .isSymbolicLinkKey
-                ])
-                guard candidateValues.isRegularFile == true,
-                      candidateValues.isSymbolicLink != true,
-                      Int64(candidateValues.fileSize ?? -1)
-                        == file.fileSizeBytes,
-                      try sha256Hex(of: candidate) == file.sha256 else {
-                    return false
-                }
-            }
-            return model.bundleFiles.reduce(Int64(0)) {
-                $0 + $1.fileSizeBytes
-            } == model.fileSizeBytes
-        }
-
         let values = try fileURL.resourceValues(forKeys: [
             .isRegularFileKey,
             .fileSizeKey
@@ -546,33 +378,24 @@ public enum VerifiedModelCatalog {
         return try sha256Hex(of: fileURL) == model.sha256
     }
 
-    private static func parakeetUnifiedModel() -> VerifiedModel {
+    private static func retiredParakeetModel() -> VerifiedModel {
         VerifiedModel(
             id: "parakeet-unified-en-int8",
-            displayName: "Parakeet",
+            displayName: "Parakeet (retired)",
             filename: "parakeet-unified-en-0.6b",
             tier: .fast,
             languageCapability: .english,
             publisher: "FluidInference / NVIDIA",
-            sourceRepository: parakeetRepository,
+            sourceRepository:
+                "https://huggingface.co/FluidInference/parakeet-unified-en-0.6b-coreml",
             upstreamRepository:
                 "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
-            sourceRevision: parakeetRevision,
-            // Digest of the pinned manifest below, not of a single file — see
-            // `manifestDigest(of:)`. The previous value here described nothing
-            // any code computed, so verification silently ignored it.
+            sourceRevision:
+                "4252711f6f060f9a2f91e5f081a806d7f45eebd8",
             sha256:
                 "04974b08a35d460ef32e37f747f938aa0c1df83120452125b01d52bded3f808a",
             fileSizeBytes: 614_082_275,
             format: "Core ML; INT8 encoder",
-            // The downloaded bundle's own config.json and metadata.json say
-            // model_id: nvidia/parakeet-unified-en-0.6b, which NVIDIA governs
-            // under the Open Model License. The conversion repository declares
-            // CC-BY-4.0 and names parakeet-tdt-0.6b-v2 as its base, so the two
-            // disagree. The artifact's own identity is the stronger evidence
-            // and the stricter of the two, so it is what ZenVoice records and
-            // notices. THIRD_PARTY_NOTICES documents the conflict and release
-            // readiness gates on the publisher confirming the source model.
             license: "NVIDIA Open Model License",
             licenseURL:
                 "https://www.nvidia.com/en-us/agreements/enterprise-software/"
@@ -580,116 +403,12 @@ public enum VerifiedModelCatalog {
             attribution:
                 "Licensed by NVIDIA Corporation under the NVIDIA Open Model "
                 + "License. Parakeet Unified EN 0.6B by NVIDIA, converted to "
-                + "Core ML by FluidInference. INT8 encoder inference uses "
-                + "FluidAudio.",
-            runtime: .parakeetCoreML,
-            bundleFiles: parakeetBundleFiles
+                + "Core ML by FluidInference. Retired from active use in "
+                + "ZenVoice because it requires the closed-source FluidAudio "
+                + "runtime."
         )
     }
 
-    private static let parakeetBundleFiles: [VerifiedModelFile] = [
-        .init(
-            relativePath: "config.json",
-            fileSizeBytes: 1_355,
-            sha256:
-                "6cbe6c76445410c5c6debf3d44c8c3b75e9966bf09bba5cd138c2378c62120f6"
-        ),
-        .init(
-            relativePath: "metadata.json",
-            fileSizeBytes: 1_046,
-            sha256:
-                "2b26a96b76fe1f7a04d3e867f50c75d6ce5dd1650d0dbcd4c35b591b22305f0e"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_decoder.mlmodelc/analytics/coremldata.bin",
-            fileSizeBytes: 243,
-            sha256:
-                "9ae70f6559989f88b856b326e59315798f9f0d08207a19fcc2dd3287a30088a5"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_decoder.mlmodelc/coremldata.bin",
-            fileSizeBytes: 560,
-            sha256:
-                "ce99c4488840fc463d59f8d4d6d2a9e8ceae8138ead51e3c265dde4d2ba4a0e9"
-        ),
-        .init(
-            relativePath: "parakeet_unified_decoder.mlmodelc/model.mil",
-            fileSizeBytes: 13_102,
-            sha256:
-                "6e60965b89c93943aa2be2d991c2461108145851fde05e1d048223a32d4cb20d"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_decoder.mlmodelc/weights/weight.bin",
-            fileSizeBytes: 14_429_952,
-            sha256:
-                "96f990461a5986d5e7309ad1a0f36084fbf0f4b28aec35948f8b8d0dcbf8599e"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_encoder_int8.mlmodelc/analytics/coremldata.bin",
-            fileSizeBytes: 243,
-            sha256:
-                "57e116a9d5765e39c0cdf754137ab744ddae34d9c6d68a5fdcad6600ae3a7b6b"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_encoder_int8.mlmodelc/coremldata.bin",
-            fileSizeBytes: 492,
-            sha256:
-                "54f533d30343d5e62b324a0691e4c262a6768b07b6e88e7aa14c617a2baba8a3"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_encoder_int8.mlmodelc/model.mil",
-            fileSizeBytes: 1_110_902,
-            sha256:
-                "c1c5d71c6cbf4d35bba08458746bde3640da7b1b444e1229a269393a58222c10"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_encoder_int8.mlmodelc/weights/weight.bin",
-            fileSizeBytes: 595_051_904,
-            sha256:
-                "f984b81590a4deae041ae20fbab8981c2d2a5b528b2ac81fae81c432633535c6"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_joint_decision_single_step.mlmodelc/analytics/coremldata.bin",
-            fileSizeBytes: 243,
-            sha256:
-                "163877ad14af97ec4107cd854fd1c6d336ee5d40ad25a657cc764fb763f452f5"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_joint_decision_single_step.mlmodelc/coremldata.bin",
-            fileSizeBytes: 556,
-            sha256:
-                "68a081570a48b52ec9379e153bd56748a5408a50be16767601563f231eaeff03"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_joint_decision_single_step.mlmodelc/model.mil",
-            fileSizeBytes: 9_611,
-            sha256:
-                "03c21096090bcd0b71c896c5ae0eb815db31a91c6676f572a7868eee4299abe3"
-        ),
-        .init(
-            relativePath:
-                "parakeet_unified_joint_decision_single_step.mlmodelc/weights/weight.bin",
-            fileSizeBytes: 3_446_978,
-            sha256:
-                "06831afa6d1beb0c0b10350ebf7886bc37638e951d14e738d7e06fbd2a05012f"
-        ),
-        .init(
-            relativePath: "vocab.json",
-            fileSizeBytes: 15_088,
-            sha256:
-                "e1a7bff4f5df133c0f4ad47b8e43c96f6bf1865d99126a4c4725ef51d0108bec"
-        ),
-    ]
 
     /// Weights ZenVoice converted itself, pinned by commit.
     ///
@@ -777,7 +496,7 @@ public enum ModelSelectionPreferences {
     public static let preferenceKey = "ZenVoice.selectedModelID"
 
     public static func load(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> VerifiedModel? {
         guard let id = defaults.string(forKey: preferenceKey) else {
             return nil
@@ -787,12 +506,12 @@ public enum ModelSelectionPreferences {
 
     public static func save(
         _ model: VerifiedModel,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(model.id, forKey: preferenceKey)
     }
 
-    public static func clear(defaults: UserDefaults = .standard) {
+    public static func clear(defaults: UserDefaults = RuntimeIdentity.userDefaults()) {
         defaults.removeObject(forKey: preferenceKey)
     }
 }

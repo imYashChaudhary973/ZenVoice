@@ -6,6 +6,19 @@ The approved milestone sequence and delivery rules are tracked in
 [Build Order](BUILD_ORDER.md). Accepted privacy and model constraints are
 recorded in
 [ADR 0001](decisions/0001-local-data-and-model-governance.md).
+The strategic choice to build for internal use first and defer public shipping
+is recorded in
+[ADR 0004](decisions/0004-internal-use-first-defer-shipping.md).
+The detailed implementation sequence for all requested features and models is
+in [Phased Plan](PHASED_PLAN.md).
+
+## Strategic direction
+
+ZenVoice is being built first for our own daily use. Quality, reliability,
+latency, and language accuracy are the current priorities. Public shipping is
+deferred until the product has matured through regular personal use and a
+deliberate future shipping decision is made. The release checklist and signing
+pipeline remain prepared but inactive.
 
 ## Current: dependable personal alpha
 
@@ -20,14 +33,14 @@ recorded in
 - [x] Configurable paste-last shortcut
 - [x] Configurable Private Dictation shortcut
 - [x] Hold-to-dictate with Fn or a right-side modifier
-- [x] Local English transcription through Parakeet and Whisper
+- [x] Local English transcription through Whisper
 - [x] Active-app paste with clipboard fallback
 - [x] ZenBar lifecycle feedback
 - [x] Microphone-responsive waveform
 - [x] Zen branding and packaged app icon
 - [x] Verified local model catalogue, downloader, selection, and removal
 - [x] Hardware-aware model recommendations and local speed benchmarks
-- [x] Bundled persistent local Whisper and Parakeet runtimes
+- [x] Bundled persistent local Whisper runtime
 - [x] Private local insights, streaks, app usage, and editable categories
 - [x] Local voice profile and encrypted explicit correction rules
 - [x] Privacy-safe local highlight cards with preview and explicit export
@@ -46,6 +59,9 @@ recorded in
 - [x] Add cancel and recover-last-dictation actions
 - [ ] Improve automated and manual lifecycle coverage
 - [x] Add stable partial-transcript preview and guarded commit-on-pause insertion
+- [x] Add a notch-aware, configurable live transcription overlay
+- [x] Add optional local Audio History with size and age budgets and ZIP export
+- [x] Add today-usage stats on Home and in the menu bar
 
 ## Later: multilingual and distribution readiness
 
@@ -60,48 +76,39 @@ recorded in
 - [x] Add explicit local learning controls without transcript comparison UI
 - [x] Add a dedicated Recovery Inbox for failed and partial dictations
 - [x] Add first-run onboarding and expanded permission recovery
-- [ ] Add Developer ID signing, notarization, and update delivery
 - [x] Complete the M9 engineering security review
-- [ ] Complete release-candidate accessibility and clean-device QA
+- [ ] Add Developer ID signing, notarization, and update delivery — deferred
+      until a future shipping decision; see [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md)
+- [ ] Complete release-candidate accessibility and clean-device QA — kept as a
+      quality goal for daily use; treated as a release gate only when shipping
+      is reconsidered
 
 ## Product decisions
 
 Decided on 2026-08-01:
 
-- License: proprietary, with the repository staying public as
-  source-visible code under the terms in `LICENSE`.
+- License: Apache License, Version 2.0, with the repository public and
+  open to contributions under `LICENSE`.
 - Distribution: direct download of a notarized build. The Mac App Store
   sandbox cannot host Accessibility-based insertion, which is the product.
 
-Decided on 2026-08-02:
+Decided on 2026-08-05:
 
-- Initial distribution: invitation-only private beta, not a paid or broad
-  public launch.
+- Initial distribution: open-source direct download, free to users.
 - Minimum supported version: Apple Silicon Macs running macOS 14 or newer.
   That is the deployment target in `Package.swift` and `LSMinimumSystemVersion`,
   so the build will launch there.
-
-Amended 2026-08-03:
-
-- Certified for the private beta: macOS 27. The minimum supported version above
-  is a build floor, not evidence. Only the version the release candidate was
+- Certified for release: macOS 27. The minimum supported version above is a
+  build floor, not evidence. Only the version the release candidate was
   actually tested on may be described as certified, and macOS 14 through 26 have
-  not been tested. Beta invitations should go to macOS 27 users until an older
-  version is swept and recorded.
-
-Decided on 2026-08-03:
-
-- Introductory pricing: ZenVoice is free to its users for an initial one to
-  three month period.
-- That period is a calendar window, not a per-user trial. The application
-  contains no trial timer, licence key, entitlement check, or account system,
-  and none is planned for this release. Charging, if it happens, is designed
-  after the free period produces real usage evidence.
+  not been tested.
+- The application contains no trial timer, licence key, entitlement check, or
+  account system, and none is planned.
 
 Still deferred:
 
-- What ZenVoice costs after the free period, and how that is collected
-- Whether non-macOS platforms belong in scope
-
-The remaining decisions should be made only after the selected local speech
-workflows are stable and tested through regular personal use.
+- Whether non-macOS platforms belong in scope.
+- When, if ever, ZenVoice resumes active public shipping. That decision
+  requires a fresh review of [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md),
+  the state of personal-use evidence, and the release checklist in
+  [Release Readiness](RELEASE_READINESS.md).

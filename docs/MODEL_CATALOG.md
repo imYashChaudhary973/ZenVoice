@@ -27,39 +27,23 @@ HTTPS URLs itself. It does not accept a user-supplied download URL, execute
 model-repository code, deserialize Python objects, or install repository
 scripts.
 
-The Parakeet CoreML bundle is the exception and is documented in
-[Parakeet download path](#parakeet-download-path) below.
-
 ## Speech model catalogue
 
-Five models, each the measured best at one job.
+Four models, each the measured best at one job.
 
 | Tier | Capability | File | Size | SHA-256 |
 | --- | --- | --- | ---: | --- |
-| Fast | English | `parakeet-unified-en-0.6b` | 614,082,275 B | *(CoreML bundle, per-file checksums)* |
 | Balanced | Multilingual | `ggml-small.bin` | 487,601,967 B | `1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b` |
 | High Accuracy | Multilingual | `ggml-large-v3-turbo-q5_0.bin` | 574,041,195 B | `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2` |
 | High Accuracy | Hinglish | `ggml-hindi2hinglish-apex-q8_0.bin` | 874,188,075 B | `0b4324d2c1ad64f20883ee7fcd5d2bb0a8466287dc70d74bc47066200c28c719` |
 | High Accuracy | Multilingual | `ggml-medium.bin` | 1,533,763,059 B | `6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208` |
 
-### Why five and not ten
+### Why four and not ten
 
-The catalogue offered ten models: two size ladders — tiny, base, small, medium —
-on the assumption that model size buys a smooth speed-for-accuracy trade the
-user can position themselves on. Benchmarked end to end, that assumption fails
-in both families.
-
-**English has no trade-off left.** Parakeet is simultaneously the most accurate
-and effectively the fastest, so every English whisper build is dominated:
-
-| Model | WER | p50 |
-| --- | ---: | ---: |
-| **Parakeet** | **5.3%** | **61 ms** |
-| Whisper Base English | 9.2% | 149 ms |
-| Whisper Medium English | 6.6% | 1,343 ms |
-| Whisper Tiny English | 13.8% | 66 ms |
-
-It also holds up on Indian-accented voices, averaging 7.9% against Base's 13.2%.
+The catalogue originally offered ten models: two size ladders — tiny, base,
+small, medium — on the assumption that model size buys a smooth
+speed-for-accuracy trade the user can position themselves on. Benchmarked end
+to end, that assumption fails.
 
 **Multilingual is a cliff, not a curve.** Below Turbo there is no "faster with a
 little less accuracy" — there is unusable:
@@ -73,9 +57,9 @@ little less accuracy" — there is unusable:
 | Whisper Tiny | 64.5% | 34.8% | 91 ms |
 
 Whisper Small survives only as the fallback for Macs that cannot run Turbo well
-— Intel, where Parakeet has no Neural Engine — and is offered as that rather
-than as a speed tier. At 35.5% it is European-languages-only in practice,
-scoring 100% word error rate on both Japanese and Mandarin.
+— Intel — and is offered as that rather than as a speed tier. At 35.5% it is
+European-languages-only in practice, scoring 100% word error rate on both
+Japanese and Mandarin.
 
 Whisper Base multilingual had been offered for months and was measured for the
 first time when this cut was made.
@@ -84,17 +68,75 @@ first time when this cut was made.
 
 Retired from new downloads, still resolvable and verifiable: Whisper Tiny
 (English and multilingual), Whisper Base (English and multilingual), Whisper
-Small English, and Whisper Medium English.
+Small English, Whisper Medium English, and the Parakeet Unified EN CoreML
+bundle.
 
 Retired rather than deleted because selection is stored by identifier: a missing
 catalogue entry would turn a working model on disk into "no model installed" and
 send discovery down its legacy fallback path. Anything already installed keeps
 working, and the Models screen offers to reclaim the disk.
 
+The Parakeet model was retired because it required the closed-source FluidAudio
+runtime. ZenVoice now uses `whisper.cpp`, Apple Speech, `parakeet.cpp`, and
+ONNX Runtime as its local speech runtimes.
+
 The catalogue metadata was verified against the official Hugging Face API on
 2026-07-26 at the pinned revision. Any model revision or file replacement
 requires a new review and new checksum; existing entries must not silently
 follow a moving branch.
+
+## Speech engine catalogue
+
+ZenVoice now selects from a multi-engine runtime layer. Each engine is recorded
+with the same provenance requirements as a model: publisher, runtime family,
+format, licence, attribution, and privacy posture.
+
+| Engine | Family | Download | Internet | Format | Licence | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Whisper | `whisper` | Required | No | whisper.cpp GGML | MIT | Active |
+| Apple Speech | `appleSpeech` | None | No | SFSpeechRecognizer (on-device) | Apple Software License | Active |
+| Parakeet TDT v2 | `parakeetTDT` | Required | No | GGUF (parakeet.cpp v0.5.0) | CC-BY-4.0 | Active |
+| Parakeet TDT v3 | `parakeetTDT` | Required | No | GGUF (parakeet.cpp v0.5.0) | CC-BY-4.0 | Active |
+| Parakeet Flash | `parakeetFlash` | Required | No | GGUF (parakeet.cpp v0.5.0, streaming) | CC-BY-4.0 | Active (Beta) |
+| Nemotron Speech 3.5 Ultra Fast | `nemotronSpeech` | Required | No | GGUF (parakeet.cpp v0.5.0, streaming) | OpenMDW-1.1 | Active |
+| Nemotron 3.5 Multilingual | `nemotronSpeech` | Required | No | GGUF (parakeet.cpp v0.5.0) | OpenMDW-1.1 | Active |
+| Cohere Transcribe | `cohereTranscribe` | Required | No | ONNX INT8 (encoder-decoder, CoreML provider) | Apache-2.0 | Active (Beta / High Accuracy) |
+
+### Active GGUF downloads
+
+All NVIDIA engines ship as quantized GGUF files converted for `parakeet.cpp`.
+They are downloaded from the community mirror
+[`mudler/parakeet-cpp-gguf`](https://huggingface.co/mudler/parakeet-cpp-gguf)
+using the same pinned-URL + size + SHA-256 contract as Whisper.
+
+| Engine | Upstream | GGUF filename | Size | SHA-256 |
+| --- | --- | --- | ---:|:---|
+| Parakeet TDT v2 | `nvidia/parakeet-tdt-0.6b-v2` | `tdt-0.6b-v2-q8_0.gguf` | 903,835,936 B | `2027e2e1a4dc60ccdd8558f93b15e7c0db4ef8895b4e82e889f3a6275d8119c6` |
+| Parakeet TDT v3 | `nvidia/parakeet-tdt-0.6b-v3` | `tdt-0.6b-v3-q8_0.gguf` | 940,663,680 B | `4d69a4a6683f4f2d952bad794c1357ca6eb628027695b4699c5a9ad4cd07d757` |
+| Parakeet Flash | `nvidia/parakeet_realtime_eou_120m-v1` | `realtime_eou_120m-v1-q8_0.gguf` | 176,001,472 B | `62616b914d6f5a683a5dea672df055b57de5c49dddf871b8b44b9c814dc3d896` |
+| Nemotron Speech 3.5 Ultra Fast | `nvidia/nemotron-3.5-asr-streaming-0.6b` | `nemotron-3.5-asr-streaming-0.6b-q8_0.gguf` | 983,696,512 B | `ba2f13eccd4a5245be728f77e6149bd6a4fdcdd133ff2e08ac6005bcef7a99f1` |
+| Nemotron 3.5 Multilingual | `nvidia/nemotron-3.5-asr-streaming-0.6b` (same checkpoint) | `nemotron-3.5-asr-streaming-0.6b-q8_0.gguf` | 983,696,512 B | `ba2f13eccd4a5245be728f77e6149bd6a4fdcdd133ff2e08ac6005bcef7a99f1` |
+
+### Active ONNX downloads
+
+Cohere Transcribe ships as three verified files from
+[`cstr/cohere-transcribe-onnx-int8`](https://huggingface.co/cstr/cohere-transcribe-onnx-int8):
+
+| File | Size | SHA-256 |
+|---|---|---:|:---|
+| `cohere-encoder.int8.onnx` | 6,164,263 B | `27ef3d3a2352c972fa4831ae680d52937a2d4e5d62910060f140b13e2f4ccd2b` |
+| `cohere-encoder.int8.onnx.data` | 2,839,314,432 B | `0a6ebd1efbaeef6d15106e33671ce73067cad862bbb20f5e2dfbcd56695fbb76` |
+| `cohere-decoder.int8.onnx` | 530,119 B | `4be3bdfe855b751985dd2b53d39cca66967bdcb656a138753daf12c451900358` |
+| `cohere-decoder.int8.onnx.data` | 222,937,088 B | `8e4d5d7ea5092cf0779b711c65dfef9ecd2b88df951c6c7aa334df345c2eb4d8` |
+| `tokens.txt` | 207,437 B | `013ede043ae2480e3a9205cc34550d9686100cc682bacc90f702facdfbb93035` |
+
+Total Cohere bundle size is approximately 3.07 GB; the `.onnx` files are small
+graphs and the weights live in the `.onnx.data` external data files.
+
+Apple Speech is configured with `requiresOnDeviceRecognition = true`, so
+audio never leaves the Mac. Whisper, the NVIDIA engines, and Cohere Transcribe
+run entirely on-device using downloaded weights. Cohere's cloud API remains an
+optional later path that requires explicit opt-in and an API key.
 
 ## Which model gets recommended
 
@@ -104,10 +146,10 @@ Mac, and only that model carries the "Recommended" badge.
 | Condition | Recommendation | Why |
 | --- | --- | --- |
 | Hinglish profile | Hinglish Apex | Preserves code-switched English words in Latin script |
-| English profile, Apple Silicon | Parakeet | Most accurate *and* fastest English model measured — 5.3% at 61 ms |
+| English profile, Apple Silicon | Whisper Turbo | Best open multilingual model on the GPU |
 | Apple Silicon, ≥ 8 GB | Whisper Turbo | Best measured accuracy/size trade-off on the GPU, and multilingual |
 | Apple Silicon, < 8 GB | Whisper Small (multilingual) | Keeps memory pressure down; the only smaller multilingual option that works at all |
-| Intel, any memory | Whisper Small (multilingual) | No Metal path, and CoreML has no Neural Engine to use |
+| Intel, any memory | Whisper Small (multilingual) | No Metal path; large models are too slow without GPU transcription |
 
 Two rules were replaced here. The first picked a tier from installed memory
 alone, which sent capable 16 GB Apple Silicon Macs to Whisper Base — measured at
@@ -120,8 +162,8 @@ it is a broken one, so those Macs now get Small and a slower answer that is
 actually usable. Recommending a model that cannot do the job is worse than
 recommending one that is merely slow.
 
-Note the engine never recommended an English-only model before Parakeet: English
-users were sent to multilingual Turbo. See
+English users were previously sent to multilingual Turbo; now they remain on
+Turbo on Apple Silicon and Small on Intel. See
 [ACCURACY_HARNESS.md](ACCURACY_HARNESS.md) for how the underlying numbers are
 produced.
 
@@ -139,35 +181,6 @@ This contract describes the `whisper.cpp` GGML path:
 5. ZenVoice streams the file through SHA-256 and compares the full digest.
 6. Only a verified file is atomically moved into private Application Support.
 7. Model files receive user-only filesystem permissions.
-
-## Parakeet download path
-
-The Parakeet CoreML bundle is a directory rather than a single file, so its
-installation contract is stated separately. It holds the same guarantees.
-
-1. The user explicitly starts a download.
-2. ZenVoice builds one revision-pinned HTTPS URL per manifest entry, of the
-   form `<sourceRepository>/resolve/<sourceRevision>/<relativePath>`. A path
-   that is absolute or contains `..` builds no URL and fails the download.
-3. Each response must be successful and remain on HTTPS.
-4. Each file must be a regular file of the exact approved size.
-5. Each file is streamed through SHA-256 and compared against the manifest.
-6. Files land in a staging directory. The completed tree must contain exactly
-   the manifest's relative paths — no extra file, no nested extra file, and no
-   symbolic link — and the summed sizes must equal the recorded bundle size.
-7. Only a fully verified bundle is atomically swapped into place, so an
-   interrupted download cannot replace a good bundle with a partial one.
-8. Bundle files receive user-only filesystem permissions.
-
-The bundle's `sha256` field is the digest of the manifest itself — every entry
-sorted by path and serialized as `path\nsize\nsha256\n`. It is verified on
-every check, so a tampered *catalogue* fails as well as a tampered download.
-
-ZenVoice performs this fetch itself rather than delegating it. FluidAudio's
-downloader resolves the repository's default branch and honours its own
-`REGISTRY_URL`/`MODEL_REGISTRY_URL` overrides, neither of which can express a
-pinned revision. FluidAudio is handed the verified local directory afterwards
-through `loadModels(from:)`.
 
 Deleting a model removes only its catalogue-derived file path. Model downloads
 contain data weights only; ZenVoice never executes them.
@@ -197,7 +210,9 @@ The reproducible M5 comparison across seven installed models, eight languages,
 multiple voices, speaking rates, memory, and real Hinglish is recorded in
 [LANGUAGE_MODEL_BENCHMARK_2026-07-26.md](LANGUAGE_MODEL_BENCHMARK_2026-07-26.md).
 
-## Bundled runtime
+## Bundled runtimes
+
+### whisper.cpp
 
 ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
 
@@ -209,7 +224,30 @@ ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
   `8c3ecbe73f48b0cb9318fc3058264f951ab336fd530e82c4ccdd2298d1311a4c`
 - Licence: MIT
 
-Swift Package Manager verifies that checksum before exposing the binary target.
-The packaged app embeds and signs `whisper.framework`. ZenVoice calls its C API
-in-process and retains one model context until the selected model changes or
-the application exits.
+### parakeet.cpp
+
+ZenVoice vendors `parakeet.cpp` v0.5.0 as a binary XCFramework for the NVIDIA
+Parakeet and Nemotron engines:
+
+- Source: [`mudler/parakeet.cpp`](https://github.com/mudler/parakeet.cpp)
+- Release: `v0.5.0`
+- Runtime licence: MIT
+- Local binary target: `vendor/parakeet.xcframework`
+- Build: universal `libparakeet.dylib` packaged with `xcodebuild -create-xcframework`
+
+Swift Package Manager exposes the `parakeet` binary target from
+`Package.swift`. The app embeds and signs the framework. ZenVoice calls its flat
+C API in-process through `Sources/ZenVoiceRuntime/ParakeetBridge.swift`.
+
+### ONNX Runtime
+
+ZenVoice links ONNX Runtime through the Swift Package Manager release for the
+Cohere Transcribe engine:
+
+- Source: [`microsoft/onnxruntime-swift-package-manager`](https://github.com/microsoft/onnxruntime-swift-package-manager)
+- Swift product: `onnxruntime`
+- Swift module: `OnnxRuntimeBindings`
+- Licence: ONNX Runtime licence (MIT for the open-source runtime)
+
+The CoreML execution provider is enabled when available; otherwise CPU execution
+is used as a fallback.

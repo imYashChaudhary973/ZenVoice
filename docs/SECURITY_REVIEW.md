@@ -25,7 +25,6 @@ permission, privacy, signing, or release testing.
 | Transcript → clipboard | another process reads dictated text | explicit clipboard fallback documented; no background upload | clipboard remains outside ZenVoice until another app replaces it |
 | Accessibility paste | synthetic events affect the wrong target | paste only after an explicit dictation lifecycle; denial falls back to copy | focus can change before insertion |
 | Whisper model download | tampered or substituted weights | fixed HTTPS allowlist, revision, size, SHA-256, atomic install, user-only permissions | a newly approved model still requires human provenance and licence review |
-| Parakeet bundle download | tampered, substituted, or padded weights | revision-pinned per-file URLs, pinned per-file size and SHA-256 manifest, exact-tree match rejecting extra and symlinked entries, verified manifest digest, staged atomic install | FluidAudio loads the verified directory afterwards; a newly approved bundle still requires human provenance and licence review |
 | Runtime dependency | compromised binary framework | fixed release URL and SwiftPM checksum; embedded framework signed with the app | upstream binary is trusted after checksum and source review, not reproduced locally |
 | Developer model override | unreviewed local model | opt-in environment override; weights are treated as data, not executable code | developer mode bypasses catalogue verification |
 | Share card | transcript or app identity disclosure | numeric-only type, local renderer, exact preview, explicit destination choice | the user can still share a card intentionally |
@@ -48,26 +47,20 @@ No cloud transcription, analytics endpoint, account system, remote sync,
 automatic publishing, or updater is present. Those are intentionally outside
 M9 and require a new threat review before implementation.
 
-The current build is appropriate for private development testing. ZenVoice is
-proprietary software, direct download is the selected channel, and the first
-distributed build is an invitation-only private beta for Apple Silicon Macs,
-free to its users for an initial one to three month period. The build targets
-macOS 14 or newer, but only the macOS versions recorded in the release QA record
-are certified; the deployment target is a floor, not evidence.
+The current build is appropriate for personal use, development testing, and
+open-source contribution. ZenVoice is licensed under the Apache License, Version
+2.0. Public distribution is deferred while ZenVoice is refined for internal use;
+see [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md). The build
+targets macOS 14 or newer, but only the macOS versions recorded in the release
+QA record are certified; the deployment target is a floor, not evidence.
 
-That free period is deliberately a calendar window rather than a per-user
-trial. Enforcing a trial would require a licence or entitlement mechanism, and
-an account system, updater, or remote entitlement check is outside this review
-and would need a new threat review before implementation. Choosing an
-unenforced window keeps this review's central finding true: there is no
-account system and nothing to authenticate.
+There is no account system, subscription, trial mechanism, or remote entitlement
+check in the application. Adding any of those would require a new threat review
+before implementation.
 
-The privacy statement review and the post-M9 runtime and model review are
-complete as of 2026-08-02, and the application now signs with a Developer ID
-Application certificate, Hardened Runtime, and a secure timestamp, with
-`com.apple.security.get-task-allow` absent. It is still not approved for the
-beta because no notarization ticket is stapled and clean-device plus
-release-candidate accessibility QA remain unfinished.
-
-What ZenVoice costs after the free period, and how that would be collected,
-remains a later decision and will require its own review.
+The privacy statement review and the runtime and model review are current as of
+2026-08-02. The application can sign with a Developer ID Application
+certificate, Hardened Runtime, and a secure timestamp, with
+`com.apple.security.get-task-allow` absent. Any future public release would
+require a stapled notarization ticket and completed clean-device plus
+release-candidate accessibility QA.

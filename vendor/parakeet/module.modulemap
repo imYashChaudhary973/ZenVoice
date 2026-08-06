@@ -1,0 +1,5 @@
+module parakeet {
+    umbrella header "parakeet_capi.h"
+    export *
+    link "parakeet"
+}

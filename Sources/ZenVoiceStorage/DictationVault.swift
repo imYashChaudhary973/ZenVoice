@@ -1,5 +1,20 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import Foundation
 import SQLite3
+import ZenVoiceCore
 
 public enum DictationVaultError: LocalizedError {
     case database(String)
@@ -23,47 +38,68 @@ public final class DictationVault: @unchecked Sendable {
 
     private let databaseURL: URL
     private let recoveryDirectoryURL: URL
+    private let archiveDirectoryURL: URL
     private let keyProvider: VaultKeyProviding
     private var cipher: TranscriptCipher
     private let queue = DispatchQueue(label: "dev.yashchaudhary.ZenVoice.vault")
     private var database: OpaquePointer?
 
+    /// Creates the production vault at the Application Support path derived
+    /// from the resolved runtime identity.
+    ///
+    /// This factory requires an explicit ``BundleIdentifierPolicy``. Production
+    /// callers obtain it from ``RuntimeIdentity/policy(from:allowedQAIdentifiers:)``;
+    /// checks must call
+    /// `init(databaseURL:recoveryDirectoryURL:keyProvider:)` with an injected
+    /// temporary root and a test key provider.
     public static func live(
         fileManager: FileManager = .default,
-        keyProvider: VaultKeyProviding = KeychainVaultKeyProvider()
+        keyProvider: VaultKeyProviding? = nil,
+        policy: BundleIdentifierPolicy
     ) throws -> DictationVault {
-        let supportDirectory = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
+        let supportDirectory = try RuntimeIdentity.applicationSupportRoot(
+            fileManager: fileManager,
+            policy: policy
         )
-        .appendingPathComponent("ZenVoice", isDirectory: true)
         let dataDirectory = supportDirectory
             .appendingPathComponent("Data", isDirectory: true)
         let recoveryDirectory = supportDirectory
             .appendingPathComponent("Recovery", isDirectory: true)
+        let archiveDirectory = supportDirectory
+            .appendingPathComponent("AudioHistory", isDirectory: true)
 
         try Self.createPrivateDirectory(dataDirectory, fileManager: fileManager)
         try Self.createPrivateDirectory(
             recoveryDirectory,
             fileManager: fileManager
         )
+        try Self.createPrivateDirectory(
+            archiveDirectory,
+            fileManager: fileManager
+        )
 
+        let resolvedKeyProvider = keyProvider ?? KeychainVaultKeyProvider(
+            policy: policy
+        )
         return try DictationVault(
             databaseURL: dataDirectory.appendingPathComponent("ZenVoice.sqlite"),
             recoveryDirectoryURL: recoveryDirectory,
-            keyProvider: keyProvider
+            archiveDirectoryURL: archiveDirectory,
+            keyProvider: resolvedKeyProvider
         )
     }
 
     public init(
         databaseURL: URL,
         recoveryDirectoryURL: URL,
+        archiveDirectoryURL: URL? = nil,
         keyProvider: VaultKeyProviding
     ) throws {
         self.databaseURL = databaseURL
         self.recoveryDirectoryURL = recoveryDirectoryURL
+        self.archiveDirectoryURL = archiveDirectoryURL
+            ?? databaseURL.deletingLastPathComponent()
+                .appendingPathComponent("AudioHistory", isDirectory: true)
         self.keyProvider = keyProvider
         cipher = try TranscriptCipher(keyProvider: keyProvider)
 
@@ -75,9 +111,14 @@ public final class DictationVault: @unchecked Sendable {
             recoveryDirectoryURL,
             fileManager: .default
         )
+        try Self.createPrivateDirectory(
+            archiveDirectoryURL ?? databaseURL.deletingLastPathComponent()
+                .appendingPathComponent("AudioHistory", isDirectory: true),
+            fileManager: .default
+        )
         try openDatabase()
         try migrate()
-        try? FileManager.default.setAttributes(
+        try FileManager.default.setAttributes(
             [.posixPermissions: 0o600],
             ofItemAtPath: databaseURL.path
         )
@@ -89,6 +130,12 @@ public final class DictationVault: @unchecked Sendable {
 
     public func recoveryAudioURL(for id: UUID) -> URL {
         recoveryDirectoryURL
+            .appendingPathComponent(id.uuidString.lowercased())
+            .appendingPathExtension("wav")
+    }
+
+    public func archiveAudioURL(for id: UUID) -> URL {
+        archiveDirectoryURL
             .appendingPathComponent(id.uuidString.lowercased())
             .appendingPathExtension("wav")
     }
@@ -235,6 +282,183 @@ public final class DictationVault: @unchecked Sendable {
             try stepDone(statement)
             try requireChangedRow()
         }
+    }
+
+    /// Archives the recording associated with a completed dictation.
+    ///
+    /// The source audio is copied into the Audio History directory and a
+    /// metadata row is added. If the dictation has no recording at the
+    /// expected recovery path, this method throws.
+    public func archiveRecording(
+        id: UUID,
+        archiveID: UUID = UUID(),
+        now: Date = Date()
+    ) throws {
+        let sourceURL = recoveryAudioURL(for: id)
+        let destinationURL = archiveAudioURL(for: archiveID)
+        let attributes = try FileManager.default.attributesOfItem(
+            atPath: sourceURL.path
+        )
+        let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+            throw DictationVaultError.invalidRecord
+        }
+
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+
+        try queue.sync {
+            let statement = try prepare(
+                """
+                INSERT INTO audio_archive (
+                    id, dictation_id, started_at, duration_seconds,
+                    file_size, audio_path, language, model_id,
+                    target_bundle_id, target_app_name, category
+                )
+                SELECT ?, ?, d.started_at, d.duration_seconds, ?,
+                    ?, d.language, d.model_id, d.target_bundle_id,
+                    d.target_app_name, d.category
+                FROM dictations d
+                WHERE d.id = ?;
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+
+            bind(archiveID.uuidString, at: 1, in: statement)
+            bind(id.uuidString, at: 2, in: statement)
+            sqlite3_bind_int64(statement, 3, fileSize)
+            bind(destinationURL.path, at: 4, in: statement)
+            bind(id.uuidString, at: 5, in: statement)
+            try stepDone(statement)
+            try requireChangedRow()
+        }
+    }
+
+    /// Deletes the archived audio file and metadata row for the given archive.
+    public func deleteAudioArchive(id: UUID) throws {
+        let path = try archiveEntries(
+            whereClause: "id = ?",
+            bindWhere: { statement in
+                self.bind(id.uuidString, at: 1, in: statement)
+            }
+        ).first?.path
+        if let path,
+           let url = validatedArchiveAudioURL(path: path, id: id),
+           FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+        try queue.sync {
+            let statement = try prepare(
+                "DELETE FROM audio_archive WHERE id = ?;"
+            )
+            defer { sqlite3_finalize(statement) }
+            bind(id.uuidString, at: 1, in: statement)
+            try stepDone(statement)
+        }
+    }
+
+    /// Removes archived recordings older than the cutoff, returning the count
+    /// of deleted archives.
+    public func purgeAudioArchive(olderThan cutoff: Date) throws -> Int {
+        let expired = try archiveEntries(
+            whereClause: "started_at < ?",
+            bindWhere: { statement in
+                sqlite3_bind_double(
+                    statement,
+                    1,
+                    cutoff.timeIntervalSince1970
+                )
+            }
+        )
+        for entry in expired {
+            try deleteAudioArchive(id: entry.id)
+        }
+        return expired.count
+    }
+
+    /// Deletes archived recordings until the total size is within the given
+    /// byte budget, starting with the oldest. Returns the count deleted.
+    public func enforceAudioArchiveSizeBudget(_ budgetBytes: Int64) throws -> Int {
+        let overBudget = try archiveEntriesOverBudget(budgetBytes: budgetBytes)
+        for entry in overBudget {
+            try deleteAudioArchive(id: entry.id)
+        }
+        return overBudget.count
+    }
+
+    /// Total size in bytes of all archived recordings.
+    public func audioArchiveTotalSize() throws -> Int64 {
+        try queue.sync {
+            let statement = try prepare(
+                "SELECT COALESCE(SUM(file_size), 0) FROM audio_archive;"
+            )
+            defer { sqlite3_finalize(statement) }
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return 0
+            }
+            return sqlite3_column_int64(statement, 0)
+        }
+    }
+
+    /// Count of archived recordings.
+    public func audioArchiveCount() throws -> Int {
+        try queue.sync {
+            let statement = try prepare(
+                "SELECT COUNT(*) FROM audio_archive;"
+            )
+            defer { sqlite3_finalize(statement) }
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                return 0
+            }
+            return Int(sqlite3_column_int64(statement, 0))
+        }
+    }
+
+    /// Recent archived recordings, newest first.
+    public func audioArchiveRecent(limit: Int = 500) throws -> [AudioArchiveRecord] {
+        try queue.sync {
+            try audioArchiveRecords(
+                whereClause: "1 = 1",
+                orderAndLimit: "ORDER BY started_at DESC LIMIT ?",
+                bindWhere: { statement in
+                    sqlite3_bind_int64(
+                        statement,
+                        1,
+                        Int64(max(1, limit))
+                    )
+                }
+            )
+        }
+    }
+
+    /// Looks up a single archived recording by ID.
+    public func audioArchive(id: UUID) throws -> AudioArchiveRecord? {
+        try queue.sync {
+            try audioArchiveRecords(
+                whereClause: "id = ?",
+                orderAndLimit: "LIMIT 1",
+                bindWhere: { statement in
+                    self.bind(id.uuidString, at: 1, in: statement)
+                }
+            ).first
+        }
+    }
+
+    /// Deletes every archived recording and its metadata.
+    @discardableResult
+    public func deleteAllAudioArchives() throws -> Int {
+        let all = try archiveEntries(whereClause: "1 = 1")
+        for entry in all {
+            if let url = validatedArchiveAudioURL(path: entry.path, id: entry.id),
+               FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+        }
+        try queue.sync {
+            try execute("DELETE FROM audio_archive;")
+            try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        }
+        return all.count
     }
 
     public func markInsertion(
@@ -815,6 +1039,23 @@ public final class DictationVault: @unchecked Sendable {
                 usage_count INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS audio_archive (
+                id TEXT PRIMARY KEY NOT NULL,
+                dictation_id TEXT NOT NULL,
+                started_at REAL NOT NULL,
+                duration_seconds REAL NOT NULL DEFAULT 0,
+                file_size INTEGER NOT NULL DEFAULT 0,
+                audio_path TEXT NOT NULL,
+                language TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                target_bundle_id TEXT,
+                target_app_name TEXT,
+                category TEXT NOT NULL DEFAULT 'other'
+            );
+            CREATE INDEX IF NOT EXISTS idx_audio_archive_started_at
+                ON audio_archive(started_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_audio_archive_dictation
+                ON audio_archive(dictation_id);
             """
         )
         if version == 1 {
@@ -833,7 +1074,9 @@ public final class DictationVault: @unchecked Sendable {
                     "ALTER TABLE correction_rules ADD COLUMN language_scope TEXT NOT NULL DEFAULT 'all';"
                 )
             }
-            try execute("PRAGMA user_version = 5;")
+        }
+        if version < 6 {
+            try execute("PRAGMA user_version = 6;")
         }
     }
 
@@ -1006,6 +1249,123 @@ public final class DictationVault: @unchecked Sendable {
         }
     }
 
+    private func archiveEntries(
+        whereClause: String,
+        bindWhere: ((OpaquePointer?) -> Void)? = nil
+    ) throws -> [(id: UUID, path: String)] {
+        try queue.sync {
+            let statement = try prepare(
+                """
+                SELECT id, audio_path
+                FROM audio_archive
+                WHERE \(whereClause);
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+            bindWhere?(statement)
+            var entries: [(UUID, String)] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                if let idValue = text(at: 0, in: statement),
+                   let id = UUID(uuidString: idValue),
+                   let path = text(at: 1, in: statement) {
+                    entries.append((id, path))
+                }
+            }
+            return entries
+        }
+    }
+
+    /// Archives that fall outside the byte budget, oldest first.
+    ///
+    /// Rows are walked newest-first and accumulated; everything past the point
+    /// where the running total crosses the budget is over it.
+    private func archiveEntriesOverBudget(
+        budgetBytes: Int64
+    ) throws -> [(id: UUID, path: String)] {
+        try queue.sync {
+            let statement = try prepare(
+                """
+                SELECT id, audio_path, file_size
+                FROM audio_archive
+                ORDER BY started_at DESC;
+                """
+            )
+            defer { sqlite3_finalize(statement) }
+            var overBudget: [(UUID, String)] = []
+            var runningTotal: Int64 = 0
+            while sqlite3_step(statement) == SQLITE_ROW {
+                guard let idValue = text(at: 0, in: statement),
+                      let id = UUID(uuidString: idValue),
+                      let path = text(at: 1, in: statement) else {
+                    continue
+                }
+                runningTotal += sqlite3_column_int64(statement, 2)
+                if runningTotal > budgetBytes {
+                    overBudget.append((id, path))
+                }
+            }
+            return overBudget
+        }
+    }
+
+    /// Decodes archive rows. Callers must already hold `queue`.
+    ///
+    /// Rows whose audio path fails validation are skipped rather than throwing,
+    /// so one tampered row cannot make the whole archive unreadable.
+    private func audioArchiveRecords(
+        whereClause: String,
+        orderAndLimit: String,
+        bindWhere: ((OpaquePointer?) -> Void)? = nil
+    ) throws -> [AudioArchiveRecord] {
+        let statement = try prepare(
+            """
+            SELECT id, dictation_id, started_at, duration_seconds,
+                file_size, audio_path, language, model_id,
+                target_bundle_id, target_app_name, category
+            FROM audio_archive
+            WHERE \(whereClause)
+            \(orderAndLimit);
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        bindWhere?(statement)
+
+        var result: [AudioArchiveRecord] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idString = text(at: 0, in: statement),
+                  let id = UUID(uuidString: idString),
+                  let dictationIDString = text(at: 1, in: statement),
+                  let dictationID = UUID(uuidString: dictationIDString),
+                  let path = text(at: 5, in: statement),
+                  let audioURL = validatedArchiveAudioURL(path: path, id: id),
+                  let language = text(at: 6, in: statement),
+                  let modelID = text(at: 7, in: statement),
+                  let categoryRaw = text(at: 10, in: statement),
+                  let category = DictationCategory(rawValue: categoryRaw) else {
+                continue
+            }
+            result.append(
+                AudioArchiveRecord(
+                    id: id,
+                    dictationID: dictationID,
+                    startedAt: Date(
+                        timeIntervalSince1970:
+                            sqlite3_column_double(statement, 2)
+                    ),
+                    durationSeconds: sqlite3_column_double(statement, 3),
+                    fileSize: sqlite3_column_int64(statement, 4),
+                    audioURL: audioURL,
+                    language: language,
+                    modelID: modelID,
+                    targetBundleID: text(at: 8, in: statement),
+                    targetAppName: text(at: 9, in: statement),
+                    category: category
+                )
+            )
+        }
+        return result
+    }
+
     private func interruptedEntries() throws -> [
         (id: UUID, startedAt: Date, persistenceSuppressed: Bool)
     ] {
@@ -1039,11 +1399,38 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     private func validatedRecoveryAudioURL(path: String, id: UUID) -> URL? {
-        let supplied = URL(fileURLWithPath: path).standardizedFileURL
-        let expected = recoveryAudioURL(for: id).standardizedFileURL
+        let supplied = URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let expected = recoveryAudioURL(for: id)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let resolvedRecovery = recoveryDirectoryURL
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
         guard supplied.path == expected.path,
               supplied.deletingLastPathComponent().path
-                == recoveryDirectoryURL.standardizedFileURL.path else {
+                == resolvedRecovery.path,
+              supplied.path.hasPrefix(resolvedRecovery.path + "/") else {
+            return nil
+        }
+        return expected
+    }
+
+    private func validatedArchiveAudioURL(path: String, id: UUID) -> URL? {
+        let supplied = URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let expected = archiveAudioURL(for: id)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let resolvedArchive = archiveDirectoryURL
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        guard supplied.path == expected.path,
+              supplied.deletingLastPathComponent().path
+                == resolvedArchive.path,
+              supplied.path.hasPrefix(resolvedArchive.path + "/") else {
             return nil
         }
         return expected
@@ -1251,10 +1638,36 @@ public final class DictationVault: @unchecked Sendable {
             at: url,
             withIntermediateDirectories: true
         )
-        try? fileManager.setAttributes(
+        // Resolve the path after creation so a replacement or symlink
+        // cannot silently redirect the directory elsewhere.
+        let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
+        let parent = url.deletingLastPathComponent()
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        guard resolved.path.hasPrefix(parent.path + "/") else {
+            throw DictationVaultError.database(
+                "Created directory escaped intended parent: \(resolved.path)"
+            )
+        }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: resolved.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw DictationVaultError.database(
+                "Expected directory is not present: \(resolved.path)"
+            )
+        }
+        try fileManager.setAttributes(
             [.posixPermissions: 0o700],
-            ofItemAtPath: url.path
+            ofItemAtPath: resolved.path
         )
+        // Verify the permissions actually took effect.
+        let attributes = try fileManager.attributesOfItem(atPath: resolved.path)
+        let permissions = (attributes[.posixPermissions] as? NSNumber)?.intValue ?? 0
+        guard permissions == 0o700 else {
+            throw DictationVaultError.database(
+                "Directory permissions are \(String(permissions, radix: 8, uppercase: false)) instead of 700: \(resolved.path)"
+            )
+        }
     }
 }
 

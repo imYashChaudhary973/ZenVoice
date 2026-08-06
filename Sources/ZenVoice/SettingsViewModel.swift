@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import AppKit
 import ApplicationServices
 import AVFoundation
@@ -84,6 +98,14 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var livePreviewEnabled: Bool
     @Published private(set) var commitOnPauseEnabled: Bool
     @Published private(set) var voiceCommandsEnabled: Bool
+    @Published private(set) var zenIntelligenceMode: ZenIntelligenceMode
+    @Published private(set) var commandModeEnabled: Bool
+    @Published private(set) var commandModeManifest: CommandManifest
+    @Published private(set) var writeModeSubMode: WriteModeSubMode
+    @Published private(set) var writeModeDefaultPrompt: String
+    @Published private(set) var activeOverlayKind: OverlayKind
+    @Published private(set) var livePreviewOverlayEnabled: Bool
+    @Published private(set) var overlayReduceMotion: Bool
     @Published var nextDictationContext = ""
 
     private let applyShortcut:
@@ -142,6 +164,16 @@ final class SettingsViewModel: ObservableObject {
             LiveDictationPreferences.isCommitOnPauseEnabled()
         voiceCommandsEnabled =
             LocalVoiceCommandPreferences.isEnabled()
+        zenIntelligenceMode = ZenIntelligencePreferences.load()
+        commandModeEnabled = CommandModePreferences.isEnabled()
+        commandModeManifest =
+            CommandModePreferences.loadManifest()
+            ?? CommandModeEngine.defaultManifest
+        writeModeSubMode = WriteModePreferences.loadSubMode()
+        writeModeDefaultPrompt = WriteModePreferences.defaultPrompt()
+        activeOverlayKind = OverlayPreferences.loadActiveOverlay()
+        livePreviewOverlayEnabled = OverlayPreferences.loadLivePreviewEnabled()
+        overlayReduceMotion = OverlayPreferences.loadReduceMotion()
         selectedMicrophoneUID =
             MicrophonePreferences.selectedDeviceUID()
         refreshMicrophones()
@@ -315,6 +347,62 @@ final class SettingsViewModel: ObservableObject {
     func setVoiceCommandsEnabled(_ enabled: Bool) {
         LocalVoiceCommandPreferences.setEnabled(enabled)
         voiceCommandsEnabled = enabled
+    }
+
+    func setZenIntelligenceMode(_ mode: ZenIntelligenceMode) {
+        ZenIntelligencePreferences.save(mode)
+        zenIntelligenceMode = mode
+    }
+
+    func setCommandModeEnabled(_ enabled: Bool) {
+        CommandModePreferences.setEnabled(enabled)
+        commandModeEnabled = enabled
+    }
+
+    func setCommandModeManifest(_ manifest: CommandManifest) {
+        CommandModePreferences.saveManifest(manifest)
+        commandModeManifest = manifest
+    }
+
+    func resetCommandModeManifest() {
+        CommandModePreferences.clearManifest()
+        commandModeManifest = CommandModeEngine.defaultManifest
+    }
+
+    func setWriteModeSubMode(_ mode: WriteModeSubMode) {
+        WriteModePreferences.saveSubMode(mode)
+        writeModeSubMode = mode
+    }
+
+    func setWriteModeDefaultPrompt(_ prompt: String) {
+        let trimmed = NextDictationContext.sanitized(prompt)
+        WriteModePreferences.saveDefaultPrompt(trimmed)
+        writeModeDefaultPrompt = trimmed
+    }
+
+    func setActiveOverlayKind(_ kind: OverlayKind) {
+        OverlayPreferences.saveActiveOverlay(kind)
+        activeOverlayKind = kind
+    }
+
+    func setLivePreviewOverlayEnabled(_ enabled: Bool) {
+        OverlayPreferences.saveLivePreviewEnabled(enabled)
+        livePreviewOverlayEnabled = enabled
+    }
+
+    func setOverlayReduceMotion(_ reduce: Bool) {
+        OverlayPreferences.saveReduceMotion(reduce)
+        overlayReduceMotion = reduce
+    }
+
+    /// Reloads overlay preferences from storage.
+    ///
+    /// The menu bar can toggle the live-preview overlay while the settings
+    /// window is open; this keeps the Overlay screen in step with it.
+    func syncOverlayPreferences() {
+        activeOverlayKind = OverlayPreferences.loadActiveOverlay()
+        livePreviewOverlayEnabled = OverlayPreferences.loadLivePreviewEnabled()
+        overlayReduceMotion = OverlayPreferences.loadReduceMotion()
     }
 
     func setInputLanguage(_ code: String) {

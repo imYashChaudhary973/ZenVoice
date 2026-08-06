@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import Combine
 import Foundation
 import ZenVoiceCore
@@ -85,13 +99,6 @@ struct VerifiedModelDownloader {
         let directory = try VerifiedModelCatalog.modelsDirectory(
             fileManager: fileManager
         )
-        if model.runtime == .parakeetCoreML {
-            return try await downloadParakeet(
-                model,
-                to: directory,
-                progress: progress
-            )
-        }
         return try await download(
             sourceURL: model.downloadURL,
             sourceRevision: model.sourceRevision,
@@ -103,174 +110,7 @@ struct VerifiedModelDownloader {
         )
     }
 
-    /// Downloads a multi-file bundle from this catalogue's pinned revision.
-    ///
-    /// The fetch is done here, file by file, rather than delegated to
-    /// FluidAudio: its registry resolves the repository's default branch and
-    /// honours `REGISTRY_URL`, so the revision ZenVoice records and the bytes
-    /// ZenVoice requested were not the same statement. Every file is verified
-    /// in a staging directory and the bundle is swapped into place only once
-    /// the whole manifest matches, so an interrupted download cannot leave a
-    /// half-written bundle where a verified one used to be.
-    private func downloadParakeet(
-        _ model: VerifiedModel,
-        to directory: URL,
-        progress:
-            AsyncStream<VerifiedModelDownloadPhase>.Continuation
-    ) async throws -> URL {
-        guard !model.bundleFiles.isEmpty else {
-            throw VerifiedModelDownloadError.invalidSource
-        }
-        try fileManager.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
-        )
-        let destinationURL = directory.appendingPathComponent(
-            model.filename,
-            isDirectory: true
-        )
-        let stagingURL = directory.appendingPathComponent(
-            ".\(model.filename).\(UUID().uuidString)",
-            isDirectory: true
-        )
-        defer {
-            try? fileManager.removeItem(at: stagingURL)
-        }
-        try fileManager.createDirectory(
-            at: stagingURL,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
-        )
-
-        let totalBytes = model.bundleFiles.reduce(Int64(0)) {
-            $0 + $1.fileSizeBytes
-        }
-        var completedBytes: Int64 = 0
-        for file in model.bundleFiles {
-            try Task.checkCancellation()
-            guard let sourceURL = model.bundleFileURL(for: file) else {
-                throw VerifiedModelDownloadError.invalidSource
-            }
-            let fileURL = stagingURL.appendingPathComponent(
-                file.relativePath,
-                isDirectory: false
-            )
-            guard fileURL.standardizedFileURL.path.hasPrefix(
-                stagingURL.standardizedFileURL.path + "/"
-            ) else {
-                throw VerifiedModelDownloadError.invalidSource
-            }
-            try fileManager.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700]
-            )
-            let fileStart = completedBytes
-            try await downloadBundleFile(
-                from: sourceURL,
-                revision: model.sourceRevision,
-                to: fileURL,
-                expectedSize: file.fileSizeBytes,
-                expectedSHA256: file.sha256
-            ) { fraction in
-                guard totalBytes > 0 else { return }
-                let done = Double(fileStart)
-                    + fraction * Double(file.fileSizeBytes)
-                progress.yield(.downloading(done / Double(totalBytes)))
-            }
-            completedBytes += file.fileSizeBytes
-        }
-
-        try Task.checkCancellation()
-        progress.yield(.verifying)
-        guard try VerifiedModelCatalog.verify(
-            stagingURL,
-            for: model,
-            fileManager: fileManager
-        ) else {
-            throw VerifiedModelDownloadError.checksumMismatch
-        }
-
-        if fileManager.fileExists(atPath: destinationURL.path) {
-            _ = try fileManager.replaceItemAt(
-                destinationURL,
-                withItemAt: stagingURL,
-                backupItemName: nil,
-                options: .usingNewMetadataOnly
-            )
-        } else {
-            try fileManager.moveItem(at: stagingURL, to: destinationURL)
-        }
-        return destinationURL
-    }
-
-    private func downloadBundleFile(
-        from sourceURL: URL,
-        revision: String,
-        to destinationURL: URL,
-        expectedSize: Int64,
-        expectedSHA256: String,
-        progress: @escaping @Sendable (Double) -> Void
-    ) async throws {
-        guard sourceURL.scheme == "https",
-              sourceURL.host == "huggingface.co",
-              sourceURL.path.contains(revision) else {
-            throw VerifiedModelDownloadError.invalidSource
-        }
-        var request = URLRequest(url: sourceURL)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 60 * 60
-
-        let stream = AsyncStream<VerifiedModelDownloadPhase>
-            .makeStream(bufferingPolicy: .bufferingNewest(1))
-        let relay = Task {
-            for await phase in stream.stream {
-                if case let .downloading(fraction) = phase {
-                    progress(fraction)
-                }
-            }
-        }
-        defer {
-            stream.continuation.finish()
-            relay.cancel()
-        }
-
-        let (temporaryURL, response) = try await download(
-            request,
-            expectedSize: expectedSize,
-            progress: stream.continuation
-        )
-        defer {
-            try? fileManager.removeItem(at: temporaryURL)
-        }
-        try Task.checkCancellation()
-        guard let response = response as? HTTPURLResponse,
-              (200...299).contains(response.statusCode),
-              response.url?.scheme == "https" else {
-            throw VerifiedModelDownloadError.invalidResponse
-        }
-        let values = try temporaryURL.resourceValues(forKeys: [
-            .isRegularFileKey,
-            .fileSizeKey
-        ])
-        guard values.isRegularFile == true,
-              Int64(values.fileSize ?? -1) == expectedSize else {
-            throw VerifiedModelDownloadError.unexpectedSize
-        }
-        guard try VerifiedModelCatalog.sha256Hex(of: temporaryURL)
-                == expectedSHA256 else {
-            throw VerifiedModelDownloadError.checksumMismatch
-        }
-        try fileManager.moveItem(at: temporaryURL, to: destinationURL)
-        try fileManager.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: destinationURL.path
-        )
-    }
-
-
-    private func download(
+    fileprivate func download(
         sourceURL: URL,
         sourceRevision: String,
         filename: String,
@@ -428,6 +268,7 @@ struct VerifiedModelDownloader {
 @MainActor
 final class ModelManagerViewModel: ObservableObject {
     let models = VerifiedModelCatalog.models
+    let engines = VerifiedEngineCatalog.engines
     let hardwareProfile: HardwareProfile
 
     @Published private(set) var installedModelIDs: Set<String> = []
@@ -438,6 +279,9 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var isVerifying = false
     @Published private(set) var benchmarkSummaries:
         [String: ModelBenchmarkSummary] = [:]
+    @Published private(set) var selectedEngineID: String?
+    @Published private(set) var engineAvailabilities: [EngineAvailability] = []
+    @Published private(set) var installedEngineIDs: Set<String> = []
     @Published var errorMessage: String?
 
     private let downloader: VerifiedModelDownloader
@@ -445,30 +289,37 @@ final class ModelManagerViewModel: ObservableObject {
     private let applySelection:
         (VerifiedModel, LanguageProfile) -> Result<Void, Error>
     private let selectionInvalidated: () -> Void
+    private let engineRegistryProvider: () -> EngineRegistry?
     private var downloadTask: Task<Void, Never>?
     private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
+    private var enginePrepareTask: Task<Void, Never>?
+    private var engineDownloadTasks: [String: Task<Void, Never>] = [:]
 
     init(
         downloader: VerifiedModelDownloader = VerifiedModelDownloader(),
         fileManager: FileManager = .default,
         applySelection: @escaping
             (VerifiedModel, LanguageProfile) -> Result<Void, Error>,
-        selectionInvalidated: @escaping () -> Void
+        selectionInvalidated: @escaping () -> Void,
+        engineRegistryProvider: @escaping () -> EngineRegistry? = { nil }
     ) {
         self.downloader = downloader
         self.fileManager = fileManager
         self.applySelection = applySelection
         self.selectionInvalidated = selectionInvalidated
+        self.engineRegistryProvider = engineRegistryProvider
         hardwareProfile = HardwareProfile.current(fileManager: fileManager)
         selectedModelID = ModelSelectionPreferences.load()?.id
         refreshBenchmarks()
+        refreshEngineSelection()
         refresh()
     }
 
     func refresh() {
         verificationTask?.cancel()
         refreshBenchmarks()
+        refreshEngineInstallStatus()
         isVerifying = true
         // Retired models are hidden from the catalogue, not invalidated.
         // Verify them too so an existing selection keeps working until the
@@ -509,7 +360,119 @@ final class ModelManagerViewModel: ObservableObject {
             } else {
                 self?.selectedModelID = ModelSelectionPreferences.load()?.id
             }
+            self?.refreshEngineInstallStatus()
             self?.isVerifying = false
+        }
+    }
+
+    func refreshEngineInstallStatus() {
+        var installed: Set<String> = []
+        for engine in engines {
+            let isInstalled: Bool
+            switch engine.descriptor.id {
+            case EngineIdentifiers.parakeetTDTv3:
+                let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory(
+                    fileManager: fileManager
+                )
+                let modelURL = modelsDirectory?
+                    .appendingPathComponent(
+                        ParakeetTDTv3Engine.modelFilename,
+                        isDirectory: false
+                    )
+                isInstalled = modelURL.map {
+                    fileManager.fileExists(atPath: $0.path)
+                } ?? false
+            case EngineIdentifiers.cohereTranscribe:
+                let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory(
+                    fileManager: fileManager
+                )
+                let engine = modelsDirectory.map {
+                    CohereTranscribeEngine(modelsDirectory: $0)
+                }
+                isInstalled = engine?.isAvailable ?? false
+            default:
+                isInstalled = engine.descriptor.requiresDownload == false
+            }
+            if isInstalled {
+                installed.insert(engine.descriptor.id)
+            }
+        }
+        installedEngineIDs = installed
+    }
+
+    func refreshEngineSelection() {
+        let profile = LanguagePreferences.load()
+        selectedEngineID = SelectedEnginePreferences.load(for: profile)
+        engineAvailabilities =
+            engineRegistryProvider()?.availability(for: profile) ?? []
+    }
+
+    func engineRecommendation() -> EngineRecommendation? {
+        guard let registry = engineRegistryProvider() else {
+            return nil
+        }
+        return EngineRecommendationEngine.recommendation(
+            for: LanguagePreferences.load(),
+            hardware: hardwareProfile,
+            registry: registry
+        )
+    }
+
+    func isRecommendedEngine(_ engineID: String) -> Bool {
+        engineRecommendation()?.preferredEngineID == engineID
+    }
+
+    func selectEngine(_ engineID: String) {
+        let profile = LanguagePreferences.load()
+        guard let availability = engineAvailabilities.first(
+            where: { $0.engine.id == engineID }
+        ) else {
+            return
+        }
+        guard availability.isAvailable else {
+            errorMessage = unavailabilityLabel(for: availability)
+            return
+        }
+        SelectedEnginePreferences.save(engineID, for: profile)
+        selectedEngineID = engineID
+        enginePrepareTask?.cancel()
+        enginePrepareTask = Task { [weak self] in
+            do {
+                try await self?.engineRegistryProvider()?.prepare(
+                    for: profile,
+                    selectedID: engineID
+                )
+            } catch is CancellationError {
+                // User moved on before preparation finished.
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func isSelectedEngine(_ engineID: String) -> Bool {
+        selectedEngineID == engineID
+    }
+
+    private func unavailabilityLabel(for availability: EngineAvailability)
+        -> String {
+        guard let reason = availability.reason else {
+            return "\(availability.engine.displayName) is not available."
+        }
+        let engineName = availability.engine.displayName
+        switch reason {
+        case .unsupportedLanguage(let language):
+            return "\(engineName) does not support \(language)."
+        case .requiresDownload:
+            return "\(engineName) needs its model downloaded first."
+        case .requiresInternet:
+            return "\(engineName) needs an internet connection."
+        case .runtimeNotReady:
+            return "\(engineName) is not ready on this Mac."
+        case .platformNotSupported:
+            return "\(engineName) is not supported on this Mac."
         }
     }
 
@@ -763,9 +726,186 @@ final class ModelManagerViewModel: ObservableObject {
         )
     }
 
+    func isEngineDownloading(_ engine: VerifiedEngine) -> Bool {
+        engineDownloadTasks[engine.descriptor.id]?.isCancelled == false
+    }
+
+    func downloadEngine(_ engine: VerifiedEngine) {
+        guard engineDownloadTasks[engine.descriptor.id] == nil else {
+            return
+        }
+        errorMessage = nil
+        engineDownloadTasks[engine.descriptor.id] = Task { [weak self] in
+            defer {
+                self?.engineDownloadTasks.removeValue(
+                    forKey: engine.descriptor.id
+                )
+                self?.refreshEngineInstallStatus()
+                self?.refreshEngineSelection()
+            }
+            do {
+                switch engine.descriptor.id {
+                case EngineIdentifiers.parakeetFlash:
+                    try await self?.downloadParakeetFlash()
+                case EngineIdentifiers.parakeetTDTv2:
+                    try await self?.downloadParakeetTDTv2()
+                case EngineIdentifiers.parakeetTDTv3:
+                    try await self?.downloadParakeetTDTv3()
+                case EngineIdentifiers.nemotronSpeechUltraFast,
+                     EngineIdentifiers.nemotronSpeechMultilingual:
+                    try await self?.downloadNemotronModel()
+                case EngineIdentifiers.cohereTranscribe:
+                    try await self?.downloadCohereModel()
+                default:
+                    break
+                }
+            } catch is CancellationError {
+                // Explicit user cancellation is handled by the UI.
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func downloadParakeetFlash() async throws {
+        try await downloadEngineModel(
+            engineID: EngineIdentifiers.parakeetFlash,
+            filename: ParakeetFlashEngine.modelFilename
+        )
+    }
+
+    private func downloadParakeetTDTv2() async throws {
+        try await downloadEngineModel(
+            engineID: EngineIdentifiers.parakeetTDTv2,
+            filename: ParakeetTDTv2Engine.modelFilename
+        )
+    }
+
+    private func downloadParakeetTDTv3() async throws {
+        try await downloadEngineModel(
+            engineID: EngineIdentifiers.parakeetTDTv3,
+            filename: ParakeetTDTv3Engine.modelFilename
+        )
+    }
+
+    private func downloadNemotronModel() async throws {
+        try await downloadEngineModel(
+            engineID: EngineIdentifiers.nemotronSpeechMultilingual,
+            filename: NemotronEngineConstants.modelFilename
+        )
+    }
+
+    private func downloadCohereModel() async throws {
+        let base =
+            "https://huggingface.co/cstr/cohere-transcribe-onnx-int8/resolve/main/"
+        let engine = VerifiedEngineCatalog.engine(
+            id: EngineIdentifiers.cohereTranscribe
+        )
+        guard let sourceRevision = engine?.sourceRevision else {
+            throw VerifiedModelDownloadError.invalidSource
+        }
+        let directory = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereEncoderFilename,
+            sourceURL: URL(string: base + "cohere-encoder.int8.onnx?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereEncoderSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereEncoderSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereDecoderFilename,
+            sourceURL: URL(string: base + "cohere-decoder.int8.onnx?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereDecoderSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereDecoderSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereTokenizerFilename,
+            sourceURL: URL(string: base + "tokens.txt?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereTokenizerSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereTokenizerSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereEncoderDataFilename,
+            sourceURL: URL(string: base + "cohere-encoder.int8.onnx.data?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereEncoderDataSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereEncoderDataSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+        try await downloadCohereFile(
+            filename: VerifiedEngineCatalog.cohereDecoderDataFilename,
+            sourceURL: URL(string: base + "cohere-decoder.int8.onnx.data?download=true")!,
+            expectedSize: VerifiedEngineCatalog.cohereDecoderDataSizeBytes,
+            expectedSHA256: VerifiedEngineCatalog.cohereDecoderDataSHA256,
+            sourceRevision: sourceRevision,
+            destinationDirectory: directory
+        )
+    }
+
+    private func downloadCohereFile(
+        filename: String,
+        sourceURL: URL,
+        expectedSize: Int64,
+        expectedSHA256: String,
+        sourceRevision: String,
+        destinationDirectory: URL
+    ) async throws {
+        let (_, progress) =
+            AsyncStream<VerifiedModelDownloadPhase>.makeStream()
+        defer { progress.finish() }
+        _ = try await downloader.download(
+            sourceURL: sourceURL,
+            sourceRevision: sourceRevision,
+            filename: filename,
+            expectedSize: expectedSize,
+            expectedSHA256: expectedSHA256,
+            destinationDirectory: destinationDirectory,
+            progress: progress
+        )
+    }
+
+    private func downloadEngineModel(
+        engineID: String,
+        filename: String
+    ) async throws {
+        guard let engine = VerifiedEngineCatalog.engine(id: engineID),
+              let sourceURL = engine.downloadURL,
+              let sha256 = engine.sha256,
+              let fileSize = engine.fileSizeBytes,
+              let sourceRevision = engine.sourceRevision
+        else {
+            throw VerifiedModelDownloadError.invalidSource
+        }
+        let directory = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        let (_, progress) =
+            AsyncStream<VerifiedModelDownloadPhase>.makeStream()
+        defer { progress.finish() }
+        _ = try await downloader.download(
+            sourceURL: sourceURL,
+            sourceRevision: sourceRevision,
+            filename: filename,
+            expectedSize: fileSize,
+            expectedSHA256: sha256,
+            destinationDirectory: directory,
+            progress: progress
+        )
+    }
+
     deinit {
         downloadTask?.cancel()
         verificationTask?.cancel()
+        engineDownloadTasks.values.forEach { $0.cancel() }
     }
 
     @discardableResult

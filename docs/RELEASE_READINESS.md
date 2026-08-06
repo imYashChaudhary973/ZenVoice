@@ -1,10 +1,13 @@
 # Release Readiness
 
 ZenVoice's M9 release controls are implemented. Public distribution is
-deliberately blocked until every unchecked item below is decided and evidenced.
-Decisions and source changes must be committed; per-candidate QA, signing, and
-notarization evidence may instead be retained with the protected release
-approval or release assets. This checklist is a project gate, not legal advice.
+deliberately deferred while ZenVoice is refined for internal use; see
+[ADR 0004](decisions/0004-internal-use-first-defer-shipping.md). This checklist
+records the gates that must be completed before any future public distribution
+decision, not a current blocker list. Decisions and source changes must be
+committed; per-candidate QA, signing, and notarization evidence may instead be
+retained with the protected release approval or release assets. This checklist is
+a project gate, not legal advice.
 
 ## Automated foundation
 
@@ -12,8 +15,8 @@ approval or release assets. This checklist is a project gate, not legal advice.
   nested-signature checks.
 - [x] Semgrep Community Edition scans pull requests and `main` without a paid
   account or repository write permission.
-- [x] `whisper.cpp` and FluidAudio runtime sources, pinned revisions or
-  checksums, and licence notices are recorded.
+- [x] `whisper.cpp` runtime source, pinned release, checksum, and licence notice
+  are recorded.
 - [x] Downloadable speech-model sources, immutable revisions, checksums,
   attribution, and licences are recorded.
 - [x] The privacy and security boundaries are documented.
@@ -21,13 +24,13 @@ approval or release assets. This checklist is a project gate, not legal advice.
 
 ## Founder and legal decisions
 
-- [x] Select and add the ZenVoice project licence as `LICENSE` — proprietary,
-  source-visible, decided 2026-08-01.
+- [x] Select and add the ZenVoice project licence as `LICENSE` — Apache License,
+  Version 2.0, decided 2026-08-01; updated to Apache-2.0 for open-source
+  distribution.
 - [x] Decide whether the first distributed build is free, paid, or private beta
-  — invitation-only private beta, decided 2026-08-02. Free to its users for an
-  initial one to three month calendar window, decided 2026-08-03. Not a
-  per-user trial: no trial timer, licence key, entitlement check, or account
-  system ships in this release, so no new authentication surface is introduced.
+  — open-source direct download, free, decided 2026-08-05. Not a per-user trial:
+  no trial timer, licence key, entitlement check, or account system ships in
+  this release, so no new authentication surface is introduced.
 - [x] Define the supported release baseline — Apple Silicon Macs running macOS
   14 or newer, decided 2026-08-02. Amended 2026-08-03: that figure is the
   deployment target, not a tested claim. The private beta is certified only on
@@ -46,37 +49,19 @@ approval or release assets. This checklist is a project gate, not legal advice.
   and secure-input refusal are described, and the Privacy screen's 500-record
   count window is stated. Re-confirm if application behavior changes before the
   release commit.
-- [x] Re-review every model or runtime artifact added after the pinned M9
-  catalogue — completed 2026-08-02. The transitive FluidAudio components
-  compiled into the shipped binary are now noticed, including fastcluster's
-  required BSD notice; the Parakeet download is revision-pinned,
-  manifest-exact, and atomically installed; and every recorded size, digest and
-  pinned revision was checked against its source.
-  The Parakeet licence was recorded as CC-BY-4.0 by taking the conversion
-  repository's declaration at face value. Its own bundle metadata says
-  `model_id: nvidia/parakeet-unified-en-0.6b`, which NVIDIA governs under the
-  Open Model License, while the conversion card declares CC-BY-4.0 and names
-  `parakeet-tdt-0.6b-v2`. ZenVoice now records the NVIDIA Open Model License
-  and carries its required notice, that being the stricter of the two and the
-  one the artifact's own identity supports. Both candidates permit commercial
-  use and redistribution with attribution, so ZenVoice is compliant either way.
-  Confirming the exact source model with the publisher remains open as an
-  accuracy item below rather than a distribution blocker.
-- [x] Establish which NVIDIA model `parakeet-unified-en-0.6b-coreml` was
-  converted from — resolved on evidence 2026-08-03. The downloaded bundle's
-  metadata and two places in FluidAudio's pinned source all name
-  `nvidia/parakeet-unified-en-0.6b`, including its conversion pipeline path. The
-  model card's `base_model` names `parakeet-tdt-0.6b-v2`, which on Hugging Face
-  usually records ancestry rather than the conversion input. ZenVoice records the
-  NVIDIA Open Model License accordingly and carries its required notice. See the
-  evidence table in `THIRD_PARTY_NOTICES.md`.
-  Asking FluidInference to confirm the ancestry is worth doing but is
-  deliberately not a checklist item: ZenVoice already carries the stricter of
-  the two terms, so their answer could only relax the recorded licence, never
-  tighten it. A permanently optional checkbox would block this fail-closed gate
-  forever.
+- [x] Re-review every model or runtime artifact in the catalogue — completed
+  2026-08-05. The closed-source FluidAudio runtime and its transitive
+  components have been removed. ZenVoice now uses only the checksum-pinned
+  `whisper.cpp` XCFramework and `whisper.cpp` GGML models. The retired Parakeet
+  entry remains resolvable for users who previously installed it, but is no
+  longer downloaded or executed.
+- [x] Confirm the `whisper.cpp` runtime licence is recorded — MIT, reproduced
+  in `THIRD_PARTY_NOTICES.md`.
 
-## Apple distribution
+## Apple distribution (deferred)
+
+The following gates are required before any future public distribution and are
+not being pursued while ZenVoice remains internal-use-first.
 
 - [ ] Sign the app and every nested executable with a **Developer ID
   Application** certificate for direct distribution.
@@ -92,6 +77,10 @@ approval or release assets. This checklist is a project gate, not legal advice.
 
 ## Product and accessibility QA
 
+These items remain important for daily use and must be completed before any
+future public distribution. They are not treated as release blockers while
+ZenVoice is internal-use-first.
+
 - [ ] Complete every manual scenario in `docs/DEVELOPMENT.md` against the exact
   distribution ZIP and source commit recorded in `docs/RELEASE_QA_RECORD.md`.
   Retain the completed record with the release evidence; its overall result and
@@ -103,10 +92,6 @@ approval or release assets. This checklist is a project gate, not legal advice.
   release notes or beta invitations, whatever the deployment target allows.
 - [ ] Test explicit English, Hindi, Auto-Detect/multilingual, and Hinglish
   specialist language paths with compatible current-catalogue models.
-- [ ] On Apple Silicon, record a successful Parakeet/CoreML → current
-  multilingual whisper.cpp → Parakeet round trip without relaunching, plus the
-  Parakeet English-only profile transition. Selection state alone is not
-  sufficient; each selected runtime must complete a dictation.
 - [ ] Verify VoiceOver labels, keyboard navigation, reduced motion, contrast,
   and full-screen/multiple-display ZenBar behavior.
 - [ ] Verify crash recovery, failed-audio expiry, Private Dictation, Delete All,
@@ -119,14 +104,17 @@ approval or release assets. This checklist is a project gate, not legal advice.
 
 Build the app, then run:
 
-```bash
+```zsh
 ./Scripts/check-release-readiness.sh
 ```
 
-The command is expected to fail for development builds. It passes only after
-the project licence exists, this checklist has no unfinished items, the app is
-Developer-ID signed, its nested signatures are valid, a notarization ticket is
-stapled, and no common secret pattern is found in tracked files.
+Run it through `./` or with an explicit `zsh`; the script is zsh, not bash.
+
+The command is expected to fail for development builds and for any build made
+while public distribution is deferred. It passes only after the project licence
+exists, this checklist has no unfinished items, the app is Developer-ID signed,
+its nested signatures are valid, a notarization ticket is stapled, and no common
+secret pattern is found in tracked files.
 
 A checklist-only release-approval commit may follow the source commit recorded
 for the tested artifact. The intervening diff must not change application
@@ -143,10 +131,28 @@ remain unchanged through signing, and reports the source commit.
 `notarytool`, staples and verifies the app with `codesign`, `stapler`, and
 `spctl`, then packages the stapled app as `build/ZenVoice-distribution.zip` and
 prints its SHA-256. The local gate rejects additional top-level payloads and
-verifies that the ZIP contains the same app. It can also be run hosted via the
-`Release readiness` workflow in the Actions tab.
+verifies that the ZIP contains the same app.
+
+The automated GitHub release flow is defined in `.github/workflows/release.yml`:
+
+1. On your local machine, run `./Scripts/bump-version.sh X.Y.Z` and open a PR.
+2. Merge the version bump PR to `main`.
+3. Go to the Actions tab, select **Release**, enter the version, and trigger the
+   workflow manually.
+4. The workflow builds, signs, notarizes, and packages the app, then creates a
+   GitHub Release with the distribution ZIP and release notes.
+5. Optionally provide `ZENVOICE_HOMEBREW_TAP_TOKEN` in the repository secrets so
+   the workflow can propose a cask update to the tap repository.
+
+Required repository secrets (add these in GitHub Settings > Secrets and Variables
+> Actions before running):
+
+- `ZENVOICE_SIGNING_IDENTITY` — full "Developer ID Application: ..." string.
+- `ZENVOICE_APPLE_ID` — Apple ID for notarytool.
+- `ZENVOICE_TEAM_ID` — Apple Developer Team ID.
+- `ZENVOICE_APP_PASSWORD` — app-specific password for notarytool.
+- `ZENVOICE_HOMEBREW_TAP_TOKEN` — optional GitHub token for the Homebrew tap.
 
 Do not place Developer ID certificates, private keys, App Store Connect API
-keys, notary credentials, or passwords in the repository. A future release
-workflow must obtain them from an approved secret store and must require a
-protected manual approval environment.
+keys, notary credentials, or passwords in the repository. The release workflow
+obtains them from the GitHub secret store and uses a protected manual trigger.

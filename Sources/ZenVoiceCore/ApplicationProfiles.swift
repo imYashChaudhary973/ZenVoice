@@ -1,3 +1,17 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import Foundation
 
 public struct ApplicationProfile:
@@ -8,6 +22,21 @@ public struct ApplicationProfile:
     public var languageProfile: LanguageProfile
     public var refinementMode: InstantRefineMode
     public var voiceCommandsEnabled: Bool
+    /// Engine override for this app. `nil` falls back to the global engine
+    /// preference for the active language profile.
+    public var preferredEngineID: String?
+    /// Output mode override for this app. `nil` uses the output mode inside
+    /// `languageProfile`.
+    public var preferredOutputMode: TranscriptionOutputMode?
+    /// ZenIntelligence mode for this app. `nil` uses the global preference.
+    public var zenIntelligenceMode: ZenIntelligenceMode?
+    /// Command set identifier for this app. `nil` uses the global manifest.
+    public var commandSetID: String?
+    /// Default Write Mode sub-mode for this app. `nil` uses the global
+    /// preference.
+    public var writeModeDefault: WriteModeSubMode?
+    /// Optional custom prompt hints for ZenIntelligence in this app.
+    public var customPromptHints: [String]
 
     public var id: String { bundleIdentifier }
 
@@ -16,13 +45,25 @@ public struct ApplicationProfile:
         applicationName: String,
         languageProfile: LanguageProfile,
         refinementMode: InstantRefineMode,
-        voiceCommandsEnabled: Bool
+        voiceCommandsEnabled: Bool,
+        preferredEngineID: String? = nil,
+        preferredOutputMode: TranscriptionOutputMode? = nil,
+        zenIntelligenceMode: ZenIntelligenceMode? = nil,
+        commandSetID: String? = nil,
+        writeModeDefault: WriteModeSubMode? = nil,
+        customPromptHints: [String] = []
     ) {
         self.bundleIdentifier = bundleIdentifier
         self.applicationName = applicationName
         self.languageProfile = languageProfile
         self.refinementMode = refinementMode
         self.voiceCommandsEnabled = voiceCommandsEnabled
+        self.preferredEngineID = preferredEngineID
+        self.preferredOutputMode = preferredOutputMode
+        self.zenIntelligenceMode = zenIntelligenceMode
+        self.commandSetID = commandSetID
+        self.writeModeDefault = writeModeDefault
+        self.customPromptHints = customPromptHints
     }
 }
 
@@ -30,7 +71,7 @@ public enum ApplicationProfilePreferences {
     public static let preferenceKey = "ZenVoice.applicationProfiles"
 
     public static func load(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> [ApplicationProfile] {
         guard let data = defaults.data(forKey: preferenceKey),
               let decoded = try? JSONDecoder().decode(
@@ -51,7 +92,7 @@ public enum ApplicationProfilePreferences {
 
     public static func profile(
         for bundleIdentifier: String?,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> ApplicationProfile? {
         guard let bundleIdentifier else {
             return nil
@@ -63,7 +104,7 @@ public enum ApplicationProfilePreferences {
 
     public static func save(
         _ profile: ApplicationProfile,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         guard !profile.bundleIdentifier.isEmpty,
               LanguageCatalog.isSupported(
@@ -84,7 +125,7 @@ public enum ApplicationProfilePreferences {
 
     public static func remove(
         bundleIdentifier: String,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         persist(
             load(defaults: defaults).filter {
@@ -110,14 +151,14 @@ public enum LocalVoiceCommandPreferences {
         "ZenVoice.localVoiceCommandsEnabled"
 
     public static func isEnabled(
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
         defaults.bool(forKey: preferenceKey)
     }
 
     public static func setEnabled(
         _ enabled: Bool,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(enabled, forKey: preferenceKey)
     }
