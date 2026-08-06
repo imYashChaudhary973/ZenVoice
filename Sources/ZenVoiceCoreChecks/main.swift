@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import ApplicationServices
+import CryptoKit
 import Foundation
 import ZenVoiceCore
 
@@ -2399,3 +2400,321 @@ guard CommandModeApprovalPreferences.requiresApproval(.openURL(URL(string: "x")!
 }
 
 print("ZenVoiceCoreChecks: action serialization and approval passed")
+
+// MARK: - Update feed verification checks
+
+// A throwaway signing key stands in for the release key. The app only ever
+// verifies; signing lives in release tooling.
+let signingKey = Curve25519.Signing.PrivateKey()
+let verifier = UpdateVerifier(publicKey: signingKey.publicKey)
+
+let goodManifest = UpdateManifest(
+    version: "1.4.0",
+    channel: .stable,
+    archiveURL: "https://example.com/ZenVoice-1.4.0.zip",
+    sha256: String(repeating: "a", count: 64),
+    publishedAt: Date(timeIntervalSince1970: 1_700_000_000)
+)
+let goodFeed = try! SignedUpdateFeed.make(manifest: goodManifest) { payload in
+    try signingKey.signature(for: payload)
+}
+
+// The happy path is the easy half; the rejections below are the point.
+guard let accepted = try? verifier.acceptableUpdate(
+    in: goodFeed,
+    installedVersion: "1.3.2",
+    channel: .stable
+), accepted.version == "1.4.0" else {
+    failEngineCheck("a valid signed update feed was rejected")
+}
+
+func expectUpdateRejection(
+    _ label: String,
+    _ body: () throws -> UpdateManifest
+) {
+    do {
+        _ = try body()
+        failEngineCheck("update verification accepted \(label)")
+    } catch {
+        // Expected.
+    }
+}
+
+// Tampered payload: same signature, different bytes.
+var tamperedManifest = goodManifest
+tamperedManifest = UpdateManifest(
+    version: "9.9.9",
+    channel: goodManifest.channel,
+    archiveURL: goodManifest.archiveURL,
+    sha256: goodManifest.sha256,
+    publishedAt: goodManifest.publishedAt
+)
+let tamperedFeed = SignedUpdateFeed(
+    manifest: try! tamperedManifest.canonicalPayload().base64EncodedString(),
+    signature: goodFeed.signature
+)
+expectUpdateRejection("a tampered manifest") {
+    try verifier.acceptableUpdate(
+        in: tamperedFeed,
+        installedVersion: "1.3.2",
+        channel: .stable
+    )
+}
+
+// Correct signature, wrong key.
+let attackerKey = Curve25519.Signing.PrivateKey()
+let attackerFeed = try! SignedUpdateFeed.make(manifest: goodManifest) { payload in
+    try attackerKey.signature(for: payload)
+}
+expectUpdateRejection("a feed signed with an unknown key") {
+    try verifier.acceptableUpdate(
+        in: attackerFeed,
+        installedVersion: "1.3.2",
+        channel: .stable
+    )
+}
+
+expectUpdateRejection("a feed with no signature") {
+    try verifier.acceptableUpdate(
+        in: SignedUpdateFeed(manifest: goodFeed.manifest, signature: ""),
+        installedVersion: "1.3.2",
+        channel: .stable
+    )
+}
+
+// Transport downgrade.
+let insecureManifest = UpdateManifest(
+    version: "1.4.0",
+    channel: .stable,
+    archiveURL: "http://example.com/ZenVoice-1.4.0.zip",
+    sha256: goodManifest.sha256,
+    publishedAt: goodManifest.publishedAt
+)
+let insecureFeed = try! SignedUpdateFeed.make(manifest: insecureManifest) { payload in
+    try signingKey.signature(for: payload)
+}
+expectUpdateRejection("a validly signed feed pointing at http") {
+    try verifier.acceptableUpdate(
+        in: insecureFeed,
+        installedVersion: "1.3.2",
+        channel: .stable
+    )
+}
+
+// Replayed older feed must not walk the user backwards.
+expectUpdateRejection("a downgrade") {
+    try verifier.acceptableUpdate(
+        in: goodFeed,
+        installedVersion: "1.4.0",
+        channel: .stable
+    )
+}
+expectUpdateRejection("a same-version reinstall") {
+    try verifier.acceptableUpdate(
+        in: goodFeed,
+        installedVersion: "1.4.0.0",
+        channel: .stable
+    )
+}
+
+// A stable install must never be offered a beta build.
+let betaManifest = UpdateManifest(
+    version: "1.5.0",
+    channel: .beta,
+    archiveURL: "https://example.com/ZenVoice-1.5.0-beta.zip",
+    sha256: goodManifest.sha256,
+    publishedAt: goodManifest.publishedAt
+)
+let betaFeed = try! SignedUpdateFeed.make(manifest: betaManifest) { payload in
+    try signingKey.signature(for: payload)
+}
+expectUpdateRejection("a beta build on the stable channel") {
+    try verifier.acceptableUpdate(
+        in: betaFeed,
+        installedVersion: "1.3.2",
+        channel: .stable
+    )
+}
+guard (try? verifier.acceptableUpdate(
+    in: betaFeed,
+    installedVersion: "1.3.2",
+    channel: .beta
+)) != nil else {
+    failEngineCheck("a beta install could not receive a signed beta build")
+}
+
+// Disabled updates reject even a perfect feed.
+expectUpdateRejection("an update while updates are disabled") {
+    try verifier.acceptableUpdate(
+        in: goodFeed,
+        installedVersion: "1.3.2",
+        channel: .stable,
+        updatesEnabled: false
+    )
+}
+
+// The archive hash binds the signed feed to the actual bytes.
+let archiveBytes = Data("pretend this is ZenVoice.zip".utf8)
+let archiveDigest = SHA256.hash(data: archiveBytes)
+    .map { String(format: "%02x", $0) }.joined()
+let boundManifest = UpdateManifest(
+    version: "1.4.0",
+    channel: .stable,
+    archiveURL: goodManifest.archiveURL,
+    sha256: archiveDigest,
+    publishedAt: goodManifest.publishedAt
+)
+do {
+    try verifier.verifyArchive(archiveBytes, matches: boundManifest)
+} catch {
+    failEngineCheck("a matching archive was rejected by its checksum")
+}
+do {
+    try verifier.verifyArchive(
+        Data("a different archive".utf8),
+        matches: boundManifest
+    )
+    failEngineCheck("an archive with the wrong checksum was accepted")
+} catch {
+    // Expected.
+}
+
+// Version parsing must refuse anything it cannot compare exactly.
+guard AppVersion("1.2.3") != nil, AppVersion("v1.2.3") != nil,
+      AppVersion("1.2.3-beta") == nil, AppVersion("") == nil,
+      AppVersion("1..3") == nil, AppVersion("latest") == nil else {
+    failEngineCheck("AppVersion parsing accepted an uncomparable version")
+}
+guard AppVersion("1.10.0")! > AppVersion("1.9.9")! else {
+    failEngineCheck("AppVersion compared components lexically, not numerically")
+}
+
+print("ZenVoiceCoreChecks: update feed verification passed")
+
+// MARK: - Cloud AI enhancement checks
+
+// Off by default, and inert until fully configured.
+let defaultCloudConfiguration = CloudAIConfiguration()
+guard !defaultCloudConfiguration.isEnabled else {
+    failEngineCheck("Cloud AI Enhancement was enabled by default")
+}
+
+let cloudEngine = CloudAIEnhancementEngine(
+    transport: URLSessionCloudAITransport()
+)
+do {
+    _ = try cloudEngine.makeRequest(
+        transcript: "hello there",
+        configuration: defaultCloudConfiguration
+    )
+    failEngineCheck("a request was built while Cloud AI was disabled")
+} catch {
+    // Expected.
+}
+
+var cloudConfiguration = CloudAIConfiguration()
+cloudConfiguration.isEnabled = true
+
+// HTTPS is mandatory, including for custom endpoints.
+cloudConfiguration.provider = .custom
+cloudConfiguration.baseURL = "http://internal.example.com/v1"
+cloudConfiguration.model = "local-model"
+do {
+    _ = try cloudConfiguration.resolvedEndpoint()
+    failEngineCheck("a non-HTTPS cloud endpoint was accepted")
+} catch {
+    // Expected.
+}
+
+cloudConfiguration.baseURL = "https://api.openai.com/v1/"
+cloudConfiguration.model = "gpt-4o-mini"
+guard let endpoint = try? cloudConfiguration.resolvedEndpoint(),
+      endpoint.absoluteString
+        == "https://api.openai.com/v1/chat/completions" else {
+    failEngineCheck("the chat-completions endpoint was built incorrectly")
+}
+
+// The privacy rule from ADR 0011, asserted against the actual bytes: only the
+// transcript and prompt may leave. If someone later attaches app identity or
+// the next-dictation context to the body, this check fails.
+let cloudRequest = try! cloudEngine.makeRequest(
+    transcript: "  meeting notes for the design review  ",
+    configuration: cloudConfiguration
+)
+let encodedBody = try! cloudRequest.encodedBody()
+let bodyText = String(decoding: encodedBody, as: UTF8.self)
+guard bodyText.contains("meeting notes for the design review") else {
+    failEngineCheck("the transcript was not present in the request body")
+}
+let forbiddenInBody = [
+    "bundleIdentifier", "bundle_id", "targetApp", "com.apple",
+    "deviceID", "device_id", "installID", "install_id",
+    "nextDictationContext", "audio", "insights", "voiceProfile"
+]
+for token in forbiddenInBody where bodyText.contains(token) {
+    failEngineCheck("the cloud request body leaked \(token)")
+}
+
+// The API key must never be part of the request value itself.
+let requestDescription = "\(cloudRequest)"
+guard !requestDescription.contains("sk-") else {
+    failEngineCheck("an API key appeared in the CloudAIRequest value")
+}
+let authorized = try! cloudRequest.urlRequest(apiKey: "sk-test-key")
+guard authorized.value(forHTTPHeaderField: "Authorization")
+        == "Bearer sk-test-key",
+      authorized.httpShouldHandleCookies == false else {
+    failEngineCheck("the authorised URLRequest was not built correctly")
+}
+
+// Empty transcripts never reach the network.
+do {
+    _ = try cloudEngine.makeRequest(
+        transcript: "   ",
+        configuration: cloudConfiguration
+    )
+    failEngineCheck("an empty transcript produced a cloud request")
+} catch {
+    // Expected.
+}
+
+// Response parsing.
+let goodResponse = Data("""
+{"choices":[{"message":{"role":"assistant","content":"Meeting notes."}}]}
+""".utf8)
+guard let parsed = try? CloudAIEnhancementEngine
+        .firstMessageContent(from: goodResponse),
+      parsed == "Meeting notes." else {
+    failEngineCheck("a valid provider response was not parsed")
+}
+for malformed in [
+    Data("{}".utf8),
+    Data("{\"choices\":[]}".utf8),
+    Data("{\"choices\":[{\"message\":{\"content\":\"\"}}]}".utf8),
+    Data("not json".utf8)
+] {
+    do {
+        _ = try CloudAIEnhancementEngine.firstMessageContent(from: malformed)
+        failEngineCheck("a malformed provider response was accepted")
+    } catch {
+        // Expected.
+    }
+}
+
+// The key store round-trips and clears.
+let keyStore = InMemoryCloudAIKeyStore()
+try! keyStore.saveKey("sk-example")
+guard try! keyStore.loadKey() == "sk-example" else {
+    failEngineCheck("the cloud API key did not round-trip")
+}
+try! keyStore.saveKey("   ")
+guard try! keyStore.loadKey() == nil else {
+    failEngineCheck("a blank cloud API key was stored instead of cleared")
+}
+try! keyStore.saveKey("sk-example")
+try! keyStore.deleteKey()
+guard try! keyStore.loadKey() == nil else {
+    failEngineCheck("the cloud API key survived deletion")
+}
+
+print("ZenVoiceCoreChecks: cloud AI enhancement passed")

@@ -161,6 +161,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
     private var audioHistoryViewModel: AudioHistoryViewModel!
+    private var cloudAIViewModel: CloudAIViewModel!
+    private var updatesViewModel: UpdatesViewModel!
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
@@ -447,6 +449,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             showError(error.localizedDescription)
         }
+    }
+
+    /// The Keychain store for the Cloud AI provider key.
+    ///
+    /// Falls back to an in-memory store if the runtime identity cannot be
+    /// resolved, so a misconfigured build cannot silently write a live
+    /// third-party credential somewhere unexpected.
+    private func makeCloudAIKeyStore() -> CloudAIKeyStoring {
+        guard let policy = try? RuntimeIdentity.policy() else {
+            return InMemoryCloudAIKeyStore()
+        }
+        return CloudAIKeychainKeyStore(policy: policy)
     }
 
     /// Copies a completed recording into the Audio History archive.
@@ -899,10 +913,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return try self.resolvedVault()
             }
         )
+        cloudAIViewModel = CloudAIViewModel(
+            keyStore: makeCloudAIKeyStore(),
+            lastTranscript: { [weak self] in
+                self?.state.lastTranscript ?? ""
+            },
+            applyEnhanced: { [weak self] text in
+                self?.state.lastTranscript = text
+            }
+        )
+        updatesViewModel = UpdatesViewModel()
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
             audioHistoryViewModel: audioHistoryViewModel,
+            cloudAIViewModel: cloudAIViewModel,
+            updatesViewModel: updatesViewModel,
             insightsViewModel: insightsViewModel,
             voiceProfileViewModel: voiceProfileViewModel,
             modelManagerViewModel: modelManagerViewModel,

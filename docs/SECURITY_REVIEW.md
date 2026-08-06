@@ -64,3 +64,70 @@ certificate, Hardened Runtime, and a secure timestamp, with
 `com.apple.security.get-task-allow` absent. Any future public release would
 require a stapled notarization ticket and completed clean-device plus
 release-candidate accessibility QA.
+
+## Phase 5 — Cloud AI Enhancement and auto-updates
+
+Phase 5 introduces the first two components that cross the machine boundary.
+Both ship off by default; the updater ships inert entirely.
+
+### Cloud AI Enhancement
+
+The only feature in ZenVoice that can send user content off-device. See
+[ADR 0011](decisions/0011-cloud-ai-enhancement.md).
+
+| Concern | Control |
+|---|---|
+| Unintended activation | Requires an explicit toggle **and** a user-supplied key. Neither alone reaches a network path. |
+| Credential storage | Keychain generic password, `WhenUnlockedThisDeviceOnly`. Never `UserDefaults`, never the SQLite vault. Disabling the feature deletes the key. |
+| Over-disclosure | Only transcript text and the prompt are sent. Audio, bundle ID, app name, next-dictation context, history, insights, voice profile, and device identifiers are excluded at request-construction time. |
+| Transport downgrade | HTTPS enforced in `CloudAIConfiguration.resolvedEndpoint()`, before any request exists, including for custom endpoints. |
+| Silent replacement | Results are shown against the original and applied only on explicit accept. |
+| Credential leakage into logs | The API key is not a stored property of `CloudAIRequest`; it is supplied only when building the `URLRequest`, so it cannot appear in an `Equatable` value or a debug description. |
+| Request reuse | Ephemeral `URLSession`, no cookie storage, no URL cache, cache policy `reloadIgnoringLocalAndRemoteCacheData`. |
+
+**Residual risk, accepted:** once the user opts in, their transcript text is
+governed by the chosen provider's retention policy, which ZenVoice cannot
+observe or constrain. This is stated in the UI rather than mitigated, because it
+is inherent to the feature. There is no ZenVoice-operated proxy, so there is no
+ZenVoice-side log of user content.
+
+### Auto-updates
+
+The highest-privilege component in the product: it can replace the application
+binary. See [ADR 0012](decisions/0012-auto-updates.md).
+
+| Concern | Control |
+|---|---|
+| Spoofed feed | Ed25519 signature over canonical manifest bytes, verified against a public key compiled into the app. |
+| Tampered manifest | The manifest is decoded from the exact bytes that were verified, never re-encoded from a parsed object. |
+| Substituted archive | The signed manifest carries the archive SHA-256; the download is hashed and compared before anything is replaced. |
+| Transport downgrade | HTTPS required for the archive and release-notes URLs; a validly signed feed carrying an `http://` URL is still rejected. |
+| Downgrade / replay | Updates are offered only when strictly newer than the installed version, so a replayed old feed cannot walk a user back to a vulnerable build. |
+| Channel confusion | A stable install rejects beta manifests. Channel selects eligibility; it never relaxes verification. |
+| Failure handling | Fail-closed throughout. No warn-and-continue, no user override, no unverified-install fallback. |
+| Check-time disclosure | A check sends no install identifier and no user content. |
+
+**Dependency posture:** Sparkle was considered and not adopted. The verification
+surface needed is small and CryptoKit provides Ed25519 directly; taking Sparkle
+would add a large dependency, a second update UI, and its own historical CVE
+surface for features (delta updates, installer scripts) this product does not
+want. The trade-off is that ZenVoice owns this code and its defects.
+
+**Residual risk, accepted:** the signing key is a single point of failure for
+update delivery. Losing it means no further updates to existing installs;
+compromise of it would be a full compromise of the update channel. Key custody
+is a release-process control, not a code control, and rotating the compiled-in
+public key requires shipping a build signed with the old key first.
+
+### Verification
+
+`ZenVoiceCoreChecks` covers the rejection paths specifically, since a verifier
+that accepts valid input is the easy half: tampered manifest, unknown signing
+key, absent signature, `http://` archive URL, downgrade, same-version reinstall,
+beta-on-stable, disabled-updates, and archive hash mismatch. Cloud AI checks
+assert the redaction rule against the encoded request body, so a future change
+that starts attaching app identity fails the build rather than shipping.
+
+This Phase 5 review is current as of 2026-08-06. Neither component has had
+manual QA against a live provider endpoint or a real signed feed; both are
+listed as open in `docs/PHASE_5.md`.
