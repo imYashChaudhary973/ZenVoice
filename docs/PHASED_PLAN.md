@@ -60,6 +60,7 @@ The list below combines the feature requests from 2026-08-06 with the current Ze
 | **Phase 3** | Intelligence & control | ZenIntelligence on-device AI; Command Mode; Write Mode. |
 | **Phase 4** | Experience polish | Notch-aware configurable overlay; Audio History; Today-Usage Stats. |
 | **Phase 5** | Distribution & cloud opt-in | Auto-updates; optional cloud AI Enhancement; remaining release gates when shipping is reconsidered. |
+| **Phase 6** | Product & interface | Remove borrowed UI; 19 → 9 navigation entries; new indigo/navy design system; finish cloud refinement; real-dictation evaluation corpus. |
 
 ## Phase selection rationale
 
@@ -78,6 +79,7 @@ Each phase has its own detailed plan:
 - [Phase 3 — Intelligence & Control](PHASE_3.md)
 - [Phase 4 — Experience](PHASE_4.md)
 - [Phase 5 — Distribution & Cloud Opt-In](PHASE_5.md)
+- [Phase 6 — Product & Interface](PHASE_6.md)
 
 ## Cross-cutting requirements
 
