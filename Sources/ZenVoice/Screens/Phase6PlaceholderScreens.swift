@@ -21,35 +21,6 @@ import ZenVoiceStorage
 /// system. Each placeholder will be replaced by a proper combined view in the
 /// screen-rebuild pass.
 
-struct LanguagesAndModelsScreen: View {
-    @ObservedObject var viewModel: SettingsViewModel
-    @ObservedObject var modelManagerViewModel: ModelManagerViewModel
-
-    var body: some View {
-        ZenScreen(
-            title: "Languages & Models",
-            subtitle: "Languages you speak and the engines that understand them."
-        ) {
-            LanguagesScreen(viewModel: viewModel)
-            ModelsScreen(viewModel: modelManagerViewModel)
-        }
-    }
-}
-
-struct CommandsScreen: View {
-    @ObservedObject var viewModel: SettingsViewModel
-
-    var body: some View {
-        ZenScreen(
-            title: "Commands",
-            subtitle: "Voice commands and assisted writing."
-        ) {
-            CommandModeScreen(viewModel: viewModel)
-            WriteModeScreen(viewModel: viewModel)
-        }
-    }
-}
-
 struct PersonalScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
