@@ -83,8 +83,13 @@ jobs:
           shasum -a 256 build/ZenVoice-distribution.zip
 
       - name: Generate release notes
+        env:
+          # Workflow inputs are untrusted. Passing the value through the
+          # environment keeps it out of the shell command GitHub assembles,
+          # so it cannot inject anything into the runner.
+          VERSION: ${{ github.event.inputs.version }}
         run: |
-          ./Scripts/generate-release-notes.sh "${{ github.event.inputs.version }}" > build/RELEASE_NOTES.md
+          ./Scripts/generate-release-notes.sh "$VERSION" > build/RELEASE_NOTES.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@c95fe14e0d0d351b72f4a6a93d6f7980c3bf4b1c # v2.2.0
@@ -100,10 +105,11 @@ jobs:
       - name: Prepare Homebrew cask update
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.ZENVOICE_HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ github.event.inputs.version }}
         run: |
           if [[ -n "$HOMEBREW_TAP_TOKEN" ]]; then
             ./Scripts/generate-homebrew-cask.rb \
-              --version "${{ github.event.inputs.version }}" \
+              --version "$VERSION" \
               --zip build/ZenVoice-distribution.zip
           else
             echo "No HOMEBREW_TAP_TOKEN set; skipping Homebrew cask PR."
