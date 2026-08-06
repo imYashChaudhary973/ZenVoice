@@ -2718,3 +2718,144 @@ guard try! keyStore.loadKey() == nil else {
 }
 
 print("ZenVoiceCoreChecks: cloud AI enhancement passed")
+
+// MARK: - Anthropic request shape checks
+
+var anthropicConfiguration = CloudAIConfiguration()
+anthropicConfiguration.isEnabled = true
+anthropicConfiguration.provider = .anthropic
+anthropicConfiguration.baseURL = "https://api.anthropic.com/v1"
+anthropicConfiguration.model = "claude-3-5-sonnet-20241022"
+
+guard let anthropicEndpoint = try? anthropicConfiguration.resolvedEndpoint(),
+      anthropicEndpoint.absoluteString
+        == "https://api.anthropic.com/v1/messages" else {
+    failEngineCheck("Anthropic endpoint was built incorrectly")
+}
+
+let anthropicRequest = try! cloudEngine.makeRequest(
+    transcript: "anthropic test transcript",
+    configuration: anthropicConfiguration
+)
+let anthropicBodyData = try! anthropicRequest.encodedBody()
+let anthropicBody = try! JSONSerialization.jsonObject(
+    with: anthropicBodyData
+) as! [String: Any]
+guard anthropicBody["model"] as? String
+        == "claude-3-5-sonnet-20241022",
+      anthropicBody["max_tokens"] as? Int == 4096,
+      anthropicBody["system"] as? String
+        == CloudAIPromptTemplate.cleanUp.text,
+      let anthropicMessages = anthropicBody["messages"]
+        as? [[String: Any]],
+      anthropicMessages.first?["role"] as? String == "user",
+      let anthropicContent = anthropicMessages.first?["content"]
+        as? String,
+      anthropicContent.contains("anthropic test transcript") else {
+    failEngineCheck("Anthropic request body shape is wrong")
+}
+
+let anthropicURLRequest = try! anthropicRequest.urlRequest(
+    apiKey: "sk-ant-test"
+)
+guard anthropicURLRequest.value(forHTTPHeaderField: "x-api-key")
+        == "sk-ant-test",
+      anthropicURLRequest.value(forHTTPHeaderField: "anthropic-version")
+        == "2023-06-01" else {
+    failEngineCheck("Anthropic auth/version headers are wrong")
+}
+
+let anthropicResponse = Data("""
+{"content":[{"type":"text","text":"Anthropic notes."}]}
+""".utf8)
+guard let anthropicParsed = try? CloudAIEnhancementEngine
+        .firstMessageContent(
+            from: anthropicResponse,
+            provider: .anthropic
+        ),
+      anthropicParsed == "Anthropic notes." else {
+    failEngineCheck("Anthropic response was not parsed")
+}
+
+print("ZenVoiceCoreChecks: Anthropic request shape passed")
+
+// MARK: - Formatting migration checks
+
+let formattingSuite =
+    "ZenVoiceCoreChecks.Formatting.\(UUID().uuidString)"
+guard let formattingDefaults = UserDefaults(suiteName: formattingSuite) else {
+    failEngineCheck("could not create formatting preference fixture")
+}
+defer {
+    formattingDefaults.removePersistentDomain(forName: formattingSuite)
+}
+
+// Fresh defaults without old keys: should default to Clean.
+guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
+        == .clean else {
+    failEngineCheck("formatting mode did not default to clean")
+}
+
+// Old keys present: Instant Refine Clean + ZenIntelligence Off -> Clean.
+formattingDefaults.set(
+    "clean",
+    forKey: InstantRefinePreferences.preferenceKey
+)
+formattingDefaults.set(
+    "off",
+    forKey: ZenIntelligencePreferences.modeKey
+)
+formattingDefaults.set(
+    false,
+    forKey: TranscriptFormattingPreferences.migratedKey
+)
+guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
+        == .clean else {
+    failEngineCheck("formatting migration from clean/off failed")
+}
+
+// Old keys present: Instant Refine Off + ZenIntelligence Format -> Smart.
+formattingDefaults.set(
+    "off",
+    forKey: InstantRefinePreferences.preferenceKey
+)
+formattingDefaults.set(
+    "format",
+    forKey: ZenIntelligencePreferences.modeKey
+)
+formattingDefaults.set(
+    false,
+    forKey: TranscriptFormattingPreferences.migratedKey
+)
+guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
+        == .smart else {
+    failEngineCheck("formatting migration from off/format failed")
+}
+
+// Old keys present: Instant Refine Agent Prompt + ZenIntelligence Off -> Clean.
+// Agent-prompt layout commands moved to Commands; the rung collapses to Clean.
+formattingDefaults.set(
+    "agentPrompt",
+    forKey: InstantRefinePreferences.preferenceKey
+)
+formattingDefaults.set(
+    "off",
+    forKey: ZenIntelligencePreferences.modeKey
+)
+formattingDefaults.set(
+    false,
+    forKey: TranscriptFormattingPreferences.migratedKey
+)
+guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
+        == .clean else {
+    failEngineCheck("formatting migration from agentPrompt/off failed")
+}
+
+// After migration, the new key is respected over any stale old keys.
+TranscriptFormattingPreferences.save(.cloud, defaults: formattingDefaults)
+guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
+        == .cloud else {
+    failEngineCheck("formatting save/load failed")
+}
+
+print("ZenVoiceCoreChecks: formatting migration passed")
