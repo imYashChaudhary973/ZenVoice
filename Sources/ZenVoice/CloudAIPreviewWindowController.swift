@@ -113,10 +113,12 @@ struct CloudAIDictationPreviewView: View {
                 comparisonBody(enhanced)
             } else {
                 Spacer()
-                Text("No preview yet.")
-                    .font(ZenDesign.Typography.body)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                ZenRow(
+                    icon: "sparkles",
+                    title: "No preview yet",
+                    subtitle: "The enhancement will appear here once it finishes."
+                )
+                .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
             }
         }
@@ -160,6 +162,10 @@ struct CloudAIDictationPreviewView: View {
                 Spacer()
                 Button("Keep local transcript") {
                     onComplete(nil)
+                }
+                .buttonStyle(ZenSecondaryButtonStyle())
+                Button("Retry") {
+                    viewModel.enhance()
                 }
                 .buttonStyle(ZenPrimaryButtonStyle())
             }

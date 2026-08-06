@@ -114,7 +114,7 @@ muted    #98A2B8   secondary
       Privacy & Data, Help & About.
 - [ ] Alignment pass: every screen on the same grid, labels on a shared baseline,
       controls right-aligned consistently.
-- [ ] Empty states for every list.
+- [x] Empty states for every list.
 
 ### 5. Cloud refinement, finished
 

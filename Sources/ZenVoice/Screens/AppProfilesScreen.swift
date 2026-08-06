@@ -161,12 +161,11 @@ struct AppProfilesScreen: View {
                 }
 
                 if applicationProfileViewModel.profiles.isEmpty {
-                    Text(
-                        "No profiles yet. Open a target app, refresh this list, then add it."
-                    )
-                    .font(.system(size: 12))
-                    .foregroundStyle(
-                        ZenDesign.Semantic.textTertiary
+                    ZenRow(
+                        icon: "app.badge.checkmark",
+                        title: "No profiles yet",
+                        subtitle:
+                            "Open a target app, refresh this list, then add it."
                     )
                 } else {
                     ForEach(

@@ -165,12 +165,12 @@ struct AudioHistoryScreen: View {
             ZenPanel {
                 VStack(alignment: .leading, spacing: 0) {
                     if viewModel.records.isEmpty {
-                        Text(
-                            "No recordings yet. New dictations will be "
-                            + "archived from now on."
+                        ZenRow(
+                            icon: "recordingtape",
+                            title: "No recordings yet",
+                            subtitle:
+                                "New dictations will be archived from now on."
                         )
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
                         .padding(ZenDesign.Spacing.md)
                     } else {
                         ForEach(viewModel.records) { record in

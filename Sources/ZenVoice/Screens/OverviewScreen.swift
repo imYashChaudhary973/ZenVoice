@@ -294,11 +294,13 @@ struct OverviewScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 miniTitle("Recent activity")
                 if recent.isEmpty {
-                    Text("Your latest dictations will appear here.")
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                        .padding(.horizontal, ZenDesign.Spacing.md)
-                        .padding(.bottom, ZenDesign.Spacing.sm)
+                    ZenRow(
+                        icon: "text.bubble",
+                        title: "No recent dictations",
+                        subtitle: "Your latest dictations will appear here."
+                    )
+                    .padding(.horizontal, ZenDesign.Spacing.md)
+                    .padding(.bottom, ZenDesign.Spacing.sm)
                 } else {
                     ForEach(recent) { record in
                         Button {
