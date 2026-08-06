@@ -128,7 +128,8 @@ Phase 5 shipped a settings-only preview. It is not usable during dictation.
       hardcodes the OpenAI shape, so this needs a per-provider request builder
       and response parser.
 - [ ] Verify Groq and OpenAI against live endpoints. Neither has ever run against
-      a real provider — current confidence is fixture-level only.
+      a real provider — current confidence is fixture-level only. Needs a real
+      API key; the request shapes and privacy assertions are covered by checks.
 - [x] Make refinement reachable from the dictation flow, not only from settings.
       `CloudAIPreviewWindowController` is presented from `finishRecording()` when
       the active formatting mode is Cloud; Accept inserts the enhanced transcript,
@@ -149,7 +150,8 @@ dictation.
       licence for each source.
 - [x] Extend `ZenVoiceAccuracyChecks` to report per-engine WER on the new corpus.
 - [ ] Baseline every installed engine so engine recommendation rests on measured
-      accuracy rather than hardware heuristics.
+      accuracy rather than hardware heuristics. Needs the real-speech corpus
+      fetched to `Datasets/`; synthetic fixture baselines already run in CI.
 - [x] Keep corpora out of git (`/Datasets/` is already ignored); fetch on demand.
 
 ## Sequencing
