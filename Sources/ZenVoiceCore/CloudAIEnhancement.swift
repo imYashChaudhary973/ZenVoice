@@ -18,12 +18,15 @@ import Foundation
 
 /// A hosted provider ZenVoice can send a transcript to, when the user opts in.
 ///
-/// All three speak the same OpenAI-style chat-completions shape. `custom`
-/// exists so a user can point at a self-hosted or local endpoint and keep the
-/// data on infrastructure they control.
+/// OpenAI, Groq, and custom endpoints use the chat-completions shape.
+/// Anthropic uses the Messages API, which has a different path, headers,
+/// request body, and response shape. `custom` exists so a user can point at
+/// a self-hosted or local endpoint and keep the data on infrastructure they
+/// control.
 public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
     case openAI
     case groq
+    case anthropic
     case custom
 
     public var displayName: String {
@@ -32,6 +35,8 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
             return "OpenAI"
         case .groq:
             return "Groq"
+        case .anthropic:
+            return "Anthropic"
         case .custom:
             return "Custom endpoint"
         }
@@ -45,6 +50,8 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
             return "https://api.openai.com/v1"
         case .groq:
             return "https://api.groq.com/openai/v1"
+        case .anthropic:
+            return "https://api.anthropic.com/v1"
         case .custom:
             return nil
         }
@@ -56,8 +63,93 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
             return "gpt-4o-mini"
         case .groq:
             return "llama-3.3-70b-versatile"
+        case .anthropic:
+            return "claude-3-5-sonnet-20241022"
         case .custom:
             return nil
+        }
+    }
+
+    // MARK: - Provider-specific request/response shapes
+
+    fileprivate var endpointPath: String {
+        switch self {
+        case .openAI, .groq, .custom:
+            return "/chat/completions"
+        case .anthropic:
+            return "/messages"
+        }
+    }
+
+    fileprivate func authHeader(apiKey: String) -> (
+        field: String,
+        value: String
+    ) {
+        switch self {
+        case .openAI, .groq, .custom:
+            return ("Authorization", "Bearer \(apiKey)")
+        case .anthropic:
+            return ("x-api-key", apiKey)
+        }
+    }
+
+    fileprivate var extraHeaders: [(String, String)] {
+        switch self {
+        case .anthropic:
+            return [
+                ("anthropic-version", "2023-06-01")
+            ]
+        case .openAI, .groq, .custom:
+            return []
+        }
+    }
+
+    fileprivate func requestBody(
+        model: String,
+        systemPrompt: String,
+        userContent: String
+    ) -> [String: Any] {
+        switch self {
+        case .openAI, .groq, .custom:
+            return [
+                "model": model,
+                "temperature": 0.2,
+                "messages": [
+                    ["role": "system", "content": systemPrompt],
+                    ["role": "user", "content": userContent]
+                ]
+            ]
+        case .anthropic:
+            return [
+                "model": model,
+                "max_tokens": 4096,
+                "temperature": 0.2,
+                "system": systemPrompt,
+                "messages": [
+                    ["role": "user", "content": userContent]
+                ]
+            ]
+        }
+    }
+
+    fileprivate func extractContent(
+        from object: [String: Any]
+    ) -> String? {
+        switch self {
+        case .openAI, .groq, .custom:
+            guard let choices = object["choices"] as? [[String: Any]],
+                  let message = choices.first?["message"] as? [String: Any],
+                  let content = message["content"] as? String else {
+                return nil
+            }
+            return content
+        case .anthropic:
+            guard let contentArray = object["content"] as? [[String: Any]],
+                  let first = contentArray.first,
+                  let text = first["text"] as? String else {
+                return nil
+            }
+            return text
         }
     }
 }
@@ -154,7 +246,7 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
         let base = trimmed.hasSuffix("/")
             ? String(trimmed.dropLast())
             : trimmed
-        guard let url = URL(string: base + "/chat/completions") else {
+        guard let url = URL(string: base + provider.endpointPath) else {
             throw CloudAIEnhancementError.invalidBaseURL(trimmed)
         }
         return url
@@ -205,6 +297,7 @@ public struct CloudAIPromptTemplate: Equatable, Sendable {
 /// context, and audio never appear in it.
 public struct CloudAIRequest: Equatable, Sendable {
     public let url: URL
+    public let provider: CloudAIProvider
     public let model: String
     public let systemPrompt: String
     public let userContent: String
@@ -213,14 +306,11 @@ public struct CloudAIRequest: Equatable, Sendable {
     /// no app identity, no bundle ID, no surrounding text, no device or
     /// install identifier, no telemetry.
     public func encodedBody() throws -> Data {
-        let body: [String: Any] = [
-            "model": model,
-            "temperature": 0.2,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": userContent]
-            ]
-        ]
+        let body = provider.requestBody(
+            model: model,
+            systemPrompt: systemPrompt,
+            userContent: userContent
+        )
         return try JSONSerialization.data(
             withJSONObject: body,
             options: [.sortedKeys]
@@ -234,10 +324,11 @@ public struct CloudAIRequest: Equatable, Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(
-            "Bearer \(apiKey)",
-            forHTTPHeaderField: "Authorization"
-        )
+        let auth = provider.authHeader(apiKey: apiKey)
+        request.setValue(auth.value, forHTTPHeaderField: auth.field)
+        for (field, value) in provider.extraHeaders {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
         request.httpBody = try encodedBody()
         request.timeoutInterval = 30
         // Nothing about this request should be reused or cached.
@@ -326,6 +417,7 @@ public struct CloudAIEnhancementEngine: Sendable {
         }
         return CloudAIRequest(
             url: try configuration.resolvedEndpoint(),
+            provider: configuration.provider,
             model: configuration.model,
             systemPrompt: configuration.prompt,
             userContent: trimmed
@@ -364,20 +456,24 @@ public struct CloudAIEnhancementEngine: Sendable {
             )
         }
 
-        let enhanced = try Self.firstMessageContent(from: data)
+        let enhanced = try Self.firstMessageContent(
+            from: data,
+            provider: configuration.provider
+        )
         return CloudAIEnhancementResult(
             original: transcript,
             enhanced: enhanced
         )
     }
 
-    /// Extracts `choices[0].message.content`.
-    public static func firstMessageContent(from data: Data) throws -> String {
+    /// Extracts the assistant text from a provider response.
+    public static func firstMessageContent(
+        from data: Data,
+        provider: CloudAIProvider = .openAI
+    ) throws -> String {
         guard let root = try? JSONSerialization.jsonObject(with: data),
               let object = root as? [String: Any],
-              let choices = object["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String else {
+              let content = provider.extractContent(from: object) else {
             throw CloudAIEnhancementError.malformedResponse
         }
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
