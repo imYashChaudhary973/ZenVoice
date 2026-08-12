@@ -1973,6 +1973,46 @@ struct FakeSpeechEngine: SpeechEngine {
     }
 }
 
+struct CancellingSpeechEngine: SpeechEngine {
+    let descriptor: EngineDescriptor
+    let languageCapability: ModelLanguageCapability = .multilingual
+    let isAvailable = true
+
+    func prepare() async throws {
+        throw CancellationError()
+    }
+
+    func transcribe(
+        audioURL: URL,
+        languageProfile: LanguageProfile,
+        initialPrompt: String?
+    ) async throws -> TranscriptionResult {
+        throw CancellationError()
+    }
+}
+
+private enum ExpectedEngineFailure: Error {
+    case failed
+}
+
+struct FailingSpeechEngine: SpeechEngine {
+    let descriptor: EngineDescriptor
+    let languageCapability: ModelLanguageCapability = .multilingual
+    let isAvailable = true
+
+    func prepare() async throws {
+        throw ExpectedEngineFailure.failed
+    }
+
+    func transcribe(
+        audioURL: URL,
+        languageProfile: LanguageProfile,
+        initialPrompt: String?
+    ) async throws -> TranscriptionResult {
+        throw ExpectedEngineFailure.failed
+    }
+}
+
 func fakeEngineDescriptor(
     id: String,
     capability: ModelLanguageCapability,
@@ -2120,6 +2160,115 @@ guard fallbackRegistry.resolve(
     selectedID: nil
 )?.descriptor.id == secondChoice.descriptor.id else {
     failEngineCheck("fallback ordering did not skip unavailable first choice")
+}
+
+let failingPreferred = FailingSpeechEngine(
+    descriptor: fakeEngineDescriptor(
+        id: "failing-preferred",
+        capability: .multilingual
+    )
+)
+let workingFallback = fakeEngine(
+    id: "working-fallback",
+    capability: .multilingual
+)
+let failureFallbackRegistry = EngineRegistry(
+    engines: [failingPreferred, workingFallback],
+    fallbackOrder: [workingFallback.descriptor.id]
+)
+do {
+    try await failureFallbackRegistry.prepare(
+        for: englishProfile,
+        selectedID: failingPreferred.descriptor.id
+    )
+} catch {
+    failEngineCheck("engine preparation did not use its working fallback")
+}
+do {
+    let result = try await failureFallbackRegistry.transcribe(
+        audioURL: URL(fileURLWithPath: "/tmp/fallback.wav"),
+        profile: englishProfile,
+        selectedID: failingPreferred.descriptor.id
+    )
+    guard result.modelID == workingFallback.descriptor.id else {
+        failEngineCheck("transcription returned the wrong fallback engine")
+    }
+} catch {
+    failEngineCheck("transcription did not use its working fallback: \(error)")
+}
+let failingFallback = FailingSpeechEngine(
+    descriptor: fakeEngineDescriptor(
+        id: "failing-fallback",
+        capability: .multilingual
+    )
+)
+let allFailRegistry = EngineRegistry(
+    engines: [failingPreferred, failingFallback],
+    fallbackOrder: [failingFallback.descriptor.id]
+)
+do {
+    _ = try await allFailRegistry.transcribe(
+        audioURL: URL(fileURLWithPath: "/tmp/all-fail.wav"),
+        profile: englishProfile,
+        selectedID: failingPreferred.descriptor.id
+    )
+    failEngineCheck("an all-failed engine chain unexpectedly succeeded")
+} catch EngineError.transcriptionFailed(let id, _) {
+    guard id == failingFallback.descriptor.id else {
+        failEngineCheck("all-failed chain reported the wrong final engine")
+    }
+} catch {
+    failEngineCheck("all-failed chain returned the wrong error: \(error)")
+}
+
+// User cancellation is lifecycle control, not an engine failure. Keeping the
+// concrete cancellation prevents an intentional stop from being presented as
+// a failed decode or retained as recovery audio.
+let cancellingEngine = CancellingSpeechEngine(
+    descriptor: fakeEngineDescriptor(
+        id: "cancelling",
+        capability: .multilingual
+    )
+)
+let cancellingRegistry = EngineRegistry(engines: [cancellingEngine])
+do {
+    try await cancellingRegistry.prepare(
+        for: englishProfile,
+        selectedID: cancellingEngine.descriptor.id
+    )
+    failEngineCheck("cancelled engine preparation unexpectedly succeeded")
+} catch is CancellationError {
+    // Expected.
+} catch {
+    failEngineCheck("engine preparation hid CancellationError: \(error)")
+}
+do {
+    _ = try await cancellingRegistry.transcribe(
+        audioURL: URL(fileURLWithPath: "/tmp/cancelled.wav"),
+        profile: englishProfile,
+        selectedID: cancellingEngine.descriptor.id
+    )
+    failEngineCheck("cancelled transcription unexpectedly succeeded")
+} catch is CancellationError {
+    // Expected.
+} catch {
+    failEngineCheck("transcription hid CancellationError: \(error)")
+}
+let cancellationMustNotFallback = EngineRegistry(
+    engines: [cancellingEngine, workingFallback],
+    fallbackOrder: [workingFallback.descriptor.id]
+)
+do {
+    _ = try await cancellationMustNotFallback.transcribe(
+        audioURL: URL(fileURLWithPath: "/tmp/cancelled-before-fallback.wav"),
+        profile: englishProfile,
+        selectedID: cancellingEngine.descriptor.id
+    )
+    failEngineCheck("user cancellation incorrectly ran a fallback engine")
+} catch is CancellationError {
+    // Expected.
+} catch {
+    failEngineCheck("fallback path hid CancellationError: \(error)")
 }
 
 print("ZenVoiceCoreChecks: engine registry passed")
@@ -2717,6 +2866,75 @@ guard try! keyStore.loadKey() == nil else {
     failEngineCheck("the cloud API key survived deletion")
 }
 
+// A configuration written before `autoApply` existed must still decode, and
+// must decode as "keep asking". Falling back to a default configuration here
+// would quietly disable the feature and discard the user's endpoint, model,
+// and prompt.
+let legacyCloudConfiguration = """
+{
+  "isEnabled": true,
+  "provider": "anthropic",
+  "baseURL": "https://api.anthropic.com/v1",
+  "model": "claude-3-5-haiku-20241022",
+  "prompt": "Legacy prompt."
+}
+"""
+guard let legacyCloudData = legacyCloudConfiguration.data(using: .utf8),
+      let decodedLegacyCloud = try? JSONDecoder().decode(
+        CloudAIConfiguration.self,
+        from: legacyCloudData
+      ) else {
+    failEngineCheck("a pre-autoApply cloud configuration failed to decode")
+}
+guard decodedLegacyCloud.isEnabled,
+      decodedLegacyCloud.provider == .anthropic,
+      decodedLegacyCloud.model == "claude-3-5-haiku-20241022",
+      decodedLegacyCloud.prompt == "Legacy prompt." else {
+    failEngineCheck("a pre-autoApply cloud configuration lost its settings")
+}
+guard decodedLegacyCloud.autoApply == false else {
+    failEngineCheck(
+        "a pre-autoApply cloud configuration opted into silent application"
+    )
+}
+
+let localCloudTranscript = "Keep this local transcript exactly."
+let dismissedCloudResolution = CloudTranscriptResolution.resolve(
+    localTranscript: localCloudTranscript,
+    acceptedTranscript: nil
+)
+let blankCloudResolution = CloudTranscriptResolution.resolve(
+    localTranscript: localCloudTranscript,
+    acceptedTranscript: "   \n"
+)
+let acceptedCloudResolution = CloudTranscriptResolution.resolve(
+    localTranscript: localCloudTranscript,
+    acceptedTranscript: "Accepted enhancement."
+)
+guard dismissedCloudResolution.transcript == localCloudTranscript,
+      !dismissedCloudResolution.didApply,
+      blankCloudResolution.transcript == localCloudTranscript,
+      !blankCloudResolution.didApply,
+      acceptedCloudResolution.transcript == "Accepted enhancement.",
+      acceptedCloudResolution.didApply else {
+    failEngineCheck("cloud review could lose the local transcript")
+}
+
+// autoApply survives a save/load round trip, so consent given once stays
+// given.
+let autoApplyConfiguration = CloudAIConfiguration(
+    isEnabled: true,
+    autoApply: true
+)
+guard let autoApplyData = try? JSONEncoder().encode(autoApplyConfiguration),
+      let autoApplyDecoded = try? JSONDecoder().decode(
+        CloudAIConfiguration.self,
+        from: autoApplyData
+      ),
+      autoApplyDecoded.autoApply else {
+    failEngineCheck("autoApply did not survive an encode/decode round trip")
+}
+
 print("ZenVoiceCoreChecks: cloud AI enhancement passed")
 
 // MARK: - Anthropic request shape checks
@@ -2856,6 +3074,55 @@ TranscriptFormattingPreferences.save(.cloud, defaults: formattingDefaults)
 guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
         == .cloud else {
     failEngineCheck("formatting save/load failed")
+}
+
+// Smart and Cloud must reach the context-aware enhancer, not plain `.format`.
+// `.format` left `ZenIntelligenceEngine`'s context join unreachable: the
+// `context:` argument threaded from AppDelegate through
+// TranscriptFormattingEngine and WriteModeEngine was accepted and ignored at
+// every call site, anyone migrated from ZenIntelligence = Context Aware lost
+// sentence joining with no setting left to restore it, and ADR 0007's
+// description of Smart stopped matching the code. Nothing about that failed to
+// compile, so it is asserted here instead.
+for rung in [TranscriptFormattingMode.smart, .cloud] {
+    guard rung.zenIntelligenceMode == .contextAware else {
+        failEngineCheck(
+            "\(rung.rawValue) maps to \(rung.zenIntelligenceMode.rawValue); "
+                + "the context join is unreachable again"
+        )
+    }
+}
+for rung in [TranscriptFormattingMode.off, .clean] {
+    guard rung.zenIntelligenceMode == .off else {
+        failEngineCheck("\(rung.rawValue) should not enhance")
+    }
+}
+
+// The listing cache must never be able to answer for changed bytes on the
+// integrity path. `verify` hashes every time; only `verifyForListing` may
+// reuse an answer.
+let listingDirectory = FileManager.default.temporaryDirectory
+    .appendingPathComponent(UUID().uuidString, isDirectory: true)
+try FileManager.default.createDirectory(
+    at: listingDirectory,
+    withIntermediateDirectories: true
+)
+defer {
+    try? FileManager.default.removeItem(at: listingDirectory)
+}
+let listingURL = listingDirectory.appendingPathComponent("fixture.bin")
+try Data("ZenVoice".utf8).write(to: listingURL)
+guard try VerifiedModelCatalog.verifyForListing(
+    listingURL,
+    for: verifierModel
+) else {
+    failEngineCheck("listing verification rejected valid data")
+}
+try Data("ZenVoicf".utf8).write(to: listingURL)
+guard try !VerifiedModelCatalog.verify(listingURL, for: verifierModel) else {
+    failEngineCheck(
+        "verify() reused a cached answer for changed bytes"
+    )
 }
 
 print("ZenVoiceCoreChecks: formatting migration passed")

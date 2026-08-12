@@ -14,6 +14,35 @@
 
 import Foundation
 
+/// Resolves a cloud-review decision without risking the local transcript.
+///
+/// Closing, cancelling, timing out, or receiving an empty provider result all
+/// keep the exact local text. Only a non-empty accepted result is allowed to
+/// replace it.
+public struct CloudTranscriptResolution: Equatable, Sendable {
+    public let transcript: String
+    public let didApply: Bool
+
+    public static func resolve(
+        localTranscript: String,
+        acceptedTranscript: String?
+    ) -> CloudTranscriptResolution {
+        guard let acceptedTranscript,
+              !acceptedTranscript.trimmingCharacters(
+                in: .whitespacesAndNewlines
+              ).isEmpty else {
+            return CloudTranscriptResolution(
+                transcript: localTranscript,
+                didApply: false
+            )
+        }
+        return CloudTranscriptResolution(
+            transcript: acceptedTranscript,
+            didApply: true
+        )
+    }
+}
+
 // MARK: - Providers
 
 /// A hosted provider ZenVoice can send a transcript to, when the user opts in.
@@ -238,19 +267,68 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
     public var baseURL: String
     public var model: String
     public var prompt: String
+    /// Whether an enhanced transcript replaces the local one without stopping
+    /// to ask each time.
+    ///
+    /// Consent to send text off-device is given once, by enabling the feature
+    /// and storing a key. Re-asking after every sentence is a different
+    /// question — "did the model do a good job?" — and the user is entitled to
+    /// answer it once. Off by default so the first few dictations are
+    /// reviewable; `CloudAIPreferences` upgrades old stored configurations to
+    /// `false` rather than failing to decode them.
+    public var autoApply: Bool
 
     public init(
         isEnabled: Bool = false,
         provider: CloudAIProvider = .openAI,
         baseURL: String = CloudAIProvider.openAI.defaultBaseURL ?? "",
         model: String = CloudAIProvider.openAI.defaultModel ?? "",
-        prompt: String = CloudAIPromptTemplate.cleanUp.text
+        prompt: String = CloudAIPromptTemplate.cleanUp.text,
+        autoApply: Bool = false
     ) {
         self.isEnabled = isEnabled
         self.provider = provider
         self.baseURL = baseURL
         self.model = model
         self.prompt = prompt
+        self.autoApply = autoApply
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isEnabled
+        case provider
+        case baseURL
+        case model
+        case prompt
+        case autoApply
+    }
+
+    /// Decoded field by field so that adding a preference never invalidates a
+    /// configuration already on disk. Synthesised decoding would throw on the
+    /// missing `autoApply` key, and `CloudAIPreferences.load` would silently
+    /// hand back a default configuration — turning the feature off and losing
+    /// the user's endpoint and prompt.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let fallback = CloudAIConfiguration()
+        isEnabled = try container.decodeIfPresent(
+            Bool.self, forKey: .isEnabled
+        ) ?? fallback.isEnabled
+        provider = try container.decodeIfPresent(
+            CloudAIProvider.self, forKey: .provider
+        ) ?? fallback.provider
+        baseURL = try container.decodeIfPresent(
+            String.self, forKey: .baseURL
+        ) ?? provider.defaultBaseURL ?? ""
+        model = try container.decodeIfPresent(
+            String.self, forKey: .model
+        ) ?? provider.defaultModel ?? ""
+        prompt = try container.decodeIfPresent(
+            String.self, forKey: .prompt
+        ) ?? fallback.prompt
+        autoApply = try container.decodeIfPresent(
+            Bool.self, forKey: .autoApply
+        ) ?? false
     }
 
     /// Validates the configuration and returns the endpoint to POST to.

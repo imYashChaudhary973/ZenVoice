@@ -69,12 +69,27 @@ public enum TranscriptFormattingMode: String, Codable, CaseIterable, Sendable {
     }
 
     /// The ZenIntelligence mode that corresponds to this formatting rung.
+    ///
+    /// Smart maps to `.contextAware`, not `.format`. `.format` left the
+    /// context join unreachable: nothing returned `.contextAware`, so the
+    /// `context:` argument threaded from `AppDelegate` through
+    /// `TranscriptFormattingEngine` and `WriteModeEngine` was accepted and
+    /// then ignored at every call site. Two things were wrong with that.
+    /// Anyone migrated from ZenIntelligence = Context Aware — which the
+    /// migration maps onto Smart — silently lost sentence joining with no
+    /// setting left to restore it. And ADR 0007 describes Smart as
+    /// "capitalisation, number formatting, spacing, and a conservative context
+    /// join", which was no longer true of the code.
+    ///
+    /// The join is conservative by construction: it does nothing unless
+    /// `NextDictationContext.sanitized` yields a non-empty context, and the
+    /// meaning guard still rejects a destructive candidate.
     public var zenIntelligenceMode: ZenIntelligenceMode {
         switch self {
         case .off, .clean:
             return .off
         case .smart, .cloud:
-            return .format
+            return .contextAware
         }
     }
 
