@@ -1,10 +1,11 @@
 # ZenVoice documentation
 
 The index below points to documents that describe ZenVoice as it is now.
-Delivery plans for finished phases, superseded R&D, and retired benchmarks are
-retained as historical evidence but are not current product guidance. Accepted
-decisions and their rationale live in [`decisions/`](decisions/), and runtime
-truth lives in the code and executable checks.
+Delivery plans for finished phases and superseded R&D are removed rather than
+archived: git history keeps them, and a document that no longer describes the
+product is a liability in a directory people read for current guidance.
+Accepted decisions and their rationale live in [`decisions/`](decisions/), and
+runtime truth lives in the code and executable checks.
 
 ## The product
 
