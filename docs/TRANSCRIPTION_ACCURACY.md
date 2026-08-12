@@ -2,7 +2,10 @@
 
 Refinement is finished work: on real data the deterministic rules take word
 error rate from 23.2% to 7.2%, and nothing further has meaningful headroom
-(see [Refinement R&D](REFINEMENT_RD.md) section 8.9). What remains in a
+(measured on DISCO's 400 human-annotated English disfluent/fluent pairs:
+23.2% word error rate on the disfluent input, 7.2% after Clean, against a
+7.2% oracle ceiling — there is no headroom left above the deterministic
+rules). What remains in a
 finished transcript is *misheard words*, which is a transcription problem.
 
 This is the first measurement of ZenVoice against real human speech rather

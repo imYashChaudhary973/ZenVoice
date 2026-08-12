@@ -61,4 +61,3 @@ Write Mode is an opt-in mode switch in ZenBar alongside Dictation and Command.
 
 - ADR 0007 — ZenIntelligence
 - ADR 0008 — Command Mode
-- `docs/PHASE_3.md`

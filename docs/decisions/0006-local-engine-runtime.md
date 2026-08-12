@@ -118,6 +118,4 @@ converted to 16 kHz mono float PCM using `AVAudioConverter`
 
 - ADR 0005 — Multi-Engine Speech Architecture
 - ADR 0003 — Verified Model Catalogue and Local Verification
-- `docs/FluidAudio_Removal_Report.md`
-- `docs/PHASE_2.md`
 - `docs/LANGUAGE_MODEL_BENCHMARK_2026-08-06.md`

@@ -45,8 +45,9 @@ model added **0.0** on top of that. An oracle allowed to read the reference
 would have added 0.1. There was no work left for a model to do, so the
 download, the wait and the `llama.cpp` dependency were all buying nothing.
 
-The full investigation, including the five architectures tried and why each
-failed, is in [Refinement R&D](REFINEMENT_RD.md).
+The investigation that settled this — five architectures tried, each measured
+and each rejected — is not kept as a document: the conclusion is the code, and
+the numbers above are the part worth carrying.
 
 Clean is the default. The selected mode is stored in local user defaults.
 Instant Refine runs after recording stops and before text is saved or pasted.

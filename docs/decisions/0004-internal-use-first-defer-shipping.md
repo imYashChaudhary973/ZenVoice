@@ -42,8 +42,9 @@ regular personal use.
 - `docs/RELEASE_READINESS.md` remains the single source of truth for what must
   be done before any future public distribution, but its unchecked items are
   now explicitly deferred rather than urgent blockers.
-- `docs/BETA_GUIDE.md` is kept accurate by noting that the private beta is
-  paused while ZenVoice is refined for internal use.
+- The private-beta guide has been retired: the programme is paused while
+  ZenVoice is refined for internal use, and a paused programme needs a decision
+  record rather than an invitation process.
 - Security and privacy reviews continue to be valuable for protecting the
   developer's own data, not only for future users.
 - No source code, build scripts, CI workflows, or signing configuration are

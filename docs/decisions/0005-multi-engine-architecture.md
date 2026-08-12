@@ -123,4 +123,3 @@ The registry resolves an engine in this order:
 
 - ADR 0004 — Internal-use-first, defer public shipping
 - ADR 0003 — Verified model catalogue and local verification
-- `docs/PHASE_1.md`

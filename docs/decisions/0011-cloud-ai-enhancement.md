@@ -90,4 +90,3 @@ Cloud AI Enhancement is opt-in, bring-your-own-key, and narrow by construction.
 - ADR 0001 — Local data and model governance
 - ADR 0004 — Internal-use-first, defer shipping
 - ADR 0007 — ZenIntelligence (the on-device counterpart)
-- `docs/PHASE_5.md`

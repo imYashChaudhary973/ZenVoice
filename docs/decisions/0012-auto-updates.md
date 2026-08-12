@@ -91,4 +91,4 @@ Squirrel was not considered seriously — it targets Electron.
 
 - ADR 0004 — Internal-use-first, defer shipping
 - ADR 0011 — Cloud AI Enhancement (the other Phase 5 trust boundary)
-- `docs/PHASE_5.md`, `docs/RELEASE_READINESS.md`
+- `docs/RELEASE_READINESS.md`

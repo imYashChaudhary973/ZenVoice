@@ -88,4 +88,3 @@ Audio History is an opt-in, bounded, separately-governed archive.
 
 - ADR 0001 — Local data and model governance
 - ADR 0004 — Internal-use-first, defer shipping
-- `docs/PHASE_4.md`

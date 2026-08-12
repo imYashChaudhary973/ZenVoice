@@ -242,10 +242,74 @@ UI and application state remain on the main actor. Local speech transcription
 and deterministic text refinement run on a dedicated user-initiated serial
 queue so model processing does not block ZenBar.
 
+## Memory
+
+A loaded speech model is the dominant term in ZenVoice's memory use — measured
+at **600 MB** for Whisper Turbo and **940 MB** for Nemotron, almost all of it
+GPU buffers allocated in 128 MB regions. With no model resident the app sits at
+about **50 MB**.
+
+Measured on one machine with Whisper Turbo selected as the model and Nemotron
+as the engine:
+
+| | Steady | Peak at launch |
+| --- | --- | --- |
+| Before | 2,369 MB | 5,469 MB |
+| Streaming hash | 1,687 MB | 2,662 MB |
+| Warming only the engine in use | 991 MB | 1,930 MB |
+| After five idle minutes | **53 MB** | — |
+
+Three rules keep that from becoming the app's steady state:
+
+**Only the engine that will be used is warmed.** Warm-up used to load Whisper
+unconditionally *and* prepare whichever engine the user had selected, so a Mac
+set to Nemotron or Parakeet loaded two models at launch and held both — about
+600 MB spent on a decode that was never going to happen. `warmUpEngines()` now
+warms Whisper only when a dictation will actually reach it: when Whisper is the
+resolved engine, or when live preview is on, since preview decodes its partial
+segments with Whisper whatever produces the final transcript.
+
+**Models are unloaded after five idle minutes.** `AppDelegate` runs a one-shot
+timer, restarted by every route into a dictation, and calls
+`EngineRegistry.releaseAll()` when it expires. The next dictation reloads
+transparently — `beginRecording` already warms the engines. A dictation that
+outlives the timeout is not interrupted: the timer sees the app is busy and
+comes back in thirty seconds.
+
+`release()` is a `SpeechEngine` requirement with a no-op default, so an engine
+whose `prepare()` is cheap need not implement it — but every engine that loads
+weights must. Whisper, all three Parakeet variants, Nemotron and Cohere do.
+When only Whisper implemented it, idle unloading reclaimed the one model the
+user had *not* selected and left the other resident indefinitely.
+
+Freeing a model while a decode holds it would be a use-after-free, and the
+Whisper context is reached from two serial queues — the engine's own, and the
+app's transcription queue for live preview. `WhisperTranscriber` therefore
+counts decodes in flight and `unload()` waits for that count to reach zero.
+
+**Hashing streams.** `VerifiedModelCatalog.sha256Hex` reads in 1 MB chunks
+inside an `autoreleasepool`. Without the pool the chunks are autoreleased
+`NSData` that live until the function returns, which made hashing O(file size)
+rather than O(chunk): measured across a full install (~6.6 GB of models), the
+unpooled loop peaked at 6,364 MB against 5 MB pooled.
+
+`verify` itself never caches: it is the integrity boundary, and it re-hashes
+every time. The settings list — which runs over every catalogue entry each time
+the window opens, about 6.6 GB on a full install — calls `verifyForListing`
+instead, which may reuse this process's answer for a file whose path, size,
+modification date and identifier all match. That distinction is not cosmetic.
+Size and mtime are not an integrity boundary: a same-size edit inside the
+filesystem's timestamp resolution is indistinguishable from no edit at all,
+which is exactly what `ZenVoiceCoreChecks` demonstrates by rewriting a fixture
+in place and demanding a rejection. The worst a stale listing answer can do is
+leave a badge wrong in a list; nothing is loaded on its say-so, because
+`ZenVoiceConfiguration.discover` calls `verify` and hashes the bytes.
+
 ## Current trade-offs
 
-- The first transcription after launch or model selection pays the model-load
-  cost; later dictations reuse that in-memory context.
+- The first transcription after launch, after a model change, or after an idle
+  unload pays the model-load cost; later dictations reuse that in-memory
+  context.
 - English remains explicit even with a multilingual model. Automatic language
   detection is an opt-in profile because short phrases are easy to misclassify.
 - Users can configure toggle dictation, paste-last, and Private Dictation

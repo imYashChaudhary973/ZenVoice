@@ -72,13 +72,10 @@ The list below combines the feature requests from 2026-08-06 with the current Ze
 
 ## Documentation
 
-Each phase has its own detailed plan:
+Phases 1–5 are delivered; their plans have been retired now that the work is in
+the code and the decisions behind it are in [`decisions/`](decisions/). Only the
+phase in progress keeps a plan:
 
-- [Phase 1 — Foundation](PHASE_1.md)
-- [Phase 2 — Speed & Languages](PHASE_2.md)
-- [Phase 3 — Intelligence & Control](PHASE_3.md)
-- [Phase 4 — Experience](PHASE_4.md)
-- [Phase 5 — Distribution & Cloud Opt-In](PHASE_5.md)
 - [Phase 6 — Product & Interface](PHASE_6.md)
 
 ## Cross-cutting requirements

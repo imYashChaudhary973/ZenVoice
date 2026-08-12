@@ -95,7 +95,7 @@ them is usable. The defect that makes Hinglish bad is therefore invisible to it.
 
 What *can* be scored without a canonical spelling is whether the English half of
 a code-switched sentence survived as English. Four fixtures carry the loanword
-set from `docs/hinglish/01-diagnosis.md`, and each records the English spellings
+set, and each records the English spellings
 those words must come back as:
 
 ```
@@ -112,8 +112,11 @@ text handed to a Hindi voice would produce a pronunciation no Hinglish speaker
 uses.
 
 **Baseline, measured 2026-07-25 on Whisper Medium: 0/26.** Every English word is
-destroyed. That is the defect, not a harness fault; the cause and the plan are in
-[docs/hinglish/05-update-2026-07.md](hinglish/05-update-2026-07.md).
+destroyed. That is the defect, not a harness fault: any model that transcribes
+Hinglish as Devanagari and then romanizes it turns `computer` into `कंप्यूटर`
+into `kampyutara`. The fix is a Hinglish-native model that writes Latin script
+directly — see [Hinglish spelling](HINGLISH_SPELLING.md) and the catalogue entry
+for Hinglish Apex in [Model catalogue](MODEL_CATALOG.md).
 
 Because a metric that always returned zero would print exactly that baseline,
 the harness first scores a known-good and a known-broken string and fails if it

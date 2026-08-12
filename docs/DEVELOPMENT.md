@@ -162,6 +162,35 @@ push. Semgrep Community Edition runs independently on an Ubuntu runner. The
 Semgrep job uses the public rule registry, does not require an account token,
 and has read-only repository permission.
 
+## Measuring memory
+
+ZenVoice's memory is dominated by one thing: a resident speech model, 600 MB to
+940 MB depending on the engine, nearly all of it GPU buffers. See
+[Architecture](ARCHITECTURE.md#memory) for how that is bounded.
+
+Use `phys_footprint`, not `ps`'s RSS — RSS counts shared and file-backed pages
+and reads far higher than what the app actually costs:
+
+```sh
+PID=$(pgrep -f "ZenVoice.app/Contents/MacOS/ZenVoice" | head -1)
+footprint -p "$PID" | grep phys_footprint   # steady and peak
+footprint -p "$PID" | head -30              # by category
+heap "$PID" | head -30                      # live allocations, by class
+```
+
+Two categories are worth recognising:
+
+- **`Untagged`, in 128 MB regions** — whisper.cpp's Metal buffers. Expect
+  600–940 MB while a model is resident, and near zero after an idle unload.
+- **`Malloc Small (empty)`** — regions the allocator holds with nothing live in
+  them. A large number here means a burst of small allocations that were freed,
+  not a leak; `heap` will show the live total is small. Chasing it in `vmmap`
+  alone is misleading.
+
+`heap` is what identifies a retention bug by class. The 1 MB autorelease
+accumulation in `sha256Hex` showed up there as 333 live `NSConcreteData`
+objects of exactly 1,048,576 bytes.
+
 ## Deterministic audio E2E
 
 Debug builds can feed a known local audio file through the real recording,

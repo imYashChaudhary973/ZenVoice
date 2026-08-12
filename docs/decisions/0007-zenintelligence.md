@@ -50,6 +50,4 @@ rung of the single **Formatting** ladder:
 ## Related decisions
 
 - ADR 0005 — Multi-Engine Speech Architecture
-- `docs/PHASE_3.md`
 - `docs/PHASE_6.md`
-- `docs/REFINEMENT_RD.md`

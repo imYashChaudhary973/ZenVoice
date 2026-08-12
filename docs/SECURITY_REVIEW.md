@@ -129,5 +129,5 @@ assert the redaction rule against the encoded request body, so a future change
 that starts attaching app identity fails the build rather than shipping.
 
 This Phase 5 review is current as of 2026-08-06. Neither component has had
-manual QA against a live provider endpoint or a real signed feed; both are
-listed as open in `docs/PHASE_5.md`.
+manual QA against a live provider endpoint or a real signed feed; both remain
+open in [Release readiness](RELEASE_READINESS.md).

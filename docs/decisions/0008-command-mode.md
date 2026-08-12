@@ -75,5 +75,4 @@ Command Mode is **off by default** and requires explicit opt-in per app profile.
 ## Related decisions
 
 - ADR 0005 — Multi-Engine Speech Architecture
-- `docs/PHASE_3.md`
 - `docs/PRIVACY.md`

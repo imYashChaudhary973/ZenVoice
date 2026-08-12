@@ -208,7 +208,7 @@ against evidence from the user's own Mac.
 
 The reproducible M5 comparison across seven installed models, eight languages,
 multiple voices, speaking rates, memory, and real Hinglish is recorded in
-[LANGUAGE_MODEL_BENCHMARK_2026-07-26.md](LANGUAGE_MODEL_BENCHMARK_2026-07-26.md).
+[LANGUAGE_MODEL_BENCHMARK_2026-08-06.md](LANGUAGE_MODEL_BENCHMARK_2026-08-06.md).
 
 ## Bundled runtimes
 

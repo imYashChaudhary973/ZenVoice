@@ -29,7 +29,7 @@ result was usable. Three specific things went wrong:
 
 1. Removal of borrowed and dead UI
 2. Information architecture: 19 → 9 navigation entries
-3. New design system (indigo/violet on deep navy)
+3. New design system (moss on ink) and the window shell it lives in
 4. Screen-by-screen rebuild against that system
 5. Cloud refinement that works end to end, including Anthropic
 6. A real-dictation evaluation corpus
@@ -80,39 +80,72 @@ Current: 19 entries across 6 groups. Target: 9.
 
 ### 3. Design system
 
-Replaces ink + gold, which the user rejected. Never pure black.
+Replaces ink + gold, which the user rejected, and the indigo-violet palette that
+briefly replaced it. Never pure black. The full contract is
+[Design](DESIGN.md); this section records what the phase had to change.
 
 ```
-base     #0B0F1A   window background
-surface  #131A2B   cards
-raised   #1B2438   inputs, chips
-accent   #6D5EF8   indigo-violet
-glow     #8B7CFF   hover / active
-text     #E8EBF5   primary
-muted    #98A2B8   secondary
+canvas   #0B0D0C   window background
+surface  #161918   cards
+raised   #202423   inset rows, inputs, chips
+accent   #4FA88C   accent text, icons, meters
+fill     #35806A   selected navigation, primary buttons
+text     #EFF1F0   primary
+muted    #A5ABA9   secondary
 ```
 
-- [x] Rewrite `ZenDesignTokens.swift`: palette above, card radius 14 (from 4),
-      one spacing scale, one type scale.
-- [x] Card component: 14px radius, 1px hairline border, generous internal padding.
+The accent is a **muted** moss green, and it exists in two weights. One
+mid-green cannot both clear 4.5:1 as text on ink *and* carry white as a button
+fill — it lands near 3.8:1 in each direction, so accent text and button labels
+are simultaneously too faint. `accent` is the foreground weight, `accentFill`
+the background weight.
+
+- [x] Rewrite `ZenDesignTokens.swift`: palette above, card radius 16, nested
+      radii 12 and 8, one spacing scale, one type scale.
+- [x] Split the accent into foreground and background weights, and document
+      which job each one does.
+- [x] Card component: 16px radius, 1px hairline border, generous internal
+      padding. No horizontal rules between sections — a card already has an
+      edge.
 - [x] Tinted icon chips — icon over a translucent accent-tinted rounded square,
-      consistent 28×28.
-- [x] Sidebar: pill-shaped active state, single icon size, consistent label
-      baseline.
+      heading every page and every card.
+- [x] Sidebar: filled accent pill for the active row, accent-tinted icons at
+      rest, four labelled groups instead of nine one-item headings.
 - [x] Buttons: fixed height, consistent horizontal padding, one primary style,
       one secondary, one destructive. Equal sizing within any row.
-- [x] Metrics: large semibold numerals with a small caption beneath, as in the
-      reference dashboards.
+- [x] Metrics: uppercase eyebrow above the number, not below it — you read what
+      the number is before you read the number.
+- [x] Badges become sentence-case capsules. They carry proper nouns
+      ("Apple Silicon"), and uppercasing turned those into shouting.
 - [x] Remove monospace except where it carries meaning (shortcuts, model IDs,
       language codes, bundle IDs, revision/checksum metadata).
 - [x] Light mode derived from the same tokens, not hand-tuned separately.
+- [x] One `.tint()` at the window root so native switches, pop-up buttons, and
+      text selection stop rendering in the system blue.
+
+### 3a. Window shell
+
+The chrome the design system sits in, rebuilt to match the approved reference.
+
+- [x] Sidebar becomes an `NSVisualEffectView` with `behindWindow` blending,
+      running the full height of the window under the traffic lights.
+- [x] Root view paints no window-wide background, and the window's
+      `backgroundColor` is `.clear` — an opaque fill behind the material
+      flattens it to a plain grey panel.
+- [x] Content column carries its own 52pt top bar: app name on the left, one
+      capsule cluster of global actions on the right.
+- [x] Appearance moves from a sidebar-footer segmented control to a single
+      cycling toolbar button that names its current and next value.
+- [x] The window opens on launch. ZenVoice keeps its menu-bar presence and its
+      global hotkey, and closing the window drops the activation policy back to
+      `.accessory`.
 
 ### 4. Screen rebuild
 
 - [x] Home — status, today usage as large numerals, quick actions.
 - [x] Dictation, Languages & Models, Formatting, Commands, Personal, History,
       Privacy & Data, Help & About.
-- [ ] Alignment pass: every screen on the same grid, labels on a shared baseline,
+- [x] Alignment pass: every screen on the same grid, labels on a shared baseline,
       controls right-aligned consistently.
 - [x] Empty states for every list.
 

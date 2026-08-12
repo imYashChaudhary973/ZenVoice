@@ -209,7 +209,13 @@ Model provenance, licences, revisions, and checksums are documented in
 
 ## Documentation
 
+Start at the [documentation index](docs/README.md). Everything under `docs/`
+describes ZenVoice as it is now; finished delivery plans and superseded R&D are
+removed rather than archived, and the reasoning behind each decision lives in
+[`docs/decisions/`](docs/decisions/).
+
 - [Architecture](docs/ARCHITECTURE.md)
+- [Design](docs/DESIGN.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Privacy](docs/PRIVACY.md)
 - [Verified Model Catalogue](docs/MODEL_CATALOG.md)
