@@ -348,19 +348,43 @@ public enum VerifiedModelCatalog {
             .appendingPathComponent(model.filename)
     }
 
+    /// Streams `fileURL` through SHA-256 in fixed-size chunks.
+    ///
+    /// - Important: the `autoreleasepool` is what makes this streaming rather
+    ///   than a whole-file read. `FileHandle.read(upToCount:)` hands back an
+    ///   autoreleased `NSData` bridged into `Data`, and a bare loop has no pool
+    ///   of its own — so every chunk stayed alive until the function returned
+    ///   and the caller's pool drained. Hashing was therefore O(file size) in
+    ///   memory, not O(chunk).
+    ///
+    ///   Measured over the models a full install puts on disk (~6.6 GB), the
+    ///   unpooled loop peaked at 6,364 MB. Draining per chunk holds it flat at
+    ///   5 MB. Verification runs across every catalogue entry each time the
+    ///   window opens, so this was the single largest allocation in the app.
     public static func sha256Hex(of fileURL: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { try? handle.close() }
         var hasher = SHA256()
         while true {
-            let data = try handle.read(upToCount: 1024 * 1024) ?? Data()
-            if data.isEmpty {
+            let finished = try autoreleasepool { () -> Bool in
+                let data = try handle.read(upToCount: chunkSizeBytes) ?? Data()
+                if data.isEmpty {
+                    return true
+                }
+                hasher.update(data: data)
+                return false
+            }
+            if finished {
                 break
             }
-            hasher.update(data: data)
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
+
+    /// Read size for `sha256Hex`. Large enough that syscall overhead is
+    /// irrelevant on a multi-gigabyte model, small enough that one chunk is
+    /// never a meaningful allocation.
+    private static let chunkSizeBytes = 1024 * 1024
 
     public static func verify(
         _ fileURL: URL,
@@ -376,6 +400,95 @@ public enum VerifiedModelCatalog {
             return false
         }
         return try sha256Hex(of: fileURL) == model.sha256
+    }
+
+    /// `verify`, but allowed to reuse this process's answer for a file whose
+    /// identity has not changed.
+    ///
+    /// For the settings list only, which re-verifies every catalogue entry each
+    /// time the window opens — about 6.6 GB of hashing on a full install, to
+    /// re-derive an answer that is almost always the same one.
+    ///
+    /// - Important: deliberately *not* what `verify` does, and deliberately not
+    ///   used by `ZenVoiceConfiguration.discover`. Size and modification date
+    ///   are not an integrity boundary: a same-size edit inside the
+    ///   filesystem's timestamp resolution is indistinguishable from no edit at
+    ///   all, which is precisely what `ZenVoiceCoreChecks` proves when it
+    ///   rewrites a fixture in place and demands a rejection. The worst this
+    ///   can do is leave a stale badge in a list; nothing loads a model on its
+    ///   say-so, because the load path calls `verify` and hashes every time.
+    public static func verifyForListing(
+        _ fileURL: URL,
+        for model: VerifiedModel,
+        fileManager: FileManager = .default
+    ) throws -> Bool {
+        let values = try fileURL.resourceValues(forKeys: [
+            .isRegularFileKey,
+            .fileSizeKey,
+            .contentModificationDateKey,
+            .fileIdentifierKey
+        ])
+        guard values.isRegularFile == true,
+              Int64(values.fileSize ?? -1) == model.fileSizeBytes else {
+            return false
+        }
+        let identity = FileIdentity(
+            modelID: model.id,
+            expectedSHA256: model.sha256,
+            path: fileURL.standardizedFileURL.path,
+            sizeBytes: model.fileSizeBytes,
+            modifiedAt: values.contentModificationDate,
+            fileIdentifier: values.fileIdentifier
+        )
+        if let cached = VerificationCache.shared.result(for: identity) {
+            return cached
+        }
+        let verified = try verify(
+            fileURL,
+            for: model,
+            fileManager: fileManager
+        )
+        VerificationCache.shared.record(verified, for: identity)
+        return verified
+    }
+
+    /// What a cached verification result is keyed on.
+    ///
+    /// Deliberately includes `expectedSHA256`: when the catalogue pins a new
+    /// revision of a model the expected hash changes, which must invalidate
+    /// any cached pass for the old bytes even if the file on disk is untouched.
+    struct FileIdentity: Hashable {
+        let modelID: String
+        let expectedSHA256: String
+        /// Included because `fileIdentifier` is not available on every volume.
+        /// Without it, two different files reaching `verify` under the same
+        /// model id with matching size and mtime would collide, and the second
+        /// would be accepted on the first one's hash.
+        let path: String
+        let sizeBytes: Int64
+        let modifiedAt: Date?
+        let fileIdentifier: UInt64?
+    }
+
+    /// Backs `verifyForListing`. In-memory and never written to disk, so a
+    /// relaunch always re-hashes.
+    final class VerificationCache: @unchecked Sendable {
+        static let shared = VerificationCache()
+
+        private var entries: [FileIdentity: Bool] = [:]
+        private let lock = NSLock()
+
+        func result(for identity: FileIdentity) -> Bool? {
+            lock.lock()
+            defer { lock.unlock() }
+            return entries[identity]
+        }
+
+        func record(_ verified: Bool, for identity: FileIdentity) {
+            lock.lock()
+            entries[identity] = verified
+            lock.unlock()
+        }
     }
 
     private static func retiredParakeetModel() -> VerifiedModel {

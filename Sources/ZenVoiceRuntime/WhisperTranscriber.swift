@@ -47,6 +47,15 @@ public final class WhisperTranscriber: @unchecked Sendable {
     private let cleaner = TranscriptCleaner()
     private var context: OpaquePointer?
     private var hasWarmedUp = false
+    /// Guards `context` against being freed while a decode holds it.
+    ///
+    /// The context is reached from two serial queues — the engine's own, and
+    /// `AppDelegate.transcriptionQueue` for live preview — so "everything is
+    /// already serialized" was never quite true, and idle unloading turns that
+    /// latent race into a use-after-free. Decodes take a reference and release
+    /// it; `unload()` waits for the count to reach zero.
+    private let contextLock = NSCondition()
+    private var decodesInFlight = 0
     /// Resolved once — it reads the model file when the model is not in the
     /// catalogue, and transcription happens far too often to repeat that.
     private let usesBeamSearch: Bool
@@ -99,7 +108,7 @@ public final class WhisperTranscriber: @unchecked Sendable {
 
     /// Pays the model's one-off setup cost before the user needs it.
     ///
-    /// Loading is otherwise lazy — ``loadedContext()`` runs inside the *first*
+    /// Loading is otherwise lazy — the context is built inside the *first*
     /// `transcribe`, which is to say after the user has already stopped
     /// talking. On top of the file read, that first call is also where Metal
     /// builds its pipelines, and
@@ -110,19 +119,33 @@ public final class WhisperTranscriber: @unchecked Sendable {
     /// Whisper pays that cost with a real decode of one second of silence,
     /// which exercises mel, encoder and decoder and then reports no speech.
     ///
-    /// - Important: `context` is unguarded mutable state, so this must run on
-    ///   the same serial queue as every decode. Callers use
-    ///   `AppDelegate.transcriptionQueue`.
+    /// Re-warming after `unload()` is expected and cheap to ask for: the guard
+    /// flag drops on unload, so the next call rebuilds the context rather than
+    /// returning early against a model that is no longer resident.
     public func warmUp() {
-        guard !hasWarmedUp else {
+        // `hasWarmedUp` is read and written from the app's transcription queue
+        // while `unload()` clears it from the engine's — the same cross-queue
+        // access `contextLock` exists to cover, so it takes the lock too.
+        // Unguarded, a `hasWarmedUp = true` could land after an unload and the
+        // next warm-up would return early against a model that is no longer
+        // resident, pushing the Metal pipeline build onto the first real
+        // decode: precisely what warming exists to avoid.
+        contextLock.lock()
+        let alreadyWarm = hasWarmedUp
+        contextLock.unlock()
+        guard !alreadyWarm else {
             return
         }
-        guard (try? loadedContext()) != nil else {
+        guard (try? acquireContext()) != nil else {
             // A model that cannot load now may load later — a download could
             // still be finishing. Leave the flag down so a retry is possible.
             return
         }
+        // Loading is all this call needed; the decode below acquires its own.
+        releaseContext()
+        contextLock.lock()
         hasWarmedUp = true
+        contextLock.unlock()
         _ = try? transcribe(samples: [Float](repeating: 0, count: 16_000))
     }
 
@@ -157,7 +180,8 @@ public final class WhisperTranscriber: @unchecked Sendable {
         // moment of lead-in some models drop the opening word. See
         // ``WhisperDecoding/leadInSilenceSeconds``.
         let paddedSamples = WhisperDecoding.withLeadInSilence(samples)
-        let context = try loadedContext()
+        let context = try acquireContext()
+        defer { releaseContext() }
         var parameters = whisper_full_default_params(
             usesBeamSearch
                 ? WHISPER_SAMPLING_BEAM_SEARCH
@@ -328,7 +352,8 @@ public final class WhisperTranscriber: @unchecked Sendable {
         guard !samples.isEmpty else {
             throw TranscriptionError.invalidAudio
         }
-        let context = try loadedContext()
+        let context = try acquireContext()
+        defer { releaseContext() }
         let padded = WhisperDecoding.withLeadInSilence(samples)
         let threads = ProcessorTopology.decodeThreadCount
         let melStatus = padded.withUnsafeBufferPointer { buffer in
@@ -355,7 +380,56 @@ public final class WhisperTranscriber: @unchecked Sendable {
         return (String(cString: name), probabilities[Int(identifier)])
     }
 
-    private func loadedContext() throws -> OpaquePointer {
+    /// Loads the model if needed and registers a decode against it.
+    ///
+    /// Every caller must balance this with `releaseContext()`, which is what
+    /// lets `unload()` know the pointer is no longer in use. Use `defer`.
+    private func acquireContext() throws -> OpaquePointer {
+        contextLock.lock()
+        defer { contextLock.unlock() }
+        let loaded = try loadedContextLocked()
+        decodesInFlight += 1
+        return loaded
+    }
+
+    private func releaseContext() {
+        contextLock.lock()
+        decodesInFlight -= 1
+        contextLock.broadcast()
+        contextLock.unlock()
+    }
+
+    /// Frees the model, returning the Metal buffers a loaded Whisper context
+    /// holds — about 600 MB for Whisper Turbo. The next decode reloads it.
+    ///
+    /// Roughly 150 MB of ggml Metal allocator and pipeline state survives
+    /// `whisper_free` and is not recovered here.
+    ///
+    /// Blocks until any in-flight decode finishes, so this must not be called
+    /// from a queue that a decode could be waiting on.
+    public func unload() {
+        contextLock.lock()
+        while decodesInFlight > 0 {
+            contextLock.wait()
+        }
+        if let context {
+            whisper_free(context)
+        }
+        context = nil
+        // Down again so the next warm-up rebuilds Metal's pipelines rather
+        // than assuming they survived the free.
+        hasWarmedUp = false
+        contextLock.unlock()
+    }
+
+    /// Whether the model is currently resident.
+    public var isLoaded: Bool {
+        contextLock.lock()
+        defer { contextLock.unlock() }
+        return context != nil
+    }
+
+    private func loadedContextLocked() throws -> OpaquePointer {
         if let context {
             return context
         }

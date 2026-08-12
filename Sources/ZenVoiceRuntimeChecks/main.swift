@@ -45,6 +45,27 @@ private func makeSilentFixture() throws -> URL {
     return url
 }
 
+/// This process's physical footprint, which is what macOS charges the app.
+///
+/// `ps`-style RSS counts shared and file-backed pages and reads far higher
+/// than the number that matters, so the memory checks use this instead.
+private func footprintMB() -> Double {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(
+        MemoryLayout<task_vm_info_data_t>.size
+            / MemoryLayout<natural_t>.size
+    )
+    let status = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+            task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+        }
+    }
+    guard status == KERN_SUCCESS else {
+        return -1
+    }
+    return Double(info.phys_footprint) / 1024 / 1024
+}
+
 private func runPass(
     _ number: Int,
     transcriber: WhisperTranscriber,
@@ -132,6 +153,64 @@ do {
     } catch WhisperTranscriber.TranscriptionError.noSpeech {
         // Direct in-memory samples reached the no-speech decision.
     }
+    // Idle unloading is what keeps a menu-bar app from holding a gigabyte-plus
+    // Whisper context all day. Two things have to hold: `unload()` must
+    // actually give the memory back, and the transcriber must decode normally
+    // afterwards by reloading on demand.
+    let loadedMB = footprintMB()
+    transcriber.unload()
+    let unloadedMB = footprintMB()
+    let reclaimedMB = loadedMB - unloadedMB
+    guard !transcriber.isLoaded else {
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 4,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "unload() left the model resident."
+            ]
+        )
+    }
+    // A generous floor. The point is that unloading returns the weights, not
+    // that it returns every last page — ggml's Metal backend keeps allocator
+    // and pipeline state that survives `whisper_free`.
+    guard reclaimedMB > 200 else {
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 5,
+            userInfo: [
+                NSLocalizedDescriptionKey: String(
+                    format:
+                        "unload() reclaimed only %.0f MB "
+                        + "(%.0f MB before, %.0f MB after).",
+                    reclaimedMB,
+                    loadedMB,
+                    unloadedMB
+                )
+            ]
+        )
+    }
+    try runPass(3, transcriber: transcriber, audioURL: audioURL)
+    guard transcriber.isLoaded else {
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 6,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "Decoding after unload() did not reload the model."
+            ]
+        )
+    }
+    print(
+        String(
+            format:
+                "  memory %.0f MB loaded · %.0f MB after unload "
+                + "(reclaimed %.0f MB) · reloaded on next decode",
+            loadedMB,
+            unloadedMB,
+            reclaimedMB
+        )
+    )
     print(
         "ZenVoice runtime checks passed (persistent model + live samples: "
             + "\(transcriber.modelID))."

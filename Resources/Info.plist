@@ -30,5 +30,7 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>ZenVoice records your speech so it can transcribe it locally on this Mac.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>ZenVoice uses Apple Speech to turn your recordings into text when you select the Apple Speech engine.</string>
 </dict>
 </plist>

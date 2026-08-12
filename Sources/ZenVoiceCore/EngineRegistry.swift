@@ -104,16 +104,47 @@ public struct EngineRegistry: Sendable {
         for profile: LanguageProfile,
         selectedID: String?
     ) async throws {
-        guard let engine = resolve(for: profile, selectedID: selectedID) else {
+        let candidates = candidateEngines(
+            for: profile,
+            selectedID: selectedID
+        )
+        guard !candidates.isEmpty else {
             throw EngineError.noEngineAvailable
         }
-        do {
-            try await engine.prepare()
-        } catch {
+        var lastFailure: (id: String, error: Error)?
+        for engine in candidates {
+            try Task.checkCancellation()
+            do {
+                try await engine.prepare()
+                return
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
+                lastFailure = (engine.descriptor.id, error)
+            }
+        }
+        if let lastFailure {
             throw EngineError.preparationFailed(
-                engine.descriptor.id,
-                error
+                lastFailure.id,
+                lastFailure.error
             )
+        }
+        throw EngineError.noEngineAvailable
+    }
+
+    /// Frees every engine's loaded model.
+    ///
+    /// Called when dictation has been idle. Releasing all of them rather than
+    /// only the resolved one matters because the resolved engine changes with
+    /// the language profile and the user's selection, so an engine prepared
+    /// earlier in the session can still be holding a model nothing is going to
+    /// ask for.
+    public func releaseAll() async {
+        for engine in engines {
+            await engine.release()
         }
     }
 
@@ -124,21 +155,38 @@ public struct EngineRegistry: Sendable {
         selectedID: String?,
         initialPrompt: String? = nil
     ) async throws -> TranscriptionResult {
-        guard let engine = resolve(for: profile, selectedID: selectedID) else {
+        let candidates = candidateEngines(
+            for: profile,
+            selectedID: selectedID
+        )
+        guard !candidates.isEmpty else {
             throw EngineError.noEngineAvailable
         }
-        do {
-            return try await engine.transcribe(
-                audioURL: audioURL,
-                languageProfile: profile,
-                initialPrompt: initialPrompt
-            )
-        } catch {
+        var lastFailure: (id: String, error: Error)?
+        for engine in candidates {
+            try Task.checkCancellation()
+            do {
+                return try await engine.transcribe(
+                    audioURL: audioURL,
+                    languageProfile: profile,
+                    initialPrompt: initialPrompt
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
+                lastFailure = (engine.descriptor.id, error)
+            }
+        }
+        if let lastFailure {
             throw EngineError.transcriptionFailed(
-                engine.descriptor.id,
-                error
+                lastFailure.id,
+                lastFailure.error
             )
         }
+        throw EngineError.noEngineAvailable
     }
 
     /// Convenience that reads the saved preference before transcribing.
@@ -185,6 +233,48 @@ public struct EngineRegistry: Sendable {
         )
     }
 
+    /// Compatible, available engines in the exact order they should be tried.
+    ///
+    /// Deduplication matters because the selected engine can also appear in
+    /// `fallbackOrder`. The final pass preserves the registry's historical
+    /// behavior of using another compatible engine when a configured fallback
+    /// list is incomplete.
+    private func candidateEngines(
+        for profile: LanguageProfile,
+        selectedID: String?
+    ) -> [any SpeechEngine] {
+        var ordered: [any SpeechEngine] = []
+        var seen: Set<String> = []
+
+        func append(_ engine: any SpeechEngine) {
+            guard !seen.contains(engine.descriptor.id),
+                  isCompatible(engine: engine, profile: profile),
+                  engine.isAvailable else {
+                return
+            }
+            seen.insert(engine.descriptor.id)
+            ordered.append(engine)
+        }
+
+        if let selectedID,
+           let selected = engines.first(where: {
+               $0.descriptor.id == selectedID
+           }) {
+            append(selected)
+        }
+        for id in fallbackOrder {
+            if let fallback = engines.first(where: {
+                $0.descriptor.id == id
+            }) {
+                append(fallback)
+            }
+        }
+        for engine in engines {
+            append(engine)
+        }
+        return ordered
+    }
+
     func isCompatible(
         engine: any SpeechEngine,
         profile: LanguageProfile
@@ -202,4 +292,3 @@ public struct EngineRegistry: Sendable {
         return profile.isCompatible(with: engine.languageCapability)
     }
 }
-

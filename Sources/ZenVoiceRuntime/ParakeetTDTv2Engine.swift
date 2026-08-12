@@ -67,6 +67,66 @@ public final class ParakeetTDTv2Engine: @unchecked Sendable, SpeechEngine {
         )
     }
 
+    /// Whether the model is currently resident.
+    public var isLoaded: Bool {
+        queue.sync { context != nil }
+    }
+
+    /// Frees the loaded model. The next `transcribe` reloads on demand.
+    ///
+    /// Without this the idle unload only reclaimed Whisper, and whichever
+    /// engine the user had actually selected stayed resident forever.
+    public func release() async {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                self?.context = nil
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Loads the model if needed and hands back a strong reference to it.
+    ///
+    /// Load-if-nil and use must happen together on `queue`, and the caller must
+    /// hold the returned object rather than re-reading `context`. Idle
+    /// unloading nils that property from the same queue, so the old
+    /// `if context == nil { prepare() }` / `guard let context` pair had a
+    /// window between its two reads: a dictation starting exactly as the idle
+    /// timer fired saw a loaded engine, then a nil one, and failed with
+    /// "no engine available" instead of reloading. A strong reference also
+    /// keeps the underlying context alive for the duration of a decode that is
+    /// already running when `release()` lands — it is freed on deinit, not on
+    /// the property going nil.
+    private func loadedContext() async throws -> ParakeetContext {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<ParakeetContext, Error>) in
+            queue.async { [weak self] in
+                guard let self else {
+                    continuation.resume(
+                        throwing: EngineError.noEngineAvailable
+                    )
+                    return
+                }
+                do {
+                    if self.context == nil {
+                        self.context = try ParakeetContext(
+                            modelPath: self.modelURL.path
+                        )
+                    }
+                    guard let context = self.context else {
+                        continuation.resume(
+                            throwing: EngineError.noEngineAvailable
+                        )
+                        return
+                    }
+                    continuation.resume(returning: context)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     public func prepare() async throws {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
@@ -95,12 +155,7 @@ public final class ParakeetTDTv2Engine: @unchecked Sendable, SpeechEngine {
         guard isAvailable else {
             throw EngineError.noEngineAvailable
         }
-        if context == nil {
-            try await prepare()
-        }
-        guard let context else {
-            throw EngineError.noEngineAvailable
-        }
+        let context = try await loadedContext()
 
         return try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<TranscriptionResult, Error>)

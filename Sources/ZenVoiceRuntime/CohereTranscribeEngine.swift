@@ -104,6 +104,117 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
         )
     }
 
+    /// Whether the sessions are currently resident.
+    public var isLoaded: Bool {
+        queue.sync { encoderSession != nil }
+    }
+
+    /// Frees the ONNX sessions. The next `transcribe` reloads on demand.
+    ///
+    /// Worth more here than anywhere else: the Cohere encoder alone is a
+    /// 2.6 GB weights file.
+    public func release() async {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                self?.encoderSession = nil
+                self?.decoderSession = nil
+                self?.environment = nil
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Loads the sessions if needed and hands back strong references.
+    ///
+    /// Same reason as the other engines: load-if-nil and use have to happen
+    /// together on `queue`, because idle unloading nils these properties from
+    /// that queue. Reading them twice around an `await` let a dictation that
+    /// started as the idle timer fired see loaded sessions and then nil ones,
+    /// failing outright instead of reloading.
+    private func loadedSessions() async throws
+        -> (ORTSession, ORTSession, CohereTokenizer) {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<
+                (ORTSession, ORTSession, CohereTokenizer), Error
+            >) in
+            queue.async { [weak self] in
+                guard let self else {
+                    continuation.resume(
+                        throwing: CohereError.modelNotAvailable
+                    )
+                    return
+                }
+                do {
+                    if self.encoderSession == nil
+                        || self.decoderSession == nil
+                        || self.tokenizer == nil {
+                        try self.loadSessionsOnQueue()
+                    }
+                    guard let encoder = self.encoderSession,
+                          let decoder = self.decoderSession,
+                          let tokenizer = self.tokenizer else {
+                        continuation.resume(
+                            throwing: CohereError.modelNotAvailable
+                        )
+                        return
+                    }
+                    continuation.resume(
+                        returning: (encoder, decoder, tokenizer)
+                    )
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// Builds the ONNX environment, both sessions, and the tokenizer.
+    ///
+    /// - Important: must run on `queue`. `prepare()` and `loadedSessions()`
+    ///   both funnel here so there is one loading path rather than two that
+    ///   can drift.
+    private func loadSessionsOnQueue() throws {
+        self.environment = try ORTEnv(
+            loggingLevel: ORTLoggingLevel.warning
+        )
+        guard let environment = self.environment else {
+            throw CohereError.environmentNotCreated
+        }
+        let sessionOptions = try ORTSessionOptions()
+        // CoreML execution provider is disabled for this model
+        // because ONNX Runtime 1.24.x has a known bug where the
+        // CoreML EP resolves external data relative to the model
+        // *file* path instead of the model *directory*, producing
+        // ".../model.onnx/model.onnx.data: Not a directory". The
+        // CPU provider loads the external `.onnx.data` files
+        // correctly. Re-enable CoreML after upgrading to a release
+        // that includes microsoft/onnxruntime#28062.
+        //
+        // if #available(macOS 14.0, *) {
+        //     do {
+        //         let coreMLOptions = ORTCoreMLExecutionProviderOptions()
+        //         try sessionOptions.appendCoreMLExecutionProvider(
+        //             with: coreMLOptions
+        //         )
+        //     } catch {
+        //         // CoreML is optional; fall back to CPU.
+        //     }
+        // }
+        self.encoderSession = try ORTSession(
+            env: environment,
+            modelPath: self.encoderURL.path,
+            sessionOptions: sessionOptions
+        )
+        self.decoderSession = try ORTSession(
+            env: environment,
+            modelPath: self.decoderURL.path,
+            sessionOptions: sessionOptions
+        )
+        self.tokenizer = try CohereTokenizer(
+            contentsOf: self.tokenizerURL
+        )
+    }
+
     public func prepare() async throws {
         try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<Void, Error>) in
@@ -113,45 +224,7 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
                     return
                 }
                 do {
-                    self.environment = try ORTEnv(
-                        loggingLevel: ORTLoggingLevel.warning
-                    )
-                    guard let environment = self.environment else {
-                        throw CohereError.environmentNotCreated
-                    }
-                    let sessionOptions = try ORTSessionOptions()
-                    // CoreML execution provider is disabled for this model
-                    // because ONNX Runtime 1.24.x has a known bug where the
-                    // CoreML EP resolves external data relative to the model
-                    // *file* path instead of the model *directory*, producing
-                    // ".../model.onnx/model.onnx.data: Not a directory". The
-                    // CPU provider loads the external `.onnx.data` files
-                    // correctly. Re-enable CoreML after upgrading to a release
-                    // that includes microsoft/onnxruntime#28062.
-                    //
-                    // if #available(macOS 14.0, *) {
-                    //     do {
-                    //         let coreMLOptions = ORTCoreMLExecutionProviderOptions()
-                    //         try sessionOptions.appendCoreMLExecutionProvider(
-                    //             with: coreMLOptions
-                    //         )
-                    //     } catch {
-                    //         // CoreML is optional; fall back to CPU.
-                    //     }
-                    // }
-                    self.encoderSession = try ORTSession(
-                        env: environment,
-                        modelPath: self.encoderURL.path,
-                        sessionOptions: sessionOptions
-                    )
-                    self.decoderSession = try ORTSession(
-                        env: environment,
-                        modelPath: self.decoderURL.path,
-                        sessionOptions: sessionOptions
-                    )
-                    self.tokenizer = try CohereTokenizer(
-                        contentsOf: self.tokenizerURL
-                    )
+                    try self.loadSessionsOnQueue()
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
@@ -168,15 +241,8 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
         guard isAvailable else {
             throw CohereError.modelNotAvailable
         }
-        if encoderSession == nil || decoderSession == nil
-            || tokenizer == nil {
-            try await prepare()
-        }
-        guard let encoderSession,
-              let decoderSession,
-              let tokenizer else {
-            throw CohereError.modelNotAvailable
-        }
+        let (encoderSession, decoderSession, tokenizer) =
+            try await loadedSessions()
 
         return try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<TranscriptionResult, Error>)

@@ -68,6 +68,23 @@ public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
         )
     }
 
+    /// Whether the model is currently resident.
+    public var isLoaded: Bool {
+        transcriber.isLoaded
+    }
+
+    public func release() async {
+        // On the engine's own serial queue, matching `prepare()`. The
+        // transcriber additionally waits out any decode started from
+        // elsewhere before it frees anything.
+        await withCheckedContinuation { continuation in
+            queue.async { [transcriber] in
+                transcriber.unload()
+                continuation.resume()
+            }
+        }
+    }
+
     public func prepare() async throws {
         // Warm-up touches the unguarded whisper context, so it must run on the
         // engine's own serial queue.

@@ -57,6 +57,24 @@ public protocol SpeechEngine: Sendable {
         languageProfile: LanguageProfile,
         initialPrompt: String?
     ) async throws -> TranscriptionResult
+
+    /// Frees whatever `prepare()` acquired, returning the engine to its
+    /// unprepared state.
+    ///
+    /// Called when dictation has been idle long enough that holding a loaded
+    /// model costs more than reloading it will. A resident model runs from
+    /// about 600 MB (Whisper Turbo) to 940 MB (Nemotron), almost all of it GPU
+    /// buffers, and a menu-bar app that nobody is dictating into should not be
+    /// holding that.
+    ///
+    /// Must be safe to call when the engine was never prepared, and safe to
+    /// follow with `prepare()` or `transcribe(...)`, which reload on demand.
+    func release() async
+}
+
+public extension SpeechEngine {
+    /// Engines whose `prepare()` is cheap have nothing to give back.
+    func release() async {}
 }
 
 /// The family a transcription engine belongs to.

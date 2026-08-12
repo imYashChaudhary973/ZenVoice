@@ -16,6 +16,103 @@ import Foundation
 import Speech
 import ZenVoiceCore
 
+/// Thread-safe bridge between Speech's callback task and Swift concurrency.
+///
+/// Cancellation, timeout, a final result, and an error can arrive on different
+/// threads. The first terminal event wins; every later callback is ignored.
+private final class AppleSpeechRecognitionOperation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation:
+        CheckedContinuation<SFSpeechRecognitionResult, Error>?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var timeoutTask: Task<Void, Never>?
+    private var completion: Result<SFSpeechRecognitionResult, Error>?
+
+    func install(
+        continuation: CheckedContinuation<SFSpeechRecognitionResult, Error>
+    ) {
+        lock.lock()
+        if let completion {
+            lock.unlock()
+            continuation.resume(with: completion)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func install(recognitionTask: SFSpeechRecognitionTask) {
+        lock.lock()
+        let alreadyCompleted = completion != nil
+        if !alreadyCompleted {
+            self.recognitionTask = recognitionTask
+        }
+        lock.unlock()
+        if alreadyCompleted {
+            recognitionTask.cancel()
+        }
+    }
+
+    func install(timeoutTask: Task<Void, Never>) {
+        lock.lock()
+        let alreadyCompleted = completion != nil
+        if !alreadyCompleted {
+            self.timeoutTask = timeoutTask
+        }
+        lock.unlock()
+        if alreadyCompleted {
+            timeoutTask.cancel()
+        }
+    }
+
+    func receive(
+        result: SFSpeechRecognitionResult?,
+        error: Error?
+    ) {
+        if let error {
+            finish(.failure(error), cancelRecognition: true)
+        } else if let result, result.isFinal {
+            finish(.success(result), cancelRecognition: false)
+        }
+    }
+
+    func cancel() {
+        finish(.failure(CancellationError()), cancelRecognition: true)
+    }
+
+    func timeout() {
+        finish(
+            .failure(AppleSpeechEngine.AppleSpeechError.timedOut),
+            cancelRecognition: true
+        )
+    }
+
+    private func finish(
+        _ result: Result<SFSpeechRecognitionResult, Error>,
+        cancelRecognition: Bool
+    ) {
+        lock.lock()
+        guard completion == nil else {
+            lock.unlock()
+            return
+        }
+        completion = result
+        let continuation = continuation
+        self.continuation = nil
+        let recognitionTask = recognitionTask
+        self.recognitionTask = nil
+        let timeoutTask = timeoutTask
+        self.timeoutTask = nil
+        lock.unlock()
+
+        timeoutTask?.cancel()
+        if cancelRecognition {
+            recognitionTask?.cancel()
+        }
+        continuation?.resume(with: result)
+    }
+}
+
 /// Apple Speech (SFSpeechRecognizer) configured for on-device recognition.
 ///
 /// Audio never leaves the Mac: `requiresOnDeviceRecognition` is forced to `true`
@@ -27,7 +124,7 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
     public var descriptor: EngineDescriptor {
         let locales = Self.supportedLocales()
         let languages = locales.compactMap { locale in
-            LanguageCatalog.language(code: locale.languageCode ?? locale.identifier)
+            LanguageCatalog.language(code: Self.languageCode(for: locale))
         }
         return EngineDescriptor(
             id: Self.engineID,
@@ -92,26 +189,28 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
         }
 
         let processingStartedAt = Date()
-        let result = try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<
-                SFSpeechRecognitionResult?, Error
-            >) in
-            let task = recognizer.recognitionTask(with: request) { result, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let result, result.isFinal {
-                    continuation.resume(returning: result)
+        let operation = AppleSpeechRecognitionOperation()
+        let result = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<
+                    SFSpeechRecognitionResult, Error
+                >) in
+                operation.install(continuation: continuation)
+                let task = recognizer.recognitionTask(
+                    with: request
+                ) { result, error in
+                    operation.receive(result: result, error: error)
                 }
+                operation.install(recognitionTask: task)
+                let timeoutTask = Task { [weak operation] in
+                    try? await Task.sleep(for: .seconds(120))
+                    guard !Task.isCancelled else { return }
+                    operation?.timeout()
+                }
+                operation.install(timeoutTask: timeoutTask)
             }
-            // Detach a timeout so a hung recognizer does not block forever.
-            Task {
-                try? await Task.sleep(for: .seconds(120))
-                task.cancel()
-            }
-        }
-
-        guard let result else {
-            throw AppleSpeechError.noResult
+        } onCancel: {
+            operation.cancel()
         }
 
         let transcript = result.bestTranscription.formattedString
@@ -164,18 +263,22 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
         let code = profile.inputLanguageCode
         let supported = supportedLocales()
         if let exact = supported.first(where: {
-            $0.languageCode == code
+            languageCode(for: $0) == code
         }) {
             return exact
         }
         // Fall back to a locale whose language code matches, ignoring region.
         if let fallback = supported.first(where: {
-            $0.languageCode?.hasPrefix(code) == true
-                || code.hasPrefix($0.languageCode ?? "")
+            languageCode(for: $0).hasPrefix(code)
+                || code.hasPrefix(languageCode(for: $0))
         }) {
             return fallback
         }
         return Locale(identifier: code)
+    }
+
+    private static func languageCode(for locale: Locale) -> String {
+        locale.language.languageCode?.identifier ?? locale.identifier
     }
 
     private func contextualStrings(from prompt: String) -> [String] {
@@ -190,6 +293,7 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
         case notAuthorized
         case unsupportedLocale(String)
         case noResult
+        case timedOut
 
         public var errorDescription: String? {
             switch self {
@@ -203,6 +307,8 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
                     + "\(locale)."
             case .noResult:
                 return "Apple Speech did not return a transcript."
+            case .timedOut:
+                return "Apple Speech timed out before returning a transcript."
             }
         }
     }
