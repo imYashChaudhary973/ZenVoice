@@ -147,9 +147,42 @@ development. This artifact must not be described as a release candidate.
   manual row above passes or has an approved, documented scope exclusion.
 - Repair or replace the untrusted Apple Development certificate chain before
   treating a future artifact as signature-verified.
-- Add a CoreAudio-compatible external-input capture path. The current
-  `AVCaptureDevice` catalogue cannot see the connected USB input, so M12's
-  selection/disconnection claim is incomplete on this Mac.
+- Establish whether an external-input capture path is needed at all. The
+  premise recorded for M12 — that the `AVCaptureDevice` catalogue cannot see
+  the connected USB input — did not reproduce; see the follow-up below.
+
+## Follow-up — 2026-08-12: external input did not reproduce
+
+M12 was recorded as `Fail` on the grounds that ZenVoice's `AVCaptureDevice`
+catalogue exposed only the built-in microphone while CoreAudio reported the
+connected `USBAudio1.0` input. A probe run today issues the same discovery
+session the app issues — `deviceTypes: [.microphone, .external]`,
+`mediaType: .audio` — and enumerates every CoreAudio input device for
+comparison. All four inputs appear in both lists:
+
+| Device | Transport | In `AVCaptureDevice` catalogue |
+|---|---|---|
+| MacBook Pro Microphone | built-in | Yes |
+| USBAudio1.0 (`AppleUSBAudioEngine:Jieli Technology:…`) | usb | Yes |
+| JBL Tune 770NC | bluetooth | Yes |
+| Yash's iPhone Microphone | continuity | Yes |
+
+The code paths are also not the problem on inspection.
+`MicrophoneCatalog.devices()` and `AudioRecorder.resolvedDevice(uid:)` issue
+identical discovery sessions, `SettingsViewModel` already refreshes on
+`AVCaptureDevice.wasConnectedNotification` and `wasDisconnectedNotification`,
+and `AudioScreen` renders the resulting list unfiltered.
+
+One variable is uncontrolled: the probe runs under the terminal's TCC identity,
+not the app's. What remains is a single in-app observation — plug the USB input
+in, open Dictation → Audio, and record what the microphone list shows. If all
+four devices appear, M12 needs re-running rather than a capture-path change,
+and this row's stated cause was wrong. If only the built-in appears, the
+difference is the app's own microphone authorisation rather than the discovery
+API, and that is what to investigate next.
+
+No capture-path work should start before that observation. Rewriting onto
+CoreAudio would be a fix for a defect that has not been reproduced.
 
 ## Current conclusion
 
