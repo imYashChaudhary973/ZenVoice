@@ -70,14 +70,27 @@ final class CloudAIViewModel: ObservableObject {
         configuration.isEnabled = enabled
         persist()
         if !enabled {
-            // Turning the feature off removes the credential too, rather than
-            // leaving a live third-party key sitting in the Keychain.
-            try? keyStore.deleteKey()
-            hasStoredKey = false
-            apiKeyDraft = ""
+            // The key stays in the Keychain. Deleting it here made the toggle
+            // destructive: flipping the feature off to compare output, or
+            // switching formatting away from Cloud and back, silently threw
+            // away a credential the user had to go and re-issue. Nothing is
+            // sent while the feature is off, and "Remove" deletes the key
+            // outright for anyone who wants it gone.
             preview = nil
-            statusMessage = "Cloud AI is off and the stored key was removed."
+            statusMessage = hasStoredKey
+                ? "Cloud AI is off. Nothing is sent. Your key is still in the "
+                    + "Keychain — use Remove to delete it."
+                : "Cloud AI is off. Nothing is sent."
         }
+    }
+
+    /// Whether an enhanced transcript replaces the local one without asking.
+    func setAutoApply(_ autoApply: Bool) {
+        configuration.autoApply = autoApply
+        persist()
+        statusMessage = autoApply
+            ? "Enhanced text will be applied automatically after each dictation."
+            : "You will be asked to review each enhancement before it applies."
     }
 
     func setProvider(_ provider: CloudAIProvider) {

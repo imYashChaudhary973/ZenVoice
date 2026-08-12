@@ -32,12 +32,12 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
     @Published var statusMessage: String?
 
     private let preferences: AudioHistoryPreferences
-    private let vaultProvider: () throws -> DictationVault
+    private let vaultProvider: () async throws -> DictationVault
     private var player: AVAudioPlayer?
 
     init(
         preferences: AudioHistoryPreferences = AudioHistoryPreferences(),
-        vaultProvider: @escaping () throws -> DictationVault
+        vaultProvider: @escaping () async throws -> DictationVault
     ) {
         self.preferences = preferences
         self.vaultProvider = vaultProvider
@@ -89,6 +89,10 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
     // MARK: - Loading
 
     func refresh() {
+        Task { await refreshNow() }
+    }
+
+    private func refreshNow() async {
         guard isEnabled else {
             records = []
             totalSizeBytes = 0
@@ -96,9 +100,9 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
             return
         }
         do {
-            let vault = try vaultProvider()
-            records = try vault.audioArchiveRecent()
-            totalSizeBytes = try vault.audioArchiveTotalSize()
+            let vault = try await vaultProvider()
+            records = try await vault.audioArchiveRecent()
+            totalSizeBytes = try await vault.audioArchiveTotalSize()
             // Drop selections whose records are gone.
             let ids = Set(records.map(\.id))
             selection = selection.intersection(ids)
@@ -110,22 +114,26 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
 
     /// Applies the age and size budgets, then reloads.
     private func applyBudgets() {
+        Task { await applyBudgetsNow() }
+    }
+
+    private func applyBudgetsNow() async {
         guard isEnabled else { return }
         do {
-            let vault = try vaultProvider()
+            let vault = try await vaultProvider()
             let cutoff = Calendar.current.date(
                 byAdding: .day,
                 value: -preferences.maxAgeDays,
                 to: Date()
             ) ?? Date.distantPast
-            _ = try vault.purgeAudioArchive(olderThan: cutoff)
-            _ = try vault.enforceAudioArchiveSizeBudget(
+            _ = try await vault.purgeAudioArchive(olderThan: cutoff)
+            _ = try await vault.enforceAudioArchiveSizeBudget(
                 preferences.maxSizeBytes
             )
         } catch {
             errorMessage = error.localizedDescription
         }
-        refresh()
+        await refreshNow()
     }
 
     // MARK: - Playback
@@ -181,25 +189,33 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
         if playingRecordID == record.id {
             stopPlayback()
         }
+        Task { await deleteNow(record) }
+    }
+
+    private func deleteNow(_ record: AudioArchiveRecord) async {
         do {
-            try vaultProvider().deleteAudioArchive(id: record.id)
+            try await vaultProvider().deleteAudioArchive(id: record.id)
             selection.remove(record.id)
             statusMessage = "Recording deleted."
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
-        refresh()
+        await refreshNow()
     }
 
     func deleteSelected() {
         let targets = records.filter { selection.contains($0.id) }
         guard !targets.isEmpty else { return }
         stopPlayback()
+        Task { await deleteSelectedNow(targets) }
+    }
+
+    private func deleteSelectedNow(_ targets: [AudioArchiveRecord]) async {
         do {
-            let vault = try vaultProvider()
+            let vault = try await vaultProvider()
             for record in targets {
-                try vault.deleteAudioArchive(id: record.id)
+                try await vault.deleteAudioArchive(id: record.id)
             }
             selection = []
             statusMessage = targets.count == 1
@@ -209,20 +225,24 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
-        refresh()
+        await refreshNow()
     }
 
     func deleteAll() {
         stopPlayback()
+        Task { await deleteAllNow() }
+    }
+
+    private func deleteAllNow() async {
         do {
-            let deleted = try vaultProvider().deleteAllAudioArchives()
+            let deleted = try await vaultProvider().deleteAllAudioArchives()
             selection = []
             statusMessage = "\(deleted) recordings deleted."
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
-        refresh()
+        await refreshNow()
     }
 
     // MARK: - Export
@@ -249,8 +269,25 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
             return
         }
 
+        Task { await exportNow(targets, to: destination) }
+    }
+
+    private func exportNow(
+        _ targets: [AudioArchiveRecord],
+        to destination: URL
+    ) async {
         do {
-            let vault = try vaultProvider()
+            let vault = try await vaultProvider()
+            var transcripts: [UUID: String] = [:]
+            if includeTranscriptsInExport {
+                for record in targets {
+                    if let transcript = try await vault.record(
+                        id: record.dictationID
+                    )?.finalTranscript {
+                        transcripts[record.dictationID] = transcript
+                    }
+                }
+            }
             try AudioArchiveExporter.export(
                 records: targets,
                 options: AudioArchiveExportOptions(
@@ -258,7 +295,7 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
                 ),
                 to: destination,
                 transcriptProvider: { dictationID in
-                    try? vault.record(id: dictationID)?.finalTranscript
+                    transcripts[dictationID]
                 }
             )
             statusMessage = targets.count == 1

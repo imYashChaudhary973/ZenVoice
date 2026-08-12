@@ -19,10 +19,7 @@ struct OverlayScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        ZenScreen(
-            title: "Overlay",
-            subtitle: "Choose how ZenVoice appears on screen while dictating."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             styleSection
             if viewModel.livePreviewOverlayEnabled {
                 previewSection
@@ -86,7 +83,7 @@ struct OverlayScreen: View {
             caption: "Approximate size and shape on screen."
         ) {
             ZenPanel {
-                HStack(spacing: 16) {
+                HStack(spacing: ZenDesign.Spacing.md) {
                     RoundedRectangle(
                         cornerRadius: ZenDesign.Radius.bar,
                         style: .continuous
@@ -108,7 +105,7 @@ struct OverlayScreen: View {
                     )
                     .overlay {
                         previewContent
-                            .padding(10)
+                            .padding(ZenDesign.Spacing.xs)
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -127,13 +124,13 @@ struct OverlayScreen: View {
     @ViewBuilder
     private var previewContent: some View {
         if viewModel.activeOverlayKind == .zenBar {
-            HStack(spacing: 8) {
+            HStack(spacing: ZenDesign.Spacing.xs) {
                 BrandLogo(size: 18)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Dictation")
                         .font(.system(size: 12, weight: .medium))
                     Text("Ready")
-                        .font(.system(size: 10.5))
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
                 }
                 Spacer()

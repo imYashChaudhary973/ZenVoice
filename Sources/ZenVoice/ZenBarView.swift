@@ -88,7 +88,7 @@ struct ZenBarView: View {
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         Text("Ready")
-                            .font(.system(size: 10.5))
+                            .font(ZenDesign.Typography.caption)
                             .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     }
                     Spacer()
@@ -136,7 +136,7 @@ struct ZenBarView: View {
                 )
             }
             .padding(.leading, 14)
-            .padding(.trailing, 8)
+            .padding(.trailing, ZenDesign.Spacing.xs)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel("ZenVoice is listening")
 
@@ -155,6 +155,33 @@ struct ZenBarView: View {
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel("Transcribing locally")
+
+        case .awaitingCloudReview:
+            // The review panel does not take focus, so without this the bar
+            // sat on "transcribing…" while nothing was happening and the
+            // shortcut appeared to have died. Says what it is waiting for and
+            // how to get out of it.
+            VStack(alignment: .leading, spacing: 2) {
+                ZenStatusLabel(
+                    text: "review cloud text…",
+                    tint: ZenDesign.Semantic.accent,
+                    pulses: false
+                )
+                Text("Press your dictation shortcut to keep the local text.")
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .lineLimit(1)
+            }
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: .leading
+            )
+            .padding(.horizontal, 14)
+            .accessibilityLabel(
+                "Waiting for your cloud review. Press your dictation "
+                + "shortcut to keep the local text."
+            )
 
         case .inserting:
             HStack(spacing: 10) {
@@ -214,7 +241,7 @@ struct ZenBarView: View {
                 OverlayBarButton(title: "Dismiss", action: dismissError)
             }
             .padding(.leading, 14)
-            .padding(.trailing, 8)
+            .padding(.trailing, ZenDesign.Spacing.xs)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel(displayedError(message))
         }
@@ -228,7 +255,7 @@ struct ZenBarView: View {
                     setMode(mode)
                 } label: {
                     Image(systemName: mode.icon)
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(ZenDesign.Typography.captionStrong)
                         .foregroundStyle(
                             isSelected
                                 ? ZenDesign.Semantic.textPrimary
@@ -265,6 +292,8 @@ struct ZenBarView: View {
             return state.liveTranscriptPreview.isEmpty ? 400 : 560
         case .transcribing, .inserting:
             return 310
+        case .awaitingCloudReview:
+            return 460
         case .success:
             return state.lastDecodeWarning == nil ? 420 : 530
         case .error:

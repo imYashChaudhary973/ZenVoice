@@ -29,10 +29,52 @@ struct CloudAIConfigurationView: View {
             if viewModel.configuration.isEnabled {
                 providerSection
                 keySection
+                applySection
                 promptSection
                 previewSection
             }
             messageSection
+        }
+    }
+
+    /// Whether a dictation gets enhanced silently or stops to be reviewed.
+    ///
+    /// Sending the text off-device is the decision that needs consent, and it
+    /// has already been made by the time this section renders. This one is
+    /// about trust in the output, which is the user's call to make once.
+    private var applySection: some View {
+        ZenSection(
+            title: "Applying enhancements",
+            caption: viewModel.configuration.autoApply
+                ? "No prompt after dictation"
+                : "Review each one"
+        ) {
+            ZenPanel {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                    Toggle(
+                        "Apply enhanced text automatically",
+                        isOn: Binding(
+                            get: { viewModel.configuration.autoApply },
+                            set: { viewModel.setAutoApply($0) }
+                        )
+                    )
+                    .toggleStyle(.switch)
+
+                    Text(
+                        viewModel.configuration.autoApply
+                            ? "Enhanced text replaces your local transcript as "
+                                + "soon as it arrives. Nothing interrupts you "
+                                + "after you finish speaking."
+                            : "After each dictation, ZenVoice shows the local "
+                                + "and enhanced text side by side and waits "
+                                + "for you to accept or discard."
+                    )
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(ZenDesign.Spacing.md)
+            }
         }
     }
 
@@ -78,41 +120,39 @@ struct CloudAIConfigurationView: View {
         ZenSection(title: "Provider") {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
-                    Picker(
-                        "Provider",
-                        selection: Binding(
-                            get: { viewModel.configuration.provider },
-                            set: { viewModel.setProvider($0) }
-                        )
+                    HStack(
+                        alignment: .firstTextBaseline,
+                        spacing: ZenDesign.Spacing.sm
                     ) {
-                        ForEach(CloudAIProvider.allCases, id: \.self) { item in
-                            Text(item.displayName).tag(item)
-                        }
+                        Text("Provider")
+                            .font(ZenDesign.Typography.body)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            .frame(width: 64, alignment: .leading)
+
+                        providerPicker
                     }
 
-                    if viewModel.configuration.provider.knownModels.isEmpty {
-                        TextField(
-                            "Model",
-                            text: Binding(
-                                get: { viewModel.configuration.model },
-                                set: { viewModel.setModel($0) }
+                    HStack(
+                        alignment: .firstTextBaseline,
+                        spacing: ZenDesign.Spacing.sm
+                    ) {
+                        Text("Model")
+                            .font(ZenDesign.Typography.body)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            .frame(width: 64, alignment: .leading)
+
+                        if viewModel.configuration.provider.knownModels.isEmpty {
+                            TextField(
+                                "Model",
+                                text: Binding(
+                                    get: { viewModel.configuration.model },
+                                    set: { viewModel.setModel($0) }
+                                )
                             )
-                        )
-                        .textFieldStyle(.roundedBorder)
-                    } else {
-                        Picker(
-                            "Model",
-                            selection: Binding(
-                                get: { viewModel.configuration.model },
-                                set: { viewModel.setModel($0) }
-                            )
-                        ) {
-                            ForEach(
-                                viewModel.configuration.provider.knownModels,
-                                id: \.self
-                            ) { model in
-                                Text(model).tag(model)
-                            }
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: .infinity)
+                        } else {
+                            modelPicker
                         }
                     }
 
@@ -124,6 +164,7 @@ struct CloudAIConfigurationView: View {
                         )
                     )
                     .textFieldStyle(.roundedBorder)
+                    .padding(.top, ZenDesign.Spacing.xs)
 
                     Text(
                         "The endpoint must use HTTPS. Choose Custom endpoint to "
@@ -133,10 +174,47 @@ struct CloudAIConfigurationView: View {
                     .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, ZenDesign.Spacing.xs)
                 }
                 .padding(ZenDesign.Spacing.md)
             }
         }
+    }
+
+    private var providerPicker: some View {
+        Picker(
+            "Provider",
+            selection: Binding(
+                get: { viewModel.configuration.provider },
+                set: { viewModel.setProvider($0) }
+            )
+        ) {
+            ForEach(CloudAIProvider.allCases, id: \.self) { item in
+                Text(item.displayName).tag(item)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, ZenDesign.Spacing.xs)
+    }
+
+    private var modelPicker: some View {
+        Picker(
+            "Model",
+            selection: Binding(
+                get: { viewModel.configuration.model },
+                set: { viewModel.setModel($0) }
+            )
+        ) {
+            ForEach(modelOptions, id: \.self) { model in
+                Text(model).tag(model)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, ZenDesign.Spacing.xs)
     }
 
     private var keySection: some View {
@@ -164,10 +242,17 @@ struct CloudAIConfigurationView: View {
                             .disabled(!viewModel.hasStoredKey)
                     }
 
+                    // Says what the code does. This used to promise that
+                    // turning Cloud AI off deleted the key, which stopped
+                    // being true when the toggle was made non-destructive —
+                    // so anyone flipping it off to stop sending text believed
+                    // their provider credential had been destroyed while it
+                    // was still in the Keychain.
                     Text(
                         "The key is stored in your macOS Keychain, never in "
                         + "preferences and never in the transcript database. "
-                        + "Turning Cloud AI off deletes it."
+                        + "Turning Cloud AI off stops anything being sent but "
+                        + "keeps the key — use Remove to delete it."
                     )
                     .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
@@ -176,6 +261,23 @@ struct CloudAIConfigurationView: View {
                 .padding(ZenDesign.Spacing.md)
             }
         }
+    }
+
+    /// The provider's known models, plus whatever is currently stored.
+    ///
+    /// A `Picker` shows a blank selection when nothing carries the selected
+    /// tag. Replacing the free-text model field with a fixed list therefore
+    /// left anyone whose saved model predates that list — `gpt-4-turbo`, an
+    /// older Groq id — looking at an empty control while the unlisted value
+    /// was still what got sent. Keeping the stored value in the list means the
+    /// UI always shows what will actually be used.
+    private var modelOptions: [String] {
+        let known = viewModel.configuration.provider.knownModels
+        let current = viewModel.configuration.model
+        guard !current.isEmpty, !known.contains(current) else {
+            return known
+        }
+        return known + [current]
     }
 
     private var promptSection: some View {
@@ -272,7 +374,7 @@ struct CloudAIConfigurationView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
-                .font(.system(size: 9.5, weight: .semibold))
+                .font(ZenDesign.Typography.eyebrow)
                 .tracking(1.5)
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)
             ScrollView {
@@ -283,7 +385,7 @@ struct CloudAIConfigurationView: View {
                     .textSelection(.enabled)
             }
             .frame(maxHeight: 140)
-            .padding(8)
+            .padding(ZenDesign.Spacing.xs)
             .background {
                 RoundedRectangle(cornerRadius: ZenDesign.Radius.small)
                     .fill(ZenDesign.Semantic.surfaceRaised)

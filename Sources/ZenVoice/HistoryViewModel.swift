@@ -37,15 +37,15 @@ final class HistoryViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let preferences: HistoryPreferences
-    private let vaultProvider: () throws -> DictationVault
-    private let retryRecord: (DictationRecord) -> Result<Void, Error>
+    private let vaultProvider: () async throws -> DictationVault
+    private let retryRecord: (DictationRecord) async -> Result<Void, Error>
     private let privacyChanged: () -> Void
 
     init(
         preferences: HistoryPreferences,
-        vaultProvider: @escaping () throws -> DictationVault,
+        vaultProvider: @escaping () async throws -> DictationVault,
         retryRecord: @escaping
-            (DictationRecord) -> Result<Void, Error>,
+            (DictationRecord) async -> Result<Void, Error>,
         privacyChanged: @escaping () -> Void
     ) {
         self.preferences = preferences
@@ -103,12 +103,16 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func refresh() {
+        Task { await refreshNow() }
+    }
+
+    private func refreshNow() async {
         guard historyEnabled || preferences.hasEverEnabledHistory else {
             records = []
             return
         }
         do {
-            records = try vaultProvider().recent(limit: 500)
+            records = try await vaultProvider().recent(limit: 500)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -116,14 +120,18 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func enableHistory() {
+        Task { await enableHistoryNow() }
+    }
+
+    private func enableHistoryNow() async {
         do {
-            _ = try vaultProvider()
+            _ = try await vaultProvider()
             preferences.isHistoryEnabled = true
             historyEnabled = true
             hasMadeHistoryChoice = true
             errorMessage = nil
             privacyChanged()
-            refresh()
+            await refreshNow()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -149,9 +157,13 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func setRetainsFailedAudio(_ enabled: Bool) {
+        Task { await setRetainsFailedAudioNow(enabled) }
+    }
+
+    private func setRetainsFailedAudioNow(_ enabled: Bool) async {
         if !enabled {
             do {
-                _ = try vaultProvider().deleteAllRecoveryAudio()
+                _ = try await vaultProvider().deleteAllRecoveryAudio()
             } catch {
                 errorMessage = error.localizedDescription
                 return
@@ -160,7 +172,7 @@ final class HistoryViewModel: ObservableObject {
         preferences.retainsFailedAudio = enabled
         retainsFailedAudio = enabled
         errorMessage = nil
-        refresh()
+        await refreshNow()
     }
 
     func setPrivateModeEnabled(_ enabled: Bool) {
@@ -178,7 +190,11 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func retry(_ record: DictationRecord) {
-        switch retryRecord(record) {
+        Task { await retryNow(record) }
+    }
+
+    private func retryNow(_ record: DictationRecord) async {
+        switch await retryRecord(record) {
         case .success:
             errorMessage = nil
         case .failure(let error):
@@ -187,8 +203,12 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func delete(_ record: DictationRecord) {
+        Task { await deleteNow(record) }
+    }
+
+    private func deleteNow(_ record: DictationRecord) async {
         do {
-            try vaultProvider().deleteRecord(id: record.id)
+            try await vaultProvider().deleteRecord(id: record.id)
             records.removeAll { $0.id == record.id }
             errorMessage = nil
         } catch {
@@ -200,12 +220,19 @@ final class HistoryViewModel: ObservableObject {
         _ category: DictationCategory,
         for record: DictationRecord
     ) {
+        Task { await setCategoryNow(category, for: record) }
+    }
+
+    private func setCategoryNow(
+        _ category: DictationCategory,
+        for record: DictationRecord
+    ) async {
         do {
-            try vaultProvider().updateCategory(
+            try await vaultProvider().updateCategory(
                 id: record.id,
                 category: category
             )
-            refresh()
+            await refreshNow()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -214,12 +241,12 @@ final class HistoryViewModel: ObservableObject {
 
     func spellingSuggestions(
         for record: DictationRecord
-    ) -> [CorrectionSuggestion] {
+    ) async -> [CorrectionSuggestion] {
         guard let transcript = record.finalTranscript else {
             return []
         }
         do {
-            return try vaultProvider().correctionSuggestions(
+            return try await vaultProvider().correctionSuggestions(
                 in: transcript,
                 activeScope: correctionScope(for: record)
             )
@@ -233,7 +260,7 @@ final class HistoryViewModel: ObservableObject {
         source: String,
         replacement: String,
         for record: DictationRecord
-    ) -> Bool {
+    ) async -> Bool {
         let source = source.trimmingCharacters(
             in: .whitespacesAndNewlines
         )
@@ -245,7 +272,7 @@ final class HistoryViewModel: ObservableObject {
             return false
         }
         do {
-            try vaultProvider().addCorrectionRule(
+            try await vaultProvider().addCorrectionRule(
                 source: source,
                 replacement: replacement,
                 languageScope: correctionScope(for: record)
@@ -263,6 +290,10 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func deleteAll(in scope: Scope) {
+        Task { await deleteAllNow(in: scope) }
+    }
+
+    private func deleteAllNow(in scope: Scope) async {
         let recordsToDelete =
             scope == .recovery ? recoveryRecords : standardRecords
         let ids = recordsToDelete.map(\.id)
@@ -270,7 +301,7 @@ final class HistoryViewModel: ObservableObject {
             return
         }
         do {
-            _ = try vaultProvider().deleteRecords(ids: ids)
+            _ = try await vaultProvider().deleteRecords(ids: ids)
             let deletedIDs = Set(ids)
             records.removeAll { deletedIDs.contains($0.id) }
             errorMessage = nil
@@ -280,8 +311,12 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func deleteAll() {
+        Task { await deleteAllNow() }
+    }
+
+    private func deleteAllNow() async {
         do {
-            try vaultProvider().deleteAll()
+            try await vaultProvider().deleteAll()
             records = []
             errorMessage = nil
         } catch {
@@ -290,9 +325,13 @@ final class HistoryViewModel: ObservableObject {
     }
 
     func deleteAllRecoveryAudio() {
+        Task { await deleteAllRecoveryAudioNow() }
+    }
+
+    private func deleteAllRecoveryAudioNow() async {
         do {
-            _ = try vaultProvider().deleteAllRecoveryAudio()
-            refresh()
+            _ = try await vaultProvider().deleteAllRecoveryAudio()
+            await refreshNow()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

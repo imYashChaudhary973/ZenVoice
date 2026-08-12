@@ -30,13 +30,7 @@ struct AudioHistoryScreen: View {
     private static let ageOptions = [7, 14, 30, 90, 365]
 
     var body: some View {
-        ZenScreen(
-            title: "Audio History",
-            subtitle:
-                "Optionally keep the original recording alongside a "
-                + "transcript. Off by default, and bounded by the budget "
-                + "you set."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             enableSection
             if viewModel.isEnabled {
                 budgetSection
@@ -267,7 +261,7 @@ struct AudioHistoryScreen: View {
             .accessibilityLabel(Text("Delete recording"))
         }
         .padding(.horizontal, ZenDesign.Spacing.md)
-        .padding(.vertical, 10)
+        .padding(.vertical, ZenDesign.Spacing.xs)
     }
 
     private func durationLabel(_ seconds: TimeInterval) -> String {

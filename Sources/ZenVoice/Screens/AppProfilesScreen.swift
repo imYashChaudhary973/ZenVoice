@@ -22,7 +22,7 @@ private struct PrivacyToggleRow: View {
     @Binding var isOn: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: ZenDesign.Spacing.sm) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
@@ -46,11 +46,7 @@ struct AppProfilesScreen: View {
         ApplicationProfileViewModel
 
     var body: some View {
-        ZenScreen(
-            title: "Per-App Rules",
-            subtitle:
-                "Overrides for specific apps — language, formatting, and voice commands."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             applicationProfilesCard
 
             ZenBanner(
@@ -66,8 +62,8 @@ struct AppProfilesScreen: View {
     }
 
     private var applicationProfilesCard: some View {
-        ZenPanel(padding: ZenDesign.Spacing.lg) {
-            VStack(alignment: .leading, spacing: 13) {
+        ZenPanel(padding: ZenDesign.Spacing.md) {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Application profiles")

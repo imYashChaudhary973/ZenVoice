@@ -43,16 +43,21 @@ struct DictationScreen: View {
     @State private var selection: Tab = .shortcut
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZenTabStrip(
-                items: Tab.allCases.map { tab in
-                    .init(tab: tab, title: tab.title)
-                },
-                selection: $selection
-            )
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
-
+        ZenScreen(
+            icon: "waveform",
+            title: "Dictation",
+            subtitle:
+                "The shortcut you press, the microphone it listens to, and "
+                + "what you see while you speak.",
+            tabs: {
+                ZenTabStrip(
+                    items: Tab.allCases.map { tab in
+                        .init(tab: tab, title: tab.title)
+                    },
+                    selection: $selection
+                )
+            }
+        ) {
             switch selection {
             case .shortcut:
                 ShortcutsScreen(viewModel: viewModel)
@@ -62,6 +67,5 @@ struct DictationScreen: View {
                 OverlayScreen(viewModel: viewModel)
             }
         }
-        .background(ZenDesign.Semantic.canvas)
     }
 }

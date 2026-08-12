@@ -95,6 +95,37 @@ else
     pass "permissions are watched for out-of-process changes"
 fi
 
+# 6b. Rows whose controls cannot shrink must be able to wrap.
+#
+#     Button labels are `lineLimit(1)` and `fixedSize`, so they never wrap or
+#     truncate — which means a row of them has a hard minimum width. SwiftUI
+#     resolves an over-constrained row by *overflowing*, not by clipping, so
+#     such a row silently pushes its card wider than the column and draws over
+#     whatever sits beside it. At the 940pt minimum window the Home action row
+#     did exactly that, spilling across the Recent activity card. Every row
+#     that mixes fixed-width controls has to offer a stacked alternative.
+fixed_rows=(
+    "Screens/OverviewScreen.swift:quickActionsPanel"
+    "Screens/VoiceProfileScreen.swift:correctionEntryFields"
+)
+for entry in $fixed_rows; do
+    file="$project_dir/Sources/ZenVoice/${entry%%:*}"
+    label="${entry##*:}"
+    if ! grep -q "ViewThatFits" "$file"; then
+        fail "${entry%%:*} has an unshrinkable control row ($label) with no ViewThatFits fallback"
+    else
+        pass "${entry%%:*} wraps its fixed-width control rows"
+    fi
+done
+
+# 6c. The Home two-column grid must collapse rather than overflow.
+overview="$project_dir/Sources/ZenVoice/Screens/OverviewScreen.swift"
+if grep -q "minWidth: 300, maxWidth: .infinity" "$overview"; then
+    fail "OverviewScreen pins a minimum column width; a minimum is a request, not a constraint — use ViewThatFits"
+else
+    pass "OverviewScreen sizes its columns by what fits"
+fi
+
 # 7. No UI type below the 11pt supporting-text floor. The share card is an
 #    exported image with its own canvas scale, not window chrome.
 offenders=$(grep -rn "size: 9[,.)]\|size: 10[,.)]\|size: 10\.5" \

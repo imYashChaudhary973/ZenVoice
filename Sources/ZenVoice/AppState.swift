@@ -46,6 +46,14 @@ final class AppState: ObservableObject {
         case idle
         case listening
         case transcribing
+        /// The cloud review panel is open and waiting for an answer.
+        ///
+        /// Distinct from `.transcribing` because the app is not working — it
+        /// is waiting on the user, behind a panel that deliberately does not
+        /// take focus. Sharing `.transcribing` meant the ZenBar claimed to be
+        /// decoding while nothing was happening, and `isBusy` locked the
+        /// dictation shortcut with no visible cause.
+        case awaitingCloudReview
         case inserting
         case success
         case error(String)
@@ -58,6 +66,8 @@ final class AppState: ObservableObject {
                 return "Listening"
             case .transcribing:
                 return "Transcribing locally"
+            case .awaitingCloudReview:
+                return "Waiting for your cloud review"
             case .inserting:
                 return "Inserting text"
             case .success:

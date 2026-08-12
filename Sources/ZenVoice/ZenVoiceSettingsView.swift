@@ -40,40 +40,45 @@ struct ZenVoiceSettingsView: View {
 
         var id: String { rawValue }
 
+        /// Filled glyphs throughout. Mixing outline and filled symbols in one
+        /// rail makes the outlined ones read as disabled.
         var icon: String {
             switch self {
             case .home:
-                return "house"
+                return "house.fill"
             case .dictation:
-                return "mic"
+                return "waveform"
             case .languagesAndModels:
                 return "globe"
             case .formatting:
                 return "wand.and.stars"
             case .commands:
-                return "command"
+                return "terminal.fill"
             case .personal:
-                return "person.crop.circle"
+                return "character.book.closed.fill"
             case .history:
-                return "clock.arrow.circlepath"
+                return "clock.fill"
             case .privacy:
-                return "hand.raised"
+                return "lock.shield.fill"
             case .help:
-                return "questionmark.circle"
+                return "questionmark.circle.fill"
             }
         }
 
-        /// Phase 6 navigation: nine entries, no duplicates.
+        /// Four labelled groups plus an unlabelled Home, which is the shape
+        /// the approved design specifies: what you set up, what you use, what
+        /// it recorded, and where to get help. The previous rail gave all nine
+        /// entries their own one-item heading, so the headings carried no
+        /// information — every label was just the row beneath it, restated.
         static let groups: [(title: String?, sections: [Section])] = [
             (nil, [.home]),
-            ("Dictation", [.dictation]),
-            ("Speech", [.languagesAndModels]),
-            ("Refinement", [.formatting]),
-            ("Control", [.commands]),
-            ("Personal", [.personal]),
-            ("Your data", [.history]),
-            ("Security", [.privacy]),
-            ("Support", [.help])
+            (
+                "Configure",
+                [.dictation, .languagesAndModels, .formatting, .personal]
+            ),
+            ("Use", [.commands]),
+            ("Activity", [.history]),
+            ("Help", [.privacy, .help])
         ]
     }
 
@@ -92,6 +97,7 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var appState: AppState
     let toggleRecording: () -> Void
     @State private var selection: Section = .home
+    @State private var hoveredSection: Section?
     @State private var showsCommandPalette = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ZenAppearance.storageKey)
@@ -111,13 +117,19 @@ struct ZenVoiceSettingsView: View {
                     settingsViewModel: viewModel,
                     modelManagerViewModel: modelManagerViewModel
                 )
+                .background(ZenDesign.Semantic.canvas)
             } else {
-                VStack(spacing: 0) {
-                    titleBar
-                    HStack(spacing: 0) {
-                        sidebar
+                // The sidebar runs the full height of the window, under the
+                // traffic lights, and the content column carries its own top
+                // bar. A single title bar spanning both would cut the sidebar
+                // material off below the window's rounded top corners.
+                HStack(spacing: 0) {
+                    sidebar
+                    VStack(spacing: 0) {
+                        topBar
                         content
                     }
+                    .background(ZenDesign.Semantic.canvas)
                 }
                 .overlay {
                     if showsCommandPalette {
@@ -141,8 +153,17 @@ struct ZenVoiceSettingsView: View {
                 }
             }
         }
-        .background(ZenDesign.Semantic.canvas)
-        .frame(minWidth: 900, minHeight: 640)
+        // Deliberately no window-wide background: an opaque fill here would
+        // sit behind the sidebar's `behindWindow` material and flatten it to
+        // a plain grey panel. Each column paints its own surface instead.
+        //
+        // One tint for the whole window. Native controls — switches, pop-up
+        // buttons, steppers, text selection — default to the *system* accent,
+        // which is blue on a stock Mac. Tinting them individually meant every
+        // new control shipped blue until someone noticed; a handful already
+        // had, so the Formatting screen mixed blue switches with green ones.
+        .tint(ZenDesign.Semantic.accent)
+        .frame(minWidth: 940, minHeight: 660)
         .preferredColorScheme(selectedAppearance.colorScheme)
         .onAppear {
             viewModel.refreshSystemStatus()
@@ -233,158 +254,149 @@ struct ZenVoiceSettingsView: View {
         }
     }
 
-    private var titleBar: some View {
+    /// Top bar of the content column: the app's name on the left, one capsule
+    /// cluster of global actions on the right.
+    ///
+    /// It sits *beside* the sidebar rather than above it, so the traffic
+    /// lights land on the sidebar material and the window keeps a single
+    /// unbroken vertical edge between the two columns.
+    private var topBar: some View {
         HStack(spacing: ZenDesign.Spacing.sm) {
-            HStack(spacing: 7) {
-                ZenBrandMark(size: 22)
-                Text("ZenVoice")
-                    .font(ZenDesign.Typography.bodyStrong)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-            }
-            .frame(width: 224, alignment: .leading)
-            .padding(.leading, 12)
-
-            HStack(spacing: ZenDesign.Spacing.xs) {
-                Image(systemName: appState.phase.statusIcon)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(appState.phase.statusTint)
-                Text(appState.phase.label)
-                    .font(ZenDesign.Typography.captionStrong)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-            }
+            Text("ZenVoice")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
 
             Spacer()
 
-            HStack(spacing: ZenDesign.Spacing.xs) {
-                titleAction("command", label: "Command palette", action: { showsCommandPalette = true })
-                    .accessibilityLabel("Open command palette")
-                let isListening = appState.phase == .listening
-                Button(action: toggleRecording) {
-                    HStack(spacing: 5) {
-                        Image(systemName: isListening ? "stop.fill" : "mic")
-                            .font(.system(size: 11, weight: .medium))
-                        Text(isListening ? "Stop" : "Dictate")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundStyle(ZenDesign.Semantic.textOnAccent)
-                    .padding(.horizontal, 12)
-                    .frame(height: 26)
-                    .background {
-                        RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.small,
-                            style: .continuous
-                        )
-                        .fill(
-                            isListening
-                                ? ZenDesign.Semantic.danger
-                                : ZenDesign.Semantic.accent
-                        )
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    isListening ? "Stop dictating" : "Start dictating"
+            ZenToolbarCluster {
+                ZenToolbarButton(
+                    systemImage: appState.phase.statusIcon,
+                    title: appState.phase.label,
+                    label: "Status: \(appState.phase.label)",
+                    tint: appState.phase.statusTint,
+                    action: {}
                 )
+                .disabled(true)
+                ZenToolbarDivider()
+                ZenToolbarButton(
+                    systemImage: "command",
+                    label: "Open command palette"
+                ) {
+                    showsCommandPalette = true
+                }
+                ZenToolbarDivider()
+                ZenToolbarButton(
+                    systemImage: selectedAppearance.systemImage,
+                    label: appearanceButtonLabel
+                ) {
+                    appearance = nextAppearance.rawValue
+                }
             }
-            .padding(.trailing, 12)
+
+            dictateButton
         }
+        .padding(.horizontal, ZenDesign.Spacing.xl)
+        .frame(height: ZenDesign.Layout.titleBar)
         .frame(maxWidth: .infinity)
-        .frame(height: 40)
-        .background(ZenDesign.Semantic.canvas)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ZenDesign.Semantic.border)
-                .frame(height: 1)
-        }
-        .accessibilityHidden(true)
     }
 
-    private func titleAction(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
-                Text(label)
-                    .font(.system(size: 12, weight: .medium))
+    private var dictateButton: some View {
+        let isListening = appState.phase == .listening
+        return Button(action: toggleRecording) {
+            HStack(spacing: 6) {
+                Image(systemName: isListening ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(isListening ? "Stop" : "Dictate")
+                    .font(ZenDesign.Typography.captionStrong)
             }
-            .foregroundStyle(ZenDesign.Semantic.textSecondary)
-            .padding(.horizontal, 9)
-            .frame(height: 26)
+            // Both fills are deep enough to carry white, so the label colour
+            // does not have to move when the fill switches to red.
+            .foregroundStyle(
+                isListening
+                    ? ZenDesign.Semantic.textOnDanger
+                    : ZenDesign.Semantic.textOnAccent
+            )
+            .padding(.horizontal, 14)
+            .frame(height: ZenDesign.Layout.control)
             .background {
-                RoundedRectangle(cornerRadius: ZenDesign.Radius.small, style: .continuous)
-                    .fill(ZenDesign.Semantic.surfaceRaised)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: ZenDesign.Radius.small, style: .continuous)
-                            .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
-                    }
+                Capsule(style: .continuous)
+                    .fill(
+                        isListening
+                            ? ZenDesign.Semantic.danger
+                            : ZenDesign.Semantic.accentFill
+                    )
             }
+            .frame(minHeight: ZenDesign.Layout.hitTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(
+            isListening ? "Stop dictating" : "Start dictating"
+        )
+    }
+
+    /// Appearance cycles System → Light → Dark on click.
+    ///
+    /// A three-way segmented control used to sit in the sidebar footer, which
+    /// spent a permanent 44pt of navigation space on a setting most people
+    /// touch once. One toolbar button that names both its current value and
+    /// its next one carries the same information.
+    private var nextAppearance: ZenAppearance {
+        switch selectedAppearance {
+        case .system:
+            return .light
+        case .light:
+            return .dark
+        case .dark:
+            return .system
+        }
+    }
+
+    private var appearanceButtonLabel: String {
+        "Appearance: \(selectedAppearance.title). "
+            + "Switch to \(nextAppearance.title)."
     }
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(
-                        Array(Section.groups.enumerated()),
-                        id: \.offset
-                    ) { index, group in
-                        if let title = group.title {
-                            Text(title.uppercased())
-                                .font(.system(size: 10, weight: .semibold))
-                                .tracking(0.6)
-                                .foregroundStyle(
-                                    ZenDesign.Semantic.textTertiary
-                                )
-                                .padding(.horizontal, 6)
-                                .padding(.top, index == 0 ? 6 : 18)
-                                .padding(.bottom, 4)
-                                .accessibilityAddTraits(.isHeader)
-                        }
-                        ForEach(group.sections) { section in
-                            sidebarItem(section)
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(
+                    Array(Section.groups.enumerated()),
+                    id: \.offset
+                ) { index, group in
+                    if let title = group.title {
+                        Text(title)
+                            .font(ZenDesign.Typography.navGroup)
+                            // Secondary, not tertiary. These headings sit on a
+                            // translucent panel over whatever wallpaper is
+                            // behind the window; at tertiary they vanished
+                            // against a light one.
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textSecondary
+                            )
+                            .padding(.horizontal, 12)
+                            .padding(.top, index == 0 ? 4 : 22)
+                            .padding(.bottom, 4)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                    ForEach(group.sections) { section in
+                        sidebarItem(section)
                     }
                 }
             }
-            .scrollIndicators(.hidden)
-            .padding(.bottom, 10)
-
-            Rectangle()
-                .fill(ZenDesign.Semantic.border)
-                .frame(height: 1)
-                .padding(.horizontal, -2)
-                .padding(.bottom, 10)
-
-            HStack(spacing: 2) {
-                ForEach(ZenAppearance.allCases) { option in
-                    appearanceButton(option)
-                }
-            }
-            .padding(2)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
-                    style: .continuous
-                )
-                .fill(ZenDesign.Semantic.surfaceRaised)
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.small,
-                        style: .continuous
-                    )
-                    .strokeBorder(ZenDesign.Semantic.border)
-                }
-            }
+            .padding(.horizontal, 8)
+            // Clears the traffic lights, which the window draws over this
+            // column rather than over a separate title bar.
+            .padding(.top, ZenDesign.Layout.titleBar)
+            .padding(.bottom, ZenDesign.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
-        .frame(width: 224)
-        .background(ZenDesign.Semantic.sidebar)
+        .scrollIndicators(.hidden)
+        .frame(width: ZenDesign.Layout.sidebarWidth)
+        .background {
+            ZenVisualEffect()
+                .overlay(ZenDesign.Semantic.sidebar)
+        }
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(ZenDesign.Semantic.border)
@@ -393,107 +405,85 @@ struct ZenVoiceSettingsView: View {
     }
 
     private func sidebarItem(_ section: Section) -> some View {
-        Button {
+        let selected = selection == section
+        return Button {
             selection = section
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 Image(systemName: section.icon)
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 18)
+                    .font(ZenDesign.Typography.navIcon)
+                    .frame(width: ZenDesign.Layout.navIcon)
+                    // Accent-tinted at rest, white when the row is filled.
+                    // Grey icons on a translucent panel disappear against a
+                    // busy wallpaper; the tint keeps them legible.
                     .foregroundStyle(
-                        selection == section
-                            ? ZenDesign.Semantic.textPrimary
-                            : ZenDesign.Semantic.textTertiary
+                        selected
+                            ? ZenDesign.Semantic.textOnAccent
+                            : ZenDesign.Semantic.accent
                     )
                 Text(section.rawValue)
                     .font(
-                        selection == section
-                            ? ZenDesign.Typography.bodyStrong
-                            : ZenDesign.Typography.body
+                        selected
+                            ? ZenDesign.Typography.navRowSelected
+                            : ZenDesign.Typography.navRow
                     )
                     .foregroundStyle(
-                        selection == section
-                            ? ZenDesign.Semantic.textPrimary
-                            : ZenDesign.Semantic.textSecondary
+                        selected
+                            ? ZenDesign.Semantic.textOnAccent
+                            : ZenDesign.Semantic.textPrimary
                     )
-                Spacer()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 4)
                 if section == .history,
                    historyViewModel.recoveryCount > 0 {
                     Text("\(historyViewModel.recoveryCount)")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(ZenDesign.Semantic.textOnAccent)
+                        .font(ZenDesign.Typography.badge)
+                        .foregroundStyle(
+                            selected
+                                ? ZenDesign.Semantic.textOnAccent
+                                : ZenDesign.Semantic.accent
+                        )
                         .padding(.horizontal, 6)
-                        .frame(height: 16)
+                        .frame(height: 17)
                         .background {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(ZenDesign.Semantic.accent)
+                            Capsule().fill(
+                                selected
+                                    ? Color.white.opacity(0.22)
+                                    : ZenDesign.Semantic.accentMuted
+                            )
                         }
                         .accessibilityLabel(
                             "\(historyViewModel.recoveryCount) items in Recovery Inbox"
                         )
                 }
             }
-            .padding(.horizontal, 6)
-            .frame(height: 28)
+            .padding(.horizontal, 12)
+            .frame(height: ZenDesign.Layout.navRow)
             .background {
                 RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
+                    cornerRadius: ZenDesign.Radius.medium,
                     style: .continuous
                 )
                 .fill(
-                    selection == section
+                    selected
                         ? ZenDesign.Component.selectedNavigation
-                        : Color.clear
+                        : (hoveredSection == section
+                            ? ZenDesign.Semantic.textPrimary.opacity(0.06)
+                            : Color.clear)
                 )
             }
+            // The painted pill is 40pt so consecutive rows nearly touch, as
+            // the approved design shows, while the clickable frame still
+            // meets the 44pt target.
+            .frame(minHeight: ZenDesign.Layout.hitTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.bottom, 1)
+        .onHover { hovering in
+            hoveredSection = hovering ? section : nil
+        }
         .accessibilityLabel(section.rawValue)
-        .accessibilityAddTraits(
-            selection == section ? .isSelected : []
-        )
-    }
-
-    private func appearanceButton(
-        _ option: ZenAppearance
-    ) -> some View {
-        let selected = selectedAppearance == option
-        return Button {
-            appearance = option.rawValue
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: option.systemImage)
-                    .font(.system(size: 11, weight: .medium))
-                Text(option.title)
-                    .font(ZenDesign.Typography.captionStrong)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .foregroundStyle(
-                selected
-                    ? ZenDesign.Semantic.textPrimary
-                    : ZenDesign.Semantic.textSecondary
-            )
-            .frame(maxWidth: .infinity, minHeight: 25)
-            .background {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(
-                        selected
-                            ? ZenDesign.Semantic.surface
-                            : Color.clear
-                    )
-                    .shadow(
-                        color: selected ? Color.black.opacity(0.10) : .clear,
-                        radius: 2,
-                        y: 1
-                    )
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(option.title) appearance")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -584,6 +574,8 @@ private extension AppState.Phase {
             return "waveform"
         case .transcribing:
             return "cpu"
+        case .awaitingCloudReview:
+            return "cloud"
         case .inserting:
             return "arrow.down.doc"
         case .success:
@@ -601,6 +593,8 @@ private extension AppState.Phase {
             return ZenDesign.Semantic.accent
         case .transcribing, .inserting:
             return ZenDesign.Semantic.warn
+        case .awaitingCloudReview:
+            return ZenDesign.Semantic.accent
         case .success:
             return ZenDesign.Semantic.success
         case .error:
@@ -631,38 +625,70 @@ struct ErrorBanner: View {
     }
 }
 
-struct ZenSecondaryButtonStyle: ButtonStyle {
-    var minWidth: CGFloat? = nil
-    var height: CGFloat = 30
+/// Shared geometry for the three button styles.
+///
+/// The painted control stays visually compact, but the frame the user can
+/// actually hit is `Layout.hitTarget` tall. Drawing a 44pt box would make a
+/// dense settings window look like a touch UI; making the *target* 44pt costs
+/// nothing visually and is what the approved design asks for.
+private struct ZenButtonShape<Background: View>: View {
+    let label: AnyView
+    let minWidth: CGFloat?
+    let height: CGFloat
+    @ViewBuilder let background: Background
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+    var body: some View {
+        label
+            .font(ZenDesign.Typography.button)
+            // A button label never wraps. The painted background is a fixed
+            // `height`, so a label allowed to run onto a second line is drawn
+            // straight through the button's own border — "Replay setup guide"
+            // broke onto two lines and spilled out of its rounded rect. The
+            // button takes the width its label needs instead.
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 13)
             .frame(minWidth: minWidth)
             .frame(height: height)
-            .background {
+            .background { background }
+            .frame(minHeight: ZenDesign.Layout.hitTarget)
+            .contentShape(Rectangle())
+    }
+}
+
+struct ZenSecondaryButtonStyle: ButtonStyle {
+    var minWidth: CGFloat? = nil
+    var height: CGFloat = ZenDesign.Layout.control
+
+    func makeBody(configuration: Configuration) -> some View {
+        ZenButtonShape(
+            label: AnyView(
+                configuration.label
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            ),
+            minWidth: minWidth,
+            height: height
+        ) {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+            .fill(
+                configuration.isPressed
+                    ? ZenDesign.Semantic.surfaceRaised
+                    : ZenDesign.Component.shortcutBackground
+            )
+            .overlay {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,
                     style: .continuous
                 )
-                .fill(
-                    configuration.isPressed
-                        ? ZenDesign.Semantic.surfaceRaised
-                        : ZenDesign.Component.shortcutBackground
+                .strokeBorder(
+                    ZenDesign.Semantic.borderStrong,
+                    lineWidth: 1
                 )
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.small,
-                        style: .continuous
-                    )
-                    .strokeBorder(
-                        ZenDesign.Semantic.borderStrong,
-                        lineWidth: 1
-                    )
-                }
             }
+        }
     }
 }
 
@@ -670,30 +696,31 @@ struct ZenPrimaryButtonStyle: ButtonStyle {
     var minWidth: CGFloat? = nil
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(ZenDesign.Semantic.textOnAccent)
-            .padding(.horizontal, 13)
-            .frame(minWidth: minWidth)
-            .frame(height: 30)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
-                    style: .continuous
-                )
-                // `accentStrong` moves the right way in both appearances:
-                // darker than `accent` in light, brighter in dark. The old
-                // `gold500` alias resolved to `rust400` after the rename, which
-                // is *lighter* than the resting accent in light mode — so
-                // pressing the primary button lifted its background to roughly
-                // 2.4:1 against near-white `textOnAccent` and the label became
-                // unreadable at the moment of the click.
-                .fill(
-                    configuration.isPressed
-                        ? ZenDesign.Semantic.accentStrong
-                        : ZenDesign.Semantic.accent
-                )
-            }
+        ZenButtonShape(
+            label: AnyView(
+                configuration.label
+                    .foregroundStyle(ZenDesign.Semantic.textOnAccent)
+            ),
+            minWidth: minWidth,
+            height: ZenDesign.Layout.control
+        ) {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+            // `accentStrong` moves the right way in both appearances:
+            // darker than `accent` in light, brighter in dark — always away
+            // from the label colour, never toward it. The regression this
+            // guards against was a `gold500` alias that resolved to `rust400`,
+            // *lighter* than the resting accent in light mode, so pressing the
+            // button lifted its background to roughly 2.4:1 against the label
+            // and the text vanished at the moment of the click.
+            .fill(
+                configuration.isPressed
+                    ? ZenDesign.Semantic.accentStrong
+                    : ZenDesign.Semantic.accent
+            )
+        }
     }
 }
 
@@ -701,23 +728,24 @@ struct ZenDestructiveButtonStyle: ButtonStyle {
     var minWidth: CGFloat? = nil
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(ZenDesign.Semantic.textOnAccent)
-            .padding(.horizontal, 13)
-            .frame(minWidth: minWidth)
-            .frame(height: 30)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
-                    style: .continuous
+        ZenButtonShape(
+            label: AnyView(
+                configuration.label
+                    .foregroundStyle(ZenDesign.Semantic.textOnDanger)
+            ),
+            minWidth: minWidth,
+            height: ZenDesign.Layout.control
+        ) {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+            .fill(
+                ZenDesign.Semantic.danger.opacity(
+                    configuration.isPressed ? 0.78 : 1
                 )
-                .fill(
-                    ZenDesign.Semantic.danger.opacity(
-                        configuration.isPressed ? 0.78 : 1
-                    )
-                )
-            }
+            )
+        }
     }
 }
 

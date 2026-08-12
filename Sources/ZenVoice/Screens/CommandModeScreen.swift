@@ -20,11 +20,7 @@ struct CommandModeScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        ZenScreen(
-            title: "Command Mode",
-            subtitle:
-                "Voice control for your Mac. Built-in actions run directly; scripts and URLs need your approval."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             enableSection
             manifestSection
             trustBanner
@@ -86,7 +82,7 @@ struct CommandModeScreen: View {
                         )
                     }
 
-                    LazyVStack(alignment: .leading, spacing: 8) {
+                    LazyVStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
                         ForEach(
                             viewModel.commandModeManifest.mappings
                         ) { mapping in

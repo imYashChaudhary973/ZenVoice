@@ -44,16 +44,21 @@ struct PersonalScreen: View {
     @State private var selection: Tab = .yourWords
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZenTabStrip(
-                items: Tab.allCases.map { tab in
-                    .init(tab: tab, title: tab.title)
-                },
-                selection: $selection
-            )
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
-
+        ZenScreen(
+            icon: "character.book.closed.fill",
+            title: "Personal",
+            subtitle:
+                "The words ZenVoice remembers for you, and the rules that "
+                + "change per app.",
+            tabs: {
+                ZenTabStrip(
+                    items: Tab.allCases.map { tab in
+                        .init(tab: tab, title: tab.title)
+                    },
+                    selection: $selection
+                )
+            }
+        ) {
             switch selection {
             case .yourWords:
                 VoiceProfileScreen(viewModel: voiceProfileViewModel)
@@ -64,6 +69,5 @@ struct PersonalScreen: View {
                 )
             }
         }
-        .background(ZenDesign.Semantic.canvas)
     }
 }

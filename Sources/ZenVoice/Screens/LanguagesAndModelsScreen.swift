@@ -41,16 +41,20 @@ struct LanguagesAndModelsScreen: View {
     @State private var selection: Tab = .languages
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZenTabStrip(
-                items: Tab.allCases.map { tab in
-                    .init(tab: tab, title: tab.title)
-                },
-                selection: $selection
-            )
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
-
+        ZenScreen(
+            icon: "globe",
+            title: "Languages & Models",
+            subtitle:
+                "What you speak, and the on-device engines that understand it.",
+            tabs: {
+                ZenTabStrip(
+                    items: Tab.allCases.map { tab in
+                        .init(tab: tab, title: tab.title)
+                    },
+                    selection: $selection
+                )
+            }
+        ) {
             switch selection {
             case .languages:
                 LanguagesScreen(viewModel: viewModel)
@@ -58,6 +62,5 @@ struct LanguagesAndModelsScreen: View {
                 ModelsScreen(viewModel: modelManagerViewModel)
             }
         }
-        .background(ZenDesign.Semantic.canvas)
     }
 }

@@ -63,8 +63,8 @@ struct OnboardingScreen: View {
                     }
                 }
             }
-            .padding(.horizontal, 30)
-            .padding(.top, 22)
+            .padding(.horizontal, ZenDesign.Spacing.xxl)
+            .padding(.top, ZenDesign.Spacing.xl)
 
             ScrollView {
                 Group {
@@ -86,8 +86,8 @@ struct OnboardingScreen: View {
                     }
                 }
                 .frame(maxWidth: 560, alignment: .leading)
-                .padding(.horizontal, 42)
-                .padding(.vertical, 36)
+                .padding(.horizontal, ZenDesign.Spacing.xxl)
+                .padding(.vertical, ZenDesign.Spacing.xxl)
                 .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -126,8 +126,8 @@ struct OnboardingScreen: View {
                 .buttonStyle(ZenPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
-            .padding(.horizontal, 30)
-            .padding(.vertical, 18)
+            .padding(.horizontal, ZenDesign.Spacing.xxl)
+            .padding(.vertical, ZenDesign.Spacing.lg)
         }
         .frame(
             maxWidth: .infinity,
@@ -146,7 +146,7 @@ struct OnboardingScreen: View {
     }
 
     private var brand: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: ZenDesign.Spacing.xs) {
             ZenBrandMark(size: 28)
             Text("ZenVoice")
                 .font(.system(size: 15, weight: .bold))
@@ -188,7 +188,7 @@ struct OnboardingScreen: View {
 
     /* ---- 3 · permissions ---- */
     private var permissions: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
             onboardingHeading(
                 icon: "checkmark.shield",
                 title: "Two permissions, clearly explained.",
@@ -197,21 +197,13 @@ struct OnboardingScreen: View {
             )
             permissionRow(
                 title: "Microphone",
-                status:
-                    settingsViewModel.microphoneStatus.title,
-                isAllowed:
-                    settingsViewModel.microphoneStatus
-                        == .allowed,
+                status: settingsViewModel.microphoneStatus,
                 action:
                     settingsViewModel.requestMicrophoneAccess
             )
             permissionRow(
                 title: "Accessibility",
-                status:
-                    settingsViewModel.accessibilityStatus.title,
-                isAllowed:
-                    settingsViewModel.accessibilityStatus
-                        == .allowed,
+                status: settingsViewModel.accessibilityStatus,
                 action:
                     settingsViewModel.requestAccessibilityAccess
             )
@@ -223,11 +215,16 @@ struct OnboardingScreen: View {
                 ZenDesign.Semantic.textTertiary
             )
         }
+        // Granting happens in System Settings, so this step watches for the
+        // change instead of showing a stale status until the user clicks
+        // something.
+        .onAppear(perform: settingsViewModel.beginWatchingPermissions)
+        .onDisappear(perform: settingsViewModel.stopWatchingPermissions)
     }
 
     /* ---- 4 · shortcut ---- */
     private var shortcut: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
             onboardingHeading(
                 icon: "command",
                 title: "Your dictation shortcut.",
@@ -249,14 +246,14 @@ struct OnboardingScreen: View {
 
     /* ---- 5 · language ---- */
     private var language: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
             onboardingHeading(
                 icon: "globe",
                 title: "What will you speak?",
                 detail:
                     "You can change this anytime, or set a different language per app in App Profiles."
             )
-            VStack(spacing: 10) {
+            VStack(spacing: ZenDesign.Spacing.xs) {
                 languageChoice(
                     title: "English",
                     detail: "Fastest — works with every model",
@@ -305,7 +302,7 @@ struct OnboardingScreen: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: ZenDesign.Spacing.sm) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(ZenDesign.Typography.bodyStrong)
@@ -330,7 +327,7 @@ struct OnboardingScreen: View {
                         : ZenDesign.Semantic.textTertiary
                 )
             }
-            .padding(14)
+            .padding(ZenDesign.Spacing.md)
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.medium,
@@ -375,7 +372,7 @@ struct OnboardingScreen: View {
     }
 
     private var model: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
             onboardingHeading(
                 icon: "cpu",
                 title: "One verified download.",
@@ -384,8 +381,8 @@ struct OnboardingScreen: View {
             )
             if let model = featuredModel {
                 ZenPanel(padding: ZenDesign.Spacing.lg) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                        HStack(spacing: ZenDesign.Spacing.xs) {
                             Text(model.displayName)
                                 .font(ZenDesign.Typography.bodyStrong)
                                 .foregroundStyle(
@@ -462,7 +459,7 @@ struct OnboardingScreen: View {
 
     /* ---- 7 · test drive ---- */
     private var test: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
             onboardingHeading(
                 icon: "mic.fill",
                 title: "Take it for a spin.",
@@ -527,14 +524,14 @@ struct OnboardingScreen: View {
         detail: String,
         facts: [(String, String)]
     ) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             onboardingHeading(
                 icon: icon,
                 title: title,
                 detail: detail
             )
             ZenPanel(padding: ZenDesign.Spacing.lg) {
-                VStack(alignment: .leading, spacing: 15) {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
                     ForEach(
                         Array(facts.enumerated()),
                         id: \.offset
@@ -554,7 +551,7 @@ struct OnboardingScreen: View {
         title: String,
         detail: String
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
             Image(systemName: icon)
                 .font(.system(size: 26, weight: .semibold))
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -587,40 +584,48 @@ struct OnboardingScreen: View {
 
     private func permissionRow(
         title: String,
-        status: String,
-        isAllowed: Bool,
+        status: SettingsViewModel.PermissionStatus,
         action: @escaping () -> Void
     ) -> some View {
         HStack {
             Image(
                 systemName:
-                    isAllowed
+                    status.isAllowed
                         ? "checkmark.circle.fill"
                         : "exclamationmark.circle"
             )
             .foregroundStyle(
-                isAllowed
+                status.isAllowed
                     ? ZenDesign.Semantic.success
                     : ZenDesign.Semantic.warn
             )
-            Text(title)
-                .font(ZenDesign.Typography.bodyStrong)
-                .foregroundStyle(
-                    ZenDesign.Semantic.textPrimary
-                )
-            Spacer()
-            Text(status)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(ZenDesign.Typography.bodyStrong)
+                    .foregroundStyle(
+                        ZenDesign.Semantic.textPrimary
+                    )
+                if let remedy = status.remedy {
+                    Text(remedy)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(
+                            ZenDesign.Semantic.textTertiary
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: ZenDesign.Spacing.sm)
+            Text(status.title)
                 .font(ZenDesign.Typography.captionStrong)
                 .foregroundStyle(
                     ZenDesign.Semantic.textSecondary
                 )
-            Button(
-                isAllowed ? "Recheck" : "Allow",
-                action: action
-            )
-            .buttonStyle(ZenSecondaryButtonStyle())
+            if let actionTitle = status.actionTitle {
+                Button(actionTitle, action: action)
+                    .buttonStyle(ZenSecondaryButtonStyle())
+            }
         }
-        .padding(14)
+        .padding(ZenDesign.Spacing.md)
         .background {
             RoundedRectangle(
                 cornerRadius: ZenDesign.Radius.medium,
@@ -651,7 +656,7 @@ struct OnboardingScreen: View {
     }
 
     private var onboardingShortcutEditor: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: ZenDesign.Spacing.md) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Dictation shortcut")
                     .font(ZenDesign.Typography.captionStrong)
@@ -701,7 +706,7 @@ private struct PrivacyFact: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: ZenDesign.Spacing.xs) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)

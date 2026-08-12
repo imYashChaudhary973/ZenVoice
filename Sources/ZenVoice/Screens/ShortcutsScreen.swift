@@ -20,11 +20,7 @@ struct ShortcutsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        ZenScreen(
-            title: "Shortcuts",
-            subtitle:
-                "Global shortcuts work in any app. Change them anytime."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             dictationSection
             zenBarSection
 
@@ -41,161 +37,159 @@ struct ShortcutsScreen: View {
 
     private var dictationSection: some View {
         ZenSection(title: "Dictation") {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                ZenPanel {
-                    ZenRow(
-                        icon: "mic",
-                        title: "Start / stop dictation",
-                        subtitle: "Press once to start, again to transcribe and insert"
-                    ) {
-                        ShortcutCaptureButton(
-                            displayName:
-                                viewModel.currentShortcut.displayName,
-                            isCapturing: viewModel.isCapturingShortcut,
-                            action: {
-                                if viewModel.isCapturingShortcut {
-                                    viewModel.cancelShortcutCapture()
-                                } else {
-                                    viewModel.beginShortcutCapture()
-                                }
-                            }
-                        )
-                        ZenIconButton(
-                            systemImage: "arrow.counterclockwise",
-                            label: "Reset dictation shortcut"
-                        ) {
-                            viewModel.resetShortcut()
-                        }
-                    }
-                    ZenPanelDivider()
-                    ZenRow(
-                        icon: "eye.slash",
-                        title: "Private dictation",
-                        subtitle: "Dictate without saving history, insights, or recovery audio"
-                    ) {
-                        ShortcutCaptureButton(
-                            displayName:
-                                viewModel.privateModeShortcut.displayName,
-                            isCapturing:
-                                viewModel.isCapturingPrivateModeShortcut,
-                            action: {
-                                if viewModel
-                                    .isCapturingPrivateModeShortcut {
-                                    viewModel.cancelShortcutCapture()
-                                } else {
-                                    viewModel.beginShortcutCapture(
-                                        for: .privateMode
-                                    )
-                                }
-                            }
-                        )
-                        ZenIconButton(
-                            systemImage: "arrow.counterclockwise",
-                            label: "Reset private dictation shortcut"
-                        ) {
-                            viewModel.resetPrivateModeShortcut()
-                        }
-                    }
-                    ZenPanelDivider()
-                    ZenRow(
-                        icon: "doc.on.doc",
-                        title: "Paste latest dictation",
-                        subtitle: "Re-insert the most recent transcript anywhere"
-                    ) {
-                        ShortcutCaptureButton(
-                            displayName:
-                                viewModel.pasteLastShortcut.displayName,
-                            isCapturing:
-                                viewModel.isCapturingPasteLastShortcut,
-                            action: {
-                                if viewModel
-                                    .isCapturingPasteLastShortcut {
-                                    viewModel.cancelShortcutCapture()
-                                } else {
-                                    viewModel.beginShortcutCapture(
-                                        for: .pasteLast
-                                    )
-                                }
-                            }
-                        )
-                        ZenIconButton(
-                            systemImage: "arrow.counterclockwise",
-                            label: "Reset paste shortcut"
-                        ) {
-                            viewModel.resetPasteLastShortcut()
-                        }
-                    }
-                    ZenPanelDivider()
-                    ZenRow(
-                        icon: "hand.tap",
-                        title: "Hold to dictate",
-                        subtitle:
-                            "Hold a modifier, speak, then release to insert"
-                    ) {
-                        ZenSwitch(
-                            isOn: Binding(
-                                get: {
-                                    viewModel.holdToDictateEnabled
-                                },
-                                set:
-                                    viewModel.setHoldToDictateEnabled
-                            ),
-                            label: "Hold to dictate"
-                        )
-                    }
-                    if viewModel.holdToDictateEnabled {
-                        ZenPanelDivider()
-                        ZenRow(
-                            title: "Hold key",
-                            subtitle:
-                                "Select Change, then press the modifier you want to hold"
-                        ) {
-                            ShortcutCaptureButton(
-                                displayName:
-                                    viewModel.holdKey.displayName,
-                                isCapturing:
-                                    viewModel.isCapturingHoldKey,
-                                action: {
-                                    if viewModel.isCapturingHoldKey {
-                                        viewModel.cancelShortcutCapture()
-                                    } else {
-                                        viewModel.beginHoldKeyCapture()
-                                    }
-                                }
-                            )
-                            ZenIconButton(
-                                systemImage: "arrow.counterclockwise",
-                                label: "Reset hold key"
-                            ) {
-                                viewModel.resetHoldKey()
+            ZenPanel {
+                ZenRow(
+                    icon: "mic",
+                    title: "Start / stop dictation",
+                    subtitle: "Press once to start, again to transcribe and insert"
+                ) {
+                    ShortcutCaptureButton(
+                        displayName:
+                            viewModel.currentShortcut.displayName,
+                        isCapturing: viewModel.isCapturingShortcut,
+                        action: {
+                            if viewModel.isCapturingShortcut {
+                                viewModel.cancelShortcutCapture()
+                            } else {
+                                viewModel.beginShortcutCapture()
                             }
                         }
+                    )
+                    ZenIconButton(
+                        systemImage: "arrow.counterclockwise",
+                        label: "Reset dictation shortcut"
+                    ) {
+                        viewModel.resetShortcut()
                     }
                 }
-
-                if viewModel.holdToDictateEnabled,
-                   viewModel.accessibilityStatus != .allowed {
-                    HStack(spacing: ZenDesign.Spacing.sm) {
-                        ZenBanner(
-                            kind: .danger,
-                            icon: "exclamationmark.shield",
-                            text:
-                                "Allow Accessibility so the hold key works in every app."
-                        )
-                        Button("Allow Access") {
-                            viewModel.requestAccessibilityAccess()
+                ZenPanelDivider()
+                ZenRow(
+                    icon: "eye.slash",
+                    title: "Private dictation",
+                    subtitle: "Dictate without saving history, insights, or recovery audio"
+                ) {
+                    ShortcutCaptureButton(
+                        displayName:
+                            viewModel.privateModeShortcut.displayName,
+                        isCapturing:
+                            viewModel.isCapturingPrivateModeShortcut,
+                        action: {
+                            if viewModel
+                                .isCapturingPrivateModeShortcut {
+                                viewModel.cancelShortcutCapture()
+                            } else {
+                                viewModel.beginShortcutCapture(
+                                    for: .privateMode
+                                )
+                            }
                         }
-                        .buttonStyle(ZenSecondaryButtonStyle())
+                    )
+                    ZenIconButton(
+                        systemImage: "arrow.counterclockwise",
+                        label: "Reset private dictation shortcut"
+                    ) {
+                        viewModel.resetPrivateModeShortcut()
                     }
                 }
-
-                if let error = viewModel.shortcutError {
-                    ZenBanner(
-                        kind: .danger,
-                        icon: "exclamationmark.triangle",
-                        text: error
+                ZenPanelDivider()
+                ZenRow(
+                    icon: "doc.on.doc",
+                    title: "Paste latest dictation",
+                    subtitle: "Re-insert the most recent transcript anywhere"
+                ) {
+                    ShortcutCaptureButton(
+                        displayName:
+                            viewModel.pasteLastShortcut.displayName,
+                        isCapturing:
+                            viewModel.isCapturingPasteLastShortcut,
+                        action: {
+                            if viewModel
+                                .isCapturingPasteLastShortcut {
+                                viewModel.cancelShortcutCapture()
+                            } else {
+                                viewModel.beginShortcutCapture(
+                                    for: .pasteLast
+                                )
+                            }
+                        }
+                    )
+                    ZenIconButton(
+                        systemImage: "arrow.counterclockwise",
+                        label: "Reset paste shortcut"
+                    ) {
+                        viewModel.resetPasteLastShortcut()
+                    }
+                }
+                ZenPanelDivider()
+                ZenRow(
+                    icon: "hand.tap",
+                    title: "Hold to dictate",
+                    subtitle:
+                        "Hold a modifier, speak, then release to insert"
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: {
+                                viewModel.holdToDictateEnabled
+                            },
+                            set:
+                                viewModel.setHoldToDictateEnabled
+                        ),
+                        label: "Hold to dictate"
                     )
                 }
+                if viewModel.holdToDictateEnabled {
+                    ZenPanelDivider()
+                    ZenRow(
+                        title: "Hold key",
+                        subtitle:
+                            "Select Change, then press the modifier you want to hold"
+                    ) {
+                        ShortcutCaptureButton(
+                            displayName:
+                                viewModel.holdKey.displayName,
+                            isCapturing:
+                                viewModel.isCapturingHoldKey,
+                            action: {
+                                if viewModel.isCapturingHoldKey {
+                                    viewModel.cancelShortcutCapture()
+                                } else {
+                                    viewModel.beginHoldKeyCapture()
+                                }
+                            }
+                        )
+                        ZenIconButton(
+                            systemImage: "arrow.counterclockwise",
+                            label: "Reset hold key"
+                        ) {
+                            viewModel.resetHoldKey()
+                        }
+                    }
+                }
+            }
+
+            if viewModel.holdToDictateEnabled,
+               viewModel.accessibilityStatus != .allowed {
+                HStack(spacing: ZenDesign.Spacing.sm) {
+                    ZenBanner(
+                        kind: .danger,
+                        icon: "exclamationmark.shield",
+                        text:
+                            "Allow Accessibility so the hold key works in every app."
+                    )
+                    Button("Allow Access") {
+                        viewModel.requestAccessibilityAccess()
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle())
+                }
+            }
+
+            if let error = viewModel.shortcutError {
+                ZenBanner(
+                    kind: .danger,
+                    icon: "exclamationmark.triangle",
+                    text: error
+                )
             }
         }
     }
@@ -236,10 +230,12 @@ struct ShortcutCaptureButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: ZenDesign.Spacing.xs) {
                 if isCapturing {
+                    // Sits on the accent fill, so it has to be the on-accent
+                    // colour — an accent-on-accent dot was invisible.
                     Circle()
-                        .fill(ZenDesign.Semantic.accent)
+                        .fill(ZenDesign.Semantic.textOnAccent)
                         .frame(width: 7, height: 7)
                     Text("Press keys…")
                     Text("Cancel")

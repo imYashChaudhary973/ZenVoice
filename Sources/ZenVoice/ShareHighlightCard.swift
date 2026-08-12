@@ -49,7 +49,7 @@ struct ShareHighlightSheet: View {
     @State private var savedMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Share your highlights")
@@ -101,7 +101,7 @@ struct ShareHighlightSheet: View {
             }
 
             HStack {
-                HStack(spacing: 8) {
+                HStack(spacing: ZenDesign.Spacing.xs) {
                     Image(systemName: "lock.shield.fill")
                         .foregroundStyle(ZenDesign.Semantic.success)
                     Text("Rendered locally • No automatic upload")
@@ -115,7 +115,7 @@ struct ShareHighlightSheet: View {
                     .buttonStyle(ZenPrimaryButtonStyle())
             }
         }
-        .padding(24)
+        .padding(ZenDesign.Spacing.xl)
         .frame(width: 588)
         .background(ZenDesign.Semantic.canvas)
     }
@@ -275,7 +275,7 @@ private struct ShareHighlightCard: View {
                 .tracking(1.5)
                 .foregroundStyle(Color.white.opacity(0.46))
         }
-        .padding(24)
+        .padding(ZenDesign.Spacing.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)

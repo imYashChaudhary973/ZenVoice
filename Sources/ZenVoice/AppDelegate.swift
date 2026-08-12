@@ -90,6 +90,24 @@ private struct ProcessedTranscription {
         )
         correctionUsages = correctionApplication?.usages ?? []
     }
+
+    /// Swaps in text produced downstream — currently a cloud enhancement —
+    /// while keeping the raw transcript, model, and timings that describe how
+    /// the local decode actually went.
+    func replacingFinalTranscript(with text: String) -> ProcessedTranscription {
+        ProcessedTranscription(
+            result: TranscriptionResult(
+                rawTranscript: result.rawTranscript,
+                finalTranscript: text,
+                correctionCount: result.correctionCount,
+                isPartial: result.isPartial,
+                modelID: result.modelID,
+                processingDurationSeconds: result.processingDurationSeconds,
+                runawayWordsCut: result.runawayWordsCut
+            ),
+            correctionUsages: correctionUsages
+        )
+    }
 }
 
 private struct ActiveDictationBehavior: Sendable {
@@ -143,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var todayUsageMenuItem: NSMenuItem!
     private var livePreviewMenuItem: NSMenuItem!
     private var languageMenuItem: NSMenuItem!
+    private var accessibilityMenuItem: NSMenuItem!
     private var zenBarController: OverlayPanelController!
     private var escapeMonitors: [Any] = []
     private var globalHotKey: GlobalHotKey?
@@ -165,43 +184,194 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cloudPreviewWindowController:
         CloudAIPreviewWindowController?
 
+    /// Applies cloud enhancement to a finished local transcript.
+    ///
+    /// Consent to send text off-device is given once, in Formatting: enabling
+    /// the feature, storing a key, and choosing the Cloud rung. When the user
+    /// has also asked for enhancements to apply automatically, this runs the
+    /// request and returns the result without interrupting them. Otherwise it
+    /// shows the review panel — which deliberately does not take focus.
+    /// The transcript to carry forward, and whether a provider produced it.
+    ///
+    /// `didApply` is what lets `complete` tell "the cloud rewrote this" from
+    /// "the cloud rung was selected but nothing happened" — the two need
+    /// different local formatting and used to be indistinguishable.
+    fileprivate struct CloudEnhancementOutcome {
+        let processed: ProcessedTranscription
+        let didApply: Bool
+    }
+
     private func processCloudEnhancement(
         localProcessed: ProcessedTranscription,
         formattingMode: TranscriptFormattingMode
-    ) async -> ProcessedTranscription {
-        guard formattingMode == .cloud, cloudAIViewModel.isReady else {
-            return localProcessed
+    ) async -> CloudEnhancementOutcome {
+        guard formattingMode == .cloud else {
+            return CloudEnhancementOutcome(
+                processed: localProcessed,
+                didApply: false
+            )
         }
+        guard cloudAIViewModel.isReady else {
+            // Cloud is the selected rung but it cannot run. Silently using
+            // local formatting made the app look like it had enhanced the
+            // text when it never left the Mac, so say so instead.
+            showError(cloudNotReadyMessage())
+            return CloudEnhancementOutcome(
+                processed: localProcessed,
+                didApply: false
+            )
+        }
+
+        let original = localProcessed.result.finalTranscript
+        if CloudAIPreferences.load().autoApply {
+            guard let enhanced = await enhanceWithoutPrompting(original)
+            else {
+                return CloudEnhancementOutcome(
+                    processed: localProcessed,
+                    didApply: false
+                )
+            }
+            return CloudEnhancementOutcome(
+                processed: localProcessed
+                    .replacingFinalTranscript(with: enhanced),
+                didApply: true
+            )
+        }
+
+        return await awaitCloudReview(localProcessed: localProcessed)
+    }
+
+    /// Shows the review panel and waits for an answer.
+    ///
+    /// The wait holds the whole dictation open: `complete` has not run, so
+    /// `state.phase` is still `.transcribing`, `state.isBusy` is true, and the
+    /// dictation shortcut, hold-to-dictate and the menu item are all inert.
+    /// The panel is a non-activating one that deliberately does not take
+    /// focus, so a user who does not notice it just sees a hotkey that stopped
+    /// working, with nothing on screen explaining why. Three things keep that
+    /// from being a dead end:
+    ///
+    ///   * the ZenBar says what it is waiting for;
+    ///   * pressing the dictation shortcut dismisses the panel and keeps the
+    ///     local transcript, so the way out is the key you already pressed;
+    ///   * `cloudReviewTimeout` resolves it anyway if nobody answers.
+    private func awaitCloudReview(
+        localProcessed: ProcessedTranscription
+    ) async -> CloudEnhancementOutcome {
+        let original = localProcessed.result.finalTranscript
         return await withCheckedContinuation { continuation in
-            let controller = CloudAIPreviewWindowController(
-                original: localProcessed.result.finalTranscript,
-                keyStore: makeCloudAIKeyStore()
-            ) { [weak self] acceptedText in
-                self?.cloudPreviewWindowController = nil
-                guard let acceptedText else {
-                    continuation.resume(returning: localProcessed)
-                    return
-                }
-                let cloudResult = TranscriptionResult(
-                    rawTranscript: localProcessed.result.rawTranscript,
-                    finalTranscript: acceptedText,
-                    correctionCount: localProcessed.result.correctionCount,
-                    isPartial: localProcessed.result.isPartial,
-                    modelID: localProcessed.result.modelID,
-                    processingDurationSeconds: localProcessed
-                        .result.processingDurationSeconds,
-                    runawayWordsCut: localProcessed.result.runawayWordsCut
+            // Whichever of answer, dismissal or timeout arrives first wins;
+            // the rest become no-ops. Resuming a continuation twice traps.
+            var hasResumed = false
+            let finish: (String?) -> Void = { [weak self] acceptedText in
+                guard !hasResumed else { return }
+                hasResumed = true
+                self?.cloudReviewTimeoutTask?.cancel()
+                self?.cloudReviewTimeoutTask = nil
+                self?.dismissCloudReviewPanel()
+                let resolution = CloudTranscriptResolution.resolve(
+                    localTranscript: original,
+                    acceptedTranscript: acceptedText
                 )
                 continuation.resume(
-                    returning: ProcessedTranscription(
-                        result: cloudResult,
-                        correctionUsages: localProcessed.correctionUsages
+                    returning: CloudEnhancementOutcome(
+                        processed: resolution.didApply
+                            ? localProcessed.replacingFinalTranscript(
+                                with: resolution.transcript
+                            )
+                            : localProcessed,
+                        didApply: resolution.didApply
                     )
                 )
             }
-            self.cloudPreviewWindowController = controller
+
+            let controller = CloudAIPreviewWindowController(
+                original: original,
+                keyStore: makeCloudAIKeyStore()
+            ) { acceptedText in
+                finish(acceptedText)
+            }
+            cloudPreviewWindowController = controller
+            cancelPendingCloudReview = { finish(nil) }
+            state.phase = .awaitingCloudReview
+            updateStartStopMenuTitle()
             controller.show()
+
+            cloudReviewTimeoutTask = Task { [weak self] in
+                try? await Task.sleep(
+                    nanoseconds: UInt64(Self.cloudReviewTimeout * 1_000_000_000)
+                )
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard self != nil else { return }
+                    finish(nil)
+                }
+            }
         }
+    }
+
+    /// How long the review panel waits before keeping the local transcript.
+    ///
+    /// Long enough to read a paragraph and decide, short enough that an
+    /// unnoticed panel cannot hold dictation open indefinitely.
+    private static let cloudReviewTimeout: TimeInterval = 120
+
+    /// Resolves a pending review with the local transcript. Set only while a
+    /// panel is on screen.
+    private var cancelPendingCloudReview: (() -> Void)?
+
+    private var cloudReviewTimeoutTask: Task<Void, Never>?
+
+    private func dismissCloudReviewPanel() {
+        cancelPendingCloudReview = nil
+        cloudPreviewWindowController?.close()
+        cloudPreviewWindowController = nil
+    }
+
+    /// Whether a review panel is waiting for an answer right now.
+    private var isAwaitingCloudReview: Bool {
+        cancelPendingCloudReview != nil
+    }
+
+    /// Runs the enhancement request with no UI at all, for the auto-apply
+    /// path. Returns nil when the transcript should be left as it is; the
+    /// failure is reported without stealing focus or blocking insertion.
+    private func enhanceWithoutPrompting(
+        _ transcript: String
+    ) async -> String? {
+        guard let key = ((try? makeCloudAIKeyStore().loadKey()) ?? nil),
+              !key.isEmpty else {
+            showError(cloudNotReadyMessage())
+            return nil
+        }
+        do {
+            let result = try await CloudAIEnhancementEngine().enhance(
+                transcript: transcript,
+                configuration: CloudAIPreferences.load(),
+                apiKey: key
+            )
+            return result.enhanced
+        } catch {
+            showError(
+                "Cloud enhancement failed — kept your local transcript. "
+                + error.localizedDescription
+            )
+            return nil
+        }
+    }
+
+    private func cloudNotReadyMessage() -> String {
+        let configuration = CloudAIPreferences.load()
+        if !configuration.isEnabled {
+            return "Formatting is set to Cloud but Cloud AI is off — used "
+                + "local formatting. Turn it on in Formatting."
+        }
+        if ((try? makeCloudAIKeyStore().loadKey()) ?? nil)?.isEmpty ?? true {
+            return "Formatting is set to Cloud but no API key is stored — "
+                + "used local formatting. Add a key in Formatting."
+        }
+        return "Formatting is set to Cloud but the provider endpoint is "
+            + "invalid — used local formatting. Check it in Formatting."
     }
 
     private var updatesViewModel: UpdatesViewModel!
@@ -245,19 +415,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.setActivationPolicy(.accessory)
         validateRuntimeIdentity()
         configureEngines()
+        configureMainMenu()
         configureMenuBar()
         configureZenBar()
-        configureHistoryStorage()
+        Task { await configureHistoryStorage() }
         configureHotKey()
         configureHoldToDictate()
         configureSettingsWindow()
-        // A menu-bar utility should not seize the screen at every login. The
-        // window is still one click from the status item, and
-        // `applicationShouldHandleReopen` brings it back from the Dock — but
-        // first-run setup does need to be seen.
-        if onboardingViewModel.isPresented {
-            settingsWindowController.show()
-        }
+        // The main window is the app. Opening it on launch is what the
+        // approved design specifies: ZenVoice keeps its menu-bar presence and
+        // its global hotkey, but starting it shows you the app rather than
+        // leaving you to hunt for a status item. Closing the window drops the
+        // activation policy back to `.accessory`, so it still gets out of the
+        // way once you are dictating.
+        settingsWindowController.show()
 
         NotificationCenter.default.addObserver(
             self,
@@ -279,7 +450,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
+    func applicationShouldTerminate(
+        _ sender: NSApplication
+    ) -> NSApplication.TerminateReply {
+        Task { @MainActor [weak self, weak sender] in
+            await self?.prepareForTermination()
+            sender?.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
+    private func prepareForTermination() async {
         livePreviewTimer?.invalidate()
         let historyID = activeHistoryID
         let processingHistoryID = transcribingHistoryID
@@ -290,9 +471,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if nonPersistentHistoryIDs.contains(historyID)
                 || historyPreferences.isPrivateModeEnabled
                 || !historyPreferences.isHistoryEnabled {
-                try? dictationVault?.discard(id: historyID)
+                try? await dictationVault?.discard(id: historyID)
             } else {
-                try? dictationVault?.markFailed(
+                try? await dictationVault?.markFailed(
                     id: historyID,
                     message: "ZenVoice closed before this dictation completed.",
                     retainAudio: historyPreferences.retainsFailedAudio
@@ -305,7 +486,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
            nonPersistentHistoryIDs.contains(processingHistoryID)
             || historyPreferences.isPrivateModeEnabled
             || !historyPreferences.isHistoryEnabled {
-            try? dictationVault?.discard(id: processingHistoryID)
+            try? await dictationVault?.discard(id: processingHistoryID)
         }
     }
 
@@ -451,28 +632,115 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Builds the model before the user asks for it.
     ///
     /// Runs on `transcriptionQueue` because that is the serial queue every
-    /// Whisper decode uses, and ``WhisperTranscriber/warmUp()`` writes the
-    /// unguarded context. Repeat calls are cheap — the transcriber warms once
-    /// — so this is safe to fire on every route into a dictation.
+    /// Whisper decode uses. Repeat calls are cheap — the transcriber warms
+    /// once — so this is safe to fire on every route into a dictation, and it
+    /// is also what reloads the model after an idle unload.
     private func warmUpEngines() {
         guard let whisperEngine else {
             return
         }
-        transcriptionQueue.async {
-            whisperEngine.transcriber.warmUp()
+        let profile = LanguagePreferences.load()
+        let selectedID = SelectedEnginePreferences.load(for: profile)
+        // Whisper is warmed only when something is actually going to use it.
+        //
+        // This used to fire unconditionally, alongside preparing whichever
+        // engine the user had selected — so a Mac set to Nemotron or Parakeet
+        // loaded *two* models at launch and held both. Whisper's context is
+        // around 600 MB, spent on a decode that was never going to happen.
+        if shouldWarmWhisper(profile: profile, selectedID: selectedID) {
+            transcriptionQueue.async {
+                whisperEngine.transcriber.warmUp()
+            }
         }
         Task {
-            let profile = LanguagePreferences.load()
-            let selectedID = SelectedEnginePreferences.load(for: profile)
             try? await engineRegistry?.prepare(
                 for: profile,
                 selectedID: selectedID
             )
         }
+        noteDictationActivity()
+    }
+
+    /// Whether a dictation in the current configuration will reach Whisper.
+    ///
+    /// Two routes do: Whisper being the resolved engine, and live preview,
+    /// which decodes its partial segments with Whisper regardless of which
+    /// engine produces the final transcript.
+    private func shouldWarmWhisper(
+        profile: LanguageProfile,
+        selectedID: String?
+    ) -> Bool {
+        if LiveDictationPreferences.isPreviewEnabled() {
+            return true
+        }
+        guard let resolved = engineRegistry?.resolve(
+            for: profile,
+            selectedID: selectedID
+        ) else {
+            // No registry yet, or nothing resolvable — Whisper is the
+            // fallback, so warm it.
+            return true
+        }
+        return resolved.descriptor.id == WhisperSpeechEngine.engineID
+    }
+
+    // MARK: - Idle model unloading
+
+    /// How long a loaded model stays resident after the last dictation.
+    ///
+    /// A resident speech model is measured at 600 MB (Whisper Turbo) to
+    /// 940 MB (Nemotron), nearly all of it GPU buffers, and warming one at
+    /// launch means a menu-bar app nobody has dictated into still holds that
+    /// all day. Five minutes keeps a working session warm — dictations cluster
+    /// far closer together than that — and gives the memory back to anyone who
+    /// walked away.
+    private static let modelIdleTimeout: TimeInterval = 5 * 60
+
+    /// Retry interval when the timeout expires mid-dictation.
+    private static let modelIdleRetryInterval: TimeInterval = 30
+
+    private var modelIdleTimer: Timer?
+
+    /// Restarts the idle countdown. Called wherever a model is warmed, which
+    /// is every route into a dictation.
+    private func noteDictationActivity() {
+        scheduleModelIdleUnload(after: Self.modelIdleTimeout)
+    }
+
+    private func scheduleModelIdleUnload(after interval: TimeInterval) {
+        modelIdleTimer?.invalidate()
+        // One-shot and rescheduled rather than repeating: an idle menu-bar app
+        // should not be waking every minute to ask whether it is still idle.
+        let timer = Timer(
+            timeInterval: interval,
+            repeats: false
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.releaseIdleModels()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        modelIdleTimer = timer
+    }
+
+    private func releaseIdleModels() {
+        modelIdleTimer = nil
+        // A dictation can outlive the timeout. Never free a model out from
+        // under a decode that is still running — come back and check later.
+        guard !state.isBusy, !recorder.isRecording else {
+            scheduleModelIdleUnload(after: Self.modelIdleRetryInterval)
+            return
+        }
+        guard let registry = engineRegistry else {
+            return
+        }
+        Task {
+            await registry.releaseAll()
+        }
     }
 
 
-    private func configureHistoryStorage() {
+    private func configureHistoryStorage() async {
         do {
             if historyPreferences.isHistoryEnabled {
                 // Materialize the default so paused history can still display
@@ -480,14 +748,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 historyPreferences.isHistoryEnabled = true
             }
             let policy = try RuntimeIdentity.policy()
-            let vault = try DictationVault.live(policy: policy)
+            let vault = try await DictationVault.live(policy: policy)
             dictationVault = vault
-            try vault.recoverInterrupted(
+            try await vault.recoverInterrupted(
                 retainAudio: historyPreferences.retainsFailedAudio
             )
-            try vault.purgeExpiredRecoveryAudio()
+            try await vault.purgeExpiredRecoveryAudio()
             scheduleRecoveryExpiry()
-            enforceAudioHistoryBudgets()
+            await enforceAudioHistoryBudgets()
+            Task(priority: .background) { [weak self] in
+                try? await self?.dictationVault?.vacuumIfNeeded()
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -512,22 +783,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Private Dictation, paused history, a one-off suppression — is never
     /// archived. Must run before the recovery audio is deleted, because that
     /// file is the archive's source.
-    private func archiveRecordingIfEnabled(historyID: UUID) {
+    private func archiveRecordingIfEnabled(historyID: UUID) async {
         guard audioHistoryPreferences.isEnabled,
               let vault = dictationVault else {
             return
         }
         // A failure to archive must not fail the dictation itself; the
         // transcript is already stored by this point.
-        try? vault.archiveRecording(id: historyID)
-        enforceAudioHistoryBudgets()
+        try? await vault.archiveRecording(id: historyID)
+        await enforceAudioHistoryBudgets()
     }
 
     /// Applies the age and size budgets to the audio archive.
     ///
     /// Runs at launch and after each archived recording, so the archive cannot
     /// grow past what the user allowed even if the app is never quit.
-    private func enforceAudioHistoryBudgets() {
+    private func enforceAudioHistoryBudgets() async {
         guard audioHistoryPreferences.isEnabled,
               let vault = dictationVault else {
             return
@@ -537,8 +808,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             value: -audioHistoryPreferences.maxAgeDays,
             to: Date()
         ) ?? Date.distantPast
-        _ = try? vault.purgeAudioArchive(olderThan: cutoff)
-        _ = try? vault.enforceAudioArchiveSizeBudget(
+        _ = try? await vault.purgeAudioArchive(olderThan: cutoff)
+        _ = try? await vault.enforceAudioArchiveSizeBudget(
             audioHistoryPreferences.maxSizeBytes
         )
     }
@@ -658,13 +929,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         languageMenuItem.submenu = languageMenu
         menu.addItem(languageMenuItem)
 
-        let permissionItem = NSMenuItem(
+        // Titled from the live permission state in `menuWillOpen`. A fixed
+        // "Enable…" title claimed the permission was missing even when it had
+        // been granted, and said nothing when it was revoked mid-session.
+        accessibilityMenuItem = NSMenuItem(
             title: "Enable Auto-Paste Permission…",
             action: #selector(requestAccessibilityPermission),
             keyEquivalent: ""
         )
-        permissionItem.target = self
-        menu.addItem(permissionItem)
+        accessibilityMenuItem.target = self
+        menu.addItem(accessibilityMenuItem)
 
         menu.addItem(.separator())
 
@@ -677,6 +951,138 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    /// Installs the application menu bar.
+    ///
+    /// ZenVoice had none. It ran as an accessory with only a status-item menu,
+    /// which is fine while it is invisible — but the window flips the app to
+    /// `.regular`, and AppKit routes the standard key equivalents through
+    /// `NSApp.mainMenu`. With no main menu there was nothing to route to, so
+    /// ⌘Q, ⌘W, ⌘M and — worse — ⌘C/⌘V/⌘A inside the app's own text fields all
+    /// did nothing.
+    ///
+    /// The Edit menu is not decoration: every text field in the window, the
+    /// Cloud AI key field included, depends on those responder actions
+    /// existing somewhere in the menu bar.
+    private func configureMainMenu() {
+        let mainMenu = NSMenu()
+
+        // AppKit treats the first item's submenu as the application menu and
+        // supplies the app's name itself.
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(
+            withTitle: "About ZenVoice",
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(.separator())
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(showSettingsWindow),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
+        appMenu.addItem(
+            withTitle: "Hide ZenVoice",
+            action: #selector(NSApplication.hide(_:)),
+            keyEquivalent: "h"
+        )
+        let hideOthers = NSMenuItem(
+            title: "Hide Others",
+            action: #selector(NSApplication.hideOtherApplications(_:)),
+            keyEquivalent: "h"
+        )
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(
+            withTitle: "Show All",
+            action: #selector(NSApplication.unhideAllApplications(_:)),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(.separator())
+        let quitItem = NSMenuItem(
+            title: "Quit ZenVoice",
+            action: #selector(quit),
+            keyEquivalent: "q"
+        )
+        quitItem.target = self
+        appMenu.addItem(quitItem)
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(
+            withTitle: "Undo",
+            action: Selector(("undo:")),
+            keyEquivalent: "z"
+        )
+        let redoItem = NSMenuItem(
+            title: "Redo",
+            action: Selector(("redo:")),
+            keyEquivalent: "z"
+        )
+        redoItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(redoItem)
+        editMenu.addItem(.separator())
+        editMenu.addItem(
+            withTitle: "Cut",
+            action: #selector(NSText.cut(_:)),
+            keyEquivalent: "x"
+        )
+        editMenu.addItem(
+            withTitle: "Copy",
+            action: #selector(NSText.copy(_:)),
+            keyEquivalent: "c"
+        )
+        editMenu.addItem(
+            withTitle: "Paste",
+            action: #selector(NSText.paste(_:)),
+            keyEquivalent: "v"
+        )
+        editMenu.addItem(
+            withTitle: "Select All",
+            action: #selector(NSText.selectAll(_:)),
+            keyEquivalent: "a"
+        )
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        // Closing the window is not quitting. ZenVoice keeps its status item
+        // and its global shortcut, and `windowWillClose` drops the app back to
+        // `.accessory` — so ⌘W puts it away and ⌘Q ends it, which is the
+        // distinction a menu-bar app needs and could not previously express.
+        windowMenu.addItem(
+            withTitle: "Close",
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w"
+        )
+        windowMenu.addItem(
+            withTitle: "Minimize",
+            action: #selector(NSWindow.performMiniaturize(_:)),
+            keyEquivalent: "m"
+        )
+        windowMenu.addItem(
+            withTitle: "Zoom",
+            action: #selector(NSWindow.performZoom(_:)),
+            keyEquivalent: ""
+        )
+        windowItem.submenu = windowMenu
+        mainMenu.addItem(windowItem)
+
+        NSApp.mainMenu = mainMenu
+        // Lets AppKit add "Enter Full Screen" and the window list itself.
+        NSApp.windowsMenu = windowMenu
+    }
+
+    @objc private func showSettingsWindow() {
+        settingsWindowController.show()
     }
 
     private func configureZenBar() {
@@ -908,7 +1314,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         "ZenVoice is no longer running."
                     )
                 }
-                return try self.resolvedVault()
+                return try await self.resolvedVault()
             },
             retryRecord: { [weak self] record in
                 guard let self else {
@@ -918,7 +1324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         )
                     )
                 }
-                return self.retryHistoryRecord(record)
+                return await self.retryHistoryRecord(record)
             },
             privacyChanged: { [weak self] in
                 self?.handlePrivacyChanged()
@@ -931,7 +1337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         "ZenVoice is no longer running."
                     )
                 }
-                return try self.resolvedVault()
+                return try await self.resolvedVault()
             }
         )
         voiceProfileViewModel = VoiceProfileViewModel(
@@ -941,7 +1347,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         "ZenVoice is no longer running."
                     )
                 }
-                return try self.resolvedVault()
+                return try await self.resolvedVault()
             }
         )
         audioHistoryViewModel = AudioHistoryViewModel(
@@ -952,7 +1358,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         "ZenVoice is no longer running."
                     )
                 }
-                return try self.resolvedVault()
+                return try await self.resolvedVault()
             }
         )
         cloudAIViewModel = CloudAIViewModel(
@@ -1216,6 +1622,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleRecording() {
+        // A pending cloud review holds the previous dictation open behind a
+        // panel that never takes focus. The shortcut is the key the user has
+        // already pressed, so it is the one that has to get them out: it
+        // resolves the review with the local transcript rather than starting
+        // a second dictation on top of an unfinished one.
+        if isAwaitingCloudReview {
+            cancelPendingCloudReview?()
+            return
+        }
         if recorder.isRecording {
             finishRecording()
         } else {
@@ -1240,21 +1655,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
 #if DEBUG
         if recorder.usesDeterministicFixture {
-            startRecorder(startedByHold: startedByHold)
+            Task { await startRecorder(startedByHold: startedByHold) }
             return
         }
 #endif
 
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
-            startRecorder(startedByHold: startedByHold)
+            Task { await startRecorder(startedByHold: startedByHold) }
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     if granted,
                        !startedByHold || self.holdKeyPressed {
-                        self.startRecorder(startedByHold: startedByHold)
+                        Task {
+                            await self.startRecorder(
+                                startedByHold: startedByHold
+                            )
+                        }
                     } else {
                         if !granted {
                             self.showError("Microphone permission is required.")
@@ -1273,7 +1692,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func startRecorder(startedByHold: Bool = false) {
+    private func startRecorder(startedByHold: Bool = false) async {
+        guard !recorder.isRecording, !state.isBusy else {
+            return
+        }
         resetWorkItem?.cancel()
         state.resetAudioSamples()
         var historyDraft: DictationDraft?
@@ -1281,7 +1703,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             LiveDictationPreferences.isPreviewEnabled()
         let targetApplication =
             NSWorkspace.shared.frontmostApplication
-        guard let dictationBehavior = resolvedDictationBehavior(
+        guard let dictationBehavior = await resolvedDictationBehavior(
             targetBundleIdentifier:
                 targetApplication?.bundleIdentifier
         ) else {
@@ -1293,7 +1715,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if historyPreferences.isHistoryEnabled,
            !historyPreferences.isPrivateModeEnabled {
             do {
-                let vault = try resolvedVault()
+                let vault = try await resolvedVault()
                 let id = UUID()
                 let category = ApplicationCategoryClassifier.category(
                     bundleIdentifier: targetApplication?.bundleIdentifier,
@@ -1308,9 +1730,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     targetBundleID: targetApplication?.bundleIdentifier,
                     targetAppName: targetApplication?.localizedName,
                     category: category,
-                    recoveryAudioURL: vault.recoveryAudioURL(for: id)
+                    recoveryAudioURL: await vault.recoveryAudioURL(for: id)
                 )
-                try vault.begin(draft)
+                try await vault.begin(draft)
                 historyDraft = draft
                 activeHistoryID = id
             } catch {
@@ -1337,7 +1759,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             liveSamplesEnabledForRecording = false
             if let historyID = historyDraft?.id {
-                try? dictationVault?.discard(id: historyID)
+                try? await dictationVault?.discard(id: historyID)
                 activeHistoryID = nil
             }
             showError(error.localizedDescription)
@@ -1346,7 +1768,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func resolvedDictationBehavior(
         targetBundleIdentifier: String?
-    ) -> ActiveDictationBehavior? {
+    ) async -> ActiveDictationBehavior? {
         let profile = ApplicationProfilePreferences.profile(
             for: targetBundleIdentifier
         )
@@ -1386,9 +1808,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let correctionScope = languageProfile.correctionScope
         let preferredVocabulary: [String]
         if learningPreferences.appliesCorrectionRules,
-           let vault = try? resolvedVault() {
+           let vault = try? await resolvedVault() {
             preferredVocabulary =
-                (try? vault.preferredVocabulary(
+                (try? await vault.preferredVocabulary(
                     activeScope: correctionScope
                 )) ?? []
         } else {
@@ -1414,6 +1836,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func finishRecording() {
+        Task { await finishRecordingNow() }
+    }
+
+    private func finishRecordingNow() async {
         holdStartedRecording = false
         let usesLivePreview = liveSamplesEnabledForRecording
         liveSamplesEnabledForRecording = false
@@ -1449,7 +1875,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if let historyID {
             do {
-                try resolvedVault().markTranscribing(
+                try await resolvedVault().markTranscribing(
                     id: historyID,
                     durationSeconds: recordedAudio.durationSeconds
                 )
@@ -1480,17 +1906,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let whisper = whisperEngine
             Task { [weak self] in
                 guard let registry else {
-                    await MainActor.run {
-                        self?.completeFromSegments(
-                            whisperEngine: whisper,
-                            recordedAudio: recordedAudio,
-                            historyID: historyID,
-                            behavior: behavior,
-                            remainingSamples: remainingSamples,
-                            correctionVault: correctionVault,
-                            appliesCorrectionRules: appliesCorrectionRules
-                        )
-                    }
+                    await self?.completeFromSegments(
+                        whisperEngine: whisper,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID,
+                        behavior: behavior,
+                        remainingSamples: remainingSamples,
+                        correctionVault: correctionVault,
+                        appliesCorrectionRules: appliesCorrectionRules
+                    )
                     return
                 }
                 guard let upgrade = await self?.wholeRecordingUpgrade(
@@ -1500,17 +1924,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     correctionVault: correctionVault,
                     appliesCorrectionRules: appliesCorrectionRules
                 ) else {
-                    await MainActor.run {
-                        self?.completeFromSegments(
-                            whisperEngine: whisper,
-                            recordedAudio: recordedAudio,
-                            historyID: historyID,
-                            behavior: behavior,
-                            remainingSamples: remainingSamples,
-                            correctionVault: correctionVault,
-                            appliesCorrectionRules: appliesCorrectionRules
-                        )
-                    }
+                    await self?.completeFromSegments(
+                        whisperEngine: whisper,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID,
+                        behavior: behavior,
+                        remainingSamples: remainingSamples,
+                        correctionVault: correctionVault,
+                        appliesCorrectionRules: appliesCorrectionRules
+                    )
                     return
                 }
                 await MainActor.run {
@@ -1520,8 +1942,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         with: upgrade.result.finalTranscript + " "
                     )
                     guard replaced == .replaced else {
-                        self.transcriptionQueue.async {
-                            self.completeFromSegments(
+                        Task {
+                            await self.completeFromSegments(
                                 whisperEngine: whisper,
                                 recordedAudio: recordedAudio,
                                 historyID: historyID,
@@ -1617,19 +2039,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     refinement: refinement,
                     correctionApplication:
                         appliesCorrectionRules
-                            ? try? correctionVault?.applyCorrections(
+                            ? try? await correctionVault?.applyCorrections(
                                 to: refinement.text,
                                 activeScope: behavior.correctionScope
                             )
                             : nil
                 )
-                let cloudProcessed = await Task { @MainActor [weak self] in
-                    guard let self else { return processed }
+                let cloudOutcome = await Task { @MainActor [weak self] in
+                    guard let self else {
+                        return CloudEnhancementOutcome(
+                            processed: processed,
+                            didApply: false
+                        )
+                    }
                     return await self.processCloudEnhancement(
                         localProcessed: processed,
                         formattingMode: behavior.formattingMode
                     )
                 }.value
+                let cloudProcessed = cloudOutcome.processed
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     guard !insertedPreview.isEmpty else {
@@ -1637,14 +2065,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             processed: cloudProcessed,
                             recordedAudio: recordedAudio,
                             historyID: historyID,
-                            formattingMode: behavior.formattingMode
+                            formattingMode: behavior.formattingMode,
+                            cloudDidApply: cloudOutcome.didApply
                         )
                         return
                     }
-                    _ = self.inserter.replaceTextBeforeCaret(
-                        insertedPreview,
-                        with: cloudProcessed.result.finalTranscript + " "
-                    )
+                    // Only swap while the caret is still where the preview
+                    // text was typed. Cloud enhancement can take seconds, and
+                    // if the user has moved to another application in the
+                    // meantime this would overwrite whatever happens to sit
+                    // before *that* caret.
+                    if NSWorkspace.shared.frontmostApplication?
+                        .processIdentifier == previewTargetProcess {
+                        _ = self.inserter.replaceTextBeforeCaret(
+                            insertedPreview,
+                            with: cloudProcessed.result.finalTranscript + " "
+                        )
+                    }
                     // Whether or not the swap succeeded, preview text is
                     // already on screen. Inserting again would give the user
                     // their dictation twice, which is worse than either
@@ -1656,7 +2093,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         historyID: historyID,
                         insertionText: "",
                         hasPriorInsertion: true,
-                        formattingMode: behavior.formattingMode
+                        formattingMode: behavior.formattingMode,
+                        cloudDidApply: cloudOutcome.didApply
                     )
                 }
             } catch {
@@ -1716,7 +2154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             result: result,
             refinement: refinement,
             correctionApplication: appliesCorrectionRules
-                ? try? correctionVault?.applyCorrections(
+                ? try? await correctionVault?.applyCorrections(
                     to: refinement.text,
                     activeScope: behavior.correctionScope
                 )
@@ -1737,7 +2175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         remainingSamples: [Float],
         correctionVault: DictationVault?,
         appliesCorrectionRules: Bool
-    ) {
+    ) async {
         let expectsRemainder = remainingSamples.count >= 1_600
         guard let whisperEngine else {
             DispatchQueue.main.async { [weak self] in
@@ -1768,7 +2206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     result: result,
                     refinement: refinement,
                     correctionApplication: appliesCorrectionRules
-                        ? try? correctionVault?.applyCorrections(
+                        ? try? await correctionVault?.applyCorrections(
                             to: refinement.text,
                             activeScope: behavior.correctionScope
                         )
@@ -1870,7 +2308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         liveSamplesEnabledForRecording = false
         resetLivePreviewSession()
         if let historyID {
-            try? dictationVault?.discard(id: historyID)
+            Task { try? await dictationVault?.discard(id: historyID) }
         }
         state.resetAudioSamples()
         state.phase = .idle
@@ -1902,11 +2340,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let message =
             "The selected microphone disconnected. Reconnect it or choose another microphone in Audio."
         if let historyID {
-            try? dictationVault?.markFailed(
-                id: historyID,
-                message: message,
-                retainAudio: historyPreferences.retainsFailedAudio
-            )
+            Task {
+                try? await dictationVault?.markFailed(
+                    id: historyID,
+                    message: message,
+                    retainAudio: historyPreferences.retainsFailedAudio
+                )
+            }
             // Retaining audio without arming the expiry timer means the 24-hour
             // promise only takes effect at the next launch.
             scheduleRecoveryExpiry()
@@ -1975,18 +2415,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         voiceCommandsEnabled:
                             behavior.voiceCommandsEnabled
                     )
-                let processed = ProcessedTranscription(
-                    result: result,
-                    refinement: refinement,
-                    correctionApplication:
-                        appliesCorrectionRules
-                            ? try? correctionVault?.applyCorrections(
-                                to: refinement.text,
-                                activeScope: behavior.correctionScope
-                            )
-                            : nil
-                )
-                DispatchQueue.main.async {
+                Task { @MainActor [weak self] in
+                    let correctionApplication = appliesCorrectionRules
+                        ? try? await correctionVault?.applyCorrections(
+                            to: refinement.text,
+                            activeScope: behavior.correctionScope
+                        )
+                        : nil
+                    let processed = ProcessedTranscription(
+                        result: result,
+                        refinement: refinement,
+                        correctionApplication: correctionApplication
+                    )
                     self?.acceptStablePhrase(
                         processed,
                         endSampleIndex: segment.endSampleIndex,
@@ -2054,12 +2494,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
            !nonPersistentHistoryIDs.contains(historyID),
            historyPreferences.isHistoryEnabled,
            !historyPreferences.isPrivateModeEnabled {
-            try? dictationVault?.storePartialTranscript(
-                id: historyID,
-                rawTranscript: liveStableRawTranscript,
-                finalTranscript: liveStableFinalTranscript,
-                correctionCount: liveStableCorrectionCount
-            )
+            let rawTranscript = liveStableRawTranscript
+            let finalTranscript = liveStableFinalTranscript
+            let correctionCount = liveStableCorrectionCount
+            Task {
+                try? await dictationVault?.storePartialTranscript(
+                    id: historyID,
+                    rawTranscript: rawTranscript,
+                    finalTranscript: finalTranscript,
+                    correctionCount: correctionCount
+                )
+            }
         }
 
         guard LiveDictationPreferences.isCommitOnPauseEnabled(),
@@ -2159,14 +2604,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 to: livePendingStableTranscript
             )
             : finalTranscript
+        let formattingMode = activeDictationBehavior.formattingMode
+        let insertedSoFar = liveInsertedStableTranscript
+        let previewTargetProcess = liveTargetProcessIdentifier
         resetLivePreviewSession()
-        complete(
-            processed: processed,
-            recordedAudio: recordedAudio,
-            historyID: historyID,
-            insertionText: insertionText,
-            hasPriorInsertion: hasPriorInsertion
-        )
+
+        guard formattingMode == .cloud else {
+            complete(
+                processed: processed,
+                recordedAudio: recordedAudio,
+                historyID: historyID,
+                insertionText: insertionText,
+                hasPriorInsertion: hasPriorInsertion,
+                formattingMode: formattingMode
+            )
+            return
+        }
+
+        // The live-preview routes never ran cloud enhancement. With Formatting
+        // set to Cloud and streaming insertion on, no request was made, no
+        // review panel appeared, and the "Cloud AI is off" warning never
+        // fired — the user got the local transcript believing their provider
+        // had rewritten it.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let outcome = await self.processCloudEnhancement(
+                localProcessed: processed,
+                formattingMode: formattingMode
+            )
+            guard outcome.didApply, hasPriorInsertion else {
+                self.complete(
+                    processed: outcome.processed,
+                    recordedAudio: recordedAudio,
+                    historyID: historyID,
+                    insertionText: outcome.didApply
+                        ? outcome.processed.result.finalTranscript
+                        : insertionText,
+                    hasPriorInsertion: hasPriorInsertion,
+                    formattingMode: formattingMode,
+                    cloudDidApply: outcome.didApply
+                )
+                return
+            }
+            // Text is already on screen, so swap rather than append — and only
+            // while the caret is still where it was typed. Enhancement takes
+            // seconds; if the user has moved on, this would overwrite whatever
+            // sits before *that* caret.
+            if NSWorkspace.shared.frontmostApplication?
+                .processIdentifier == previewTargetProcess {
+                _ = self.inserter.replaceTextBeforeCaret(
+                    insertedSoFar,
+                    with: outcome.processed.result.finalTranscript + " "
+                )
+            }
+            // Whether or not the swap landed, inserting again would give the
+            // user their dictation twice. History keeps the accurate text and
+            // nothing further is typed.
+            self.complete(
+                processed: outcome.processed,
+                recordedAudio: recordedAudio,
+                historyID: historyID,
+                insertionText: "",
+                hasPriorInsertion: true,
+                formattingMode: formattingMode,
+                cloudDidApply: true
+            )
+        }
     }
 
     private func resetLivePreviewSession() {
@@ -2183,14 +2686,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         liveTargetProcessIdentifier = nil
     }
 
+    /// - Parameter cloudDidApply: whether a cloud provider actually produced
+    ///   `processed.result.finalTranscript`. Only true when the request ran
+    ///   *and* its result was kept, so a discarded suggestion or an unreachable
+    ///   provider still gets local formatting rather than raw refined text.
     private func complete(
         processed: ProcessedTranscription,
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?,
         insertionText: String? = nil,
         hasPriorInsertion: Bool = false,
-        formattingMode: TranscriptFormattingMode? = nil
+        formattingMode: TranscriptFormattingMode? = nil,
+        cloudDidApply: Bool = false
     ) {
+        Task {
+            await completeNow(
+                processed: processed,
+                recordedAudio: recordedAudio,
+                historyID: historyID,
+                insertionText: insertionText,
+                hasPriorInsertion: hasPriorInsertion,
+                formattingMode: formattingMode,
+                cloudDidApply: cloudDidApply
+            )
+        }
+    }
+
+    private func completeNow(
+        processed: ProcessedTranscription,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        historyID: UUID?,
+        insertionText: String?,
+        hasPriorInsertion: Bool,
+        formattingMode: TranscriptFormattingMode?,
+        cloudDidApply: Bool
+    ) async {
         let result = processed.result
         let resolvedFormattingMode = formattingMode ?? activeDictationBehavior.formattingMode
         transcribingHistoryID = nil
@@ -2209,22 +2739,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var historySaveError: Error?
         if let historyID, shouldPersist {
             do {
-                let vault = try resolvedVault()
-                try vault.storeTranscript(
+                let vault = try await resolvedVault()
+                try await vault.storeTranscript(
                     id: historyID,
                     rawTranscript: result.rawTranscript,
                     finalTranscript: result.finalTranscript,
                     correctionCount: result.correctionCount,
                     isPartial: result.isPartial
                 )
-                archiveRecordingIfEnabled(historyID: historyID)
-                try vault.deleteRecoveryAudio(id: historyID)
-                try? vault.recordCorrectionUsage(
+                await archiveRecordingIfEnabled(historyID: historyID)
+                try await vault.deleteRecoveryAudio(id: historyID)
+                try? await vault.recordCorrectionUsage(
                     processed.correctionUsages
                 )
             } catch {
                 historySaveError = error
-                try? resolvedVault().markFailed(
+                try? await resolvedVault().markFailed(
                     id: historyID,
                     message: error.localizedDescription,
                     retainAudio: historyPreferences.retainsFailedAudio
@@ -2233,7 +2763,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } else {
             if let historyID {
-                try? resolvedVault().discard(id: historyID)
+                try? await resolvedVault().discard(id: historyID)
             }
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
@@ -2248,9 +2778,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let textToInsert: String
         if let insertionText {
             textToInsert = insertionText
-        } else if resolvedFormattingMode == .cloud {
+        } else if resolvedFormattingMode == .cloud, cloudDidApply {
+            // The provider already rewrote this text; running the local
+            // enhancer over its output would re-format someone else's work.
             textToInsert = result.finalTranscript
         } else {
+            // Reached for every rung below Cloud, and for Cloud when the
+            // request did not happen — no key, provider unreachable, or the
+            // user discarded the suggestion. Skipping the local enhancer here
+            // unconditionally made the top rung produce *less* formatting than
+            // the one beneath it: the text came out only `.clean`-refined
+            // while the app said it had "used local formatting".
             textToInsert = enhanceForMode(
                 result.finalTranscript,
                 formattingMode: resolvedFormattingMode
@@ -2276,7 +2814,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if textToInsert.isEmpty, hasPriorInsertion {
             if let historyID, shouldPersist, historySaveError == nil {
-                try? resolvedVault().markInsertion(
+                try? await resolvedVault().markInsertion(
                     id: historyID,
                     outcome: .inserted
                 )
@@ -2294,10 +2832,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             switch self.inserter.insert(textToInsert) {
             case .pasted:
                 if let historyID, shouldPersist, historySaveError == nil {
-                    try? self.resolvedVault().markInsertion(
-                        id: historyID,
-                        outcome: .inserted
-                    )
+                    Task {
+                        try? await self.resolvedVault().markInsertion(
+                            id: historyID,
+                            outcome: .inserted
+                        )
+                    }
                 }
                 self.state.phase = .success
                 self.historyViewModel?.refresh()
@@ -2306,18 +2846,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.scheduleIdleReset(after: self.successResetDelay)
             case .copiedOnly:
                 if let historyID, shouldPersist, historySaveError == nil {
-                    try? self.resolvedVault().markInsertion(
-                        id: historyID,
-                        outcome: .copiedOnly
-                    )
+                    Task {
+                        try? await self.resolvedVault().markInsertion(
+                            id: historyID,
+                            outcome: .copiedOnly
+                        )
+                    }
                 }
                 self.showError("Copied—enable Accessibility to auto-paste.")
             case .blockedBySecureInput:
                 if let historyID, shouldPersist, historySaveError == nil {
-                    try? self.resolvedVault().markInsertion(
-                        id: historyID,
-                        outcome: .copiedOnly
-                    )
+                    Task {
+                        try? await self.resolvedVault().markInsertion(
+                            id: historyID,
+                            outcome: .copiedOnly
+                        )
+                    }
                 }
                 // Naming the cause matters: nothing the user can change in
                 // ZenVoice fixes this, and without an explanation the app
@@ -2344,6 +2888,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?
     ) {
+        Task {
+            await handleTranscriptionFailureNow(
+                error,
+                recordedAudio: recordedAudio,
+                historyID: historyID
+            )
+        }
+    }
+
+    private func handleTranscriptionFailureNow(
+        _ error: Error,
+        recordedAudio: AudioRecorder.RecordedAudio,
+        historyID: UUID?
+    ) async {
         transcribingHistoryID = nil
         resetActiveDictationBehavior()
         let shouldPersist = historyID.map {
@@ -2353,7 +2911,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } ?? false
         if let historyID, shouldPersist {
             do {
-                try resolvedVault().markFailed(
+                try await resolvedVault().markFailed(
                     id: historyID,
                     message: error.localizedDescription,
                     retainAudio: historyPreferences.retainsFailedAudio
@@ -2364,7 +2922,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } else {
             if let historyID {
-                try? resolvedVault().discard(id: historyID)
+                try? await resolvedVault().discard(id: historyID)
             }
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
@@ -2372,12 +2930,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showError(error.localizedDescription)
     }
 
-    private func resolvedVault() throws -> DictationVault {
+    private func resolvedVault() async throws -> DictationVault {
         if let dictationVault {
             return dictationVault
         }
         let policy = try RuntimeIdentity.policy()
-        let vault = try DictationVault.live(policy: policy)
+        let vault = try await DictationVault.live(policy: policy)
         dictationVault = vault
         return vault
     }
@@ -2550,27 +3108,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             switch self.inserter.insert(text) {
             case .pasted:
                 if let historyID, shouldPersist, historySaveError == nil {
-                    try? self.resolvedVault().markInsertion(
-                        id: historyID,
-                        outcome: .inserted
-                    )
+                    Task {
+                        try? await self.resolvedVault().markInsertion(
+                            id: historyID,
+                            outcome: .inserted
+                        )
+                    }
                 }
                 self.state.phase = .success
             case .copiedOnly:
                 if let historyID, shouldPersist, historySaveError == nil {
-                    try? self.resolvedVault().markInsertion(
-                        id: historyID,
-                        outcome: .copiedOnly
-                    )
+                    Task {
+                        try? await self.resolvedVault().markInsertion(
+                            id: historyID,
+                            outcome: .copiedOnly
+                        )
+                    }
                 }
                 self.showError("Copied—enable Accessibility to auto-paste.")
                 return
             case .blockedBySecureInput:
                 if let historyID, shouldPersist, historySaveError == nil {
-                    try? self.resolvedVault().markInsertion(
-                        id: historyID,
-                        outcome: .copiedOnly
-                    )
+                    Task {
+                        try? await self.resolvedVault().markInsertion(
+                            id: historyID,
+                            outcome: .copiedOnly
+                        )
+                    }
                 }
                 self.showError("Copied—\(self.secureInputAdvice())")
                 return
@@ -2646,12 +3210,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func pasteLastTranscript() {
+        Task { await pasteLastTranscriptNow() }
+    }
+
+    private func pasteLastTranscriptNow() async {
         let transcript: String?
         if !state.lastTranscript.isEmpty {
             transcript = state.lastTranscript
         } else if historyPreferences.hasEverEnabledHistory,
                   let dictationVault {
-            transcript = try? dictationVault
+            transcript = try? await dictationVault
                 .recent(limit: 1)
                 .first?
                 .finalTranscript
@@ -2729,34 +3297,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if let activeHistoryID {
             nonPersistentHistoryIDs.insert(activeHistoryID)
-            do {
-                try dictationVault?.suppressPersistence(id: activeHistoryID)
-            } catch {
-                showError(
-                    "Private Dictation could not update local history: "
-                    + error.localizedDescription
-                )
+            Task { @MainActor in
+                do {
+                    try await dictationVault?.suppressPersistence(
+                        id: activeHistoryID
+                    )
+                } catch {
+                    showError(
+                        "Private Dictation could not update local history: "
+                        + error.localizedDescription
+                    )
+                }
             }
         }
         if let transcribingHistoryID {
             nonPersistentHistoryIDs.insert(transcribingHistoryID)
-            do {
-                try dictationVault?.suppressPersistence(
-                    id: transcribingHistoryID
-                )
-            } catch {
-                showError(
-                    "Private Dictation could not update local history: "
-                    + error.localizedDescription
-                )
+            Task { @MainActor in
+                do {
+                    try await dictationVault?.suppressPersistence(
+                        id: transcribingHistoryID
+                    )
+                } catch {
+                    showError(
+                        "Private Dictation could not update local history: "
+                        + error.localizedDescription
+                    )
+                }
             }
         }
     }
 
     private func scheduleRecoveryExpiry() {
+        Task { await scheduleRecoveryExpiryNow() }
+    }
+
+    private func scheduleRecoveryExpiryNow() async {
         recoveryExpiryTimer?.invalidate()
         guard let vault = dictationVault,
-              let expiry = try? vault.nextRecoveryExpiry() else {
+              let expiry = try? await vault.nextRecoveryExpiry() else {
             return
         }
         let delay = max(1, expiry.timeIntervalSinceNow)
@@ -2766,16 +3344,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                _ = try? self.dictationVault?.purgeExpiredRecoveryAudio()
+                _ = try? await self.dictationVault?
+                    .purgeExpiredRecoveryAudio()
                 self.historyViewModel?.refresh()
-                self.scheduleRecoveryExpiry()
+                await self.scheduleRecoveryExpiryNow()
             }
         }
     }
 
     private func retryHistoryRecord(
         _ record: DictationRecord
-    ) -> Result<Void, Error> {
+    ) async -> Result<Void, Error> {
         guard !state.isBusy else {
             return .failure(
                 DictationVaultError.database(
@@ -2821,7 +3400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         do {
-            try resolvedVault().markTranscribing(
+            try await resolvedVault().markTranscribing(
                 id: record.id,
                 durationSeconds: record.durationSeconds
             )
@@ -2841,7 +3420,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let correctionScope = recordedLanguageProfile.correctionScope
         let preferredVocabulary =
             appliesCorrectionRules
-                ? (try? correctionVault?.preferredVocabulary(
+                ? (try? await correctionVault?.preferredVocabulary(
                     activeScope: correctionScope
                 )) ?? []
                 : []
@@ -2878,19 +3457,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     refinement: refinement,
                     correctionApplication:
                         appliesCorrectionRules
-                            ? try? correctionVault?.applyCorrections(
+                            ? try? await correctionVault?.applyCorrections(
                                 to: refinement.text,
                                 activeScope: correctionScope
                             )
                             : nil
                 )
-                await MainActor.run {
-                    self?.completeHistoryRetry(
-                        processed: processed,
-                        recordedAudio: recordedAudio,
-                        historyID: record.id
-                    )
-                }
+                await self?.completeHistoryRetry(
+                    processed: processed,
+                    recordedAudio: recordedAudio,
+                    historyID: record.id
+                )
             } catch {
                 await MainActor.run {
                     self?.handleTranscriptionFailure(
@@ -2908,7 +3485,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         processed: ProcessedTranscription,
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID
-    ) {
+    ) async {
         let result = processed.result
         transcribingHistoryID = nil
         ModelBenchmarkStore.record(
@@ -2920,23 +3497,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard nonPersistentHistoryIDs.remove(historyID) == nil,
               historyPreferences.isHistoryEnabled,
               !historyPreferences.isPrivateModeEnabled else {
-            try? resolvedVault().discard(id: historyID)
+            try? await resolvedVault().discard(id: historyID)
             try? FileManager.default.removeItem(at: recordedAudio.url)
             showError("Private Dictation was enabled; this retry was not saved.")
             return
         }
         do {
-            let vault = try resolvedVault()
-            try vault.storeTranscript(
+            let vault = try await resolvedVault()
+            try await vault.storeTranscript(
                 id: historyID,
                 rawTranscript: result.rawTranscript,
                 finalTranscript: result.finalTranscript,
                 correctionCount: result.correctionCount,
                 isPartial: result.isPartial
             )
-            archiveRecordingIfEnabled(historyID: historyID)
-            try vault.deleteRecoveryAudio(id: historyID)
-            try? vault.recordCorrectionUsage(processed.correctionUsages)
+            await archiveRecordingIfEnabled(historyID: historyID)
+            try await vault.deleteRecoveryAudio(id: historyID)
+            try? await vault.recordCorrectionUsage(processed.correctionUsages)
             state.recordSuccessfulDictation(
                 transcript: result.finalTranscript,
                 durationSeconds: recordedAudio.durationSeconds,
@@ -2975,7 +3552,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     ) {
         let showsForActiveDictation: Bool
         switch phase {
-        case .listening, .transcribing, .inserting, .error:
+        case .listening, .transcribing, .awaitingCloudReview, .inserting,
+             .error:
             showsForActiveDictation = true
         case .idle, .success:
             showsForActiveDictation = false
@@ -2993,10 +3571,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// without polling insights on a timer.
     func menuWillOpen(_ menu: NSMenu) {
         refreshTodayUsagePill()
+        refreshAccessibilityMenuItem()
+    }
+
+    /// Keeps the menu honest about auto-paste.
+    ///
+    /// Accessibility can be revoked in System Settings at any time, and when
+    /// that happens dictation quietly falls back to the clipboard. The menu is
+    /// the one surface a menu-bar app always has, so it says which mode the
+    /// user is actually in.
+    private func refreshAccessibilityMenuItem() {
+        guard let item = accessibilityMenuItem else { return }
+        if AXIsProcessTrusted() {
+            item.title = "Auto-Paste Enabled"
+            item.state = .on
+            item.isEnabled = false
+            item.action = nil
+        } else {
+            item.title = "Enable Auto-Paste Permission…"
+            item.state = .off
+            item.isEnabled = true
+            item.action = #selector(requestAccessibilityPermission)
+            item.target = self
+        }
+        settingsViewModel?.refreshSystemStatus()
     }
 
     private func refreshTodayUsagePill() {
-        let today = (try? dictationVault?.insights().today) ?? nil
+        Task { await refreshTodayUsagePillNow() }
+    }
+
+    private func refreshTodayUsagePillNow() async {
+        let today = (try? await dictationVault?.insights().today) ?? nil
         let summary = (today ?? .empty).pillSummary
         todayUsageMenuItem?.title = summary
         statusItem?.button?.toolTip = "ZenVoice — \(summary)"

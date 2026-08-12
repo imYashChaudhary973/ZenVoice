@@ -20,10 +20,7 @@ struct AudioScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        ZenScreen(
-            title: "Audio",
-            subtitle: "Pick the microphone ZenVoice listens to."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             inputSection
             doctorSection
 
@@ -162,7 +159,7 @@ struct AudioScreen: View {
             caption: "3-second on-device check"
         ) {
             ZenPanel {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
                     HStack(spacing: ZenDesign.Spacing.sm) {
                         Image(systemName: "stethoscope")
                             .font(.system(size: 13, weight: .semibold))
@@ -203,7 +200,7 @@ struct AudioScreen: View {
                         )
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
                         AudioDoctorWaveform(
                             samples: viewModel.audioDoctorSamples,
                             tint: audioDoctorTint
@@ -220,8 +217,8 @@ struct AudioScreen: View {
                             ZenDesign.Semantic.textTertiary
                         )
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, ZenDesign.Spacing.sm)
+                    .padding(.vertical, ZenDesign.Spacing.xs)
                     .background {
                         RoundedRectangle(
                             cornerRadius: ZenDesign.Radius.small,

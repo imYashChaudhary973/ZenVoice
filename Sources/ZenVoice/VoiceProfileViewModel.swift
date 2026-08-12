@@ -23,13 +23,13 @@ final class VoiceProfileViewModel: ObservableObject {
     @Published private(set) var analyzesHistory: Bool
     @Published var errorMessage: String?
 
-    private let vaultProvider: () throws -> DictationVault
+    private let vaultProvider: () async throws -> DictationVault
     private let preferences: LocalLearningPreferences
 
     init(
         preferences: LocalLearningPreferences =
             LocalLearningPreferences(),
-        vaultProvider: @escaping () throws -> DictationVault
+        vaultProvider: @escaping () async throws -> DictationVault
     ) {
         self.preferences = preferences
         self.vaultProvider = vaultProvider
@@ -40,17 +40,21 @@ final class VoiceProfileViewModel: ObservableObject {
     }
 
     func refresh() {
+        Task { await refreshNow() }
+    }
+
+    private func refreshNow() async {
         do {
-            let vault = try vaultProvider()
+            let vault = try await vaultProvider()
             if analyzesHistory {
-                snapshot = try vault.voiceProfile()
+                snapshot = try await vault.voiceProfile()
             } else {
                 snapshot = VoiceProfileSnapshot(
                     analyzedDictationCount: 0,
                     topWords: [],
                     catchPhrases: [],
                     correctionRules:
-                        try vault.correctionRules(),
+                        try await vault.correctionRules(),
                     mostActiveHour: nil
                 )
             }
@@ -64,9 +68,9 @@ final class VoiceProfileViewModel: ObservableObject {
         source: String,
         replacement: String,
         languageScope: CorrectionLanguageScope
-    ) -> Bool {
+    ) async -> Bool {
         do {
-            try vaultProvider().addCorrectionRule(
+            try await vaultProvider().addCorrectionRule(
                 source: source,
                 replacement: replacement,
                 languageScope: languageScope
@@ -84,9 +88,13 @@ final class VoiceProfileViewModel: ObservableObject {
     }
 
     func deleteRule(_ rule: CorrectionRule) {
+        Task { await deleteRuleNow(rule) }
+    }
+
+    private func deleteRuleNow(_ rule: CorrectionRule) async {
         do {
-            try vaultProvider().deleteCorrectionRule(id: rule.id)
-            refresh()
+            try await vaultProvider().deleteCorrectionRule(id: rule.id)
+            await refreshNow()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -104,9 +112,13 @@ final class VoiceProfileViewModel: ObservableObject {
     }
 
     func deleteAllRules() {
+        Task { await deleteAllRulesNow() }
+    }
+
+    private func deleteAllRulesNow() async {
         do {
-            try vaultProvider().deleteAllCorrectionRules()
-            refresh()
+            try await vaultProvider().deleteAllCorrectionRules()
+            await refreshNow()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

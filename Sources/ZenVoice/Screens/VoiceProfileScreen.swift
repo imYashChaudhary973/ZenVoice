@@ -25,11 +25,7 @@ struct VoiceProfileScreen: View {
     @State private var confirmsDeleteAllRules = false
 
     var body: some View {
-        ZenScreen(
-            title: "Your Words",
-            subtitle:
-                "Vocabulary and spelling corrections ZenVoice remembers for you."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             if let error = viewModel.errorMessage {
                 ZenBanner(
                     kind: .danger,
@@ -146,14 +142,14 @@ struct VoiceProfileScreen: View {
                     ForEach(
                         viewModel.snapshot.correctionRules
                     ) { rule in
-                        HStack(spacing: 8) {
+                        HStack(spacing: ZenDesign.Spacing.xs) {
                             Text("“\(rule.source)”")
                                 .font(ZenDesign.Typography.body)
                                 .foregroundStyle(
                                     ZenDesign.Semantic.textSecondary
                                 )
                             Image(systemName: "arrow.right")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(ZenDesign.Typography.badge)
                                 .foregroundStyle(
                                     ZenDesign.Semantic.textTertiary
                                 )
@@ -193,70 +189,153 @@ struct VoiceProfileScreen: View {
 
                 ZenPanelDivider()
 
-                HStack(alignment: .bottom, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("When I say")
-                            .font(ZenDesign.Typography.caption)
-                            .foregroundStyle(
-                                ZenDesign.Semantic.textTertiary
-                            )
-                        correctionField(
-                            placeholder: "zen pens", text: $heardPhrase
-                        )
+                // Entry controls and destructive action, on one line while
+                // they fit and two when they do not.
+                //
+                // Two 150pt fields, a button, a 125pt picker and a second
+                // button need about 700pt. The narrowest window leaves 652pt
+                // here, so as a single `HStack` this row forced its card wider
+                // than the content column and spilled past the edge.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .bottom, spacing: ZenDesign.Spacing.xs) {
+                        correctionEntryFields
+                        addRuleButton
+                        languageScopePicker
+                        Spacer(minLength: ZenDesign.Spacing.xs)
+                        deleteAllRulesButton
                     }
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                        .padding(.bottom, 9)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Write")
-                            .font(ZenDesign.Typography.caption)
-                            .foregroundStyle(
-                                ZenDesign.Semantic.textTertiary
-                            )
-                        correctionField(
-                            placeholder: "ZenPense",
-                            text: $replacementPhrase
-                        )
-                    }
-                    Button("Add rule") {
-                        if viewModel.addRule(
-                            source: heardPhrase,
-                            replacement: replacementPhrase,
-                            languageScope: correctionScope
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                        HStack(
+                            alignment: .bottom,
+                            spacing: ZenDesign.Spacing.xs
                         ) {
-                            heardPhrase = ""
-                            replacementPhrase = ""
+                            correctionEntryFields
+                            addRuleButton
+                            Spacer(minLength: 0)
+                        }
+                        HStack(alignment: .bottom, spacing: ZenDesign.Spacing.xs) {
+                            languageScopePicker
+                            Spacer(minLength: ZenDesign.Spacing.xs)
+                            deleteAllRulesButton
                         }
                     }
-                    .buttonStyle(ZenSecondaryButtonStyle())
-                    .disabled(
-                        heardPhrase.trimmingCharacters(
-                            in: .whitespacesAndNewlines
-                        ).isEmpty
-                            || replacementPhrase.trimmingCharacters(
-                                in: .whitespacesAndNewlines
-                            ).isEmpty
-                    )
-                    Picker("Language scope", selection: $correctionScope) {
-                        ForEach(CorrectionLanguageScope.allCases) { scope in
-                            Text(scope.displayName).tag(scope)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: 125)
-                    Spacer()
-                    Button("Delete All") {
-                        confirmsDeleteAllRules = true
-                    }
-                    .buttonStyle(ZenDestructiveButtonStyle())
-                    .disabled(
-                        viewModel.snapshot.correctionRules.isEmpty
-                    )
                 }
                 .padding(ZenDesign.Spacing.md)
             }
+        }
+    }
+
+    private var correctionEntryFields: some View {
+        HStack(alignment: .bottom, spacing: ZenDesign.Spacing.xs) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("When I say")
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                correctionField(
+                    placeholder: "zen pens",
+                    text: $heardPhrase
+                )
+            }
+            Image(systemName: "arrow.right")
+                .font(ZenDesign.Typography.badge)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                .padding(.bottom, 9)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Write")
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                correctionField(
+                    placeholder: "ZenPense",
+                    text: $replacementPhrase
+                )
+            }
+        }
+    }
+
+    private var addRuleButton: some View {
+        Button("Add rule") {
+            Task { @MainActor in
+                if await viewModel.addRule(
+                    source: heardPhrase,
+                    replacement: replacementPhrase,
+                    languageScope: correctionScope
+                ) {
+                    heardPhrase = ""
+                    replacementPhrase = ""
+                }
+            }
+        }
+        .buttonStyle(ZenSecondaryButtonStyle())
+        .disabled(
+            heardPhrase.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty
+                || replacementPhrase.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty
+        )
+        .alignmentGuide(.bottom) { dimensions in
+            dimensions[.bottom]
+                - (dimensions.height - ZenDesign.Layout.control) / 2
+        }
+    }
+
+    private var languageScopePicker: some View {
+        Menu {
+            ForEach(CorrectionLanguageScope.allCases) { scope in
+                Button {
+                    correctionScope = scope
+                } label: {
+                    if correctionScope == scope {
+                        Label(
+                            scope.displayName,
+                            systemImage: "checkmark"
+                        )
+                    } else {
+                        Text(scope.displayName)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(correctionScope.displayName)
+                    .lineLimit(1)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .padding(.horizontal, 10)
+            .frame(width: 125, height: ZenDesign.Layout.control)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(ZenDesign.Semantic.surface)
+            }
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .strokeBorder(ZenDesign.Semantic.borderStrong)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 125, height: ZenDesign.Layout.control)
+        .accessibilityLabel("Language scope")
+    }
+
+    private var deleteAllRulesButton: some View {
+        Button("Delete All") {
+            confirmsDeleteAllRules = true
+        }
+        .buttonStyle(ZenDestructiveButtonStyle())
+        .disabled(viewModel.snapshot.correctionRules.isEmpty)
+        .alignmentGuide(.bottom) { dimensions in
+            dimensions[.bottom]
+                - (dimensions.height - ZenDesign.Layout.control) / 2
         }
     }
 
@@ -269,7 +348,7 @@ struct VoiceProfileScreen: View {
             .font(ZenDesign.Typography.body)
             .foregroundStyle(ZenDesign.Semantic.textPrimary)
             .padding(.horizontal, 10)
-            .frame(width: 150, height: 30)
+            .frame(width: 150, height: ZenDesign.Layout.control)
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,
@@ -297,10 +376,10 @@ struct VoiceProfileScreen: View {
                     } else {
                         LazyVGrid(
                             columns: [
-                                GridItem(.adaptive(minimum: 104), spacing: 8)
+                                GridItem(.adaptive(minimum: 104), spacing: ZenDesign.Spacing.xs)
                             ],
                             alignment: .leading,
-                            spacing: 8
+                            spacing: ZenDesign.Spacing.xs
                         ) {
                             ForEach(
                                 viewModel.snapshot.topWords
@@ -349,13 +428,13 @@ struct VoiceProfileScreen: View {
                     if viewModel.snapshot.catchPhrases.isEmpty {
                         emptyProfileText
                     } else {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
                             ForEach(
                                 viewModel.snapshot.catchPhrases
                             ) { item in
-                                HStack(spacing: 8) {
+                                HStack(spacing: ZenDesign.Spacing.xs) {
                                     Image(systemName: "quote.opening")
-                                        .font(.system(size: 10))
+                                        .font(ZenDesign.Typography.badge)
                                         .foregroundStyle(
                                             ZenDesign.Semantic.textTertiary
                                         )
@@ -389,13 +468,17 @@ struct VoiceProfileScreen: View {
     }
 
     private var emptyProfileText: some View {
-        Text(
-            viewModel.analyzesHistory
-                ? "More saved dictations are needed."
-                : "Pattern analysis is paused."
+        ZenRow(
+            icon: "chart.bar.xaxis",
+            title:
+                viewModel.analyzesHistory
+                    ? "More saved dictations are needed"
+                    : "Pattern analysis is paused",
+            subtitle:
+                viewModel.analyzesHistory
+                    ? "Keep dictating and ZenVoice will surface frequent words and phrases."
+                    : "Turn on history analysis to see your most-used words and phrases."
         )
-        .font(ZenDesign.Typography.caption)
-        .foregroundStyle(ZenDesign.Semantic.textTertiary)
     }
 
     private var activeHourLabel: String {

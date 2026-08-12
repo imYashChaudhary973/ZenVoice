@@ -20,11 +20,7 @@ struct WriteModeScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        ZenScreen(
-            title: "Write Mode",
-            subtitle:
-                "Dictate at the caret, or rewrite the current selection by voice."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             subModeSection
             defaultPromptSection
             accessibilityBanner
@@ -33,38 +29,36 @@ struct WriteModeScreen: View {
 
     private var subModeSection: some View {
         ZenSection(title: "Default sub-mode") {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10)
-                    ],
-                    spacing: 10
-                ) {
-                    subModeCard(
-                        .compose,
-                        detail: "Insert transcript at the cursor"
-                    )
-                    subModeCard(
-                        .rewrite,
-                        detail: "Replace selected text"
-                    )
-                }
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: ZenDesign.Spacing.sm),
+                    GridItem(.flexible(), spacing: ZenDesign.Spacing.sm)
+                ],
+                spacing: ZenDesign.Spacing.sm
+            ) {
+                subModeCard(
+                    .compose,
+                    detail: "Insert transcript at the cursor"
+                )
+                subModeCard(
+                    .rewrite,
+                    detail: "Replace selected text"
+                )
+            }
 
-                ZenPanel {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(viewModel.writeModeSubMode.displayName)
-                            .font(ZenDesign.Typography.bodyStrong)
-                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        Text(
-                            "In Rewrite, ZenVoice reads the current selection using Accessibility (or the clipboard as a fallback), applies your prompt through the Smart formatting rung, and shows a preview when the change is large."
-                        )
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(ZenDesign.Spacing.md)
+            ZenPanel {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(viewModel.writeModeSubMode.displayName)
+                        .font(ZenDesign.Typography.bodyStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Text(
+                        "In Rewrite, ZenVoice reads the current selection using Accessibility (or the clipboard as a fallback), applies your prompt through the Smart formatting rung, and shows a preview when the change is large."
+                    )
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(ZenDesign.Spacing.md)
             }
         }
     }
@@ -98,7 +92,7 @@ struct WriteModeScreen: View {
                     .font(ZenDesign.Typography.body)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     .scrollContentBackground(.hidden)
-                    .padding(8)
+                    .padding(ZenDesign.Spacing.xs)
                     .frame(minHeight: 64, maxHeight: 82)
                     .background {
                         RoundedRectangle(

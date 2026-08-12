@@ -23,6 +23,7 @@ public final class HistoryPreferences {
         static let retainsFailedAudio = "ZenVoice.history.retainsFailedAudio"
         static let retentionDays = "ZenVoice.history.retentionDays"
         static let privateMode = "ZenVoice.history.privateMode"
+        static let vaultNeedsVacuum = "ZenVoice.history.vaultNeedsVacuum"
     }
 
     private let defaults: UserDefaults
@@ -82,5 +83,14 @@ public final class HistoryPreferences {
     public var isPrivateModeEnabled: Bool {
         get { defaults.bool(forKey: Key.privateMode) }
         set { defaults.set(newValue, forKey: Key.privateMode) }
+    }
+
+    /// Whether the vault database needs a `VACUUM` after a large deletion.
+    ///
+    /// `VACUUM` can take seconds on a large database, so it is scheduled for
+    /// the next idle launch rather than blocking the UI during `deleteAll()`.
+    public var vaultNeedsVacuum: Bool {
+        get { defaults.bool(forKey: Key.vaultNeedsVacuum) }
+        set { defaults.set(newValue, forKey: Key.vaultNeedsVacuum) }
     }
 }

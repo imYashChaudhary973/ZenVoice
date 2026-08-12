@@ -41,12 +41,12 @@ private struct VaultFixture {
     let keyProvider: StaticKeyProvider
     let vault: DictationVault
 
-    init() throws {
+    init() async throws {
         directoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         databaseURL = directoryURL.appendingPathComponent("test.sqlite")
         keyProvider = StaticKeyProvider()
-        vault = try DictationVault(
+        vault = try await DictationVault(
             databaseURL: databaseURL,
             recoveryDirectoryURL: directoryURL
                 .appendingPathComponent("Recovery", isDirectory: true),
@@ -60,10 +60,10 @@ private struct VaultFixture {
 }
 
 private func require(
-    _ condition: @autoclosure () throws -> Bool,
+    _ condition: @autoclosure () async throws -> Bool,
     _ message: String
-) throws {
-    guard try condition() else {
+) async throws {
+    guard try await condition() else {
         throw CheckError.failed(message)
     }
 }
@@ -79,14 +79,14 @@ private enum CheckError: LocalizedError {
     }
 }
 
-private func checkEncryptedStorage() throws {
-    let fixture = try VaultFixture()
+private func checkEncryptedStorage() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let id = UUID()
-    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
     try Data("audio".utf8).write(to: audioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: id,
             startedAt: Date(timeIntervalSince1970: 1_000),
@@ -98,25 +98,25 @@ private func checkEncryptedStorage() throws {
             recoveryAudioURL: audioURL
         )
     )
-    try fixture.vault.markTranscribing(id: id, durationSeconds: 30)
-    try fixture.vault.storeTranscript(
+    try await fixture.vault.markTranscribing(id: id, durationSeconds: 30)
+    try await fixture.vault.storeTranscript(
         id: id,
         rawTranscript: "hello local world",
         finalTranscript: "Hello local world.",
         completedAt: Date(timeIntervalSince1970: 1_030),
         correctionCount: 1
     )
-    try fixture.vault.markInsertion(id: id, outcome: .inserted)
+    try await fixture.vault.markInsertion(id: id, outcome: .inserted)
 
-    guard let record = try fixture.vault.record(id: id) else {
+    guard let record = try await fixture.vault.record(id: id) else {
         throw CheckError.failed("stored record is missing")
     }
-    try require(record.finalTranscript == "Hello local world.", "final text")
-    try require(record.rawTranscript == "hello local world", "raw text")
-    try require(record.wordCount == 3, "word count")
-    try require(record.wordsPerMinute == 6, "words per minute")
-    try require(record.status == .inserted, "insertion status")
-    try require(record.correctionCount == 1, "correction count")
+    try await require(record.finalTranscript == "Hello local world.", "final text")
+    try await require(record.rawTranscript == "hello local world", "raw text")
+    try await require(record.wordCount == 3, "word count")
+    try await require(record.wordsPerMinute == 6, "words per minute")
+    try await require(record.status == .inserted, "insertion status")
+    try await require(record.correctionCount == 1, "correction count")
 
     for suffix in ["", "-wal", "-shm"] {
         let fileURL = URL(fileURLWithPath: fixture.databaseURL.path + suffix)
@@ -125,26 +125,26 @@ private func checkEncryptedStorage() throws {
         }
         let databaseData = try Data(contentsOf: fileURL)
         let databaseText = String(decoding: databaseData, as: UTF8.self)
-        try require(
+        try await require(
             !databaseText.contains("Hello local world"),
             "final transcript leaked into plaintext database\(suffix)"
         )
-        try require(
+        try await require(
             !databaseText.contains("hello local world"),
             "raw transcript leaked into plaintext database\(suffix)"
         )
     }
 }
 
-private func checkRecoveryExpiry() throws {
-    let fixture = try VaultFixture()
+private func checkRecoveryExpiry() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let id = UUID()
     let startedAt = Date(timeIntervalSince1970: 9_000)
-    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
     try Data("audio".utf8).write(to: audioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: id,
             startedAt: startedAt,
@@ -157,42 +157,42 @@ private func checkRecoveryExpiry() throws {
     )
 
     let recoveryTime = Date(timeIntervalSince1970: 10_000)
-    try require(
-        try fixture.vault.recoverInterrupted(
+    try await require(
+        try await fixture.vault.recoverInterrupted(
             retainAudio: true,
             now: recoveryTime
         ) == 1,
         "interrupted record was not recovered"
     )
-    guard let failed = try fixture.vault.record(id: id) else {
+    guard let failed = try await fixture.vault.record(id: id) else {
         throw CheckError.failed("failed record is missing")
     }
-    try require(failed.status == .failed, "recovered status")
-    try require(failed.recoveryAudioURL == audioURL, "recovery audio path")
-    try require(
+    try await require(failed.status == .failed, "recovered status")
+    try await require(failed.recoveryAudioURL == audioURL, "recovery audio path")
+    try await require(
         failed.recoveryAudioExpiresAt
             == startedAt.addingTimeInterval(DictationVault.recoveryLifetime),
         "interrupted recovery expiry was extended from relaunch time"
     )
-    try require(
+    try await require(
         FileManager.default.fileExists(atPath: audioURL.path),
         "recovery audio was deleted too early"
     )
 
-    try require(
-        try fixture.vault.purgeExpiredRecoveryAudio(
+    try await require(
+        try await fixture.vault.purgeExpiredRecoveryAudio(
             now: recoveryTime.addingTimeInterval(
                 DictationVault.recoveryLifetime + 1
             )
         ) == 1,
         "expired audio was not purged"
     )
-    try require(
+    try await require(
         !FileManager.default.fileExists(atPath: audioURL.path),
         "expired audio remains on disk"
     )
-    try require(
-        try fixture.vault.record(id: id)?.recoveryAudioURL == nil,
+    try await require(
+        try await fixture.vault.record(id: id)?.recoveryAudioURL == nil,
         "expired audio path remains in database"
     )
 
@@ -201,9 +201,9 @@ private func checkRecoveryExpiry() throws {
     // decode time on top of the 24 hours the privacy contract states.
     let failedID = UUID()
     let failedStartedAt = Date(timeIntervalSince1970: 50_000)
-    let failedAudioURL = fixture.vault.recoveryAudioURL(for: failedID)
+    let failedAudioURL = await fixture.vault.recoveryAudioURL(for: failedID)
     try Data("audio".utf8).write(to: failedAudioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: failedID,
             startedAt: failedStartedAt,
@@ -214,21 +214,21 @@ private func checkRecoveryExpiry() throws {
             recoveryAudioURL: failedAudioURL
         )
     )
-    try fixture.vault.markFailed(
+    try await fixture.vault.markFailed(
         id: failedID,
         message: "test",
         retainAudio: true,
         now: failedStartedAt.addingTimeInterval(600)
     )
-    try require(
-        try fixture.vault.record(id: failedID)?.recoveryAudioExpiresAt
+    try await require(
+        try await fixture.vault.record(id: failedID)?.recoveryAudioExpiresAt
             == failedStartedAt.addingTimeInterval(
                 DictationVault.recoveryLifetime
             ),
         "failed recovery expiry was anchored to failure instead of capture"
     )
-    try require(
-        try fixture.vault.purgeExpiredRecoveryAudio(
+    try await require(
+        try await fixture.vault.purgeExpiredRecoveryAudio(
             now: failedStartedAt.addingTimeInterval(
                 DictationVault.recoveryLifetime + 1
             )
@@ -238,9 +238,9 @@ private func checkRecoveryExpiry() throws {
 
     // An explicit expiry must still win, and retainAudio: false must clear it.
     let explicitID = UUID()
-    let explicitAudioURL = fixture.vault.recoveryAudioURL(for: explicitID)
+    let explicitAudioURL = await fixture.vault.recoveryAudioURL(for: explicitID)
     try Data("audio".utf8).write(to: explicitAudioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: explicitID,
             startedAt: failedStartedAt,
@@ -252,31 +252,31 @@ private func checkRecoveryExpiry() throws {
         )
     )
     let explicitExpiry = Date(timeIntervalSince1970: 99_999)
-    try fixture.vault.markFailed(
+    try await fixture.vault.markFailed(
         id: explicitID,
         message: "test",
         retainAudio: true,
         recoveryExpiresAt: explicitExpiry
     )
-    try require(
-        try fixture.vault.record(id: explicitID)?.recoveryAudioExpiresAt
+    try await require(
+        try await fixture.vault.record(id: explicitID)?.recoveryAudioExpiresAt
             == explicitExpiry,
         "explicit recovery expiry was ignored"
     )
-    try fixture.vault.markFailed(
+    try await fixture.vault.markFailed(
         id: explicitID,
         message: "test",
         retainAudio: false
     )
-    try require(
-        try fixture.vault.record(id: explicitID)?.recoveryAudioExpiresAt == nil,
+    try await require(
+        try await fixture.vault.record(id: explicitID)?.recoveryAudioExpiresAt == nil,
         "declining audio retention left an expiry behind"
     )
 
     let staleID = UUID()
-    let staleAudioURL = fixture.vault.recoveryAudioURL(for: staleID)
+    let staleAudioURL = await fixture.vault.recoveryAudioURL(for: staleID)
     try Data("stale audio".utf8).write(to: staleAudioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: staleID,
             startedAt: recoveryTime.addingTimeInterval(
@@ -289,27 +289,27 @@ private func checkRecoveryExpiry() throws {
             recoveryAudioURL: staleAudioURL
         )
     )
-    try require(
-        try fixture.vault.recoverInterrupted(
+    try await require(
+        try await fixture.vault.recoverInterrupted(
             retainAudio: true,
             now: recoveryTime
         ) == 1,
         "stale interrupted record was not recovered"
     )
-    try require(
-        try fixture.vault.purgeExpiredRecoveryAudio(now: recoveryTime) == 1,
+    try await require(
+        try await fixture.vault.purgeExpiredRecoveryAudio(now: recoveryTime) == 1,
         "already-expired interrupted audio was retained"
     )
 }
 
-private func checkPrivacySuppressionAndRecoveryCleanup() throws {
-    let fixture = try VaultFixture()
+private func checkPrivacySuppressionAndRecoveryCleanup() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let privateID = UUID()
-    let privateAudioURL = fixture.vault.recoveryAudioURL(for: privateID)
+    let privateAudioURL = await fixture.vault.recoveryAudioURL(for: privateID)
     try Data("private audio".utf8).write(to: privateAudioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: privateID,
             language: "en",
@@ -319,16 +319,16 @@ private func checkPrivacySuppressionAndRecoveryCleanup() throws {
             recoveryAudioURL: privateAudioURL
         )
     )
-    try fixture.vault.suppressPersistence(id: privateID)
-    try require(
-        try fixture.vault.recoverInterrupted(retainAudio: true) == 1,
+    try await fixture.vault.suppressPersistence(id: privateID)
+    try await require(
+        try await fixture.vault.recoverInterrupted(retainAudio: true) == 1,
         "suppressed dictation was not handled during recovery"
     )
-    try require(
-        try fixture.vault.record(id: privateID) == nil,
+    try await require(
+        try await fixture.vault.record(id: privateID) == nil,
         "suppressed dictation survived restart recovery"
     )
-    try require(
+    try await require(
         !FileManager.default.fileExists(atPath: privateAudioURL.path),
         "suppressed recovery audio survived restart recovery"
     )
@@ -336,9 +336,9 @@ private func checkPrivacySuppressionAndRecoveryCleanup() throws {
     let firstID = UUID()
     let secondID = UUID()
     for id in [firstID, secondID] {
-        let audioURL = fixture.vault.recoveryAudioURL(for: id)
+        let audioURL = await fixture.vault.recoveryAudioURL(for: id)
         try Data("failed audio".utf8).write(to: audioURL)
-        try fixture.vault.begin(
+        try await fixture.vault.begin(
             DictationDraft(
                 id: id,
                 language: "en",
@@ -348,32 +348,32 @@ private func checkPrivacySuppressionAndRecoveryCleanup() throws {
                 recoveryAudioURL: audioURL
             )
         )
-        try fixture.vault.markFailed(
+        try await fixture.vault.markFailed(
             id: id,
             message: "test",
             retainAudio: true
         )
     }
-    try require(
-        try fixture.vault.deleteAllRecoveryAudio() == 2,
+    try await require(
+        try await fixture.vault.deleteAllRecoveryAudio() == 2,
         "disabling recovery did not remove every retained recording"
     )
     for id in [firstID, secondID] {
-        try require(
-            try fixture.vault.record(id: id)?.recoveryAudioURL == nil,
+        try await require(
+            try await fixture.vault.record(id: id)?.recoveryAudioURL == nil,
             "disabled recovery left an audio path"
         )
     }
 }
 
-private func checkDiscard() throws {
-    let fixture = try VaultFixture()
+private func checkDiscard() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let id = UUID()
-    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
     try Data("audio".utf8).write(to: audioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: id,
             language: "en",
@@ -383,23 +383,23 @@ private func checkDiscard() throws {
             recoveryAudioURL: audioURL
         )
     )
-    try fixture.vault.discard(id: id)
+    try await fixture.vault.discard(id: id)
 
-    try require(try fixture.vault.record(id: id) == nil, "discarded record")
-    try require(
+    try await require(try await fixture.vault.record(id: id) == nil, "discarded record")
+    try await require(
         !FileManager.default.fileExists(atPath: audioURL.path),
         "discarded audio remains on disk"
     )
 }
 
-private func checkDeleteAllRotatesVault() throws {
-    let fixture = try VaultFixture()
+private func checkDeleteAllRotatesVault() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let firstID = UUID()
-    let firstAudioURL = fixture.vault.recoveryAudioURL(for: firstID)
+    let firstAudioURL = await fixture.vault.recoveryAudioURL(for: firstID)
     try Data("audio".utf8).write(to: firstAudioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: firstID,
             language: "en",
@@ -409,42 +409,42 @@ private func checkDeleteAllRotatesVault() throws {
             recoveryAudioURL: firstAudioURL
         )
     )
-    try fixture.vault.markTranscribing(
+    try await fixture.vault.markTranscribing(
         id: firstID,
         durationSeconds: 10
     )
-    try fixture.vault.storeTranscript(
+    try await fixture.vault.storeTranscript(
         id: firstID,
         rawTranscript: "private history",
         finalTranscript: "Private history."
     )
 
     let originalKey = try fixture.keyProvider.loadOrCreateKeyData()
-    try fixture.vault.deleteAll()
+    try await fixture.vault.deleteAll()
     let replacementKey = try fixture.keyProvider.loadOrCreateKeyData()
 
-    try require(
-        try fixture.vault.recent().isEmpty,
+    try await require(
+        try await fixture.vault.recent().isEmpty,
         "delete all left history records"
     )
-    try require(
+    try await require(
         !FileManager.default.fileExists(atPath: firstAudioURL.path),
         "delete all left recovery audio"
     )
-    try require(
+    try await require(
         originalKey != replacementKey,
         "delete all did not rotate the encryption key"
     )
 }
 
-private func checkScopedHistoryDeletion() throws {
-    let fixture = try VaultFixture()
+private func checkScopedHistoryDeletion() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let savedID = UUID()
-    let savedAudioURL = fixture.vault.recoveryAudioURL(for: savedID)
+    let savedAudioURL = await fixture.vault.recoveryAudioURL(for: savedID)
     try Data("saved audio".utf8).write(to: savedAudioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: savedID,
             language: "en",
@@ -454,17 +454,17 @@ private func checkScopedHistoryDeletion() throws {
             recoveryAudioURL: savedAudioURL
         )
     )
-    try fixture.vault.storeTranscript(
+    try await fixture.vault.storeTranscript(
         id: savedID,
         rawTranscript: "saved dictation",
         finalTranscript: "Saved dictation."
     )
-    try fixture.vault.markInsertion(id: savedID, outcome: .inserted)
+    try await fixture.vault.markInsertion(id: savedID, outcome: .inserted)
 
     let recoveryID = UUID()
-    let recoveryAudioURL = fixture.vault.recoveryAudioURL(for: recoveryID)
+    let recoveryAudioURL = await fixture.vault.recoveryAudioURL(for: recoveryID)
     try Data("recovery audio".utf8).write(to: recoveryAudioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: recoveryID,
             language: "en",
@@ -474,44 +474,44 @@ private func checkScopedHistoryDeletion() throws {
             recoveryAudioURL: recoveryAudioURL
         )
     )
-    try fixture.vault.markFailed(
+    try await fixture.vault.markFailed(
         id: recoveryID,
         message: "Interrupted",
         retainAudio: true
     )
 
-    try require(
-        try fixture.vault.deleteRecords(ids: [savedID]) == 1,
+    try await require(
+        try await fixture.vault.deleteRecords(ids: [savedID]) == 1,
         "scoped deletion did not remove the saved dictation"
     )
-    try require(
-        try fixture.vault.record(id: savedID) == nil,
+    try await require(
+        try await fixture.vault.record(id: savedID) == nil,
         "scoped deletion retained the saved dictation"
     )
-    try require(
-        try fixture.vault.record(id: recoveryID) != nil,
+    try await require(
+        try await fixture.vault.record(id: recoveryID) != nil,
         "saved-dictation deletion removed Recovery Inbox data"
     )
-    try require(
+    try await require(
         FileManager.default.fileExists(atPath: recoveryAudioURL.path),
         "saved-dictation deletion removed recovery audio"
     )
 
-    try require(
-        try fixture.vault.deleteRecords(ids: [recoveryID]) == 1,
+    try await require(
+        try await fixture.vault.deleteRecords(ids: [recoveryID]) == 1,
         "scoped deletion did not remove the Recovery Inbox item"
     )
-    try require(
-        try fixture.vault.record(id: recoveryID) == nil,
+    try await require(
+        try await fixture.vault.record(id: recoveryID) == nil,
         "scoped deletion retained the Recovery Inbox item"
     )
-    try require(
+    try await require(
         !FileManager.default.fileExists(atPath: recoveryAudioURL.path),
         "Recovery Inbox deletion retained recovery audio"
     )
 }
 
-private func checkHistoryPreferencesDefaults() throws {
+private func checkHistoryPreferencesDefaults() async throws {
     let suiteName = "ZenVoiceStorageChecks.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
         throw CheckError.failed("could not create isolated user defaults")
@@ -521,22 +521,22 @@ private func checkHistoryPreferencesDefaults() throws {
     }
 
     let preferences = HistoryPreferences(defaults: defaults)
-    try require(preferences.hasMadeHistoryChoice, "history default not active")
-    try require(preferences.isHistoryEnabled, "history disabled by default")
-    try require(preferences.retainsFailedAudio, "failed audio default")
+    try await require(preferences.hasMadeHistoryChoice, "history default not active")
+    try await require(preferences.isHistoryEnabled, "history disabled by default")
+    try await require(preferences.retainsFailedAudio, "failed audio default")
 
     preferences.isHistoryEnabled = true
     preferences.isPrivateModeEnabled = true
-    try require(preferences.hasMadeHistoryChoice, "history choice not saved")
-    try require(
+    try await require(preferences.hasMadeHistoryChoice, "history choice not saved")
+    try await require(
         preferences.hasEverEnabledHistory,
         "history activation not recorded"
     )
-    try require(preferences.isPrivateModeEnabled, "private mode not saved")
+    try await require(preferences.isPrivateModeEnabled, "private mode not saved")
 
     preferences.isHistoryEnabled = false
     let reloaded = HistoryPreferences(defaults: defaults)
-    try require(!reloaded.isHistoryEnabled, "explicit pause was not preserved")
+    try await require(!reloaded.isHistoryEnabled, "explicit pause was not preserved")
 }
 
 private func executeSQL(_ sql: String, databaseURL: URL) throws {
@@ -550,7 +550,7 @@ private func executeSQL(_ sql: String, databaseURL: URL) throws {
     }
 }
 
-private func checkVersionTwoMigration() throws {
+private func checkVersionTwoMigration() async throws {
     let directoryURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let recoveryURL = directoryURL
@@ -591,15 +591,15 @@ private func checkVersionTwoMigration() throws {
         """,
         databaseURL: databaseURL
     )
-    let vault = try DictationVault(
+    let vault = try await DictationVault(
         databaseURL: databaseURL,
         recoveryDirectoryURL: recoveryURL,
         keyProvider: StaticKeyProvider()
     )
     let id = UUID()
-    let audioURL = vault.recoveryAudioURL(for: id)
+    let audioURL = await vault.recoveryAudioURL(for: id)
     try Data("private audio".utf8).write(to: audioURL)
-    try vault.begin(
+    try await vault.begin(
         DictationDraft(
             id: id,
             language: "en",
@@ -609,23 +609,23 @@ private func checkVersionTwoMigration() throws {
             recoveryAudioURL: audioURL
         )
     )
-    try vault.suppressPersistence(id: id)
-    try require(
-        try vault.recoverInterrupted(retainAudio: true) == 1,
+    try await vault.suppressPersistence(id: id)
+    try await require(
+        try await vault.recoverInterrupted(retainAudio: true) == 1,
         "version-two vault did not migrate privacy suppression"
     )
-    try vault.addCorrectionRule(
+    try await vault.addCorrectionRule(
         source: "bild",
         replacement: "build",
         languageScope: .hinglish
     )
-    try require(
-        try vault.correctionRules().first?.languageScope == .hinglish,
+    try await require(
+        try await vault.correctionRules().first?.languageScope == .hinglish,
         "version-two vault did not migrate correction scope"
     )
 }
 
-private func checkVersionFourCorrectionMigration() throws {
+private func checkVersionFourCorrectionMigration() async throws {
     let directoryURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let recoveryURL = directoryURL
@@ -651,30 +651,30 @@ private func checkVersionFourCorrectionMigration() throws {
         """,
         databaseURL: databaseURL
     )
-    let vault = try DictationVault(
+    let vault = try await DictationVault(
         databaseURL: databaseURL,
         recoveryDirectoryURL: recoveryURL,
         keyProvider: StaticKeyProvider()
     )
-    try vault.addCorrectionRule(
+    try await vault.addCorrectionRule(
         source: "bild",
         replacement: "build",
         languageScope: .hinglish
     )
-    try require(
-        try vault.correctionRules().first?.languageScope == .hinglish,
+    try await require(
+        try await vault.correctionRules().first?.languageScope == .hinglish,
         "version-four correction scope migration failed"
     )
 }
 
-private func checkPartialAndCipherBinding() throws {
-    let fixture = try VaultFixture()
+private func checkPartialAndCipherBinding() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let id = UUID()
-    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
     try Data("audio".utf8).write(to: audioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: id,
             language: "en",
@@ -684,15 +684,15 @@ private func checkPartialAndCipherBinding() throws {
             recoveryAudioURL: audioURL
         )
     )
-    try fixture.vault.markTranscribing(id: id, durationSeconds: 10)
-    try fixture.vault.storeTranscript(
+    try await fixture.vault.markTranscribing(id: id, durationSeconds: 10)
+    try await fixture.vault.storeTranscript(
         id: id,
         rawTranscript: "partial raw",
         finalTranscript: "Partial final",
         isPartial: true
     )
-    try require(
-        try fixture.vault.record(id: id)?.isPartial == true,
+    try await require(
+        try await fixture.vault.record(id: id)?.isPartial == true,
         "partial transcript flag was not stored"
     )
 
@@ -706,7 +706,7 @@ private func checkPartialAndCipherBinding() throws {
         databaseURL: fixture.databaseURL
     )
     do {
-        _ = try fixture.vault.record(id: id)
+        _ = try await fixture.vault.record(id: id)
         throw CheckError.failed("swapped ciphertext fields were accepted")
     } catch let checkError as CheckError {
         throw checkError
@@ -714,15 +714,15 @@ private func checkPartialAndCipherBinding() throws {
         // Expected: authenticated field context rejects the swap.
     }
 
-    try fixture.vault.deleteAll()
-    try require(
-        try fixture.vault.recent().isEmpty,
+    try await fixture.vault.deleteAll()
+    try await require(
+        try await fixture.vault.recent().isEmpty,
         "corrupt ciphertext blocked delete all"
     )
 }
 
-private func checkRecoveryPathConfinement() throws {
-    let fixture = try VaultFixture()
+private func checkRecoveryPathConfinement() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let id = UUID()
@@ -730,7 +730,7 @@ private func checkRecoveryPathConfinement() throws {
         .appendingPathComponent("outside.wav")
     try Data("do not delete".utf8).write(to: outsideURL)
     do {
-        try fixture.vault.begin(
+        try await fixture.vault.begin(
             DictationDraft(
                 id: id,
                 language: "en",
@@ -746,13 +746,13 @@ private func checkRecoveryPathConfinement() throws {
     } catch {
         // Expected: recovery files must use the vault-generated UUID path.
     }
-    try require(
+    try await require(
         FileManager.default.fileExists(atPath: outsideURL.path),
         "external file was modified"
     )
 }
 
-private func checkLocalInsights() throws {
+private func checkLocalInsights() async throws {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0)!
     let now = Date(timeIntervalSince1970: 1_721_865_600)
@@ -812,29 +812,29 @@ private func checkLocalInsights() throws {
         now: now,
         calendar: calendar
     )
-    try require(snapshot.dictationCount == 4, "insight dictation count")
-    try require(snapshot.totalWordCount == 42, "insight total words")
-    try require(
+    try await require(snapshot.dictationCount == 4, "insight dictation count")
+    try await require(snapshot.totalWordCount == 42, "insight total words")
+    try await require(
         abs(snapshot.weightedWordsPerMinute - (42 / (220 / 60))) < 0.001,
         "weighted insight words per minute"
     )
-    try require(snapshot.correctionCount == 3, "insight corrections")
-    try require(snapshot.distinctApplicationCount == 2, "distinct apps")
-    try require(snapshot.currentStreakDays == 3, "current streak")
-    try require(snapshot.longestStreakDays == 3, "longest streak")
-    try require(snapshot.recentActivity.count == 7, "seven-day activity")
-    try require(
+    try await require(snapshot.correctionCount == 3, "insight corrections")
+    try await require(snapshot.distinctApplicationCount == 2, "distinct apps")
+    try await require(snapshot.currentStreakDays == 3, "current streak")
+    try await require(snapshot.longestStreakDays == 3, "longest streak")
+    try await require(snapshot.recentActivity.count == 7, "seven-day activity")
+    try await require(
         snapshot.categories.first?.category == .documents,
         "category ranking"
     )
-    try require(
+    try await require(
         ApplicationCategoryClassifier.category(
             bundleIdentifier: "com.openai.chatgpt",
             appName: "ChatGPT"
         ) == .aiPrompts,
         "AI application classification"
     )
-    try require(
+    try await require(
         ApplicationCategoryClassifier.category(
             bundleIdentifier: "com.apple.Safari",
             appName: "Safari"
@@ -843,14 +843,14 @@ private func checkLocalInsights() throws {
     )
 }
 
-private func checkCategoryCorrection() throws {
-    let fixture = try VaultFixture()
+private func checkCategoryCorrection() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let id = UUID()
-    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
     try Data("audio".utf8).write(to: audioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: id,
             language: "en",
@@ -861,21 +861,21 @@ private func checkCategoryCorrection() throws {
             recoveryAudioURL: audioURL
         )
     )
-    try fixture.vault.markTranscribing(id: id, durationSeconds: 60)
-    try fixture.vault.storeTranscript(
+    try await fixture.vault.markTranscribing(id: id, durationSeconds: 60)
+    try await fixture.vault.storeTranscript(
         id: id,
         rawTranscript: "one two three four five",
         finalTranscript: "One two three four five."
     )
-    try fixture.vault.updateCategory(id: id, category: .workMessages)
+    try await fixture.vault.updateCategory(id: id, category: .workMessages)
 
-    try require(
-        try fixture.vault.record(id: id)?.category == .workMessages,
+    try await require(
+        try await fixture.vault.record(id: id)?.category == .workMessages,
         "corrected category was not stored"
     )
-    let snapshot = try fixture.vault.insights()
-    try require(snapshot.totalWordCount == 5, "vault insight words")
-    try require(
+    let snapshot = try await fixture.vault.insights()
+    try await require(snapshot.totalWordCount == 5, "vault insight words")
+    try await require(
         snapshot.categories.first?.category == .workMessages,
         "vault insight did not use corrected category"
     )
@@ -885,9 +885,9 @@ private func checkCategoryCorrection() throws {
     // counting it inflates words, application counts, streak days, and weighted
     // WPM — and the share card exports those same numbers.
     let abandonedID = UUID()
-    let abandonedAudioURL = fixture.vault.recoveryAudioURL(for: abandonedID)
+    let abandonedAudioURL = await fixture.vault.recoveryAudioURL(for: abandonedID)
     try Data("audio".utf8).write(to: abandonedAudioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: abandonedID,
             language: "en",
@@ -898,36 +898,36 @@ private func checkCategoryCorrection() throws {
             recoveryAudioURL: abandonedAudioURL
         )
     )
-    try fixture.vault.storePartialTranscript(
+    try await fixture.vault.storePartialTranscript(
         id: abandonedID,
         rawTranscript: "one two three four five six seven eight",
         finalTranscript: "One two three four five six seven eight."
     )
-    try fixture.vault.recoverInterrupted(retainAudio: true)
-    try require(
-        try fixture.vault.record(id: abandonedID)?.status == .failed,
+    try await fixture.vault.recoverInterrupted(retainAudio: true)
+    try await require(
+        try await fixture.vault.record(id: abandonedID)?.status == .failed,
         "interrupted dictation was not marked failed"
     )
-    let afterAbandon = try fixture.vault.insights()
-    try require(
+    let afterAbandon = try await fixture.vault.insights()
+    try await require(
         afterAbandon.totalWordCount == 5,
         "an interrupted dictation's partial was counted in insights"
     )
-    try require(
+    try await require(
         afterAbandon.distinctApplicationCount == 1,
         "an interrupted dictation added an application to insights"
     )
-    try require(
+    try await require(
         afterAbandon.dictationCount == 1,
         "an interrupted dictation was counted as a completed dictation"
     )
-    try require(
+    try await require(
         afterAbandon.currentStreakDays == snapshot.currentStreakDays,
         "an interrupted dictation changed the streak"
     )
 }
 
-private func checkCorrectionEngine() throws {
+private func checkCorrectionEngine() async throws {
     let firstID = UUID()
     let secondID = UUID()
     let scopedID = UUID()
@@ -974,13 +974,13 @@ private func checkCorrectionEngine() throws {
         "Use zen pens with git hub, not a zen pencil.",
         rules: rules
     )
-    try require(
+    try await require(
         application.text
             == "Use ZenPense with GitHub, not a zen pencil.",
         "whole-phrase corrections"
     )
-    try require(application.correctionCount == 2, "correction count")
-    try require(
+    try await require(application.correctionCount == 2, "correction count")
+    try await require(
         Set(application.usages.map(\.ruleID)) == [firstID, secondID],
         "correction rule usage"
     )
@@ -990,11 +990,11 @@ private func checkCorrectionEngine() throws {
         rules: rules,
         activeScope: .hinglish
     )
-    try require(
+    try await require(
         hinglish.text == "kal build deploy karo aur server check karo",
         "scoped exact or conservative fuzzy correction"
     )
-    try require(
+    try await require(
         Set(hinglish.usages.map(\.ruleID)) == [scopedID, fuzzyID],
         "scoped correction usage"
     )
@@ -1003,7 +1003,7 @@ private func checkCorrectionEngine() throws {
         rules: rules,
         activeScope: .all
     )
-    try require(
+    try await require(
         nonHinglish.text == "bild guild servr",
         "Hinglish rule leaked into another language"
     )
@@ -1012,7 +1012,7 @@ private func checkCorrectionEngine() throws {
         rules: rules,
         activeScope: .hinglish
     )
-    try require(
+    try await require(
         controls.text == "the severe guild server remains unchanged",
         "fuzzy correction changed an unrelated word"
     )
@@ -1021,7 +1021,7 @@ private func checkCorrectionEngine() throws {
         rules: rules,
         activeScope: .hinglish
     )
-    try require(
+    try await require(
         commonExact.text == "mujhe",
         "approved common-word rules should still apply exactly"
     )
@@ -1030,7 +1030,7 @@ private func checkCorrectionEngine() throws {
         rules: rules,
         activeScope: .hinglish
     )
-    try require(
+    try await require(
         commonFuzzyControl.text == "mujha",
         "common Romanized Hindi words must not be fuzzy-corrected"
     )
@@ -1039,7 +1039,7 @@ private func checkCorrectionEngine() throws {
         rules: rules,
         activeScope: .hinglish
     )
-    try require(
+    try await require(
         suggestions == [
             CorrectionSuggestion(
                 ruleID: suggestionID,
@@ -1070,7 +1070,7 @@ private func checkCorrectionEngine() throws {
     let p95 = correctionLatencies[
         Int(Double(correctionLatencies.count - 1) * 0.95)
     ]
-    try require(
+    try await require(
         p95 < 10,
         "personal correction p95 exceeded 10 ms: \(p95) ms"
     )
@@ -1084,61 +1084,61 @@ private func checkCorrectionEngine() throws {
     )
 }
 
-private func checkEncryptedVoiceProfile() throws {
-    let fixture = try VaultFixture()
+private func checkEncryptedVoiceProfile() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let ruleID = UUID()
-    try fixture.vault.addCorrectionRule(
+    try await fixture.vault.addCorrectionRule(
         source: "zen pens",
         replacement: "ZenPense",
         id: ruleID,
         createdAt: Date(timeIntervalSince1970: 1_000)
     )
-    try fixture.vault.addCorrectionRule(
+    try await fixture.vault.addCorrectionRule(
         source: "bild",
         replacement: "build",
         languageScope: .hinglish,
         createdAt: Date(timeIntervalSince1970: 1_001)
     )
 
-    let application = try fixture.vault.applyCorrections(
+    let application = try await fixture.vault.applyCorrections(
         to: "zen pens and zen pens"
     )
-    try require(
+    try await require(
         application.text == "ZenPense and ZenPense",
         "vault correction application"
     )
-    try fixture.vault.recordCorrectionUsage(application.usages)
-    try require(
-        try fixture.vault.correctionRules().first?.usageCount == 2,
+    try await fixture.vault.recordCorrectionUsage(application.usages)
+    try await require(
+        try await fixture.vault.correctionRules().first?.usageCount == 2,
         "correction usage was not recorded"
     )
-    try require(
-        try fixture.vault.applyCorrections(
+    try await require(
+        try await fixture.vault.applyCorrections(
             to: "bild",
             activeScope: .all
         ).text == "bild",
         "vault ignored correction language scope"
     )
-    try require(
-        try fixture.vault.applyCorrections(
+    try await require(
+        try await fixture.vault.applyCorrections(
             to: "bild",
             activeScope: .hinglish
         ).text == "build",
         "vault did not apply Hinglish correction"
     )
-    let allVocabulary = try fixture.vault.preferredVocabulary(
+    let allVocabulary = try await fixture.vault.preferredVocabulary(
         activeScope: .all
     )
-    let hinglishVocabulary = try fixture.vault.preferredVocabulary(
+    let hinglishVocabulary = try await fixture.vault.preferredVocabulary(
         activeScope: .hinglish
     )
-    try require(
+    try await require(
         allVocabulary == ["ZenPense"],
         "global vocabulary included a scoped term"
     )
-    try require(
+    try await require(
         Set(hinglishVocabulary) == ["ZenPense", "build"],
         "Hinglish vocabulary omitted an approved term"
     )
@@ -1148,9 +1148,9 @@ private func checkEncryptedVoiceProfile() throws {
         "Zen voice keeps local voice private"
     ].enumerated() {
         let id = UUID()
-        let audioURL = fixture.vault.recoveryAudioURL(for: id)
+        let audioURL = await fixture.vault.recoveryAudioURL(for: id)
         try Data("audio".utf8).write(to: audioURL)
-        try fixture.vault.begin(
+        try await fixture.vault.begin(
             DictationDraft(
                 id: id,
                 startedAt: Date(
@@ -1165,34 +1165,34 @@ private func checkEncryptedVoiceProfile() throws {
                 recoveryAudioURL: audioURL
             )
         )
-        try fixture.vault.markTranscribing(
+        try await fixture.vault.markTranscribing(
             id: id,
             durationSeconds: 30
         )
-        try fixture.vault.storeTranscript(
+        try await fixture.vault.storeTranscript(
             id: id,
             rawTranscript: transcript.lowercased(),
             finalTranscript: transcript
         )
     }
 
-    let profile = try fixture.vault.voiceProfile()
-    try require(
+    let profile = try await fixture.vault.voiceProfile()
+    try await require(
         profile.analyzedDictationCount == 2,
         "voice profile dictation count"
     )
-    try require(
+    try await require(
         profile.topWords.first?.text == "voice"
             && profile.topWords.first?.count == 4,
         "voice profile top words"
     )
-    try require(
+    try await require(
         profile.catchPhrases.contains {
             $0.text == "zen voice" && $0.count == 2
         },
         "voice profile recurring phrases"
     )
-    try require(
+    try await require(
         profile.correctionRules.first?.usageCount == 2,
         "voice profile correction ranking"
     )
@@ -1206,7 +1206,7 @@ private func checkEncryptedVoiceProfile() throws {
             decoding: try Data(contentsOf: fileURL),
             as: UTF8.self
         )
-        try require(
+        try await require(
             !text.contains("zen pens")
                 && !text.contains("ZenPense")
                 && !text.contains("bild"),
@@ -1214,19 +1214,19 @@ private func checkEncryptedVoiceProfile() throws {
         )
     }
 
-    try fixture.vault.deleteAllCorrectionRules()
-    try require(
-        try fixture.vault.correctionRules().isEmpty,
+    try await fixture.vault.deleteAllCorrectionRules()
+    try await require(
+        try await fixture.vault.correctionRules().isEmpty,
         "dedicated correction deletion retained rules"
     )
-    try require(
-        try fixture.vault.recent().count == 2,
+    try await require(
+        try await fixture.vault.recent().count == 2,
         "dedicated correction deletion removed transcripts"
     )
-    try fixture.vault.deleteAll()
+    try await fixture.vault.deleteAll()
 }
 
-private func checkLocalLearningPreferences() throws {
+private func checkLocalLearningPreferences() async throws {
     let suite =
         "ZenVoiceStorageChecks.Learning.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suite) else {
@@ -1238,31 +1238,31 @@ private func checkLocalLearningPreferences() throws {
         defaults.removePersistentDomain(forName: suite)
     }
     let preferences = LocalLearningPreferences(defaults: defaults)
-    try require(
+    try await require(
         preferences.appliesCorrectionRules,
         "correction rules did not default on"
     )
-    try require(
+    try await require(
         preferences.analyzesHistory,
         "history analysis did not default on"
     )
     preferences.appliesCorrectionRules = false
     preferences.analyzesHistory = false
-    try require(
+    try await require(
         !preferences.appliesCorrectionRules
             && !preferences.analyzesHistory,
         "learning preferences did not persist"
     )
 }
 
-private func checkLivePartialRecovery() throws {
-    let fixture = try VaultFixture()
+private func checkLivePartialRecovery() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let id = UUID()
-    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
     try Data("audio".utf8).write(to: audioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: id,
             startedAt: Date(timeIntervalSince1970: 12_000),
@@ -1274,36 +1274,36 @@ private func checkLivePartialRecovery() throws {
             recoveryAudioURL: audioURL
         )
     )
-    try fixture.vault.storePartialTranscript(
+    try await fixture.vault.storePartialTranscript(
         id: id,
         rawTranscript: "build the local",
         finalTranscript: "Build the local app",
         correctionCount: 1
     )
 
-    guard let partial = try fixture.vault.record(id: id) else {
+    guard let partial = try await fixture.vault.record(id: id) else {
         throw CheckError.failed("live partial record is missing")
     }
-    try require(partial.status == .recording, "live partial changed status")
-    try require(partial.isPartial, "live partial flag")
-    try require(
+    try await require(partial.status == .recording, "live partial changed status")
+    try await require(partial.isPartial, "live partial flag")
+    try await require(
         partial.finalTranscript == "Build the local app",
         "live partial final text"
     )
-    try require(partial.correctionCount == 1, "live partial corrections")
+    try await require(partial.correctionCount == 1, "live partial corrections")
 
-    try require(
-        try fixture.vault.recoverInterrupted(
+    try await require(
+        try await fixture.vault.recoverInterrupted(
             retainAudio: true,
             now: Date(timeIntervalSince1970: 12_030)
         ) == 1,
         "live partial interruption was not recovered"
     )
-    guard let recovered = try fixture.vault.record(id: id) else {
+    guard let recovered = try await fixture.vault.record(id: id) else {
         throw CheckError.failed("recovered live partial is missing")
     }
-    try require(recovered.status == .failed, "live partial recovery status")
-    try require(
+    try await require(recovered.status == .failed, "live partial recovery status")
+    try await require(
         recovered.finalTranscript == "Build the local app",
         "live partial was lost during recovery"
     )
@@ -1315,12 +1315,12 @@ private func archiveFixtureRecording(
     startedAt: Date,
     audioBytes: Int,
     appName: String = "TextEdit"
-) throws -> UUID {
+) async throws -> UUID {
     let id = UUID()
     let archiveID = UUID()
-    let audioURL = fixture.vault.recoveryAudioURL(for: id)
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
     try Data(repeating: 0x41, count: audioBytes).write(to: audioURL)
-    try fixture.vault.begin(
+    try await fixture.vault.begin(
         DictationDraft(
             id: id,
             startedAt: startedAt,
@@ -1331,105 +1331,105 @@ private func archiveFixtureRecording(
             recoveryAudioURL: audioURL
         )
     )
-    try fixture.vault.storeTranscript(
+    try await fixture.vault.storeTranscript(
         id: id,
         rawTranscript: "raw text",
         finalTranscript: "final text",
         correctionCount: 0,
         isPartial: false
     )
-    try fixture.vault.archiveRecording(id: id, archiveID: archiveID)
+    try await fixture.vault.archiveRecording(id: id, archiveID: archiveID)
     return archiveID
 }
 
-private func checkAudioArchiveLifecycle() throws {
-    let fixture = try VaultFixture()
+private func checkAudioArchiveLifecycle() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
-    let archiveID = try archiveFixtureRecording(
+    let archiveID = try await archiveFixtureRecording(
         fixture: fixture,
         startedAt: Date(timeIntervalSince1970: 100_000),
         audioBytes: 2_048
     )
 
-    try require(
-        try fixture.vault.audioArchiveCount() == 1,
+    try await require(
+        try await fixture.vault.audioArchiveCount() == 1,
         "archive row was not written"
     )
-    try require(
-        try fixture.vault.audioArchiveTotalSize() == 2_048,
+    try await require(
+        try await fixture.vault.audioArchiveTotalSize() == 2_048,
         "archive size was not recorded"
     )
 
-    guard let record = try fixture.vault.audioArchive(id: archiveID) else {
+    guard let record = try await fixture.vault.audioArchive(id: archiveID) else {
         throw CheckError.failed("archived record could not be read back")
     }
-    try require(
+    try await require(
         record.targetAppName == "TextEdit",
         "archive metadata was not carried over from the dictation"
     )
-    try require(
+    try await require(
         FileManager.default.fileExists(atPath: record.audioURL.path),
         "archived audio file is missing"
     )
 
     // The archive copies the audio; the recovery file stays put until the
     // caller deletes it.
-    try fixture.vault.deleteAudioArchive(id: archiveID)
-    try require(
-        try fixture.vault.audioArchiveCount() == 0,
+    try await fixture.vault.deleteAudioArchive(id: archiveID)
+    try await require(
+        try await fixture.vault.audioArchiveCount() == 0,
         "archive row survived deletion"
     )
-    try require(
+    try await require(
         !FileManager.default.fileExists(atPath: record.audioURL.path),
         "archived audio file survived deletion"
     )
 }
 
-private func checkAudioArchiveBudgets() throws {
-    let fixture = try VaultFixture()
+private func checkAudioArchiveBudgets() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
     let now = Date(timeIntervalSince1970: 1_000_000)
     let old = now.addingTimeInterval(-60 * 24 * 60 * 60)
 
-    _ = try archiveFixtureRecording(
+    _ = try await archiveFixtureRecording(
         fixture: fixture,
         startedAt: old,
         audioBytes: 1_024
     )
-    let recentID = try archiveFixtureRecording(
+    let recentID = try await archiveFixtureRecording(
         fixture: fixture,
         startedAt: now,
         audioBytes: 1_024
     )
 
-    let purged = try fixture.vault.purgeAudioArchive(
+    let purged = try await fixture.vault.purgeAudioArchive(
         olderThan: now.addingTimeInterval(-30 * 24 * 60 * 60)
     )
-    try require(purged == 1, "age purge removed the wrong number of archives")
-    try require(
-        try fixture.vault.audioArchive(id: recentID) != nil,
+    try await require(purged == 1, "age purge removed the wrong number of archives")
+    try await require(
+        try await fixture.vault.audioArchive(id: recentID) != nil,
         "age purge deleted a recording inside the window"
     )
 
     // Two 1 KiB recordings against a 1.5 KiB budget: the oldest goes.
-    _ = try archiveFixtureRecording(
+    _ = try await archiveFixtureRecording(
         fixture: fixture,
         startedAt: now.addingTimeInterval(60),
         audioBytes: 1_024
     )
-    let evicted = try fixture.vault.enforceAudioArchiveSizeBudget(1_536)
-    try require(evicted == 1, "size budget evicted the wrong count")
-    try require(
-        try fixture.vault.audioArchiveTotalSize() <= 1_536,
+    let evicted = try await fixture.vault.enforceAudioArchiveSizeBudget(1_536)
+    try await require(evicted == 1, "size budget evicted the wrong count")
+    try await require(
+        try await fixture.vault.audioArchiveTotalSize() <= 1_536,
         "archive stayed over its size budget"
     )
 
-    let deletedAll = try fixture.vault.deleteAllAudioArchives()
-    try require(deletedAll == 1, "delete-all returned the wrong count")
-    try require(
-        try fixture.vault.audioArchiveCount() == 0,
+    let deletedAll = try await fixture.vault.deleteAllAudioArchives()
+    try await require(deletedAll == 1, "delete-all returned the wrong count")
+    try await require(
+        try await fixture.vault.audioArchiveCount() == 0,
         "archives survived delete-all"
     )
 }
@@ -1459,17 +1459,17 @@ private func unzippedManifest(from archiveURL: URL) throws -> String {
     return String(decoding: data, as: UTF8.self)
 }
 
-private func checkAudioArchiveExport() throws {
-    let fixture = try VaultFixture()
+private func checkAudioArchiveExport() async throws {
+    let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
 
-    _ = try archiveFixtureRecording(
+    _ = try await archiveFixtureRecording(
         fixture: fixture,
         startedAt: Date(timeIntervalSince1970: 500_000),
         audioBytes: 512
     )
-    let records = try fixture.vault.audioArchiveRecent()
-    try require(records.count == 1, "expected one archived record")
+    let records = try await fixture.vault.audioArchiveRecent()
+    try await require(records.count == 1, "expected one archived record")
 
     let destination = fixture.directoryURL
         .appendingPathComponent("export.zip")
@@ -1478,7 +1478,7 @@ private func checkAudioArchiveExport() throws {
         to: destination,
         transcriptProvider: { _ in "secret transcript" }
     )
-    try require(
+    try await require(
         FileManager.default.fileExists(atPath: destination.path),
         "export archive was not written"
     )
@@ -1486,15 +1486,15 @@ private func checkAudioArchiveExport() throws {
     // Transcripts are opt-in. Read the manifest back out of the ZIP rather
     // than scanning the compressed bytes, which would pass even on a leak.
     let defaultManifest = try unzippedManifest(from: destination)
-    try require(
+    try await require(
         defaultManifest.contains("\"includesTranscripts\" : false"),
         "default export did not record that transcripts were excluded"
     )
-    try require(
+    try await require(
         !defaultManifest.contains("secret transcript"),
         "transcript text leaked into a default export"
     )
-    try require(
+    try await require(
         defaultManifest.contains("\"language\" : \"en\""),
         "export manifest is missing capture metadata"
     )
@@ -1508,7 +1508,7 @@ private func checkAudioArchiveExport() throws {
         transcriptProvider: { _ in "secret transcript" }
     )
     let optedInManifest = try unzippedManifest(from: withTranscripts)
-    try require(
+    try await require(
         optedInManifest.contains("secret transcript"),
         "opt-in export did not include the transcript"
     )
@@ -1527,7 +1527,7 @@ private func checkAudioArchiveExport() throws {
     }
 }
 
-private func checkAudioHistoryPreferenceDefaults() throws {
+private func checkAudioHistoryPreferenceDefaults() async throws {
     let suiteName = "ZenVoiceChecks.audioHistory.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
         throw CheckError.failed("could not create a defaults suite")
@@ -1535,39 +1535,39 @@ private func checkAudioHistoryPreferenceDefaults() throws {
     defer { defaults.removePersistentDomain(forName: suiteName) }
 
     let preferences = AudioHistoryPreferences(defaults: defaults)
-    try require(!preferences.isEnabled, "audio history was not off by default")
-    try require(
+    try await require(!preferences.isEnabled, "audio history was not off by default")
+    try await require(
         !preferences.hasMadeChoice,
         "audio history claimed a choice had been made"
     )
-    try require(
+    try await require(
         preferences.maxSizeBytes
             == AudioHistoryPreferences.defaultMaxSizeBytes,
         "default size cap is wrong"
     )
-    try require(
+    try await require(
         preferences.maxAgeDays == AudioHistoryPreferences.defaultMaxAgeDays,
         "default age cap is wrong"
     )
 
     // The size cap is clamped so the archive cannot be set to a useless size.
     preferences.maxSizeBytes = 1
-    try require(
+    try await require(
         preferences.maxSizeBytes
             == AudioHistoryPreferences.minimumMaxSizeBytes,
         "size cap was not clamped to the minimum"
     )
     preferences.maxAgeDays = 0
-    try require(preferences.maxAgeDays == 1, "age cap was not clamped")
+    try await require(preferences.maxAgeDays == 1, "age cap was not clamped")
 
     preferences.isEnabled = true
-    try require(
+    try await require(
         preferences.hasMadeChoice,
         "enabling audio history did not record an explicit choice"
     )
 }
 
-private func checkTodayUsageInsight() throws {
+private func checkTodayUsageInsight() async throws {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0)!
     let now = Date(timeIntervalSince1970: 1_721_865_600)
@@ -1609,20 +1609,20 @@ private func checkTodayUsageInsight() throws {
         now: now,
         calendar: calendar
     )
-    try require(
+    try await require(
         snapshot.today.dictationCount == 2,
         "today counted dictations from other days"
     )
-    try require(snapshot.today.wordCount == 50, "today word count is wrong")
-    try require(
+    try await require(snapshot.today.wordCount == 50, "today word count is wrong")
+    try await require(
         snapshot.today.durationSeconds == 60,
         "today duration is wrong"
     )
-    try require(
+    try await require(
         snapshot.today.topApplicationName == "Notes",
         "today top app is wrong"
     )
-    try require(
+    try await require(
         snapshot.today.pillSummary == "50 words today",
         "today pill summary is wrong"
     )
@@ -1632,35 +1632,35 @@ private func checkTodayUsageInsight() throws {
         now: now,
         calendar: calendar
     )
-    try require(
+    try await require(
         !empty.today.hasActivity,
         "an empty day reported activity"
     )
 }
 
 do {
-    try checkEncryptedStorage()
-    try checkRecoveryExpiry()
-    try checkDiscard()
-    try checkDeleteAllRotatesVault()
-    try checkScopedHistoryDeletion()
-    try checkHistoryPreferencesDefaults()
-    try checkVersionTwoMigration()
-    try checkVersionFourCorrectionMigration()
-    try checkPartialAndCipherBinding()
-    try checkRecoveryPathConfinement()
-    try checkPrivacySuppressionAndRecoveryCleanup()
-    try checkLocalInsights()
-    try checkCategoryCorrection()
-    try checkCorrectionEngine()
-    try checkEncryptedVoiceProfile()
-    try checkLocalLearningPreferences()
-    try checkLivePartialRecovery()
-    try checkAudioArchiveLifecycle()
-    try checkAudioArchiveBudgets()
-    try checkAudioArchiveExport()
-    try checkAudioHistoryPreferenceDefaults()
-    try checkTodayUsageInsight()
+    try await checkEncryptedStorage()
+    try await checkRecoveryExpiry()
+    try await checkDiscard()
+    try await checkDeleteAllRotatesVault()
+    try await checkScopedHistoryDeletion()
+    try await checkHistoryPreferencesDefaults()
+    try await checkVersionTwoMigration()
+    try await checkVersionFourCorrectionMigration()
+    try await checkPartialAndCipherBinding()
+    try await checkRecoveryPathConfinement()
+    try await checkPrivacySuppressionAndRecoveryCleanup()
+    try await checkLocalInsights()
+    try await checkCategoryCorrection()
+    try await checkCorrectionEngine()
+    try await checkEncryptedVoiceProfile()
+    try await checkLocalLearningPreferences()
+    try await checkLivePartialRecovery()
+    try await checkAudioArchiveLifecycle()
+    try await checkAudioArchiveBudgets()
+    try await checkAudioArchiveExport()
+    try await checkAudioHistoryPreferenceDefaults()
+    try await checkTodayUsageInsight()
     print("ZenVoiceStorageChecks: 22 checks passed")
 } catch {
     FileHandle.standardError.write(

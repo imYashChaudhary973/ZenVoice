@@ -335,7 +335,11 @@ final class ModelManagerViewModel: ObservableObject {
                             for: model,
                             fileManager: fileManager
                           ),
-                          (try? VerifiedModelCatalog.verify(
+                          // Listing variant: this runs over every catalogue
+                          // entry each time the window opens. Nothing is
+                          // loaded on its answer — `ZenVoiceConfiguration`
+                          // hashes for real before a model is used.
+                          (try? VerifiedModelCatalog.verifyForListing(
                             url,
                             for: model,
                             fileManager: fileManager

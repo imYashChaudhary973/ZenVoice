@@ -21,11 +21,7 @@ struct InsightsScreen: View {
     @State private var showsShareCard = false
 
     var body: some View {
-        ZenScreen(
-            title: "Insights",
-            subtitle:
-                "How you dictate, computed on this Mac. Never uploaded."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             if let error = viewModel.errorMessage {
                 ZenBanner(
                     kind: .danger,
@@ -162,12 +158,13 @@ struct InsightsScreen: View {
             ZenPanel {
                 VStack(alignment: .leading, spacing: 0) {
                     if viewModel.snapshot.topApplications.isEmpty {
-                        Text("No application context has been saved yet.")
-                            .font(ZenDesign.Typography.caption)
-                            .foregroundStyle(
-                                ZenDesign.Semantic.textSecondary
-                            )
-                            .padding(ZenDesign.Spacing.md)
+                        ZenRow(
+                            icon: "app",
+                            title: "No application context yet",
+                            subtitle:
+                                "ZenVoice remembers only the app name, never window titles or URLs."
+                        )
+                        .padding(.vertical, ZenDesign.Spacing.sm)
                     } else {
                         ForEach(
                             viewModel.snapshot.topApplications
@@ -215,7 +212,7 @@ struct InsightsScreen: View {
 
     private var emptyState: some View {
         ZenPanel {
-            VStack(spacing: 8) {
+            VStack(spacing: ZenDesign.Spacing.xs) {
                 Image(systemName: "chart.bar.xaxis")
                     .font(.system(size: 24, weight: .light))
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)

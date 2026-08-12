@@ -45,16 +45,20 @@ struct HistoryContainerScreen: View {
     @State private var selection: Tab = .dictations
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZenTabStrip(
-                items: Tab.allCases.map { tab in
-                    .init(tab: tab, title: tab.title)
-                },
-                selection: $selection
-            )
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
-
+        ZenScreen(
+            icon: "clock.fill",
+            title: "History",
+            subtitle:
+                "Every dictation, recording, and statistic — all kept on this Mac.",
+            tabs: {
+                ZenTabStrip(
+                    items: Tab.allCases.map { tab in
+                        .init(tab: tab, title: tab.title)
+                    },
+                    selection: $selection
+                )
+            }
+        ) {
             switch selection {
             case .dictations:
                 HistoryScreen(viewModel: historyViewModel)
@@ -64,6 +68,5 @@ struct HistoryContainerScreen: View {
                 InsightsScreen(viewModel: insightsViewModel)
             }
         }
-        .background(ZenDesign.Semantic.canvas)
     }
 }

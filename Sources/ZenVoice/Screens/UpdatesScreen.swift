@@ -86,12 +86,7 @@ struct UpdatesScreen: View {
     @ObservedObject var viewModel: UpdatesViewModel
 
     var body: some View {
-        ZenScreen(
-            title: "About",
-            subtitle:
-                "ZenVoice \(viewModel.installedVersion). Distributed directly "
-                + "and verified against a signed feed."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             if !viewModel.isFeedConfigured {
                 deferredNotice
             }
@@ -108,7 +103,7 @@ struct UpdatesScreen: View {
 
     private var deferredNotice: some View {
         ZenPanel {
-            HStack(alignment: .top, spacing: 9) {
+            HStack(alignment: .top, spacing: ZenDesign.Spacing.xs) {
                 Image(systemName: "clock.badge.questionmark")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -205,7 +200,7 @@ struct UpdatesScreen: View {
     }
 
     private func bullet(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 7) {
+        HStack(alignment: .top, spacing: ZenDesign.Spacing.xs) {
             Text("•")
                 .font(ZenDesign.Typography.caption)
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)

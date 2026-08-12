@@ -105,7 +105,7 @@ struct ZenCommandPalette: View {
     }
 
     private var searchRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ZenDesign.Spacing.xs) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 13))
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)
@@ -223,7 +223,7 @@ struct ZenCommandPalette: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: ZenDesign.Spacing.sm) {
             hint(keys: ["↑", "↓"], label: "navigate")
             hint(keys: ["↩"], label: "open")
             hint(keys: ["esc"], label: "close")
@@ -241,7 +241,7 @@ struct ZenCommandPalette: View {
         HStack(spacing: 4) {
             ForEach(keys, id: \.self) { key in
                 Text(key)
-                    .font(.system(size: 9.5, design: .monospaced))
+                    .font(ZenDesign.Typography.monoSmall)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
                     .padding(.horizontal, 4)
                     .frame(minWidth: 16, minHeight: 16)

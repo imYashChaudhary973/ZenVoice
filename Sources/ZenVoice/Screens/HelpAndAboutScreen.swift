@@ -44,16 +44,20 @@ struct HelpAndAboutScreen: View {
     @State private var selection: Tab = .help
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZenTabStrip(
-                items: Tab.allCases.map { tab in
-                    .init(tab: tab, title: tab.title)
-                },
-                selection: $selection
-            )
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
-
+        ZenScreen(
+            icon: "questionmark.circle.fill",
+            title: "Help & About",
+            subtitle:
+                "Short answers, and what you are running.",
+            tabs: {
+                ZenTabStrip(
+                    items: Tab.allCases.map { tab in
+                        .init(tab: tab, title: tab.title)
+                    },
+                    selection: $selection
+                )
+            }
+        ) {
             switch selection {
             case .help:
                 HelpScreen(
@@ -65,6 +69,5 @@ struct HelpAndAboutScreen: View {
                 UpdatesScreen(viewModel: updatesViewModel)
             }
         }
-        .background(ZenDesign.Semantic.canvas)
     }
 }

@@ -76,16 +76,12 @@ struct ModelsScreen: View {
     }
 
     var body: some View {
-        ZenScreen(
-            title: "Models",
-            subtitle:
-                "Speech models run entirely on this Mac. Verified before first use."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             ZenSection(
                 title: "What matters most?",
                 caption: viewModel.hardwareProfile.summary
             ) {
-                HStack(spacing: ZenDesign.Spacing.xs) {
+                HStack(spacing: ZenDesign.Spacing.sm) {
                     tierCard(
                         .fast,
                         icon: "gauge.with.needle",
@@ -110,7 +106,7 @@ struct ModelsScreen: View {
             ) {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                     if viewModel.engineAvailabilities.isEmpty {
-                        HStack(spacing: 9) {
+                        HStack(spacing: ZenDesign.Spacing.xs) {
                             ProgressView().controlSize(.small)
                             Text("Loading engines…")
                                 .font(ZenDesign.Typography.caption)
@@ -122,7 +118,7 @@ struct ModelsScreen: View {
                                 in: group
                             )
                             if !availabilities.isEmpty {
-                                VStack(alignment: .leading, spacing: 7) {
+                                VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
                                     Text(group.displayName)
                                         .font(
                                             ZenDesign.Typography.captionStrong
@@ -156,7 +152,7 @@ struct ModelsScreen: View {
             ) {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                     if viewModel.isVerifying {
-                        HStack(spacing: 9) {
+                        HStack(spacing: ZenDesign.Spacing.xs) {
                             ProgressView().controlSize(.small)
                             Text("Verifying installed models…")
                                 .font(ZenDesign.Typography.caption)
@@ -175,7 +171,7 @@ struct ModelsScreen: View {
                     }
 
                     if let legacy = viewModel.selectedLegacyModel {
-                        VStack(alignment: .leading, spacing: 7) {
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
                             HStack {
                                 Text("Legacy model")
                                     .font(ZenDesign.Typography.captionStrong)
@@ -196,7 +192,7 @@ struct ModelsScreen: View {
                     }
 
                     if !viewModel.reclaimableModels.isEmpty {
-                        VStack(alignment: .leading, spacing: 7) {
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
                             HStack {
                                 Text("No longer offered")
                                     .font(ZenDesign.Typography.captionStrong)
@@ -287,7 +283,7 @@ struct ModelsScreen: View {
         let isSelected = viewModel.isSelectedEngine(availability.engine.id)
         let isAvailable = availability.isAvailable
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
             HStack(spacing: ZenDesign.Spacing.sm) {
                 Image(systemName: engineIcon(for: availability.engine.family))
                     .font(.system(size: 14, weight: .semibold))
@@ -299,7 +295,7 @@ struct ModelsScreen: View {
                     }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 7) {
+                    HStack(spacing: ZenDesign.Spacing.xs) {
                         Text(availability.engine.displayName)
                             .font(ZenDesign.Typography.bodyStrong)
                             .foregroundStyle(
@@ -424,7 +420,7 @@ struct ModelsScreen: View {
         let isDownloading = viewModel.downloadingModelID == model.id
         let recommendation = viewModel.recommendation(for: model)
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
             HStack(spacing: ZenDesign.Spacing.sm) {
                 Image(
                     systemName: {
@@ -444,7 +440,7 @@ struct ModelsScreen: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 7) {
+                    HStack(spacing: ZenDesign.Spacing.xs) {
                         Text(model.displayName)
                             .font(ZenDesign.Typography.bodyStrong)
                             .foregroundStyle(

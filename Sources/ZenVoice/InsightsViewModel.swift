@@ -21,16 +21,20 @@ final class InsightsViewModel: ObservableObject {
     @Published private(set) var snapshot = LocalInsightsSnapshot.empty
     @Published var errorMessage: String?
 
-    private let vaultProvider: () throws -> DictationVault
+    private let vaultProvider: () async throws -> DictationVault
 
-    init(vaultProvider: @escaping () throws -> DictationVault) {
+    init(vaultProvider: @escaping () async throws -> DictationVault) {
         self.vaultProvider = vaultProvider
         refresh()
     }
 
     func refresh() {
+        Task { await refreshNow() }
+    }
+
+    private func refreshNow() async {
         do {
-            snapshot = try vaultProvider().insights()
+            snapshot = try await vaultProvider().insights()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

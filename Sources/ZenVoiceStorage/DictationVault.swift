@@ -33,7 +33,13 @@ public enum DictationVaultError: LocalizedError {
     }
 }
 
-public final class DictationVault: @unchecked Sendable {
+/// Encrypted transcript and audio-history storage.
+///
+/// Converted from a serial `DispatchQueue` to a Swift `actor`. All database
+/// access is still serialized, but callers now `await` instead of blocking the
+/// calling thread. This keeps the main thread free while encrypting and writing
+/// transcripts during live dictation.
+public actor DictationVault {
     public static let recoveryLifetime: TimeInterval = 24 * 60 * 60
 
     private let databaseURL: URL
@@ -41,7 +47,6 @@ public final class DictationVault: @unchecked Sendable {
     private let archiveDirectoryURL: URL
     private let keyProvider: VaultKeyProviding
     private var cipher: TranscriptCipher
-    private let queue = DispatchQueue(label: "dev.yashchaudhary.ZenVoice.vault")
     private var database: OpaquePointer?
 
     /// Creates the production vault at the Application Support path derived
@@ -56,7 +61,7 @@ public final class DictationVault: @unchecked Sendable {
         fileManager: FileManager = .default,
         keyProvider: VaultKeyProviding? = nil,
         policy: BundleIdentifierPolicy
-    ) throws -> DictationVault {
+    ) async throws -> DictationVault {
         let supportDirectory = try RuntimeIdentity.applicationSupportRoot(
             fileManager: fileManager,
             policy: policy
@@ -81,7 +86,7 @@ public final class DictationVault: @unchecked Sendable {
         let resolvedKeyProvider = keyProvider ?? KeychainVaultKeyProvider(
             policy: policy
         )
-        return try DictationVault(
+        return try await DictationVault(
             databaseURL: dataDirectory.appendingPathComponent("ZenVoice.sqlite"),
             recoveryDirectoryURL: recoveryDirectory,
             archiveDirectoryURL: archiveDirectory,
@@ -94,7 +99,7 @@ public final class DictationVault: @unchecked Sendable {
         recoveryDirectoryURL: URL,
         archiveDirectoryURL: URL? = nil,
         keyProvider: VaultKeyProviding
-    ) throws {
+    ) async throws {
         self.databaseURL = databaseURL
         self.recoveryDirectoryURL = recoveryDirectoryURL
         self.archiveDirectoryURL = archiveDirectoryURL
@@ -147,31 +152,29 @@ public final class DictationVault: @unchecked Sendable {
         ) != nil else {
             throw DictationVaultError.invalidRecord
         }
-        try queue.sync {
-            let sql = """
-                INSERT INTO dictations (
-                    id, started_at, language, model_id, target_bundle_id,
-                    target_app_name, category, status, recovery_audio_path
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-                """
-            let statement = try prepare(sql)
-            defer { sqlite3_finalize(statement) }
+        let sql = """
+            INSERT INTO dictations (
+                id, started_at, language, model_id, target_bundle_id,
+                target_app_name, category, status, recovery_audio_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """
+        let statement = try prepare(sql)
+        defer { sqlite3_finalize(statement) }
 
-            bind(draft.id.uuidString, at: 1, in: statement)
-            sqlite3_bind_double(
-                statement,
-                2,
-                draft.startedAt.timeIntervalSince1970
-            )
-            bind(draft.language, at: 3, in: statement)
-            bind(draft.modelID, at: 4, in: statement)
-            bind(draft.targetBundleID, at: 5, in: statement)
-            bind(draft.targetAppName, at: 6, in: statement)
-            bind(draft.category.rawValue, at: 7, in: statement)
-            bind(DictationStatus.recording.rawValue, at: 8, in: statement)
-            bind(draft.recoveryAudioURL.path, at: 9, in: statement)
-            try stepDone(statement)
-        }
+        bind(draft.id.uuidString, at: 1, in: statement)
+        sqlite3_bind_double(
+            statement,
+            2,
+            draft.startedAt.timeIntervalSince1970
+        )
+        bind(draft.language, at: 3, in: statement)
+        bind(draft.modelID, at: 4, in: statement)
+        bind(draft.targetBundleID, at: 5, in: statement)
+        bind(draft.targetAppName, at: 6, in: statement)
+        bind(draft.category.rawValue, at: 7, in: statement)
+        bind(DictationStatus.recording.rawValue, at: 8, in: statement)
+        bind(draft.recoveryAudioURL.path, at: 9, in: statement)
+        try stepDone(statement)
     }
 
     public func markTranscribing(
@@ -199,34 +202,32 @@ public final class DictationVault: @unchecked Sendable {
         correctionCount: Int = 0
     ) throws {
         let wordCount = DictationMetrics.wordCount(in: finalTranscript)
-        try queue.sync {
-            let encryptedRaw = try cipher.seal(
-                rawTranscript,
-                context: encryptionContext(id: id, field: "raw")
-            )
-            let encryptedFinal = try cipher.seal(
-                finalTranscript,
-                context: encryptionContext(id: id, field: "final")
-            )
-            let statement = try prepare(
-                """
-                UPDATE dictations
-                SET raw_transcript = ?, final_transcript = ?,
-                    word_count = ?, correction_count = ?,
-                    is_partial = 1
-                WHERE id = ?;
-                """
-            )
-            defer { sqlite3_finalize(statement) }
+        let encryptedRaw = try cipher.seal(
+            rawTranscript,
+            context: encryptionContext(id: id, field: "raw")
+        )
+        let encryptedFinal = try cipher.seal(
+            finalTranscript,
+            context: encryptionContext(id: id, field: "final")
+        )
+        let statement = try prepare(
+            """
+            UPDATE dictations
+            SET raw_transcript = ?, final_transcript = ?,
+                word_count = ?, correction_count = ?,
+                is_partial = 1
+            WHERE id = ?;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
 
-            bind(encryptedRaw, at: 1, in: statement)
-            bind(encryptedFinal, at: 2, in: statement)
-            sqlite3_bind_int64(statement, 3, Int64(wordCount))
-            sqlite3_bind_int64(statement, 4, Int64(correctionCount))
-            bind(id.uuidString, at: 5, in: statement)
-            try stepDone(statement)
-            try requireChangedRow()
-        }
+        bind(encryptedRaw, at: 1, in: statement)
+        bind(encryptedFinal, at: 2, in: statement)
+        sqlite3_bind_int64(statement, 3, Int64(wordCount))
+        sqlite3_bind_int64(statement, 4, Int64(correctionCount))
+        bind(id.uuidString, at: 5, in: statement)
+        try stepDone(statement)
+        try requireChangedRow()
     }
 
     public func storeTranscript(
@@ -239,49 +240,47 @@ public final class DictationVault: @unchecked Sendable {
     ) throws {
         let wordCount = DictationMetrics.wordCount(in: finalTranscript)
 
-        try queue.sync {
-            let encryptedRaw = try cipher.seal(
-                rawTranscript,
-                context: encryptionContext(id: id, field: "raw")
-            )
-            let encryptedFinal = try cipher.seal(
-                finalTranscript,
-                context: encryptionContext(id: id, field: "final")
-            )
-            let duration = try durationSeconds(for: id)
-            let wordsPerMinute = DictationMetrics.wordsPerMinute(
-                wordCount: wordCount,
-                durationSeconds: duration
-            )
-            let statement = try prepare(
-                """
-                UPDATE dictations
-                SET completed_at = ?, raw_transcript = ?,
-                    final_transcript = ?, word_count = ?,
-                    words_per_minute = ?, correction_count = ?,
-                    is_partial = ?, status = ?,
-                    error_message = NULL
-                WHERE id = ?;
-                """
-            )
-            defer { sqlite3_finalize(statement) }
+        let encryptedRaw = try cipher.seal(
+            rawTranscript,
+            context: encryptionContext(id: id, field: "raw")
+        )
+        let encryptedFinal = try cipher.seal(
+            finalTranscript,
+            context: encryptionContext(id: id, field: "final")
+        )
+        let duration = try durationSeconds(for: id)
+        let wordsPerMinute = DictationMetrics.wordsPerMinute(
+            wordCount: wordCount,
+            durationSeconds: duration
+        )
+        let statement = try prepare(
+            """
+            UPDATE dictations
+            SET completed_at = ?, raw_transcript = ?,
+                final_transcript = ?, word_count = ?,
+                words_per_minute = ?, correction_count = ?,
+                is_partial = ?, status = ?,
+                error_message = NULL
+            WHERE id = ?;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
 
-            sqlite3_bind_double(
-                statement,
-                1,
-                completedAt.timeIntervalSince1970
-            )
-            bind(encryptedRaw, at: 2, in: statement)
-            bind(encryptedFinal, at: 3, in: statement)
-            sqlite3_bind_int64(statement, 4, Int64(wordCount))
-            sqlite3_bind_double(statement, 5, wordsPerMinute)
-            sqlite3_bind_int64(statement, 6, Int64(correctionCount))
-            sqlite3_bind_int(statement, 7, isPartial ? 1 : 0)
-            bind(DictationStatus.ready.rawValue, at: 8, in: statement)
-            bind(id.uuidString, at: 9, in: statement)
-            try stepDone(statement)
-            try requireChangedRow()
-        }
+        sqlite3_bind_double(
+            statement,
+            1,
+            completedAt.timeIntervalSince1970
+        )
+        bind(encryptedRaw, at: 2, in: statement)
+        bind(encryptedFinal, at: 3, in: statement)
+        sqlite3_bind_int64(statement, 4, Int64(wordCount))
+        sqlite3_bind_double(statement, 5, wordsPerMinute)
+        sqlite3_bind_int64(statement, 6, Int64(correctionCount))
+        sqlite3_bind_int(statement, 7, isPartial ? 1 : 0)
+        bind(DictationStatus.ready.rawValue, at: 8, in: statement)
+        bind(id.uuidString, at: 9, in: statement)
+        try stepDone(statement)
+        try requireChangedRow()
     }
 
     /// Archives the recording associated with a completed dictation.
@@ -307,31 +306,29 @@ public final class DictationVault: @unchecked Sendable {
 
         try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
 
-        try queue.sync {
-            let statement = try prepare(
-                """
-                INSERT INTO audio_archive (
-                    id, dictation_id, started_at, duration_seconds,
-                    file_size, audio_path, language, model_id,
-                    target_bundle_id, target_app_name, category
-                )
-                SELECT ?, ?, d.started_at, d.duration_seconds, ?,
-                    ?, d.language, d.model_id, d.target_bundle_id,
-                    d.target_app_name, d.category
-                FROM dictations d
-                WHERE d.id = ?;
-                """
+        let statement = try prepare(
+            """
+            INSERT INTO audio_archive (
+                id, dictation_id, started_at, duration_seconds,
+                file_size, audio_path, language, model_id,
+                target_bundle_id, target_app_name, category
             )
-            defer { sqlite3_finalize(statement) }
+            SELECT ?, ?, d.started_at, d.duration_seconds, ?,
+                ?, d.language, d.model_id, d.target_bundle_id,
+                d.target_app_name, d.category
+            FROM dictations d
+            WHERE d.id = ?;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
 
-            bind(archiveID.uuidString, at: 1, in: statement)
-            bind(id.uuidString, at: 2, in: statement)
-            sqlite3_bind_int64(statement, 3, fileSize)
-            bind(destinationURL.path, at: 4, in: statement)
-            bind(id.uuidString, at: 5, in: statement)
-            try stepDone(statement)
-            try requireChangedRow()
-        }
+        bind(archiveID.uuidString, at: 1, in: statement)
+        bind(id.uuidString, at: 2, in: statement)
+        sqlite3_bind_int64(statement, 3, fileSize)
+        bind(destinationURL.path, at: 4, in: statement)
+        bind(id.uuidString, at: 5, in: statement)
+        try stepDone(statement)
+        try requireChangedRow()
     }
 
     /// Deletes the archived audio file and metadata row for the given archive.
@@ -347,14 +344,12 @@ public final class DictationVault: @unchecked Sendable {
            FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
-        try queue.sync {
-            let statement = try prepare(
-                "DELETE FROM audio_archive WHERE id = ?;"
-            )
-            defer { sqlite3_finalize(statement) }
-            bind(id.uuidString, at: 1, in: statement)
-            try stepDone(statement)
-        }
+        let statement = try prepare(
+            "DELETE FROM audio_archive WHERE id = ?;"
+        )
+        defer { sqlite3_finalize(statement) }
+        bind(id.uuidString, at: 1, in: statement)
+        try stepDone(statement)
     }
 
     /// Removes archived recordings older than the cutoff, returning the count
@@ -388,60 +383,52 @@ public final class DictationVault: @unchecked Sendable {
 
     /// Total size in bytes of all archived recordings.
     public func audioArchiveTotalSize() throws -> Int64 {
-        try queue.sync {
-            let statement = try prepare(
-                "SELECT COALESCE(SUM(file_size), 0) FROM audio_archive;"
-            )
-            defer { sqlite3_finalize(statement) }
-            guard sqlite3_step(statement) == SQLITE_ROW else {
-                return 0
-            }
-            return sqlite3_column_int64(statement, 0)
+        let statement = try prepare(
+            "SELECT COALESCE(SUM(file_size), 0) FROM audio_archive;"
+        )
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            return 0
         }
+        return sqlite3_column_int64(statement, 0)
     }
 
     /// Count of archived recordings.
     public func audioArchiveCount() throws -> Int {
-        try queue.sync {
-            let statement = try prepare(
-                "SELECT COUNT(*) FROM audio_archive;"
-            )
-            defer { sqlite3_finalize(statement) }
-            guard sqlite3_step(statement) == SQLITE_ROW else {
-                return 0
-            }
-            return Int(sqlite3_column_int64(statement, 0))
+        let statement = try prepare(
+            "SELECT COUNT(*) FROM audio_archive;"
+        )
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            return 0
         }
+        return Int(sqlite3_column_int64(statement, 0))
     }
 
     /// Recent archived recordings, newest first.
     public func audioArchiveRecent(limit: Int = 500) throws -> [AudioArchiveRecord] {
-        try queue.sync {
-            try audioArchiveRecords(
-                whereClause: "1 = 1",
-                orderAndLimit: "ORDER BY started_at DESC LIMIT ?",
-                bindWhere: { statement in
-                    sqlite3_bind_int64(
-                        statement,
-                        1,
-                        Int64(max(1, limit))
-                    )
-                }
-            )
-        }
+        try audioArchiveRecords(
+            whereClause: "1 = 1",
+            orderAndLimit: "ORDER BY started_at DESC LIMIT ?",
+            bindWhere: { statement in
+                sqlite3_bind_int64(
+                    statement,
+                    1,
+                    Int64(max(1, limit))
+                )
+            }
+        )
     }
 
     /// Looks up a single archived recording by ID.
     public func audioArchive(id: UUID) throws -> AudioArchiveRecord? {
-        try queue.sync {
-            try audioArchiveRecords(
-                whereClause: "id = ?",
-                orderAndLimit: "LIMIT 1",
-                bindWhere: { statement in
-                    self.bind(id.uuidString, at: 1, in: statement)
-                }
-            ).first
-        }
+        try audioArchiveRecords(
+            whereClause: "id = ?",
+            orderAndLimit: "LIMIT 1",
+            bindWhere: { statement in
+                self.bind(id.uuidString, at: 1, in: statement)
+            }
+        ).first
     }
 
     /// Deletes every archived recording and its metadata.
@@ -454,10 +441,8 @@ public final class DictationVault: @unchecked Sendable {
                 try FileManager.default.removeItem(at: url)
             }
         }
-        try queue.sync {
-            try execute("DELETE FROM audio_archive;")
-            try execute("PRAGMA wal_checkpoint(TRUNCATE);")
-        }
+        try execute("DELETE FROM audio_archive;")
+        try execute("PRAGMA wal_checkpoint(TRUNCATE);")
         return all.count
     }
 
@@ -560,14 +545,12 @@ public final class DictationVault: @unchecked Sendable {
 
     public func discard(id: UUID) throws {
         try deleteRecoveryAudioAndClear(id: id)
-        try queue.sync {
-            let statement = try prepare(
-                "DELETE FROM dictations WHERE id = ?;"
-            )
-            defer { sqlite3_finalize(statement) }
-            bind(id.uuidString, at: 1, in: statement)
-            try stepDone(statement)
-        }
+        let statement = try prepare(
+            "DELETE FROM dictations WHERE id = ?;"
+        )
+        defer { sqlite3_finalize(statement) }
+        bind(id.uuidString, at: 1, in: statement)
+        try stepDone(statement)
     }
 
     public func deleteRecord(id: UUID) throws {
@@ -599,14 +582,23 @@ public final class DictationVault: @unchecked Sendable {
             }
         }
 
-        try queue.sync {
-            try execute("DELETE FROM dictations;")
-            try execute("DELETE FROM correction_rules;")
-            try execute("PRAGMA wal_checkpoint(TRUNCATE);")
-            try execute("VACUUM;")
-            try keyProvider.deleteKey()
-            cipher = try TranscriptCipher(keyProvider: keyProvider)
+        try execute("DELETE FROM dictations;")
+        try execute("DELETE FROM correction_rules;")
+        try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        try keyProvider.deleteKey()
+        cipher = try TranscriptCipher(keyProvider: keyProvider)
+        // VACUUM is deferred to avoid blocking the UI on a large database.
+        HistoryPreferences().vaultNeedsVacuum = true
+    }
+
+    /// Reclaims disk space by running `VACUUM` if it was deferred after a
+    /// large deletion. Callers should run this only when the app is idle.
+    public func vacuumIfNeeded() throws {
+        guard HistoryPreferences().vaultNeedsVacuum else {
+            return
         }
+        try execute("VACUUM;")
+        HistoryPreferences().vaultNeedsVacuum = false
     }
 
     @discardableResult
@@ -672,20 +664,18 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     public func nextRecoveryExpiry() throws -> Date? {
-        try queue.sync {
-            let statement = try prepare(
-                """
-                SELECT MIN(recovery_audio_expires_at)
-                FROM dictations
-                WHERE recovery_audio_expires_at IS NOT NULL;
-                """
-            )
-            defer { sqlite3_finalize(statement) }
-            guard sqlite3_step(statement) == SQLITE_ROW else {
-                return nil
-            }
-            return optionalDate(at: 0, in: statement)
+        let statement = try prepare(
+            """
+            SELECT MIN(recovery_audio_expires_at)
+            FROM dictations
+            WHERE recovery_audio_expires_at IS NOT NULL;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            return nil
         }
+        return optionalDate(at: 0, in: statement)
     }
 
     @discardableResult
@@ -698,27 +688,23 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     public func recent(limit: Int = 100) throws -> [DictationRecord] {
-        try queue.sync {
-            try records(
-                whereClause: "1 = 1",
-                orderAndLimit: "ORDER BY started_at DESC LIMIT ?",
-                bindWhere: { statement in
-                    sqlite3_bind_int64(statement, 1, Int64(max(1, limit)))
-                }
-            )
-        }
+        try records(
+            whereClause: "1 = 1",
+            orderAndLimit: "ORDER BY started_at DESC LIMIT ?",
+            bindWhere: { statement in
+                sqlite3_bind_int64(statement, 1, Int64(max(1, limit)))
+            }
+        )
     }
 
     public func record(id: UUID) throws -> DictationRecord? {
-        try queue.sync {
-            try records(
-                whereClause: "id = ?",
-                orderAndLimit: "LIMIT 1",
-                bindWhere: { statement in
-                    self.bind(id.uuidString, at: 1, in: statement)
-                }
-            ).first
-        }
+        try records(
+            whereClause: "id = ?",
+            orderAndLimit: "LIMIT 1",
+            bindWhere: { statement in
+                self.bind(id.uuidString, at: 1, in: statement)
+            }
+        ).first
     }
 
     public func updateCategory(
@@ -738,57 +724,54 @@ public final class DictationVault: @unchecked Sendable {
         now: Date = Date(),
         calendar: Calendar = .current
     ) throws -> LocalInsightsSnapshot {
-        let events: [DictationInsightEvent] = try queue.sync {
-            let statement = try prepare(
-                """
-                SELECT started_at, duration_seconds, word_count,
-                    correction_count, target_bundle_id, target_app_name,
-                    category
-                FROM dictations
-                WHERE final_transcript IS NOT NULL
-                    AND persistence_suppressed = 0
-                    AND is_partial = 0
-                    AND status IN (?, ?, ?);
-                """
-            )
-            defer { sqlite3_finalize(statement) }
-            // "Completed" is the promise Insights makes. A force-quit
-            // dictation keeps its live-preview partial and is later marked
-            // failed with duration 0, so counting it inflated word totals,
-            // streaks, and weighted WPM — and the share card carries those.
-            bind(DictationStatus.ready.rawValue, at: 1, in: statement)
-            bind(DictationStatus.inserted.rawValue, at: 2, in: statement)
-            bind(DictationStatus.copiedOnly.rawValue, at: 3, in: statement)
-            var values: [DictationInsightEvent] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                guard let categoryValue = text(at: 6, in: statement),
-                      let category = DictationCategory(
-                        rawValue: categoryValue
-                      ) else {
-                    throw DictationVaultError.invalidRecord
-                }
-                values.append(
-                    DictationInsightEvent(
-                        startedAt: Date(
-                            timeIntervalSince1970:
-                                sqlite3_column_double(statement, 0)
-                        ),
-                        durationSeconds:
-                            sqlite3_column_double(statement, 1),
-                        wordCount:
-                            Int(sqlite3_column_int64(statement, 2)),
-                        correctionCount:
-                            Int(sqlite3_column_int64(statement, 3)),
-                        targetBundleID: text(at: 4, in: statement),
-                        targetAppName: text(at: 5, in: statement),
-                        category: category
-                    )
-                )
+        let statement = try prepare(
+            """
+            SELECT started_at, duration_seconds, word_count,
+                correction_count, target_bundle_id, target_app_name,
+                category
+            FROM dictations
+            WHERE final_transcript IS NOT NULL
+                AND persistence_suppressed = 0
+                AND is_partial = 0
+                AND status IN (?, ?, ?);
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        // "Completed" is the promise Insights makes. A force-quit
+        // dictation keeps its live-preview partial and is later marked
+        // failed with duration 0, so counting it inflated word totals,
+        // streaks, and weighted WPM — and the share card carries those.
+        bind(DictationStatus.ready.rawValue, at: 1, in: statement)
+        bind(DictationStatus.inserted.rawValue, at: 2, in: statement)
+        bind(DictationStatus.copiedOnly.rawValue, at: 3, in: statement)
+        var values: [DictationInsightEvent] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let categoryValue = text(at: 6, in: statement),
+                  let category = DictationCategory(
+                    rawValue: categoryValue
+                  ) else {
+                throw DictationVaultError.invalidRecord
             }
-            return values
+            values.append(
+                DictationInsightEvent(
+                    startedAt: Date(
+                        timeIntervalSince1970:
+                            sqlite3_column_double(statement, 0)
+                    ),
+                    durationSeconds:
+                        sqlite3_column_double(statement, 1),
+                    wordCount:
+                        Int(sqlite3_column_int64(statement, 2)),
+                    correctionCount:
+                        Int(sqlite3_column_int64(statement, 3)),
+                    targetBundleID: text(at: 4, in: statement),
+                    targetAppName: text(at: 5, in: statement),
+                    category: category
+                )
+            )
         }
         return LocalInsightsSnapshot.calculate(
-            events: events,
+            events: values,
             now: now,
             calendar: calendar
         )
@@ -812,57 +795,53 @@ public final class DictationVault: @unchecked Sendable {
               source.caseInsensitiveCompare(replacement) != .orderedSame else {
             throw DictationVaultError.invalidRecord
         }
-        try queue.sync {
-            let existing = try correctionRulesLocked()
-            guard !existing.contains(where: {
-                $0.source.caseInsensitiveCompare(source) == .orderedSame
-                    && $0.languageScope == languageScope
-            }) else {
-                throw DictationVaultError.invalidRecord
-            }
-            let statement = try prepare(
-                """
-                INSERT INTO correction_rules (
-                    id, source_text, replacement_text, language_scope,
-                    usage_count, created_at
-                ) VALUES (?, ?, ?, ?, 0, ?);
-                """
-            )
-            defer { sqlite3_finalize(statement) }
-            bind(id.uuidString, at: 1, in: statement)
-            bind(
-                try cipher.seal(
-                    source,
-                    context: correctionContext(id: id, field: "source")
-                ),
-                at: 2,
-                in: statement
-            )
-            bind(
-                try cipher.seal(
-                    replacement,
-                    context: correctionContext(
-                        id: id,
-                        field: "replacement"
-                    )
-                ),
-                at: 3,
-                in: statement
-            )
-            bind(languageScope.rawValue, at: 4, in: statement)
-            sqlite3_bind_double(
-                statement,
-                5,
-                createdAt.timeIntervalSince1970
-            )
-            try stepDone(statement)
+        let existing = try correctionRulesLocked()
+        guard !existing.contains(where: {
+            $0.source.caseInsensitiveCompare(source) == .orderedSame
+                && $0.languageScope == languageScope
+        }) else {
+            throw DictationVaultError.invalidRecord
         }
+        let statement = try prepare(
+            """
+            INSERT INTO correction_rules (
+                id, source_text, replacement_text, language_scope,
+                usage_count, created_at
+            ) VALUES (?, ?, ?, ?, 0, ?);
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        bind(id.uuidString, at: 1, in: statement)
+        bind(
+            try cipher.seal(
+                source,
+                context: correctionContext(id: id, field: "source")
+            ),
+            at: 2,
+            in: statement
+        )
+        bind(
+            try cipher.seal(
+                replacement,
+                context: correctionContext(
+                    id: id,
+                    field: "replacement"
+                )
+            ),
+            at: 3,
+            in: statement
+        )
+        bind(languageScope.rawValue, at: 4, in: statement)
+        sqlite3_bind_double(
+            statement,
+            5,
+            createdAt.timeIntervalSince1970
+        )
+        try stepDone(statement)
     }
 
     public func correctionRules() throws -> [CorrectionRule] {
-        try queue.sync {
-            try correctionRulesLocked()
-        }
+        try correctionRulesLocked()
     }
 
     public func correctionRules(
@@ -874,22 +853,18 @@ public final class DictationVault: @unchecked Sendable {
     }
 
     public func deleteCorrectionRule(id: UUID) throws {
-        try queue.sync {
-            let statement = try prepare(
-                "DELETE FROM correction_rules WHERE id = ?;"
-            )
-            defer { sqlite3_finalize(statement) }
-            bind(id.uuidString, at: 1, in: statement)
-            try stepDone(statement)
-            try requireChangedRow()
-        }
+        let statement = try prepare(
+            "DELETE FROM correction_rules WHERE id = ?;"
+        )
+        defer { sqlite3_finalize(statement) }
+        bind(id.uuidString, at: 1, in: statement)
+        try stepDone(statement)
+        try requireChangedRow()
     }
 
     public func deleteAllCorrectionRules() throws {
-        try queue.sync {
-            try execute("DELETE FROM correction_rules;")
-            try execute("PRAGMA wal_checkpoint(TRUNCATE);")
-        }
+        try execute("DELETE FROM correction_rules;")
+        try execute("PRAGMA wal_checkpoint(TRUNCATE);")
     }
 
     public func applyCorrections(
@@ -944,31 +919,29 @@ public final class DictationVault: @unchecked Sendable {
         guard !usages.isEmpty else {
             return
         }
-        try queue.sync {
-            try execute("BEGIN IMMEDIATE TRANSACTION;")
-            do {
-                for usage in usages where usage.count > 0 {
-                    let statement = try prepare(
-                        """
-                        UPDATE correction_rules
-                        SET usage_count = usage_count + ?
-                        WHERE id = ?;
-                        """
-                    )
-                    defer { sqlite3_finalize(statement) }
-                    sqlite3_bind_int64(
-                        statement,
-                        1,
-                        Int64(usage.count)
-                    )
-                    bind(usage.ruleID.uuidString, at: 2, in: statement)
-                    try stepDone(statement)
-                }
-                try execute("COMMIT;")
-            } catch {
-                try? execute("ROLLBACK;")
-                throw error
+        try execute("BEGIN IMMEDIATE TRANSACTION;")
+        do {
+            for usage in usages where usage.count > 0 {
+                let statement = try prepare(
+                    """
+                    UPDATE correction_rules
+                    SET usage_count = usage_count + ?
+                    WHERE id = ?;
+                    """
+                )
+                defer { sqlite3_finalize(statement) }
+                sqlite3_bind_int64(
+                    statement,
+                    1,
+                    Int64(usage.count)
+                )
+                bind(usage.ruleID.uuidString, at: 2, in: statement)
+                try stepDone(statement)
             }
+            try execute("COMMIT;")
+        } catch {
+            try? execute("ROLLBACK;")
+            throw error
         }
     }
 
@@ -1206,73 +1179,67 @@ public final class DictationVault: @unchecked Sendable {
         whereClause: String,
         bindWhere: ((OpaquePointer?) -> Void)? = nil
     ) throws -> [UUID] {
-        try queue.sync {
-            let statement = try prepare(
-                "SELECT id FROM dictations WHERE \(whereClause);"
-            )
-            defer { sqlite3_finalize(statement) }
-            bindWhere?(statement)
-            var ids: [UUID] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                if let value = text(at: 0, in: statement),
-                   let id = UUID(uuidString: value) {
-                    ids.append(id)
-                }
+        let statement = try prepare(
+            "SELECT id FROM dictations WHERE \(whereClause);"
+        )
+        defer { sqlite3_finalize(statement) }
+        bindWhere?(statement)
+        var ids: [UUID] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let value = text(at: 0, in: statement),
+               let id = UUID(uuidString: value) {
+                ids.append(id)
             }
-            return ids
         }
+        return ids
     }
 
     private func recoveryEntries(
         whereClause: String,
         bindWhere: ((OpaquePointer?) -> Void)? = nil
     ) throws -> [(id: UUID, path: String)] {
-        try queue.sync {
-            let statement = try prepare(
-                """
-                SELECT id, recovery_audio_path
-                FROM dictations
-                WHERE \(whereClause) AND recovery_audio_path IS NOT NULL;
-                """
-            )
-            defer { sqlite3_finalize(statement) }
-            bindWhere?(statement)
-            var entries: [(UUID, String)] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                if let idValue = text(at: 0, in: statement),
-                   let id = UUID(uuidString: idValue),
-                   let path = text(at: 1, in: statement) {
-                    entries.append((id, path))
-                }
+        let statement = try prepare(
+            """
+            SELECT id, recovery_audio_path
+            FROM dictations
+            WHERE \(whereClause) AND recovery_audio_path IS NOT NULL;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        bindWhere?(statement)
+        var entries: [(UUID, String)] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let idValue = text(at: 0, in: statement),
+               let id = UUID(uuidString: idValue),
+               let path = text(at: 1, in: statement) {
+                entries.append((id, path))
             }
-            return entries
         }
+        return entries
     }
 
     private func archiveEntries(
         whereClause: String,
         bindWhere: ((OpaquePointer?) -> Void)? = nil
     ) throws -> [(id: UUID, path: String)] {
-        try queue.sync {
-            let statement = try prepare(
-                """
-                SELECT id, audio_path
-                FROM audio_archive
-                WHERE \(whereClause);
-                """
-            )
-            defer { sqlite3_finalize(statement) }
-            bindWhere?(statement)
-            var entries: [(UUID, String)] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                if let idValue = text(at: 0, in: statement),
-                   let id = UUID(uuidString: idValue),
-                   let path = text(at: 1, in: statement) {
-                    entries.append((id, path))
-                }
+        let statement = try prepare(
+            """
+            SELECT id, audio_path
+            FROM audio_archive
+            WHERE \(whereClause);
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        bindWhere?(statement)
+        var entries: [(UUID, String)] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let idValue = text(at: 0, in: statement),
+               let id = UUID(uuidString: idValue),
+               let path = text(at: 1, in: statement) {
+                entries.append((id, path))
             }
-            return entries
         }
+        return entries
     }
 
     /// Archives that fall outside the byte budget, oldest first.
@@ -1282,30 +1249,28 @@ public final class DictationVault: @unchecked Sendable {
     private func archiveEntriesOverBudget(
         budgetBytes: Int64
     ) throws -> [(id: UUID, path: String)] {
-        try queue.sync {
-            let statement = try prepare(
-                """
-                SELECT id, audio_path, file_size
-                FROM audio_archive
-                ORDER BY started_at DESC;
-                """
-            )
-            defer { sqlite3_finalize(statement) }
-            var overBudget: [(UUID, String)] = []
-            var runningTotal: Int64 = 0
-            while sqlite3_step(statement) == SQLITE_ROW {
-                guard let idValue = text(at: 0, in: statement),
-                      let id = UUID(uuidString: idValue),
-                      let path = text(at: 1, in: statement) else {
-                    continue
-                }
-                runningTotal += sqlite3_column_int64(statement, 2)
-                if runningTotal > budgetBytes {
-                    overBudget.append((id, path))
-                }
+        let statement = try prepare(
+            """
+            SELECT id, audio_path, file_size
+            FROM audio_archive
+            ORDER BY started_at DESC;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        var overBudget: [(UUID, String)] = []
+        var runningTotal: Int64 = 0
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let idValue = text(at: 0, in: statement),
+                  let id = UUID(uuidString: idValue),
+                  let path = text(at: 1, in: statement) else {
+                continue
             }
-            return overBudget
+            runningTotal += sqlite3_column_int64(statement, 2)
+            if runningTotal > budgetBytes {
+                overBudget.append((id, path))
+            }
         }
+        return overBudget
     }
 
     /// Decodes archive rows. Callers must already hold `queue`.
@@ -1369,33 +1334,31 @@ public final class DictationVault: @unchecked Sendable {
     private func interruptedEntries() throws -> [
         (id: UUID, startedAt: Date, persistenceSuppressed: Bool)
     ] {
-        try queue.sync {
-            let statement = try prepare(
-                """
-                SELECT id, started_at, persistence_suppressed
-                FROM dictations
-                WHERE status IN ('recording', 'transcribing');
-                """
-            )
-            defer { sqlite3_finalize(statement) }
-            var entries: [(UUID, Date, Bool)] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                if let idValue = text(at: 0, in: statement),
-                   let id = UUID(uuidString: idValue) {
-                    entries.append(
-                        (
-                            id,
-                            Date(
-                                timeIntervalSince1970:
-                                    sqlite3_column_double(statement, 1)
-                            ),
-                            sqlite3_column_int(statement, 2) == 1
-                        )
+        let statement = try prepare(
+            """
+            SELECT id, started_at, persistence_suppressed
+            FROM dictations
+            WHERE status IN ('recording', 'transcribing');
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        var entries: [(UUID, Date, Bool)] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let idValue = text(at: 0, in: statement),
+               let id = UUID(uuidString: idValue) {
+                entries.append(
+                    (
+                        id,
+                        Date(
+                            timeIntervalSince1970:
+                                sqlite3_column_double(statement, 1)
+                        ),
+                        sqlite3_column_int(statement, 2) == 1
                     )
-                }
+                )
             }
-            return entries
         }
+        return entries
     }
 
     private func validatedRecoveryAudioURL(path: String, id: UUID) -> URL? {
@@ -1520,13 +1483,11 @@ public final class DictationVault: @unchecked Sendable {
         _ sql: String,
         bindings: (OpaquePointer?) -> Void
     ) throws {
-        try queue.sync {
-            let statement = try prepare(sql)
-            defer { sqlite3_finalize(statement) }
-            bindings(statement)
-            try stepDone(statement)
-            try requireChangedRow()
-        }
+        let statement = try prepare(sql)
+        defer { sqlite3_finalize(statement) }
+        bindings(statement)
+        try stepDone(statement)
+        try requireChangedRow()
     }
 
     private func requireChangedRow() throws {

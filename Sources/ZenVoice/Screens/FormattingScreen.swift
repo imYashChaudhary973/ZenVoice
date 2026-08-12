@@ -33,6 +33,7 @@ struct FormattingScreen: View {
 
     var body: some View {
         ZenScreen(
+            icon: "wand.and.stars",
             title: "Formatting",
             subtitle: "How ZenVoice shapes your words after it hears them."
         ) {
@@ -58,6 +59,18 @@ struct FormattingScreen: View {
             }
 
             if mode == .cloud {
+                if !cloudAIViewModel.isReady {
+                    // Selecting Cloud and leaving it unconfigured used to fail
+                    // silently at dictation time — the transcript was formatted
+                    // locally and nothing said so.
+                    ZenBanner(
+                        kind: .warn,
+                        icon: "exclamationmark.triangle",
+                        text:
+                            "Cloud is selected but not ready, so dictations are "
+                            + "being formatted locally. Finish the setup below."
+                    )
+                }
                 CloudAIConfigurationView(viewModel: cloudAIViewModel)
             }
 

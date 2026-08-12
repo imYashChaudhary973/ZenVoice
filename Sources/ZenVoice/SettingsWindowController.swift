@@ -75,8 +75,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified
-        window.backgroundColor = .windowBackgroundColor
-        window.minSize = NSSize(width: 900, height: 640)
+        // The sidebar's vibrancy material is what fills the top-left corner,
+        // so the window must not paint a `windowBackgroundColor` title bar
+        // over it. `.clear` lets each column own its own surface; the content
+        // column paints the canvas itself.
+        window.backgroundColor = .clear
+        window.isMovableByWindowBackground = true
+        window.minSize = NSSize(width: 940, height: 660)
         // Menu-bar apps don't get full screen for free: the green zoom
         // button only offers it when the window opts in explicitly.
         window.collectionBehavior.insert(.fullScreenPrimary)
@@ -103,6 +108,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func show() {
         viewModel.refreshSystemStatus()
+        // Permissions are granted in System Settings, so the window has to
+        // watch for the change rather than sampling once on open.
+        viewModel.beginWatchingPermissions()
         historyViewModel.refresh()
         insightsViewModel.refresh()
         voiceProfileViewModel.refresh()
@@ -121,11 +129,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func hide() {
         window.orderOut(nil)
+        viewModel.stopWatchingPermissions()
         NSApp.setActivationPolicy(.accessory)
     }
 
     func windowWillClose(_ notification: Notification) {
         viewModel.cancelShortcutCapture()
+        viewModel.stopWatchingPermissions()
         // Back to a pure menu-bar presence once the window is gone.
         NSApp.setActivationPolicy(.accessory)
     }

@@ -39,6 +39,13 @@ public enum VaultKeyError: LocalizedError {
 public final class KeychainVaultKeyProvider: VaultKeyProviding {
     private let service: String
     private let account: String
+    /// In-memory cache of the 32-byte key after the first Keychain read.
+    ///
+    /// SecItemCopyMatching can block on `securityd`; caching avoids repeating
+    /// that synchronous round-trip for every vault open or cipher re-creation
+    /// (for example, during `deleteAll()` key rotation). The cache is never
+    /// persisted outside process memory.
+    private var cachedKeyData: Data?
 
     public init(
         policy: BundleIdentifierPolicy,
@@ -49,6 +56,13 @@ public final class KeychainVaultKeyProvider: VaultKeyProviding {
     }
 
     public func loadOrCreateKeyData() throws -> Data {
+        if let cached = cachedKeyData {
+            guard cached.count == 32 else {
+                throw VaultKeyError.invalidKey
+            }
+            return cached
+        }
+
         let query = baseQuery.merging([
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
@@ -60,6 +74,7 @@ public final class KeychainVaultKeyProvider: VaultKeyProviding {
             guard let data = item as? Data, data.count == 32 else {
                 throw VaultKeyError.invalidKey
             }
+            cachedKeyData = data
             return data
         }
         guard status == errSecItemNotFound else {
@@ -81,10 +96,12 @@ public final class KeychainVaultKeyProvider: VaultKeyProviding {
         guard addStatus == errSecSuccess else {
             throw VaultKeyError.keychain(addStatus)
         }
+        cachedKeyData = keyData
         return keyData
     }
 
     public func deleteKey() throws {
+        cachedKeyData = nil
         let status = SecItemDelete(baseQuery as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw VaultKeyError.keychain(status)

@@ -40,16 +40,20 @@ struct CommandsScreen: View {
     @State private var selection: Tab = .commandMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZenTabStrip(
-                items: Tab.allCases.map { tab in
-                    .init(tab: tab, title: tab.title)
-                },
-                selection: $selection
-            )
-            .padding(.horizontal, 32)
-            .padding(.top, 24)
-
+        ZenScreen(
+            icon: "terminal.fill",
+            title: "Commands",
+            subtitle:
+                "Control your Mac and rewrite existing text, by voice.",
+            tabs: {
+                ZenTabStrip(
+                    items: Tab.allCases.map { tab in
+                        .init(tab: tab, title: tab.title)
+                    },
+                    selection: $selection
+                )
+            }
+        ) {
             switch selection {
             case .commandMode:
                 CommandModeScreen(viewModel: viewModel)
@@ -57,6 +61,5 @@ struct CommandsScreen: View {
                 WriteModeScreen(viewModel: viewModel)
             }
         }
-        .background(ZenDesign.Semantic.canvas)
     }
 }

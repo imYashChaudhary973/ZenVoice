@@ -57,6 +57,9 @@ jobs:
           ZENVOICE_SCORING_ONLY: "1"
         run: swift run ZenVoiceAccuracyChecks
 
+      - name: Check settings-window structural invariants
+        run: ./Scripts/check-ui-invariants.sh
+
       - name: Build debug target
         run: swift build
 

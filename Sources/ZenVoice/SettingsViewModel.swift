@@ -27,21 +27,59 @@ final class SettingsViewModel: ObservableObject {
         case privateMode
     }
 
+    /// State of a macOS privacy permission.
+    ///
+    /// `notRequested` and `denied` are kept apart because the remedy differs:
+    /// the first can be resolved by a system prompt in place, the second only
+    /// in System Settings. Collapsing them into one "Needs access" label left
+    /// the button doing two different things with no way to tell which.
     enum PermissionStatus: Equatable {
         case allowed
-        case needsAccess
+        case notRequested
+        case denied
         case restricted
 
         var title: String {
             switch self {
             case .allowed:
                 return "Allowed"
-            case .needsAccess:
-                return "Needs access"
+            case .notRequested:
+                return "Not asked yet"
+            case .denied:
+                return "Denied"
             case .restricted:
                 return "Restricted"
             }
         }
+
+        /// What the user has to do next, in their own terms.
+        var remedy: String? {
+            switch self {
+            case .allowed:
+                return nil
+            case .notRequested:
+                return "ZenVoice will ask macOS for permission."
+            case .denied:
+                return "Turn ZenVoice on in System Settings, then come back."
+            case .restricted:
+                return "A device policy blocks this. Contact whoever manages "
+                    + "this Mac."
+            }
+        }
+
+        /// Label for the button that resolves this state.
+        var actionTitle: String? {
+            switch self {
+            case .allowed, .restricted:
+                return nil
+            case .notRequested:
+                return "Grant"
+            case .denied:
+                return "Open System Settings"
+            }
+        }
+
+        var isAllowed: Bool { self == .allowed }
     }
 
     enum AudioDoctorState: Equatable {
@@ -82,8 +120,8 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var showsZenVoiceAtAllTimes: Bool
     @Published private(set) var shortcutTarget: ShortcutTarget?
     @Published var shortcutError: String?
-    @Published private(set) var microphoneStatus: PermissionStatus = .needsAccess
-    @Published private(set) var accessibilityStatus: PermissionStatus = .needsAccess
+    @Published private(set) var microphoneStatus: PermissionStatus = .notRequested
+    @Published private(set) var accessibilityStatus: PermissionStatus = .notRequested
     @Published private(set) var isLocalModelReady = false
     @Published private(set) var languageProfile: LanguageProfile
     @Published var languageError: String?
@@ -121,6 +159,26 @@ final class SettingsViewModel: ObservableObject {
     private var audioDoctorTask: Task<Void, Never>?
     private var microphoneObserverTokens: [NSObjectProtocol] = []
     private var eventMonitor: Any?
+    private var permissionWatchTimer: Timer?
+
+    private static let accessibilityRequestedKey =
+        "ZenVoice.permissions.accessibilityRequested"
+
+    /// Whether ZenVoice has ever shown the Accessibility prompt.
+    ///
+    /// macOS reports only trusted/not-trusted, so this is the only way to tell
+    /// "we have not asked yet" from "the user has seen the prompt and not
+    /// granted it" — which need different wording and different buttons.
+    private var hasRequestedAccessibility: Bool {
+        get {
+            RuntimeIdentity.userDefaults()
+                .bool(forKey: Self.accessibilityRequestedKey)
+        }
+        set {
+            RuntimeIdentity.userDefaults()
+                .set(newValue, forKey: Self.accessibilityRequestedKey)
+        }
+    }
 
     init(
         currentShortcut: HotKeyConfiguration,
@@ -202,6 +260,7 @@ final class SettingsViewModel: ObservableObject {
     deinit {
         audioDoctorTask?.cancel()
         audioDoctorRecorder.cancel()
+        permissionWatchTimer?.invalidate()
         if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
         }
@@ -216,16 +275,22 @@ final class SettingsViewModel: ObservableObject {
             microphoneStatus = .allowed
         case .restricted:
             microphoneStatus = .restricted
-        case .notDetermined, .denied:
-            microphoneStatus = .needsAccess
+        case .notDetermined:
+            microphoneStatus = .notRequested
+        case .denied:
+            microphoneStatus = .denied
         @unknown default:
-            microphoneStatus = .needsAccess
+            microphoneStatus = .denied
         }
 
         let previousAccessibilityStatus = accessibilityStatus
+        // Accessibility has no "not determined" state to read back: the
+        // system prompt only ever adds a disabled entry to the list, so
+        // anything that is not trusted is something the user has to switch on
+        // themselves in System Settings.
         accessibilityStatus = AXIsProcessTrusted()
             ? .allowed
-            : .needsAccess
+            : (hasRequestedAccessibility ? .denied : .notRequested)
         if accessibilityStatus == .allowed,
            previousAccessibilityStatus != .allowed,
            holdToDictateEnabled {
@@ -233,6 +298,33 @@ final class SettingsViewModel: ObservableObject {
             applyHoldToDictate(true, holdKey)
         }
         isLocalModelReady = (try? ZenVoiceConfiguration.discover()) != nil
+    }
+
+    /// Watches for permission changes made outside the app.
+    ///
+    /// Both permissions are granted in System Settings, in another process,
+    /// with no completion callback to hang a refresh off. Without this the
+    /// window kept showing "Needs access" long after the user had granted it,
+    /// and kept showing "Allowed" after a revoke — the single delayed re-check
+    /// after prompting almost always fired before the user had finished.
+    /// Polling is cheap (`AXIsProcessTrusted` is a local lookup) and only runs
+    /// while a window is actually on screen.
+    func beginWatchingPermissions() {
+        guard permissionWatchTimer == nil else { return }
+        refreshSystemStatus()
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
+            [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshSystemStatus()
+            }
+        }
+        timer.tolerance = 0.5
+        permissionWatchTimer = timer
+    }
+
+    func stopWatchingPermissions() {
+        permissionWatchTimer?.invalidate()
+        permissionWatchTimer = nil
     }
 
     func beginShortcutCapture(
@@ -615,18 +707,36 @@ final class SettingsViewModel: ObservableObject {
             openSystemSettings(
                 "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
             )
+            // The grant happens in another app, so watch for it rather than
+            // waiting for the user to come back and poke something.
+            beginWatchingPermissions()
         default:
             refreshSystemStatus()
         }
     }
 
     func requestAccessibilityAccess() {
-        let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let options = [promptKey: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.refreshSystemStatus()
+        if AXIsProcessTrusted() {
+            refreshSystemStatus()
+            return
         }
+        if hasRequestedAccessibility {
+            // The prompt only appears once per install; after that macOS
+            // silently ignores it, so send the user where the switch is.
+            openSystemSettings(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+            )
+        } else {
+            let promptKey =
+                kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+            let options = [promptKey: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+            hasRequestedAccessibility = true
+        }
+        // Granting happens out of process with no callback. Poll until it
+        // lands instead of guessing at a delay.
+        beginWatchingPermissions()
+        refreshSystemStatus()
     }
 
     private func capture(_ event: NSEvent) {

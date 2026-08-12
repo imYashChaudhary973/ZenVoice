@@ -40,10 +40,7 @@ struct LanguagesScreen: View {
     }
 
     var body: some View {
-        ZenScreen(
-            title: "Languages",
-            subtitle: "What you speak, and how it should be written."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             if let error = viewModel.languageError {
                 ZenBanner(
                     kind: .danger,
@@ -78,7 +75,7 @@ struct LanguagesScreen: View {
 
     private var profileSection: some View {
         ZenSection(title: "English · Multilingual · Auto-Detect") {
-            HStack(spacing: ZenDesign.Spacing.xs) {
+            HStack(spacing: ZenDesign.Spacing.sm) {
                 ZenChoiceCard(
                     title: "English",
                     detail: "English-safe: never outputs another language",
@@ -110,7 +107,7 @@ struct LanguagesScreen: View {
             title: "Output mode",
             caption: viewModel.languageProfile.displayName
         ) {
-            HStack(spacing: ZenDesign.Spacing.xs) {
+            HStack(spacing: ZenDesign.Spacing.sm) {
                 ForEach(TranscriptionOutputMode.allCases) { mode in
                     ZenChoiceCard(
                         title: mode.displayName,

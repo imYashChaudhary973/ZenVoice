@@ -32,6 +32,7 @@ final class CloudAIDictationPreviewViewModel: ObservableObject {
     private let configuration: CloudAIConfiguration
     private let key: String
     private let engine: CloudAIEnhancementEngine
+    private var enhancementTask: Task<Void, Never>?
 
     init(
         original: String,
@@ -43,6 +44,10 @@ final class CloudAIDictationPreviewViewModel: ObservableObject {
         self.key = (try? keyStore.loadKey()) ?? ""
         self.engine = engine
         providerName = configuration.provider.displayName
+    }
+
+    deinit {
+        enhancementTask?.cancel()
     }
 
     var isReady: Bool {
@@ -57,6 +62,7 @@ final class CloudAIDictationPreviewViewModel: ObservableObject {
                 .localizedDescription
             return
         }
+        enhancementTask?.cancel()
         isEnhancing = true
         errorMessage = nil
         enhanced = nil
@@ -64,24 +70,35 @@ final class CloudAIDictationPreviewViewModel: ObservableObject {
         let configuration = configuration
         let key = key
         let engine = engine
-        Task { [weak self] in
+        let transcript = original
+        enhancementTask = Task { [weak self] in
             do {
                 let result = try await engine.enhance(
-                    transcript: self?.original ?? "",
+                    transcript: transcript,
                     configuration: configuration,
                     apiKey: key
                 )
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self?.isEnhancing = false
                     self?.enhanced = result.enhanced
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     self?.isEnhancing = false
                     self?.errorMessage = error.localizedDescription
                 }
             }
         }
+    }
+
+    /// Abandons an in-flight request so the user is never stuck watching a
+    /// spinner until the 30-second transport timeout.
+    func cancelEnhancement() {
+        enhancementTask?.cancel()
+        enhancementTask = nil
+        isEnhancing = false
     }
 }
 
@@ -99,11 +116,18 @@ struct CloudAIDictationPreviewView: View {
 
             if viewModel.isEnhancing {
                 Spacer()
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("Asking \(viewModel.providerName)…")
-                        .font(ZenDesign.Typography.body)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                VStack(spacing: ZenDesign.Spacing.sm) {
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Asking \(viewModel.providerName)…")
+                            .font(ZenDesign.Typography.body)
+                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    }
+                    Button("Cancel and keep local transcript") {
+                        viewModel.cancelEnhancement()
+                        onComplete(nil)
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle())
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 Spacer()
@@ -196,7 +220,7 @@ struct CloudAIDictationPreviewView: View {
     private func previewColumn(_ title: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title.uppercased())
-                .font(.system(size: 9.5, weight: .semibold))
+                .font(ZenDesign.Typography.eyebrow)
                 .tracking(1.5)
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)
             ScrollView {
@@ -218,6 +242,16 @@ struct CloudAIDictationPreviewView: View {
 
 /// Window controller that hosts the dictation cloud preview and reports the
 /// user's choice through a closure.
+///
+/// This is a non-activating floating panel, not an ordinary window, and that
+/// choice is load-bearing. The transcript is inserted into whichever
+/// application was frontmost when dictation ended, and accepting an
+/// enhancement replaces that text in place. An ordinary window would activate
+/// ZenVoice, make *it* frontmost, and the accessibility call that swaps the
+/// text would then aim at the wrong process — dropping the replacement or
+/// leaving the local transcript and the enhanced one both on screen.
+/// A `.nonactivatingPanel` takes clicks without stealing focus, so the target
+/// application stays frontmost the whole time.
 @MainActor
 final class CloudAIPreviewWindowController: NSWindowController {
     private let onComplete: (String?) -> Void
@@ -229,14 +263,25 @@ final class CloudAIPreviewWindowController: NSWindowController {
         onComplete: @escaping (String?) -> Void
     ) {
         self.onComplete = onComplete
-        let window = NSWindow(
+        let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 420),
-            styleMask: [.titled, .closable],
+            styleMask: [
+                .titled,
+                .closable,
+                .utilityWindow,
+                .nonactivatingPanel
+            ],
             backing: .buffered,
             defer: false
         )
-        window.title = "Cloud Enhancement Preview"
-        window.isReleasedWhenClosed = false
+        panel.title = "Cloud Enhancement Preview"
+        panel.isReleasedWhenClosed = false
+        panel.isFloatingPanel = true
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.hidesOnDeactivate = false
+        panel.level = .floating
+        panel.collectionBehavior.insert(.moveToActiveSpace)
+        let window: NSWindow = panel
         super.init(window: window)
         let viewModel = CloudAIDictationPreviewViewModel(
             original: original,
@@ -260,8 +305,11 @@ final class CloudAIPreviewWindowController: NSWindowController {
     }
 
     func show() {
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        // `orderFrontRegardless` rather than `makeKeyAndOrderFront` plus
+        // `NSApp.activate`: the panel needs to be visible and clickable, not
+        // focused. See the type comment for why stealing focus here breaks
+        // the text replacement.
+        window?.orderFrontRegardless()
     }
 
     private func complete(_ text: String?) {

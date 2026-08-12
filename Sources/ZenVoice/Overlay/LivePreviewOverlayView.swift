@@ -65,6 +65,12 @@ struct LivePreviewOverlayView: View {
             listeningContent
         case .transcribing:
             statusContent("transcribing…", pulses: true)
+        case .awaitingCloudReview:
+            statusContent(
+                "review cloud text…",
+                pulses: false,
+                tint: ZenDesign.Semantic.accent
+            )
         case .inserting:
             statusContent("inserting…", pulses: true, tint: ZenDesign.Semantic.success)
         case .success:
@@ -82,7 +88,7 @@ struct LivePreviewOverlayView: View {
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 Text("Ready")
-                    .font(.system(size: 10.5))
+                    .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
             }
             Spacer()
@@ -91,7 +97,7 @@ struct LivePreviewOverlayView: View {
     }
 
     private var listeningContent: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: ZenDesign.Spacing.xs) {
             HStack(spacing: 10) {
                 ZenStatusLabel(
                     text: "listening",
@@ -107,7 +113,7 @@ struct LivePreviewOverlayView: View {
                 )
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: ZenDesign.Spacing.xs) {
                 WaveformView(model: state.audioLevel)
                     .frame(height: 24)
                 if !state.liveTranscriptPreview.isEmpty {

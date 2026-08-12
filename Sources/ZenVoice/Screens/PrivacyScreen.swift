@@ -29,6 +29,7 @@ struct PrivacyScreen: View {
 
     var body: some View {
         ZenScreen(
+            icon: "lock.shield.fill",
             title: "Privacy & Data",
             subtitle: "What ZenVoice keeps, and where."
         ) {
@@ -267,7 +268,7 @@ private struct PermissionRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: ZenDesign.Spacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -282,29 +283,50 @@ private struct PermissionRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(ZenDesign.Typography.bodyStrong)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 Text(detail)
-                    .font(.system(size: 12))
+                    .font(ZenDesign.Typography.body)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let remedy = status.remedy {
+                    Text(remedy)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
-            Spacer()
+            Spacer(minLength: ZenDesign.Spacing.sm)
 
             ZenBadge(
                 text: status.title,
-                kind: status == .allowed ? .success : .danger,
+                kind: badgeKind,
                 showsDot: true
             )
 
-            if status != .allowed {
-                Button("Open") {
+            if let actionTitle = status.actionTitle {
+                Button(actionTitle) {
                     action()
                 }
                 .buttonStyle(ZenSecondaryButtonStyle())
             }
         }
-        .padding(.vertical, 13)
+        .padding(.vertical, ZenDesign.Spacing.sm)
         .padding(.horizontal, ZenDesign.Spacing.md)
+        .frame(minHeight: 64)
+    }
+
+    /// "Not asked yet" is a neutral starting state, not a failure — only an
+    /// actual denial or a policy restriction is worth colouring red.
+    private var badgeKind: ZenBadge.Kind {
+        switch status {
+        case .allowed:
+            return .success
+        case .notRequested:
+            return .neutral
+        case .denied, .restricted:
+            return .danger
+        }
     }
 }

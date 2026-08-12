@@ -117,10 +117,7 @@ struct HelpScreen: View {
     }
 
     var body: some View {
-        ZenScreen(
-            title: "Help & FAQ",
-            subtitle: "Short answers, no tickets."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             quickActions
             cheatSheet
             faqCard
@@ -130,7 +127,7 @@ struct HelpScreen: View {
 
     private var quickActions: some View {
         ZenPanel(padding: ZenDesign.Spacing.lg) {
-            HStack(spacing: 12) {
+            HStack(spacing: ZenDesign.Spacing.sm) {
                 Image(systemName: "arrow.counterclockwise.circle")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -167,7 +164,7 @@ struct HelpScreen: View {
                 Text("Shortcut cheat-sheet")
                     .font(ZenDesign.Typography.sectionTitle)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, ZenDesign.Spacing.xs)
 
                 cheatRow(
                     "Start / stop dictation",
@@ -215,7 +212,7 @@ struct HelpScreen: View {
 
     private var faqCard: some View {
         ZenPanel(padding: ZenDesign.Spacing.lg) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                 HStack {
                     Text("Frequently asked")
                         .font(ZenDesign.Typography.sectionTitle)
@@ -233,7 +230,7 @@ struct HelpScreen: View {
                 )
 
                 if filteredFAQs.isEmpty {
-                    VStack(spacing: 6) {
+                    VStack(spacing: ZenDesign.Spacing.xxs) {
                         Text("No answer found")
                             .font(ZenDesign.Typography.bodyStrong)
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
@@ -242,7 +239,7 @@ struct HelpScreen: View {
                             .foregroundStyle(ZenDesign.Semantic.textTertiary)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, ZenDesign.Spacing.xl)
                 } else {
                     VStack(spacing: 0) {
                         ForEach(filteredFAQs) { faq in
@@ -274,7 +271,7 @@ struct HelpScreen: View {
                         .multilineTextAlignment(.leading)
                     Spacer()
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(ZenDesign.Typography.badge)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
@@ -290,7 +287,7 @@ struct HelpScreen: View {
                     .font(ZenDesign.Typography.body)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, ZenDesign.Spacing.sm)
                     .frame(maxWidth: 560, alignment: .leading)
             }
         }
@@ -298,7 +295,7 @@ struct HelpScreen: View {
 
     private var aboutCard: some View {
         ZenPanel(padding: ZenDesign.Spacing.lg) {
-            HStack(spacing: 12) {
+            HStack(spacing: ZenDesign.Spacing.sm) {
                 ZenBrandMark(size: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("ZenVoice")

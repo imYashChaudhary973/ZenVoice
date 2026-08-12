@@ -20,12 +20,10 @@ struct HistoryScreen: View {
     @ObservedObject var viewModel: HistoryViewModel
     @State private var confirmsDeleteAll = false
     @State private var spellingRecord: DictationRecord?
+    @State private var spellingSuggestions: [CorrectionSuggestion] = []
 
     var body: some View {
-        ZenScreen(
-            title: "History",
-            subtitle: "Every dictation, kept on this Mac."
-        ) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             if !viewModel.hasMadeHistoryChoice {
                 consentCard
             } else {
@@ -94,9 +92,9 @@ struct HistoryScreen: View {
             SpellingCorrectionSheet(
                 record: record,
                 scope: viewModel.correctionScope(for: record),
-                suggestions: viewModel.spellingSuggestions(for: record),
+                suggestions: spellingSuggestions,
                 save: { source, replacement in
-                    let saved = viewModel.addSpellingCorrection(
+                    let saved = await viewModel.addSpellingCorrection(
                         source: source,
                         replacement: replacement,
                         for: record
@@ -149,7 +147,11 @@ struct HistoryScreen: View {
                             copy: { viewModel.copy(record) },
                             retry: { viewModel.retry(record) },
                             correctSpelling: {
-                                spellingRecord = record
+                                Task { @MainActor in
+                                    spellingSuggestions = await viewModel
+                                        .spellingSuggestions(for: record)
+                                    spellingRecord = record
+                                }
                             },
                             setCategory: {
                                 viewModel.setCategory($0, for: record)
@@ -219,13 +221,13 @@ struct HistoryScreen: View {
                     .buttonStyle(ZenPrimaryButtonStyle())
                 }
             }
-            .padding(ZenDesign.Spacing.lg)
+            .padding(ZenDesign.Spacing.md)
         }
     }
 
     private var emptyState: some View {
         ZenPanel {
-            VStack(spacing: 8) {
+            VStack(spacing: ZenDesign.Spacing.xs) {
                 Image(
                     systemName: viewModel.scope == .recovery
                         ? "checkmark.circle" : "text.badge.checkmark"
@@ -289,7 +291,7 @@ private struct SpellingCorrectionSheet: View {
     let record: DictationRecord
     let scope: CorrectionLanguageScope
     let suggestions: [CorrectionSuggestion]
-    let save: (String, String) -> Bool
+    let save: (String, String) async -> Bool
     let cancel: () -> Void
 
     @State private var source = ""
@@ -330,7 +332,7 @@ private struct SpellingCorrectionSheet: View {
                         .font(ZenDesign.Typography.captionStrong)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     ForEach(visibleSuggestions) { suggestion in
-                        HStack(spacing: 8) {
+                        HStack(spacing: ZenDesign.Spacing.xs) {
                             Text("“\(suggestion.source)”")
                                 .foregroundStyle(
                                     ZenDesign.Semantic.textSecondary
@@ -343,10 +345,12 @@ private struct SpellingCorrectionSheet: View {
                                 .font(ZenDesign.Typography.bodyStrong)
                             Spacer()
                             Button("Accept") {
-                                showsSaveError = !save(
-                                    suggestion.source,
-                                    suggestion.replacement
-                                )
+                                Task { @MainActor in
+                                    showsSaveError = !(await save(
+                                        suggestion.source,
+                                        suggestion.replacement
+                                    ))
+                                }
                             }
                             .buttonStyle(ZenSecondaryButtonStyle())
                             ZenIconButton(
@@ -364,7 +368,7 @@ private struct SpellingCorrectionSheet: View {
                 }
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: ZenDesign.Spacing.xs) {
                 spellingField(
                     title: "Incorrect spelling",
                     placeholder: "bild",
@@ -393,7 +397,9 @@ private struct SpellingCorrectionSheet: View {
                     .buttonStyle(ZenSecondaryButtonStyle())
                 Spacer()
                 Button("Save correction") {
-                    showsSaveError = !save(source, replacement)
+                    Task { @MainActor in
+                        showsSaveError = !(await save(source, replacement))
+                    }
                 }
                 .buttonStyle(ZenPrimaryButtonStyle())
                 .disabled(
@@ -455,7 +461,7 @@ private struct HistoryRecordRow: View {
             .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+                HStack(spacing: ZenDesign.Spacing.xs) {
                     Text(record.startedAt.formatted(date: .omitted, time: .shortened))
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
