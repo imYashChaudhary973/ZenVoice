@@ -206,11 +206,3 @@ enum ParakeetError: LocalizedError {
         }
     }
 }
-
-private extension NSLock {
-    func withLock<T>(_ action: () -> T) -> T {
-        lock()
-        defer { unlock() }
-        return action()
-    }
-}

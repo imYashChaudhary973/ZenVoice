@@ -176,17 +176,17 @@ public struct CommandModeEngine: Sendable {
     private static func normalized(_ text: String) -> String {
         text
             .lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
     }
 
     private static func containsPhrase(_ text: String, phrase: String) -> Bool {
         let escaped = NSRegularExpression.escapedPattern(for: phrase)
-        let pattern = "(?<!\\\\S)\(escaped)(?!\\\\S)"
+        let pattern = "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])"
         guard let expression = try? NSRegularExpression(
             pattern: pattern,
-            options: []
+            options: [.caseInsensitive]
         ) else {
             return false
         }

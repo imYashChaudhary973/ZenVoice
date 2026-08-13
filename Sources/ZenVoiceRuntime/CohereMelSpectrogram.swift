@@ -23,7 +23,9 @@ struct CohereMelSpectrogram {
     /// Normalize a 16 kHz mono float waveform to [-1, 1] and reshape for the
     /// encoder. The encoder expects shape `(1, samples)`.
     static func normalize(_ samples: [Float]) -> [Float] {
-        guard let maxAbs = samples.map(abs).max(), maxAbs > 0 else {
+        guard !samples.isEmpty else { return samples }
+        let maxAbs = samples.reduce(0 as Float) { max($0, abs($1)) }
+        guard maxAbs > 0 else {
             return samples
         }
         let scale = 1.0 / maxAbs

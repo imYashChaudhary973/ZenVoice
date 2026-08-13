@@ -251,12 +251,11 @@ public struct ZenIntelligenceEngine: Sendable {
                 word.trimmingCharacters(in: punctuation).lowercased()
             ], !word.isEmpty {
                 let leading = word.prefix(
-                    while: { punctuation.contains($0.unicodeScalars.first!) }
+                    while: { $0.unicodeScalars.first.map { punctuation.contains($0) } ?? false }
                 )
                 let trimmed = word.trimmingCharacters(in: punctuation)
-                let trailing = word.suffix(
-                    word.count - leading.count - trimmed.count
-                )
+                let trailingLength = max(0, word.count - leading.count - trimmed.count)
+                let trailing = word.suffix(trailingLength)
                 result += leading + digit + trailing
                 changed += 1
             } else {
@@ -310,8 +309,7 @@ public struct ZenIntelligenceEngine: Sendable {
     ) -> Int {
         let trimmedContext = context.trimmingCharacters(in: .whitespaces)
         guard !trimmedContext.isEmpty,
-              let first = text.first,
-              first.isLowercase else {
+              let first = text.first else {
             return 0
         }
         let lastContextCharacter = trimmedContext.last
@@ -322,8 +320,11 @@ public struct ZenIntelligenceEngine: Sendable {
               !sentenceEnders.contains(last) else {
             return 0
         }
-        text = trimmedContext + " " + text
-        return 1
+        if first.isUppercase {
+            text = text.prefix(1).lowercased() + text.dropFirst()
+            return 1
+        }
+        return 0
     }
 
     // MARK: - Meaning guard

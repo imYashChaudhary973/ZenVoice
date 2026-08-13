@@ -240,9 +240,11 @@ final class AudioRecorder: NSObject,
             captureQueue.sync {
                 audioOutput?.setSampleBufferDelegate(nil, queue: nil)
                 captureSession.stopRunning()
+                audioFile = nil
             }
+        } else {
+            audioFile = nil
         }
-        audioFile = nil
         audioOutput = nil
         targetFormat = nil
         levelChanged = nil

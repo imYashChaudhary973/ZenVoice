@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import CryptoKit
 import Foundation
 
 /// Persistent approval state for script and URL actions in Command Mode.
@@ -53,10 +54,14 @@ public enum CommandModeApprovalPreferences {
 
     private static func approvalKey(for action: CommandAction) -> String {
         switch action {
-        case .appleScript:
-            return approvedActionsKey + ".appleScript"
-        case .shellScript:
-            return approvedActionsKey + ".shellScript"
+        case .appleScript(let script):
+            let hash = SHA256.hash(data: Data(script.utf8))
+                .map { String(format: "%02x", $0) }.joined()
+            return approvedActionsKey + ".appleScript." + hash
+        case .shellScript(let script):
+            let hash = SHA256.hash(data: Data(script.utf8))
+                .map { String(format: "%02x", $0) }.joined()
+            return approvedActionsKey + ".shellScript." + hash
         case .openURL(let url):
             return approvedActionsKey + ".openURL." + url.absoluteString
         default:

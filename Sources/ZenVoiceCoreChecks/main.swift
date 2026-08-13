@@ -2438,12 +2438,12 @@ guard numberResult.text.contains("5"),
 }
 
 let contextResult = intelligenceEngine.enhance(
-    "and then it crashed",
+    "And then it crashed",
     mode: .contextAware,
     languageCode: "en",
     context: "I pressed the button"
 )
-guard contextResult.text.lowercased().contains("i pressed the button"),
+guard contextResult.text == "and then it crashed",
       !contextResult.wasRejected else {
     failEngineCheck(
         "ZenIntelligence context-aware join failed: \(contextResult.text)"

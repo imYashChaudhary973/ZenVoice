@@ -94,7 +94,7 @@ struct ZenBarView: View {
                     Spacer()
                     modeSwitcher
                     OverlayBarButton(title: "Start", emphasized: true, action: toggleRecording)
-                    ZenKbdGroup(combo: "⌃⌥ Space")
+                    ZenKbdGroup(combo: HotKeyPreferences.load().displayName)
                 }
                 .padding(.horizontal, 14)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -102,7 +102,7 @@ struct ZenBarView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Start ZenVoice \(state.mode.displayName)")
-            .accessibilityHint("Press Control Option Space or activate this button.")
+            .accessibilityHint("Press \(HotKeyPreferences.load().displayName) or activate this button.")
 
         case .listening:
             HStack(spacing: 10) {

@@ -92,7 +92,7 @@ struct LivePreviewOverlayView: View {
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
             }
             Spacer()
-            ZenKbdGroup(combo: "⌃⌥ Space")
+            ZenKbdGroup(combo: HotKeyPreferences.load().displayName)
         }
     }
 

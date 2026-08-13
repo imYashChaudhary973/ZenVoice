@@ -32,18 +32,42 @@ public struct TranscriptCleaner {
         "subtitles by the amara.org community"
     ]
 
+    private static let bracketsRegex = try? NSRegularExpression(pattern: #"\s*\[[^\]]+\]\s*"#)
+    private static let spacesRegex = try? NSRegularExpression(pattern: #"\s+"#)
+    private static let fillerRegex = try? NSRegularExpression(
+        pattern: #"(?i)(^|(?<=[.!?]\s))(?:(?:um+|uh+|erm+)[,.\s]+)+"#
+    )
+    private static let annotationRegex = try? NSRegularExpression(pattern: #"\([^)]*\)"#)
+
     public func clean(_ transcript: String) -> String {
         var result = transcript
-            .replacingOccurrences(of: #"\[[^\]]+\]"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let range = NSRange(result.startIndex..., in: result)
 
-        let fillerPattern = #"(?i)(^|(?<=[.!?]\s))(?:(?:um+|uh+|erm+)[,.\s]+)+"#
-        result = result.replacingOccurrences(
-            of: fillerPattern,
-            with: "$1",
-            options: .regularExpression
-        )
+        if let bracketsRegex = Self.bracketsRegex {
+            result = bracketsRegex.stringByReplacingMatches(
+                in: result,
+                range: range,
+                withTemplate: " "
+            )
+        }
+        if let spacesRegex = Self.spacesRegex {
+            let currentRange = NSRange(result.startIndex..., in: result)
+            result = spacesRegex.stringByReplacingMatches(
+                in: result,
+                range: currentRange,
+                withTemplate: " "
+            )
+        }
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let fillerRegex = Self.fillerRegex {
+            let currentRange = NSRange(result.startIndex..., in: result)
+            result = fillerRegex.stringByReplacingMatches(
+                in: result,
+                range: currentRange,
+                withTemplate: "$1"
+            )
+        }
 
         guard !isNonSpeech(result) else {
             return ""
@@ -65,13 +89,17 @@ public struct TranscriptCleaner {
         // them. Stripping them inline would silently eat dictated asides like
         // "the total (before tax) is fifty", and a user's own words matter more
         // than a rare stray annotation.
-        let withoutAnnotations = transcript
-            .replacingOccurrences(
-                of: #"\([^)]*\)"#,
-                with: "",
-                options: .regularExpression
-            )
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let withoutAnnotations: String
+        if let annotationRegex = Self.annotationRegex {
+            let range = NSRange(transcript.startIndex..., in: transcript)
+            withoutAnnotations = annotationRegex.stringByReplacingMatches(
+                in: transcript,
+                range: range,
+                withTemplate: ""
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            withoutAnnotations = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if withoutAnnotations.isEmpty, !transcript.isEmpty {
             return true
         }

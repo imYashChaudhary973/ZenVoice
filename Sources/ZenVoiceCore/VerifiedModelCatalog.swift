@@ -112,11 +112,12 @@ public struct VerifiedModel: Codable, Identifiable, Equatable, Sendable {
     }
 
     public var downloadURL: URL {
-        URL(
-            string:
-                "\(sourceRepository)/resolve/\(sourceRevision)/\(filename)"
-                + "?download=true"
-        )!
+        if let url = URL(
+            string: "\(sourceRepository)/resolve/\(sourceRevision)/\(filename)?download=true"
+        ) {
+            return url
+        }
+        return URL(fileURLWithPath: filename)
     }
 
     public var formattedFileSize: String {

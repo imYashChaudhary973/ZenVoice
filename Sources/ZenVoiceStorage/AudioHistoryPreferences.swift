@@ -64,9 +64,9 @@ public final class AudioHistoryPreferences {
     /// Maximum total archive size in bytes. Clamped to at least the minimum.
     public var maxSizeBytes: Int64 {
         get {
-            let stored = defaults.object(forKey: Key.maxSizeBytes) as? Int
-                ?? Int(Self.defaultMaxSizeBytes)
-            return max(Self.minimumMaxSizeBytes, Int64(stored))
+            let stored = (defaults.object(forKey: Key.maxSizeBytes) as? NSNumber)?.int64Value
+                ?? Self.defaultMaxSizeBytes
+            return max(Self.minimumMaxSizeBytes, stored)
         }
         set {
             defaults.set(

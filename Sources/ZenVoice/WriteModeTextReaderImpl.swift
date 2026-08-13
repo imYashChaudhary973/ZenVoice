@@ -68,11 +68,11 @@ struct WriteModeTextReaderImpl: WriteModeTextReader {
             kAXFocusedUIElementAttribute as CFString,
             &focusedValue
         ) == .success,
-        CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
+        let rawFocused = focusedValue,
+        CFGetTypeID(rawFocused) == AXUIElementGetTypeID() else {
             return nil
         }
-        // swiftlint:disable:next force_cast
-        let element = focusedValue as! AXUIElement
+        let element = unsafeBitCast(rawFocused, to: AXUIElement.self)
 
         var selectedValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(

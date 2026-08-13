@@ -136,7 +136,9 @@ public enum TranscriptRepetition {
     /// Compares words ignoring case and trailing punctuation, because a loop
     /// arrives as "India, India, India" rather than three identical strings.
     private static func matches(_ lhs: String, _ rhs: String) -> Bool {
-        normalized(lhs) == normalized(rhs) && !normalized(lhs).isEmpty
+        let nLhs = normalized(lhs)
+        guard !nLhs.isEmpty else { return false }
+        return nLhs == normalized(rhs)
     }
 
     private static func normalized(_ word: String) -> String {
@@ -144,7 +146,9 @@ public enum TranscriptRepetition {
             options: [.caseInsensitive, .diacriticInsensitive],
             locale: .current
         )
-        .components(separatedBy: CharacterSet.alphanumerics.inverted)
+        .unicodeScalars
+        .filter { CharacterSet.alphanumerics.contains($0) }
+        .map(String.init)
         .joined()
     }
 

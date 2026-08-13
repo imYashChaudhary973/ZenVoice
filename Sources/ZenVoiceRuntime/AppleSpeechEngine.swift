@@ -13,7 +13,8 @@
 // limitations under the License.
 
 import Foundation
-import Speech
+import os
+@preconcurrency import Speech
 import ZenVoiceCore
 
 /// Thread-safe bridge between Speech's callback task and Swift concurrency.

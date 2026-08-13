@@ -40,7 +40,7 @@ public class NemotronSpeechEngineBase: @unchecked Sendable, SpeechEngine {
         languageProfile: LanguageProfile,
         initialPrompt: String?
     ) async throws -> TranscriptionResult {
-        fatalError("subclass must implement transcribe")
+        throw EngineError.noEngineAvailable
     }
 
     public var isAvailable: Bool {
@@ -159,6 +159,7 @@ public class NemotronSpeechEngineBase: @unchecked Sendable, SpeechEngine {
             in
             queue.async {
                 do {
+                    let startTime = Date()
                     let transcript = try context.transcribe(
                         url: audioURL,
                         languageCode: Self.nemotronLanguageCode(
@@ -171,7 +172,7 @@ public class NemotronSpeechEngineBase: @unchecked Sendable, SpeechEngine {
                         correctionCount: 0,
                         isPartial: false,
                         modelID: self.engineID,
-                        processingDurationSeconds: 0
+                        processingDurationSeconds: Date().timeIntervalSince(startTime)
                     )
                     continuation.resume(returning: result)
                 } catch {
@@ -195,6 +196,7 @@ public class NemotronSpeechEngineBase: @unchecked Sendable, SpeechEngine {
             in
             queue.async {
                 do {
+                    let startTime = Date()
                     let samples = try AudioSampleLoader.load16kHzMonoFloatSamples(
                         from: audioURL
                     )
@@ -210,7 +212,7 @@ public class NemotronSpeechEngineBase: @unchecked Sendable, SpeechEngine {
                         correctionCount: 0,
                         isPartial: false,
                         modelID: self.engineID,
-                        processingDurationSeconds: 0
+                        processingDurationSeconds: Date().timeIntervalSince(startTime)
                     )
                     continuation.resume(returning: result)
                 } catch {

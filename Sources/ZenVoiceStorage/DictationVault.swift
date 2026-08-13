@@ -130,7 +130,7 @@ public actor DictationVault {
     }
 
     deinit {
-        sqlite3_close(database)
+        sqlite3_close_v2(database)
     }
 
     public func recoveryAudioURL(for id: UUID) -> URL {
@@ -327,8 +327,13 @@ public actor DictationVault {
         sqlite3_bind_int64(statement, 3, fileSize)
         bind(destinationURL.path, at: 4, in: statement)
         bind(id.uuidString, at: 5, in: statement)
-        try stepDone(statement)
-        try requireChangedRow()
+        do {
+            try stepDone(statement)
+            try requireChangedRow()
+        } catch {
+            try? FileManager.default.removeItem(at: destinationURL)
+            throw error
+        }
     }
 
     /// Deletes the archived audio file and metadata row for the given archive.
@@ -582,6 +587,7 @@ public actor DictationVault {
             }
         }
 
+        try deleteAllAudioArchives()
         try execute("DELETE FROM dictations;")
         try execute("DELETE FROM correction_rules;")
         try execute("PRAGMA wal_checkpoint(TRUNCATE);")
@@ -969,6 +975,7 @@ public actor DictationVault {
         guard status == SQLITE_OK else {
             throw DictationVaultError.database(databaseMessage)
         }
+        sqlite3_busy_timeout(database, 5000)
         try execute("PRAGMA journal_mode = WAL;")
         try execute("PRAGMA foreign_keys = ON;")
         try execute("PRAGMA secure_delete = ON;")
@@ -1005,13 +1012,18 @@ public actor DictationVault {
                 ON dictations(started_at DESC);
             CREATE INDEX IF NOT EXISTS idx_dictations_status
                 ON dictations(status);
+            CREATE INDEX IF NOT EXISTS idx_dictations_recovery_expiry
+                ON dictations(recovery_audio_expires_at);
             CREATE TABLE IF NOT EXISTS correction_rules (
                 id TEXT PRIMARY KEY NOT NULL,
                 source_text BLOB NOT NULL,
                 replacement_text BLOB NOT NULL,
+                language_scope TEXT NOT NULL DEFAULT 'all',
                 usage_count INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS idx_correction_rules_usage
+                ON correction_rules(usage_count DESC, created_at ASC);
             CREATE TABLE IF NOT EXISTS audio_archive (
                 id TEXT PRIMARY KEY NOT NULL,
                 dictation_id TEXT NOT NULL,

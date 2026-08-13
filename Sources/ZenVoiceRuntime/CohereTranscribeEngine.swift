@@ -249,6 +249,7 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
             in
             queue.async {
                 do {
+                    let startTime = Date()
                     let samples = try AudioSampleLoader
                         .load16kHzMonoFloatSamples(from: audioURL)
                     let normalized = CohereMelSpectrogram.normalize(samples)
@@ -268,7 +269,7 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
                         correctionCount: 0,
                         isPartial: false,
                         modelID: Self.engineID,
-                        processingDurationSeconds: 0
+                        processingDurationSeconds: Date().timeIntervalSince(startTime)
                     )
                     continuation.resume(returning: result)
                 } catch {

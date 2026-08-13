@@ -169,7 +169,7 @@ public struct LocalInsightsSnapshot: Sendable {
             grouping: events.compactMap { event -> DictationInsightEvent? in
                 event.targetBundleID == nil ? nil : event
             },
-            by: { $0.targetBundleID! }
+            by: { $0.targetBundleID ?? "" }
         )
         let applications = applicationGroups.map { bundleID, values in
             ApplicationInsight(
@@ -187,13 +187,23 @@ public struct LocalInsightsSnapshot: Sendable {
             return $0.wordCount > $1.wordCount
         }
 
+        let today = calendar.startOfDay(for: now)
         let activeDays = Set(
             events.filter { $0.wordCount >= 5 }.map {
                 calendar.startOfDay(for: $0.startedAt)
             }
         )
+        let streakAnchor: Date
+        if activeDays.contains(today) {
+            streakAnchor = today
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+                  activeDays.contains(yesterday) {
+            streakAnchor = yesterday
+        } else {
+            streakAnchor = today
+        }
         let currentStreak = streakEnding(
-            at: calendar.startOfDay(for: now),
+            at: streakAnchor,
             activeDays: activeDays,
             calendar: calendar
         )
@@ -202,7 +212,6 @@ public struct LocalInsightsSnapshot: Sendable {
             calendar: calendar
         )
 
-        let today = calendar.startOfDay(for: now)
         let activity: [DailyActivityInsight] =
             (0..<7).reversed().compactMap { offset in
             guard let date = calendar.date(

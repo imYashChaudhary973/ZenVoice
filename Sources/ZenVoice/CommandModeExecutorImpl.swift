@@ -81,10 +81,14 @@ final class CommandModeExecutorImpl: CommandModeExecutor {
         guard !bundleID.isEmpty else {
             throw CommandModeExecutionError.missingBundleID
         }
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            logger.warning("Could not find application URL for bundle ID: \(bundleID)")
+            throw CommandModeExecutionError.missingBundleID
+        }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         NSWorkspace.shared.openApplication(
-            at: URL(fileURLWithPath: "/Applications"),
+            at: appURL,
             configuration: configuration,
             completionHandler: { _, error in
                 if let error {
@@ -163,10 +167,11 @@ final class CommandModeExecutorImpl: CommandModeExecutor {
         guard !selected.isEmpty else {
             throw CommandModeExecutionError.systemActionFailed(.searchSelectedText)
         }
-        let query = selected
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-            ?? ""
-        let url = URL(string: "https://www.google.com/search?q=\(query)")!
+        var components = URLComponents(string: "https://www.google.com/search")
+        components?.queryItems = [URLQueryItem(name: "q", value: selected)]
+        guard let url = components?.url else {
+            throw CommandModeExecutionError.scriptFailed("Invalid search query: \(selected)")
+        }
         NSWorkspace.shared.open(url)
     }
 
@@ -194,7 +199,7 @@ final class CommandModeExecutorImpl: CommandModeExecutor {
 
     private func openURL(_ url: URL) throws {
         guard NSWorkspace.shared.open(url) else {
-            throw CommandModeExecutionError.systemActionFailed(.showPreferences)
+            throw CommandModeExecutionError.scriptFailed("Failed to open URL: \(url.absoluteString)")
         }
     }
 
@@ -203,10 +208,10 @@ final class CommandModeExecutorImpl: CommandModeExecutor {
         task.standardOutput = pipe
         task.standardError = pipe
         try task.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
         guard task.terminationStatus == 0 else {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: data, encoding: .utf8)
+            let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 ?? "Process exited with \(task.terminationStatus)"
             throw CommandModeExecutionError.scriptFailed(message)
         }
@@ -356,11 +361,11 @@ extension CommandModeExecutorImpl {
             kAXFocusedUIElementAttribute as CFString,
             &focusedValue
         ) == .success,
-        CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
+        let rawFocused = focusedValue,
+        CFGetTypeID(rawFocused) == AXUIElementGetTypeID() else {
             throw CommandModeExecutionError.systemActionFailed(.searchSelectedText)
         }
-        // swiftlint:disable:next force_cast
-        let element = focusedValue as! AXUIElement
+        let element = unsafeBitCast(rawFocused, to: AXUIElement.self)
 
         var selectedValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
