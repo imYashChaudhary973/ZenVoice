@@ -28,8 +28,8 @@ It contains no transcript text, API keys, or private application content.
 | Real runtime lifecycle | Pass | `ZENVOICE_RUNTIME_REQUIRED=1 ZENVOICE_MODEL_PATH=…turbo… swift run ZenVoiceRuntimeChecks`: warm-up 1.19 s, decodes 0.90 s, 751 MB loaded, 598 MB reclaimed, reload on next decode |
 | Fail-closed required mode | Pass | `ZENVOICE_RUNTIME_REQUIRED=1` with no resolvable model exits 1 with a clear message; same contract verified for `ZENVOICE_ACCURACY_REQUIRED=1` |
 | Real-speech corpus validation | Pass | `ZENVOICE_CORPUS_VALIDATE_ONLY=1` against the frozen Common Voice Spontaneous test JSONL: 262 clips validated |
-| Real-speech WER measurement | Pass | Full `ZenVoiceAccuracyChecks` decode of the 262-clip Common Voice test with Whisper Turbo (summary in TRANSCRIPT-free form below) |
-| Local smoke-gate reproduction | Pass | `build-librispeech-corpus.py` corpus; smoke with Whisper Turbo: 1.0 % WER; with the gate's pinned `ggml-base.en.bin` (SHA verified): 2.0 % WER — the hosted-runner smoke failure does not reproduce locally |
+| Real-speech WER measurement | Pass with finding | Full `ZenVoiceAccuracyChecks` decode of the 262-clip / 3,084 s Common Voice test with Whisper Turbo Q5: **8.1 % whole / 9.6 % segmented WER** at 10× real time; semantic-guard violations 0 in both Clean and Agent Prompt modes; whole-recording protected-token counts 10 quantities / 5 negations. For scale on the same frozen test: whisper-small.en base Q5 scored 9.1 % / 9.6 % and the rejected fine-tuned checkpoint 7.3 % / 8.3 % |
+| Local smoke-gate reproduction | Pass | `build-librispeech-corpus.py` corpus; smoke with Whisper Turbo: 1.0 % WER; with the gate's pinned `ggml-base.en.bin` (SHA verified): 2.0 % WER on the dictation clip and 7.7 % / 0.55 s on the single-utterance clip now used by the gate — the hosted-runner smoke failure does not reproduce locally |
 | Full compile | Pass | `swift build`; only pre-existing Apple locale deprecation warnings |
 | Signed app build | Pass | `Scripts/build-app.sh` with Apple Development identity |
 | Python pipeline checks | Pass | consented-dictation pipeline, evidence collection, composite selection, and promotion checks all pass |
@@ -43,19 +43,30 @@ It contains no transcript text, API keys, or private application content.
    installed and selected. `ZENVOICE_RUNTIME_REQUIRED=1` now fails closed,
    and PR CI downloads the pinned `ggml-small.en.bin` so every merge decodes
    through the real whisper.cpp path.
-2. **Weekly speech gate had never passed (partially fixed, under
-   diagnosis).** Every scheduled run since its introduction failed at exit
-   137 (SIGKILL during compilation) because the workflow lacked the SwiftPM
-   cache used by CI. With the cache and `macos-latest` the build completes
-   and the gate now reaches the decode, where it fails with
-   `real-speech smoke produced no transcript for 1272`. The same corpus,
-   harness, and pinned `ggml-base.en.bin` decode that clip at 2.0 % WER on
-   this Mac, so the failure is specific to the CPU-only hosted runner.
-   Suspect: `flash_attn = true` is hardcoded in `WhisperTranscriber`
-   without a GPU-availability check. Instrumentation committed in
-   `0a2bdda` distinguishes thrown errors from empty decodes on the next
-   gate run.
-3. **External-input M12 failure still not reproduced.** The 2026-08-11
+2. **Weekly speech gate had never passed (fixed across three commits).**
+   Every scheduled run since its introduction failed at exit 137 (SIGKILL
+   during compilation) because the workflow lacked the SwiftPM cache used by
+   CI. With the cache and `macos-latest` the build completes, but the smoke
+   decode then timed out twice: first from Flash Attention being hardcoded
+   without a GPU check (now gated on a Metal device), and fundamentally
+   because the ~40 s multi-sentence smoke clip cannot be decoded by base.en
+   on a CPU-only runner inside the product's own 2.5×-audio decode deadline.
+   That deadline catches stuck decodes for real users and stays; the gate
+   now smokes a single ~5 s utterance (0.55 s decode locally with the same
+   pinned model).
+3. **Turbo hallucinates "Thank you." on near-silence (open product
+   decision).** The first honest accuracy run with the daily Whisper Turbo
+   model fails the silence-suppression probes: 1, 5, and 10 seconds of
+   near-silence decode to "Thank you." and survive cleanup. This is not a
+   regression — `TranscriptCleaner.nonSpeechFragments` deliberately excludes
+   "Thank you." because it is plausible real dictation, and the tradeoff is
+   documented at the declaration. The check is correctly reporting a real
+   artifact of the recommended model. Resolving it means choosing between
+   accepting the artifact, audio-conditioned suppression in the recorder
+   path (suppress only when speech activity was near zero), or a different
+   default model; it should not be fixed by silently widening the fragment
+   list.
+4. **External-input M12 failure still not reproduced.** The 2026-08-11
    record's `Fail` (USB microphone absent from the capture catalogue) was
    re-tested with `Scripts/probe-audio-inputs.swift` on the same macOS
    build with the same USB device connected: built-in, USB (`USBAudio1.0`),

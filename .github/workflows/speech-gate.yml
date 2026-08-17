@@ -68,6 +68,18 @@ jobs:
           python3 Scripts/build-librispeech-corpus.py \
             --output "$accuracy_root/corpus"
 
+      # Secondary coverage plus decode-speed diagnostics for the smoke step:
+      # prints warm-up and decode timings for the same pinned model. The
+      # memory-reclaim floor assumes a larger model, so a base.en failure here
+      # must not mask the smoke result. PR CI already runs these checks as a
+      # required step with small.en.
+      - name: Run runtime checks with the same pinned model
+        continue-on-error: true
+        env:
+          ZENVOICE_MODEL_PATH: ${{ runner.temp }}/zenvoice-accuracy/models/ggml-base.en.bin
+          ZENVOICE_RUNTIME_REQUIRED: "1"
+        run: swift run ZenVoiceRuntimeChecks
+
       - name: Run real-speech accuracy smoke gate
         env:
           ZENVOICE_ACCURACY_REQUIRED: "1"
