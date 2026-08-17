@@ -78,6 +78,7 @@ jobs:
         env:
           ZENVOICE_MODEL_PATH: ${{ runner.temp }}/zenvoice-accuracy/models/ggml-base.en.bin
           ZENVOICE_RUNTIME_REQUIRED: "1"
+          ZENVOICE_DISABLE_GPU: "1"
         run: swift run ZenVoiceRuntimeChecks
 
       - name: Run real-speech accuracy smoke gate
@@ -86,11 +87,14 @@ jobs:
           ZENVOICE_ACCURACY_REQUIRE_REAL: "1"
           ZENVOICE_ACCURACY_SMOKE: "1"
           ZENVOICE_MODEL_PATH: ${{ runner.temp }}/zenvoice-accuracy/models/ggml-base.en.bin
+          # The hosted macOS VM exposes a paravirtualized Metal device whose
+          # compute is ~40x slower than its own CPU backend; force CPU so the
+          # decode completes inside the product's own decode deadline.
+          ZENVOICE_DISABLE_GPU: "1"
           # single/ holds one real utterance (~5 s). The multi-sentence
-          # dictation/ clips are ~40 s, which a CPU-only runner cannot decode
-          # inside the product's own 2.5×-audio decode deadline (it exists to
-          # catch stuck decodes for real users, so it must not be loosened for
-          # CI). Long-form coverage stays with local full-harness runs on real
-          # hardware.
+          # dictation/ clips are ~40 s, which the VM cannot decode inside
+          # that deadline (it exists to catch stuck decodes for real users,
+          # so it must not be loosened for CI). Long-form coverage stays
+          # with local full-harness runs on real hardware.
           ZENVOICE_ACCURACY_CORPUS: ${{ runner.temp }}/zenvoice-accuracy/corpus/single
         run: swift run ZenVoiceAccuracyChecks

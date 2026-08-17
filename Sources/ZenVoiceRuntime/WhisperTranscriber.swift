@@ -435,12 +435,18 @@ public final class WhisperTranscriber: @unchecked Sendable {
             return context
         }
         var parameters = whisper_context_default_params()
-        parameters.use_gpu = true
-        // Flash Attention in whisper.cpp is only fast on the Metal backend.
-        // On CPU-only hosts (CI runners) it decodes pathologically slowly —
-        // a ~40 s clip exceeds the decode deadline that finishes in seconds
-        // on Metal — so it stays off whenever no Metal device exists.
-        parameters.flash_attn = MTLCreateSystemDefaultDevice() != nil
+        // ZenVoice runs on real Macs with hardware Metal. Hosted CI VMs can
+        // expose a paravirtualized Metal device that compiles pipelines in
+        // ~14 s and decodes speech ~40x slower than the CPU backend, which
+        // looks exactly like a stuck decode to the deadline guard.
+        // ZENVOICE_DISABLE_GPU forces the CPU backend for those hosts.
+        let cpuOnly =
+            ProcessInfo.processInfo.environment["ZENVOICE_DISABLE_GPU"] == "1"
+        parameters.use_gpu = !cpuOnly
+        // Flash Attention in whisper.cpp is only fast on the Metal backend;
+        // it stays off on CPU-only hosts.
+        parameters.flash_attn =
+            !cpuOnly && MTLCreateSystemDefaultDevice() != nil
         let loaded = configuration.modelURL.path.withCString { path in
             whisper_init_from_file_with_params(path, parameters)
         }
