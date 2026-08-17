@@ -261,6 +261,9 @@ public final class TextInserter {
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
         keyDown.post(tap: .cghidEventTap)
+        // 15ms hold duration ensures Electron, Chromium, and web compositor
+        // event loops reliably capture the synthetic Command+V event without dropping it.
+        usleep(15_000)
         keyUp.post(tap: .cghidEventTap)
         return .pasted
     }

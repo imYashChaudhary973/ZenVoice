@@ -410,6 +410,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var liveSamplesEnabledForRecording = false
     private var activeDictationBehavior =
         ActiveDictationBehavior.global
+    private var anticipatoryEventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -421,6 +422,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { await configureHistoryStorage() }
         configureHotKey()
         configureHoldToDictate()
+        configureAnticipatoryWarmup()
         configureSettingsWindow()
         // The main window is the app. Opening it on launch is what the
         // approved design specifies: ZenVoice keeps its menu-bar presence and
@@ -487,6 +489,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || historyPreferences.isPrivateModeEnabled
             || !historyPreferences.isHistoryEnabled {
             try? await dictationVault?.discard(id: processingHistoryID)
+        }
+        if let monitor = anticipatoryEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            anticipatoryEventMonitor = nil
         }
     }
 
@@ -1221,6 +1227,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.holdToDictateReleased()
         }
         holdToDictateController = controller
+    }
+
+    private func configureAnticipatoryWarmup() {
+        // Global monitor for modifier flag changes. When the user taps Control or Option
+        // (the modifier keys for the default dictation hotkey ^⌥Space), pre-warm the engine
+        // asynchronously if it's currently unloaded.
+        anticipatoryEventMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: .flagsChanged
+        ) { [weak self] event in
+            let flags = event.modifierFlags
+            if flags.contains(.control) || flags.contains(.option) {
+                self?.warmUpEngines()
+            }
+        }
     }
 
     private func configureSettingsWindow() {
