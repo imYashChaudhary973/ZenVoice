@@ -104,9 +104,9 @@ public struct ApplicationProfile:
         writeModeDefault = try container.decodeIfPresent(
             WriteModeSubMode.self, forKey: .writeModeDefault
         )
-        customPromptHints = try container.decode(
+        customPromptHints = try container.decodeIfPresent(
             [String].self, forKey: .customPromptHints
-        )
+        ) ?? []
 
         if let mode = try? container.decode(
             TranscriptFormattingMode.self, forKey: .formattingMode
@@ -278,8 +278,12 @@ public enum NextDictationContext {
             }
             return term
         }
+        var termsToProcess = terms
+        if termsToProcess.isEmpty {
+            termsToProcess = ["PR", "repo", "deploy", "k8s", "LLM", "API", "theek", "matlab", "acha", "bhai", "jugaad", "pakka"]
+        }
         var vocabulary = ""
-        for term in terms {
+        for term in termsToProcess {
             let candidate = vocabulary.isEmpty
                 ? term
                 : vocabulary + ", " + term

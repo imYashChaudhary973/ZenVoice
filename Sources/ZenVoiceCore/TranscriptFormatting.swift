@@ -234,6 +234,9 @@ public struct TranscriptFormattingEngine: Sendable {
             finalText = enhanced.wasRejected ? localText : enhanced.text
         }
 
+        // Normalize common colloquial phrases and acoustic homophones
+        finalText = BuiltInSlangLexicon.normalizeColloquialPhrases(finalText)
+
         return TranscriptFormattingResult(
             text: finalText,
             mode: mode,

@@ -127,6 +127,10 @@ public struct LanguageProfile:
         outputMode == .latinScript
     }
 
+    public var isHinglish: Bool {
+        self == Self.hinglish
+    }
+
     public var requiresMultilingualModel: Bool {
         inputLanguageCode != "en"
     }
