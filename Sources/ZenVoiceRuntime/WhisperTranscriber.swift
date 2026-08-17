@@ -14,6 +14,7 @@
 
 import AVFoundation
 import Foundation
+import Metal
 import ZenVoiceCore
 import whisper
 
@@ -435,7 +436,11 @@ public final class WhisperTranscriber: @unchecked Sendable {
         }
         var parameters = whisper_context_default_params()
         parameters.use_gpu = true
-        parameters.flash_attn = true
+        // Flash Attention in whisper.cpp is only fast on the Metal backend.
+        // On CPU-only hosts (CI runners) it decodes pathologically slowly —
+        // a ~40 s clip exceeds the decode deadline that finishes in seconds
+        // on Metal — so it stays off whenever no Metal device exists.
+        parameters.flash_attn = MTLCreateSystemDefaultDevice() != nil
         let loaded = configuration.modelURL.path.withCString { path in
             whisper_init_from_file_with_params(path, parameters)
         }
