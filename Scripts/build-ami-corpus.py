@@ -48,6 +48,15 @@ import wave
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+try:
+    from defusedxml.ElementTree import parse as parse_xml
+except ImportError:
+    # The NITE XML read here is extracted from the checksum-pinned AMI
+    # archive this script downloads, so entity expansion is not
+    # attacker-controlled; stdlib parsing is the reviewed fallback when
+    # defusedxml is not installed.
+    parse_xml = ET.parse  # nosemgrep
+
 NITE = "{http://nite.sourceforge.net/}"
 MIRROR = "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus"
 LICENCE_URL = "https://groups.inf.ed.ac.uk/ami/corpus/"
@@ -101,7 +110,7 @@ def parse_words(path):
     """
     words = {}
     order = []
-    tree = ET.parse(path)
+    tree = parse_xml(path)
     for element in tree.getroot():
         identifier = element.get(f"{NITE}id")
         if identifier is None:
@@ -131,7 +140,7 @@ CHILD_RANGE = re.compile(r"id\(([^)]+)\)")
 
 def parse_segments(path):
     """Yields (channel, start, end, [word ids]) per transcribed utterance."""
-    tree = ET.parse(path)
+    tree = parse_xml(path)
     for segment in tree.getroot():
         child = segment.find(f"{NITE}child")
         if child is None:

@@ -433,15 +433,31 @@ private func runRealSpeechSmoke() -> Bool {
         isReproducible: true
     )
     let startedAt = Date()
-    let transcript = (
-        try? transcriber.transcribe(
-            samples: samples,
-            languageProfile: .english
-        )
-    )?.finalTranscript ?? ""
+    let decode = Result {
+        try transcriber.transcribe(samples: samples, languageProfile: .english)
+    }
     let elapsed = Date().timeIntervalSince(startedAt)
-    guard !transcript.isEmpty else {
-        fail("real-speech smoke produced no transcript for \(clip.name)")
+    let transcript: String
+    switch decode {
+    case .success(let result):
+        guard !result.finalTranscript.isEmpty else {
+            let raw = result.rawTranscript
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            fail(
+                "real-speech smoke produced no transcript for \(clip.name) "
+                + String(format: "after %.2fs", elapsed)
+                + (raw.isEmpty
+                    ? "; decoder output was empty"
+                    : "; raw decode was \"\(raw.prefix(160))\"")
+            )
+        }
+        transcript = result.finalTranscript
+    case .failure(let error):
+        fail(
+            "real-speech smoke decode failed for \(clip.name) "
+            + String(format: "after %.2fs", elapsed)
+            + ": \(error)"
+        )
     }
 
     let score = Scoring.wordErrorRate(
