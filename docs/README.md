@@ -36,6 +36,8 @@ runtime truth lives in the code and executable checks.
 | --- | --- |
 | [Development](DEVELOPMENT.md) | Prerequisites, build, run, check suites, and measuring memory. |
 | [Accuracy harness](ACCURACY_HARNESS.md) | How to measure a change to the dictation path. |
+| [Real-speech corpus](REAL_SPEECH_CORPUS.md) | Public and consented evaluation corpora, licences, and baseline procedure. |
+| [Cloud providers](CLOUD_PROVIDERS.md) | Cloud refinement providers, wire shapes, and the privacy boundary. |
 | [PR and merge policy](PR_AND_MERGE_POLICY.md) | How changes get reviewed and landed. |
 | [Build order](BUILD_ORDER.md) | Milestone ledger and verification gates. |
 | [Phased plan](PHASED_PLAN.md) | Feature phases and their status. |
@@ -54,6 +56,21 @@ runtime truth lives in the code and executable checks.
 | Document | What it covers |
 | --- | --- |
 | [Multi-engine benchmark, 2026-08-06](LANGUAGE_MODEL_BENCHMARK_2026-08-06.md) | The current comparison across local speech engines. |
+
+## Agentic roadmap — design only, not built
+
+These documents describe **future work**. Nothing in this section is
+implemented; they exist so the coding agent builds from a reviewed design
+rather than improvising architecture. Command Mode v1 (built) is documented
+by [ADR 0008](decisions/0008-command-mode.md).
+
+| Document | What it covers |
+| --- | --- |
+| [Agentic Command Mode](AGENTIC_COMMAND_MODE.md) | Master design for Command Mode v2: flow, components, trust model, sequencing. |
+| [Agentic planner](AGENTIC_PLANNER.md) | Hybrid deterministic→local-LLM planner, JSON plan schema, validation. |
+| [Agentic approval gate](AGENTIC_APPROVAL_GATE.md) | Risk classes, approval modes, decision records, UI contract. |
+| [Agentic orchestrator](AGENTIC_ORCHESTRATOR.md) | Execution state machine, executors, failure and cancellation policy. |
+| [Agentic status streaming](AGENTIC_STATUS_STREAMING.md) | Live-status event envelope for Mac HUD and the future iPhone consumer. |
 
 ## Decisions
 
