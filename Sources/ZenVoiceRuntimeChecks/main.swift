@@ -223,6 +223,17 @@ do {
             + "\(transcriber.modelID))."
     )
 } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
+    // Skipping is a local-development convenience only. CI sets
+    // ZENVOICE_RUNTIME_REQUIRED so a runner without a resolvable model
+    // fails the build instead of passing vacuously.
+    if ProcessInfo.processInfo.environment["ZENVOICE_RUNTIME_REQUIRED"] == "1" {
+        let message =
+            "ZenVoice runtime checks failed: no verified model is "
+            + "resolvable, but ZENVOICE_RUNTIME_REQUIRED is set. Install "
+            + "a verified model in Models or set ZENVOICE_MODEL_PATH.\n"
+        FileHandle.standardError.write(Data(message.utf8))
+        exit(1)
+    }
     print(
         "ZenVoice runtime checks skipped: install a verified model in Models."
     )

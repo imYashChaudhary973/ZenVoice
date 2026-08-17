@@ -142,8 +142,16 @@ The checks cover:
 - durable Private Dictation suppression, recovery-disable cleanup, strict
   hotkey labels, and hold-key configuration.
 - in-process runtime model loading and two sequential transcription passes
-  through one persistent transcriber instance. This check skips only when no
-  local model is installed.
+  through one persistent transcriber instance. The check skips when no model
+  is resolvable in the current process: either no verified model is
+  installed, or the model selected in the app's defaults is invisible to a
+  CLI process (`RuntimeIdentity` deliberately keeps bare executables out of
+  the production defaults suite). Point a run at a specific model with
+  `ZENVOICE_MODEL_PATH`, and set `ZENVOICE_RUNTIME_REQUIRED=1` — as CI does —
+  to make an unresolved model fail the run instead of skipping it.
+  `ZenVoiceAccuracyChecks` honours the same contract through
+  `ZENVOICE_ACCURACY_REQUIRED=1`. Real-speech decoding in CI runs in the
+  scheduled `speech-gate` workflow, not on every pull request.
 - privacy-safe numeric share-card payload validation.
 - Instant Refine fillers, repeated words, punctuation-marked restarts, agent
   prompt layout commands, persisted mode, disabled behavior, and destructive

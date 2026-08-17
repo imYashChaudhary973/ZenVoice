@@ -20,12 +20,27 @@ concurrency:
 jobs:
   real-speech:
     name: Real-speech smoke gate
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 30
 
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # Same cache as ci.yml: without it the runner re-downloads the pinned
+      # XCFrameworks and the uncached build has been SIGKILLed (exit 137)
+      # mid-compilation on hosted runners.
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            .build/checkouts
+            .build/repositories
+            .build/artifacts
+            .build/workspace-state.json
+          key: >-
+            ${{ runner.os }}-swiftpm-${{ hashFiles('Package.swift',
+            'Package.resolved') }}
 
       - name: Cache pinned accuracy assets
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5

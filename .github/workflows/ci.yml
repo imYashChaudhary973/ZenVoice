@@ -49,7 +49,31 @@ jobs:
       - name: Run encrypted storage checks
         run: swift run ZenVoiceStorageChecks
 
+      # Runtime checks decode through the real whisper.cpp path, so they need
+      # a real model even though the audio is a deterministic silence fixture.
+      # small.en (not tiny.en) because the check's memory-reclaim floor of
+      # 200 MB needs a model whose resident footprint clears it. Real-speech
+      # decoding stays in speech-gate.yml by design; PR CI stays deterministic.
+      - name: Cache pinned runtime-check model
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .build/models/ggml-small.en.bin
+          key: whisper-small-en-c6138d6d
+
+      - name: Download pinned runtime-check model
+        run: |
+          mkdir -p .build/models
+          if [ ! -f .build/models/ggml-small.en.bin ]; then
+            curl --fail --location --retry 3 \
+              --output .build/models/ggml-small.en.bin \
+              "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en.bin?download=true"
+          fi
+          echo "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d  .build/models/ggml-small.en.bin" | shasum -a 256 --check
+
       - name: Run runtime checks
+        env:
+          ZENVOICE_MODEL_PATH: ${{ github.workspace }}/.build/models/ggml-small.en.bin
+          ZENVOICE_RUNTIME_REQUIRED: "1"
         run: swift run ZenVoiceRuntimeChecks
 
       - name: Run deterministic accuracy scoring checks
