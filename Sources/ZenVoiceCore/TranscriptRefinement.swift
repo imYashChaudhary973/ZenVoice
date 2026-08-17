@@ -43,6 +43,16 @@ public enum TranscriptRefinement {
             commands.text,
             mode: mode
         )
+        guard TranscriptSemanticGuard.preservesProtectedTerms(
+            original: transcript,
+            candidate: refined.text
+        ) else {
+            return InstantRefineResult(
+                text: transcript,
+                correctionCount: 0,
+                wasRejected: true
+            )
+        }
         return InstantRefineResult(
             text: refined.text,
             correctionCount:
