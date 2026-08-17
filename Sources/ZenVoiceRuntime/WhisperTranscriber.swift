@@ -192,7 +192,7 @@ public final class WhisperTranscriber: @unchecked Sendable {
             parameters.beam_search.beam_size = WhisperDecoding.beamSize
         }
         parameters.n_threads = isReproducible
-            ? 4
+            ? Int32(min(4, ProcessInfo.processInfo.activeProcessorCount))
             : ProcessorTopology.decodeThreadCount
         // `audio_ctx` is deliberately left at the model default. See
         // ``WhisperDecoding`` for the measurement that settled it.
