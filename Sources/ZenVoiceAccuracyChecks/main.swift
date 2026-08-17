@@ -40,11 +40,14 @@ import ZenVoiceRuntime
 //   ZENVOICE_ACCURACY_NOISE    noise floor added before decoding (default 0.004)
 //   ZENVOICE_ACCURACY_CLEAN    set to 1 to measure studio-clean audio instead
 //   ZENVOICE_ACCURACY_FIXTURES cache directory for rendered audio
+//   ZENVOICE_ACCURACY_CORPUS   flat audio/text directory or locked JSONL
 //   ZENVOICE_ACCURACY_VERBOSE  set to 1 to print every hypothesis
 //   ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS
 //                               cap synthetic clips; real/long-form stay intact
 //   ZENVOICE_ACCURACY_SMOKE    decode one real recording for fast PR coverage
 //   ZENVOICE_SCORING_ONLY      validate deterministic scoring without a model
+//   ZENVOICE_CORPUS_VALIDATE_ONLY
+//                               validate corpus paths/audio without a model
 
 private let environment = ProcessInfo.processInfo.environment
 
@@ -97,6 +100,157 @@ private func validateScoring() {
           mixedErrors.deletions == 0,
           mixedErrors.insertions == 1 else {
         fail("mixed-error scoring is incorrect")
+    }
+
+    let repository = URL(
+        fileURLWithPath: FileManager.default.currentDirectoryPath,
+        isDirectory: true
+    ).standardizedFileURL
+    let fixtureDirectory = repository
+        .appendingPathComponent(".build", isDirectory: true)
+        .appendingPathComponent(
+            "ZenVoiceAccuracyChecks-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    do {
+        try FileManager.default.createDirectory(
+            at: fixtureDirectory,
+            withIntermediateDirectories: true
+        )
+    } catch {
+        fail("could not create corpus-loader fixtures: \(error)")
+    }
+    defer {
+        try? FileManager.default.removeItem(at: fixtureDirectory)
+    }
+
+    let audio = fixtureDirectory.appendingPathComponent("sample.wav")
+    let manifest = fixtureDirectory.appendingPathComponent("corpus.jsonl")
+    let symlink = fixtureDirectory.appendingPathComponent("outside.wav")
+    let repositoryPrefix = repository.path + "/"
+    let relativeAudio = String(audio.path.dropFirst(repositoryPrefix.count))
+    let relativeSymlink = String(
+        symlink.path.dropFirst(repositoryPrefix.count)
+    )
+
+    func writeManifest(_ rows: [[String: String]]) throws {
+        let lines = try rows.map { row -> String in
+            let data = try JSONSerialization.data(
+                withJSONObject: row,
+                options: [.sortedKeys]
+            )
+            guard let line = String(data: data, encoding: .utf8) else {
+                throw CocoaError(.fileWriteInapplicableStringEncoding)
+            }
+            return line
+        }
+        try (lines.joined(separator: "\n") + "\n").write(
+            to: manifest,
+            atomically: true,
+            encoding: .utf8
+        )
+    }
+
+    do {
+        try Data([0]).write(to: audio)
+        try writeManifest([
+            [
+                "audio": relativeAudio,
+                "audio_id": "clip-1",
+                "text": "  Keep this reference exact.  "
+            ]
+        ])
+        let clips = try Fixtures.corpus(at: manifest)
+        let loadedAudio = clips.first?.url.standardizedFileURL
+        guard clips.count == 1,
+              clips[0].name == "audio-clip-1",
+              clips[0].sentence.text == "Keep this reference exact.",
+              loadedAudio == audio.standardizedFileURL else {
+            fail("valid JSONL corpus did not load exactly once")
+        }
+
+        try writeManifest([
+            [
+                "audio": "/etc/hosts",
+                "audio_id": "absolute",
+                "text": "Must be rejected."
+            ]
+        ])
+        guard try Fixtures.corpus(at: manifest).isEmpty else {
+            fail("JSONL corpus accepted an absolute audio path")
+        }
+
+        try FileManager.default.createSymbolicLink(
+            at: symlink,
+            withDestinationURL: URL(fileURLWithPath: "/etc/hosts")
+        )
+        try writeManifest([
+            [
+                "audio": relativeSymlink,
+                "audio_id": "symlink",
+                "text": "Must be rejected."
+            ]
+        ])
+        guard try Fixtures.corpus(at: manifest).isEmpty else {
+            fail("JSONL corpus followed a symlink outside the repository")
+        }
+
+        let duplicateRow = [
+            "audio": relativeAudio,
+            "audio_id": "duplicate",
+            "text": "Duplicate identity."
+        ]
+        try writeManifest([duplicateRow, duplicateRow])
+        guard try Fixtures.corpus(at: manifest).isEmpty else {
+            fail("JSONL corpus accepted duplicate clip identities")
+        }
+
+        try writeManifest([
+            [
+                "audio": relativeAudio,
+                "audio_id": "blank-reference",
+                "text": "  "
+            ]
+        ])
+        guard try Fixtures.corpus(at: manifest).isEmpty else {
+            fail("JSONL corpus accepted an empty reference transcript")
+        }
+
+        try "not-json\n".write(
+            to: manifest,
+            atomically: true,
+            encoding: .utf8
+        )
+        do {
+            _ = try Fixtures.corpus(at: manifest)
+            fail("JSONL corpus accepted malformed JSON")
+        } catch {
+            // Expected: malformed input must fail closed.
+        }
+    } catch {
+        fail("corpus-loader regression check failed: \(error)")
+    }
+}
+
+private func validateCorpusInput() -> Bool {
+    guard let path = environment["ZENVOICE_ACCURACY_CORPUS"] else {
+        fail("ZENVOICE_ACCURACY_CORPUS is required for corpus validation")
+    }
+    let url = URL(fileURLWithPath: path)
+    do {
+        let clips = try Fixtures.corpus(at: url)
+        guard !clips.isEmpty else {
+            fail("corpus contains no valid clips: \(path)")
+        }
+        for clip in clips {
+            guard !(try Fixtures.samples(at: clip.url)).isEmpty else {
+                fail("corpus clip contains no audio: \(clip.name)")
+            }
+        }
+        report("ZenVoiceAccuracyChecks corpus validation passed: \(clips.count) clips")
+        return true
+    } catch {
+        fail("corpus validation failed: \(error.localizedDescription)")
     }
 }
 
@@ -710,6 +864,18 @@ private func measure() -> Bool {
 
     report()
     report("ZenVoice accuracy — model \(configuration.modelID)")
+    if let modelPath = environment["ZENVOICE_MODEL_PATH"] {
+        report(
+            "model artifact: "
+                + URL(fileURLWithPath: modelPath).standardizedFileURL.path
+        )
+    }
+    if let corpusPath = environment["ZENVOICE_ACCURACY_CORPUS"] {
+        report(
+            "corpus input: "
+                + URL(fileURLWithPath: corpusPath).standardizedFileURL.path
+        )
+    }
     report(
         isClean
             ? "input: studio clean"
@@ -722,6 +888,7 @@ private func measure() -> Bool {
     var totals = Totals()
     var emptyDecodes: [String] = []
     var refinementFailures: [String] = []
+    var silenceFailures: [String] = []
     var realSpeechOutcome:
         (whole: Scoring.Result, segmented: Scoring.Result)?
 
@@ -808,6 +975,37 @@ private func measure() -> Bool {
             totals.segmentCount
         )
     )
+    report()
+
+    // ---- silence ----
+    //
+    // Whisper commonly emits short stock phrases for silence. The product
+    // contract is end-to-end suppression, so exercise the actual model and the
+    // shipping TranscriptCleaner together rather than testing either alone.
+    report("  silence suppression (model output must clean to empty)")
+    report("  " + String(repeating: "-", count: 60))
+    let transcriptCleaner = TranscriptCleaner()
+    for seconds in [1, 5, 10] {
+        let raw = decode(
+            [Float](repeating: 0, count: seconds * 16_000)
+        )
+        let cleaned = transcriptCleaner.clean(raw)
+        report(
+            "  "
+                + "\(seconds)s silence".padding(
+                    toLength: 28,
+                    withPad: " ",
+                    startingAt: 0
+                )
+                + (cleaned.isEmpty ? "suppressed" : "SURVIVED")
+                + "  raw: \(raw.isEmpty ? "<empty>" : raw)"
+        )
+        if !cleaned.isEmpty {
+            silenceFailures.append(
+                "\(seconds)s silence survived as: \(cleaned)"
+            )
+        }
+    }
     report()
 
     if flag("ZENVOICE_ACCURACY_MULTIENGINE") {
@@ -1442,6 +1640,10 @@ private func measure() -> Bool {
             var corpusLoanwords = 0
             var corpusLoanwordsKept = 0
             var decodedCorpusClips = 0
+            var corpusWholeQuantityFailures = 0
+            var corpusWholeNegationFailures = 0
+            var corpusSegmentedQuantityFailures = 0
+            var corpusSegmentedNegationFailures = 0
             for clip in corpus {
                 // Real recordings arrive at whatever level they were captured
                 // at, so the synthetic degradation is deliberately not applied.
@@ -1470,6 +1672,26 @@ private func measure() -> Bool {
                 )
                 corpusWhole = corpusWhole + wholeScore
                 corpusSegmented = corpusSegmented + segmentedScore
+                let wholeProtected = SemanticSafety.transcriptionViolations(
+                    reference: clip.sentence.text,
+                    hypothesis: whole
+                )
+                let segmentedProtected = SemanticSafety.transcriptionViolations(
+                    reference: clip.sentence.text,
+                    hypothesis: segmented
+                )
+                corpusWholeQuantityFailures += wholeProtected.filter {
+                    $0.kind == .quantity
+                }.count
+                corpusWholeNegationFailures += wholeProtected.filter {
+                    $0.kind == .negation
+                }.count
+                corpusSegmentedQuantityFailures += segmentedProtected.filter {
+                    $0.kind == .quantity
+                }.count
+                corpusSegmentedNegationFailures += segmentedProtected.filter {
+                    $0.kind == .negation
+                }.count
                 report(
                     "  "
                         + clip.name.padding(
@@ -1518,6 +1740,16 @@ private func measure() -> Bool {
                         format: "%+9.1f pts",
                         (corpusSegmented.rate - corpusWhole.rate) * 100
                     )
+            )
+            report(
+                "  REAL PROTECTED whole quantities "
+                    + "\(corpusWholeQuantityFailures) negations "
+                    + "\(corpusWholeNegationFailures)"
+            )
+            report(
+                "  REAL PROTECTED segmented quantities "
+                    + "\(corpusSegmentedQuantityFailures) negations "
+                    + "\(corpusSegmentedNegationFailures)"
             )
             if corpusLoanwords > 0 {
                 report(
@@ -1582,6 +1814,13 @@ private func measure() -> Bool {
         fail(
             "refinement degraded the transcript: "
                 + refinementFailures.joined(separator: "; ")
+        )
+    }
+
+    guard silenceFailures.isEmpty else {
+        fail(
+            "silence suppression failed: "
+                + silenceFailures.joined(separator: "; ")
         )
     }
 
@@ -1679,6 +1918,8 @@ let outcome: Bool
 if flag("ZENVOICE_SCORING_ONLY") {
     report("ZenVoiceAccuracyChecks deterministic scoring passed.")
     outcome = true
+} else if flag("ZENVOICE_CORPUS_VALIDATE_ONLY") {
+    outcome = validateCorpusInput()
 } else if flag("ZENVOICE_ACCURACY_SMOKE") {
     outcome = runRealSpeechSmoke()
 } else if flag("ZENVOICE_STRUCTURE_PROBE") {

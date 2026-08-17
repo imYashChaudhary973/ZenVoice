@@ -98,6 +98,13 @@ do {
         languageProfile: languageProfile,
         environment: environment
     )
+    if let modelPath = environment["ZENVOICE_MODEL_PATH"] {
+        print(
+            "model artifact: "
+                + URL(fileURLWithPath: modelPath).standardizedFileURL.path
+        )
+    }
+    print("hardware profile: \(HardwareProfile.current().summary)")
     let audioURL = try makeSilentFixture()
     defer {
         try? FileManager.default.removeItem(at: audioURL)
