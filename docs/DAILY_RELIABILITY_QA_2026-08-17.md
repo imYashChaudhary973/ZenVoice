@@ -43,17 +43,21 @@ It contains no transcript text, API keys, or private application content.
    installed and selected. `ZENVOICE_RUNTIME_REQUIRED=1` now fails closed,
    and PR CI downloads the pinned `ggml-small.en.bin` so every merge decodes
    through the real whisper.cpp path.
-2. **Weekly speech gate had never passed (fixed across three commits).**
-   Every scheduled run since its introduction failed at exit 137 (SIGKILL
-   during compilation) because the workflow lacked the SwiftPM cache used by
-   CI. With the cache and `macos-latest` the build completes, but the smoke
-   decode then timed out twice: first from Flash Attention being hardcoded
-   without a GPU check (now gated on a Metal device), and fundamentally
-   because the ~40 s multi-sentence smoke clip cannot be decoded by base.en
-   on a CPU-only runner inside the product's own 2.5×-audio decode deadline.
-   That deadline catches stuck decodes for real users and stays; the gate
-   now smokes a single ~5 s utterance (0.55 s decode locally with the same
-   pinned model).
+2. **Weekly speech gate had never passed (fixed; five stacked causes).**
+   Every scheduled run since its introduction failed. In order, the layers
+   were: exit 137 SIGKILL during compilation from the missing SwiftPM cache
+   (added, with the `macos-latest` image); Flash Attention hardcoded without
+   a GPU check (now gated); a ~40 s multi-sentence smoke clip no hosted VM
+   can decode inside the product's own 2.5×-audio decode deadline, which
+   catches stuck decodes for real users and must not be loosened for CI
+   (the gate now smokes a single ~5 s utterance); the VM's paravirtualized
+   Metal device decoding speech ~40x slower than its own CPU backend
+   (`ZENVOICE_DISABLE_GPU=1` forces CPU there; real Macs keep Metal); and
+   the reproducible-harness thread pin of 4 oversubscribing the VM's 3
+   vCPUs into ggml barrier livelock (the pin is now capped at the machine's
+   core count). Final state: runtime checks green on the runner (0.78 s
+   decode, 303 MB reclaimed) and real-speech smoke green — `1272-00` at
+   11.5 % WER, 1.32 s decode, matching local CPU results.
 3. **Turbo hallucinates "Thank you." on near-silence (open product
    decision).** The first honest accuracy run with the daily Whisper Turbo
    model fails the silence-suppression probes: 1, 5, and 10 seconds of
