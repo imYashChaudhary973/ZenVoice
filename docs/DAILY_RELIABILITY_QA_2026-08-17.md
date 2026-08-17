@@ -1,0 +1,79 @@
+# Daily Reliability QA — 2026-08-17
+
+**Status:** In progress. Development QA, not release certification. This
+record continues the open items from
+[`DAILY_RELIABILITY_QA_2026-08-11.md`](DAILY_RELIABILITY_QA_2026-08-11.md).
+It contains no transcript text, API keys, or private application content.
+
+## Tested build and Mac
+
+| Field | Evidence |
+|---|---|
+| Source branch | `feat/consented-dictation-cycle` at `fcbd529` (worktree at that state) |
+| App | `build/ZenVoice.app` via `Scripts/build-app.sh` |
+| Executable SHA-256 | `1e00156b329c4ed85ab3c70eaea919924e7c7498bfa7e99dcbaeca31ec20639a` |
+| Bundle identity | `dev.yashchaudhary.ZenVoice`, team `8QSM298XJ2`, Hardened Runtime |
+| Build result | `Scripts/build-app.sh` passed with Apple Development signing |
+| Independent signature verification | Pass: `codesign --verify --deep --strict` valid on disk and satisfies its Designated Requirement |
+| Mac | MacBook Pro `Mac17,2`, Apple M5, 10 cores, 24 GB |
+| macOS | 27.0 build `26A5388g` |
+| Installed speech model exercised | Whisper Turbo `ggml-large-v3-turbo-q5_0.bin` (catalogue SHA-256 verified) |
+
+## Automated lifecycle evidence
+
+| Check | Result | Evidence |
+|---|---|---|
+| Core policies | Pass | `swift run ZenVoiceCoreChecks`: 10 checks, including the new semantic-guard and slang-lexicon coverage |
+| Encrypted storage lifecycle | Pass | `swift run ZenVoiceStorageChecks`: 22 checks |
+| Real runtime lifecycle | Pass | `ZENVOICE_RUNTIME_REQUIRED=1 ZENVOICE_MODEL_PATH=…turbo… swift run ZenVoiceRuntimeChecks`: warm-up 1.19 s, decodes 0.90 s, 751 MB loaded, 598 MB reclaimed, reload on next decode |
+| Fail-closed required mode | Pass | `ZENVOICE_RUNTIME_REQUIRED=1` with no resolvable model exits 1 with a clear message; same contract verified for `ZENVOICE_ACCURACY_REQUIRED=1` |
+| Real-speech corpus validation | Pass | `ZENVOICE_CORPUS_VALIDATE_ONLY=1` against the frozen Common Voice Spontaneous test JSONL: 262 clips validated |
+| Real-speech WER measurement | Pass | Full `ZenVoiceAccuracyChecks` decode of the 262-clip Common Voice test with Whisper Turbo (summary in TRANSCRIPT-free form below) |
+| Local smoke-gate reproduction | Pass | `build-librispeech-corpus.py` corpus; smoke with Whisper Turbo: 1.0 % WER; with the gate's pinned `ggml-base.en.bin` (SHA verified): 2.0 % WER — the hosted-runner smoke failure does not reproduce locally |
+| Full compile | Pass | `swift build`; only pre-existing Apple locale deprecation warnings |
+| Signed app build | Pass | `Scripts/build-app.sh` with Apple Development identity |
+| Python pipeline checks | Pass | consented-dictation pipeline, evidence collection, composite selection, and promotion checks all pass |
+
+## Findings recorded this session
+
+1. **Vacuous runtime/accuracy skips (fixed in PR #34).** A plain `swift run`
+   cannot see the app's model selection (`RuntimeIdentity` intentionally
+   keeps foreign processes out of the production defaults suite), so both
+   checks skipped — with exit 0 — even with a catalogue-verified model
+   installed and selected. `ZENVOICE_RUNTIME_REQUIRED=1` now fails closed,
+   and PR CI downloads the pinned `ggml-small.en.bin` so every merge decodes
+   through the real whisper.cpp path.
+2. **Weekly speech gate had never passed (partially fixed, under
+   diagnosis).** Every scheduled run since its introduction failed at exit
+   137 (SIGKILL during compilation) because the workflow lacked the SwiftPM
+   cache used by CI. With the cache and `macos-latest` the build completes
+   and the gate now reaches the decode, where it fails with
+   `real-speech smoke produced no transcript for 1272`. The same corpus,
+   harness, and pinned `ggml-base.en.bin` decode that clip at 2.0 % WER on
+   this Mac, so the failure is specific to the CPU-only hosted runner.
+   Suspect: `flash_attn = true` is hardcoded in `WhisperTranscriber`
+   without a GPU-availability check. Instrumentation committed in
+   `0a2bdda` distinguishes thrown errors from empty decodes on the next
+   gate run.
+3. **External-input M12 failure still not reproduced.** The 2026-08-11
+   record's `Fail` (USB microphone absent from the capture catalogue) was
+   re-tested with `Scripts/probe-audio-inputs.swift` on the same macOS
+   build with the same USB device connected: built-in, USB (`USBAudio1.0`),
+   Bluetooth (`JBL Tune 770NC`), and Continuity iPhone inputs all appear in
+   the same `AVCaptureDevice` discovery session the app issues. Consistent
+   with the 2026-08-12 non-reproduction record; the one in-app observation
+   under the app's own TCC identity remains the only settling step.
+
+## Remaining manual scenarios
+
+Unchanged from the 2026-08-11 record and still `Not run`: real-microphone
+Hindi, auto-detect multilingual, live spoken preview, force-quit Recovery
+retry, and the in-app Audio screen observation for M12. The deterministic
+`ZENVOICE_E2E_AUDIO_FILE` fixture path remains available and should adopt
+the first consented cohort clip once session 001 exists.
+
+## Model-cycle status reminder
+
+The consented cohort remains at zero recorded sessions; the pipeline,
+locks, and measurement path are verified end-to-end and wait only on
+`Datasets/consented-dictation/cohort-v1/SESSION_001_RUNBOOK.md`.
