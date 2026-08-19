@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import AppKit
+import ApplicationServices
 import SwiftUI
 import ZenVoiceCore
 
@@ -42,6 +43,7 @@ final class OverlayPanelController {
     private let panel: NSPanel
     private var isShowing = false
     private var spaceObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
     private var reassertWorkItems: [DispatchWorkItem] = []
     private var hostingView: NSHostingView<AnyView>?
 
@@ -99,11 +101,16 @@ final class OverlayPanelController {
         panel.contentView = host
 
         observeActiveSpaceChanges()
+        observeApplicationActivation()
     }
 
     deinit {
         if let spaceObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver)
+        }
+        if let activationObserver {
+            NSWorkspace.shared.notificationCenter
+                .removeObserver(activationObserver)
         }
         for item in reassertWorkItems {
             item.cancel()
@@ -209,6 +216,32 @@ final class OverlayPanelController {
         }
     }
 
+    /// Follows the user between displays as they switch applications.
+    ///
+    /// Without this the overlay is positioned once, when it is first shown, and
+    /// then stays on that display for the rest of the session — so picking the
+    /// right screen at launch fixes only the launch. Dictation is aimed at
+    /// whatever app is in front, so the bar belongs on whatever display that
+    /// app is on.
+    private func observeApplicationActivation() {
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                // A newly activated app has not necessarily finished making a
+                // window key, and the focused-window query is only as good as
+                // the answer Accessibility gives at the moment it is asked.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    MainActor.assumeIsolated {
+                        self?.reposition()
+                    }
+                }
+            }
+        }
+    }
+
     private func scheduleSpaceReassertions() {
         cancelPendingReassertions()
         guard isShowing else {
@@ -261,8 +294,13 @@ final class OverlayPanelController {
     }
 
     /// Positions the overlay based on its kind.
+    ///
+    /// The chain is ordered by how directly each signal answers "which display
+    /// is the user working on": the focused window of the app they are typing
+    /// into, then where their pointer is, then the screen holding keyboard
+    /// focus, then the primary.
     private func positionOverlay() {
-        guard let screen = screenForFrontmostApplication()
+        guard let screen = screenForFocusedWindow()
             ?? screenContainingMouse()
             ?? NSScreen.main
             ?? NSScreen.screens.first else {
@@ -283,11 +321,10 @@ final class OverlayPanelController {
         let visibleFrame = screen.visibleFrame
         let x = visibleFrame.midX - panel.frame.width / 2
         let barBottomMargin: CGFloat = 18
-        let y = max(
-            screen.frame.minY,
-            visibleFrame.minY + barBottomMargin - ZenBarView.shadowInset
+        let y = visibleFrame.minY + barBottomMargin - ZenBarView.shadowInset
+        panel.setFrameOrigin(
+            clampedOrigin(NSPoint(x: x, y: y), on: screen)
         )
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
     /// Positions the panel near the notch when present, otherwise top-center.
@@ -306,7 +343,10 @@ final class OverlayPanelController {
             // No notch: center at the top of the display, below the menu bar.
             let y = screen.visibleFrame.maxY - panelHeight - topMargin
             panel.setFrameOrigin(
-                NSPoint(x: frame.midX - panelWidth / 2, y: y)
+                clampedOrigin(
+                    NSPoint(x: frame.midX - panelWidth / 2, y: y),
+                    on: screen
+                )
             )
             return
         }
@@ -324,12 +364,17 @@ final class OverlayPanelController {
                 strip.maxX - panelWidth
             )
             let y = strip.midY - panelHeight / 2
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            panel.setFrameOrigin(
+                clampedOrigin(NSPoint(x: x, y: y), on: screen)
+            )
             return
         }
 
         panel.setFrameOrigin(
-            NSPoint(x: frame.midX - panelWidth / 2, y: belowNotchY)
+            clampedOrigin(
+                NSPoint(x: frame.midX - panelWidth / 2, y: belowNotchY),
+                on: screen
+            )
         )
     }
 
@@ -367,50 +412,80 @@ final class OverlayPanelController {
         )
     }
 
-    private func screenForFrontmostApplication() -> NSScreen? {
+    /// The screen holding the frontmost application's **focused** window.
+    ///
+    /// This replaces a scan of `CGWindowListCopyWindowInfo` that took the
+    /// frontmost app's first layer-0 window in list order. That order is
+    /// front-to-back across *every* display, so on a multi-display desktop it
+    /// routinely resolved to a window the user was not looking at: with three
+    /// displays attached, the bar was placed at the bottom-centre of a screen
+    /// to the left of the primary and was, for practical purposes, missing.
+    /// The list order also cannot distinguish an app's focused window from any
+    /// other window it happens to have open.
+    ///
+    /// The Accessibility API answers the question directly. ZenVoice already
+    /// requires that permission in order to type into other applications, so
+    /// this costs no new prompt; when it is not granted the call simply fails
+    /// and the caller falls through to the pointer.
+    private func screenForFocusedWindow() -> NSScreen? {
         guard let processIdentifier =
-            NSWorkspace.shared.frontmostApplication?.processIdentifier,
-            let windowInfo = CGWindowListCopyWindowInfo(
-                [.optionOnScreenOnly, .excludeDesktopElements],
-                kCGNullWindowID
-            ) as? [[String: Any]] else {
+            NSWorkspace.shared.frontmostApplication?.processIdentifier else {
             return nil
         }
 
-        let applicationWindows = windowInfo.filter { window in
-            let owner = window[kCGWindowOwnerPID as String] as? NSNumber
-            let layer = window[kCGWindowLayer as String] as? NSNumber
-            return owner?.int32Value == processIdentifier &&
-                layer?.intValue == 0
+        let application = AXUIElementCreateApplication(processIdentifier)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            application,
+            kAXFocusedWindowAttribute as CFString,
+            &focused
+        ) == .success else {
+            return nil
+        }
+        // CFTypeRef is only known to be an AXUIElement by contract, so this is
+        // checked rather than forced: a malformed reply must fall through to
+        // the next signal, not trap.
+        guard let windowValue = focused,
+              CFGetTypeID(windowValue) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        let window = windowValue as! AXUIElement
+
+        var positionValue: CFTypeRef?
+        var sizeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            window,
+            kAXPositionAttribute as CFString,
+            &positionValue
+        ) == .success,
+            AXUIElementCopyAttributeValue(
+                window,
+                kAXSizeAttribute as CFString,
+                &sizeValue
+            ) == .success,
+            let rawPosition = positionValue,
+            let rawSize = sizeValue,
+            CFGetTypeID(rawPosition) == AXValueGetTypeID(),
+            CFGetTypeID(rawSize) == AXValueGetTypeID() else {
+            return nil
         }
 
-        for window in applicationWindows {
-            guard let values =
-                window[kCGWindowBounds as String] as? [String: NSNumber],
-                let x = values["X"],
-                let y = values["Y"],
-                let width = values["Width"],
-                let height = values["Height"] else {
-                continue
-            }
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(rawPosition as! AXValue, .cgPoint, &origin),
+              AXValueGetValue(rawSize as! AXValue, .cgSize, &size),
+              size.width > 0,
+              size.height > 0 else {
+            return nil
+        }
 
-            let bounds = convertToAppKit(
-                CGRect(
-                    x: x.doubleValue,
-                    y: y.doubleValue,
-                    width: width.doubleValue,
-                    height: height.doubleValue
-                )
+        // Accessibility reports the same top-left-origin global space as
+        // CGWindowList, so the existing flip still applies.
+        return screen(
+            bestMatching: convertToAppKit(
+                CGRect(origin: origin, size: size)
             )
-            let center = CGPoint(x: bounds.midX, y: bounds.midY)
-            if let screen = NSScreen.screens.first(where: {
-                $0.frame.contains(center)
-            }) {
-                return screen
-            }
-        }
-
-        return nil
+        )
     }
 
     private func screenContainingMouse() -> NSScreen? {
@@ -418,5 +493,50 @@ final class OverlayPanelController {
         return NSScreen.screens.first {
             $0.frame.contains(mouseLocation)
         }
+    }
+
+    /// The screen showing the most of `rect`.
+    ///
+    /// Area of overlap rather than a centre-point containment test: a window
+    /// straddling two displays belongs to the one showing more of it, and a
+    /// window dragged mostly off-screen has a centre that lands on no display
+    /// at all — in which case the old test returned nothing and the caller
+    /// silently fell through to the pointer.
+    private func screen(bestMatching rect: CGRect) -> NSScreen? {
+        let best = NSScreen.screens.max { first, second in
+            overlapArea(first, rect) < overlapArea(second, rect)
+        }
+        guard let best, overlapArea(best, rect) > 0 else {
+            return nil
+        }
+        return best
+    }
+
+    private func overlapArea(_ screen: NSScreen, _ rect: CGRect) -> CGFloat {
+        let intersection = screen.frame.intersection(rect)
+        guard !intersection.isNull, !intersection.isEmpty else {
+            return 0
+        }
+        return intersection.width * intersection.height
+    }
+
+    /// Keeps the panel wholly inside a screen.
+    ///
+    /// A backstop rather than a positioning rule: every caller already aims for
+    /// a sensible spot, and this only catches the case where the arithmetic and
+    /// the display geometry disagree. The bar is clamped to `frame` rather than
+    /// `visibleFrame` because sitting over the Dock is intended.
+    private func clampedOrigin(
+        _ origin: NSPoint,
+        on screen: NSScreen
+    ) -> NSPoint {
+        let bounds = screen.frame
+        let size = panel.frame.size
+        let maximumX = max(bounds.minX, bounds.maxX - size.width)
+        let maximumY = max(bounds.minY, bounds.maxY - size.height)
+        return NSPoint(
+            x: min(max(origin.x, bounds.minX), maximumX),
+            y: min(max(origin.y, bounds.minY), maximumY)
+        )
     }
 }
