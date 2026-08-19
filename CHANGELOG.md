@@ -25,15 +25,6 @@ All notable ZenVoice changes are recorded here.
   kills the whole child process group, and relaunch never resumes an interrupted
   command. Settings live in Commands → Agentic Mode
   ([ADR 0013](docs/decisions/0013-agentic-command-mode.md)).
-- ZenVoice is $9.99, paid once. Activation is an offline Ed25519-signed licence
-  key: buy on the web, paste the key, and it is verified on this Mac with a
-  public key compiled into the app. No account, no licence server, no network
-  request at activation. The key lives in the Keychain as
-  `WhenUnlockedThisDeviceOnly`, and Help → About can remove it again so a
-  licence can move to another Mac. Nothing is gated behind it: an app someone
-  is mid-sentence in does not stop working because a receipt has not arrived.
-  Keys are issued with `Scripts/sign-licence.swift`, which reads a signing key
-  that never enters this repository.
 
 ### Changed
 
@@ -73,9 +64,7 @@ All notable ZenVoice changes are recorded here.
   asks for something or hands something back: the promise page and the privacy
   page were two consecutive pages of reading before the user could do anything,
   and are now one. The header names the current step and counts them, so the
-  length of the flow is visible from the first screen. The price is stated once,
-  on the last step, after dictation has been demonstrated — setup is not a
-  checkout, and buying stays a separate decision made from Help → About.
+  length of the flow is visible from the first screen.
 - History retention is now enforced. `HistoryPreferences.retentionDays` was
   stored and read by nothing: no code path purged old dictations, so an
   encrypted vault grew for as long as the app was used. Launch now discards

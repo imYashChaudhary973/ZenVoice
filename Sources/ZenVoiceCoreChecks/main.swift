@@ -3706,58 +3706,5 @@ guard unifiedSmart.text == "Hello, world.",
 
 print("ZenVoiceCoreChecks: Smart local formatting passed")
 
-// MARK: - Licence checks
-
-// The signing key is deliberately absent from this repository, so these checks
-// verify against a throwaway pair — the same shape the release signer uses.
-// What is being defended is the token format and the rejection paths: a licence
-// that verifies against the wrong key, a truncated paste, or a tampered payload
-// must all fail closed.
-let licenceStore = InMemoryLicenceStore()
-guard LicenceResolver.status(from: licenceStore) == .unlicensed else {
-    failEngineCheck("an empty store should resolve to unlicensed")
-}
-
-try licenceStore.save("ZV1-not-a-real-key")
-guard LicenceResolver.status(from: licenceStore) == .unlicensed else {
-    failEngineCheck("a malformed token should resolve to unlicensed")
-}
-
-do {
-    _ = try LicenceVerifier.verify("hello")
-    failEngineCheck("a token without the ZV1- prefix should be rejected")
-} catch LicenceError.malformed { }
-
-let licencePayload = LicenceVerifier.payload(
-    orderID: 4242,
-    issuedAt: Date(timeIntervalSince1970: 1_777_000_000)
-)
-guard licencePayload.count == 9, licencePayload.first == 1 else {
-    failEngineCheck("licence payload layout changed")
-}
-
-// A signature from a key the app does not trust must not verify, whatever the
-// payload says.
-let foreignKey = Curve25519.Signing.PrivateKey()
-let foreignToken = LicenceVerifier.token(
-    payload: licencePayload,
-    signature: try foreignKey.signature(for: licencePayload)
-)
-do {
-    _ = try LicenceVerifier.verify(foreignToken)
-    failEngineCheck("a licence signed by an untrusted key should be rejected")
-} catch LicenceError.signatureRejected { }
-
-// Base64URL round-trip, including the padding the encoder strips.
-for length in 1...80 {
-    let sample = Data((0..<length).map { UInt8($0 % 251) })
-    guard LicenceVerifier.decodeBase64URL(
-        LicenceVerifier.encodeBase64URL(sample)
-    ) == sample else {
-        failEngineCheck("licence base64url round-trip failed at \(length) bytes")
-    }
-}
-
-print("ZenVoiceCoreChecks: licence verification passed")
 
 await runAgenticChecks()

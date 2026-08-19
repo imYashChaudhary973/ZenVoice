@@ -374,7 +374,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private var updatesViewModel: UpdatesViewModel!
-    private var licenceViewModel: LicenceViewModel!
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
@@ -787,17 +786,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return CloudAIKeychainKeyStore(policy: policy)
     }
 
-    /// The Keychain store for the licence token.
-    ///
-    /// Falls back to an in-memory store when the runtime identity cannot be
-    /// resolved, matching the Cloud AI key: a misconfigured build must not
-    /// write a purchase record to an unexpected Keychain service.
-    private func makeLicenceStore() -> any LicenceStoring {
-        guard let policy = try? RuntimeIdentity.policy() else {
-            return InMemoryLicenceStore()
-        }
-        return LicenceKeychainStore(policy: policy)
-    }
 
     /// Copies a completed recording into the Audio History archive.
     ///
@@ -1411,7 +1399,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         )
         updatesViewModel = UpdatesViewModel()
-        licenceViewModel = LicenceViewModel(store: makeLicenceStore())
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
@@ -1424,7 +1411,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             applicationProfileViewModel:
                 applicationProfileViewModel,
             onboardingViewModel: onboardingViewModel,
-            licenceViewModel: licenceViewModel,
             appState: state,
             toggleRecording: { [weak self] in
                 self?.toggleRecording()

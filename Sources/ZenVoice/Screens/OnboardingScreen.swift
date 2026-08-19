@@ -514,27 +514,6 @@ struct OnboardingScreen: View {
                 isReady:
                     settingsViewModel.isLocalModelReady
             )
-            // The price is stated once, here, after the app has done the thing
-            // it is being sold for — not as a step of its own, and never
-            // between the user and their first dictation. Setup is setup;
-            // buying is a separate decision the user makes when they are ready,
-            // from Help & About.
-            ZenPanel(padding: ZenDesign.Spacing.md) {
-                HStack(alignment: .firstTextBaseline, spacing: ZenDesign.Spacing.md) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("ZenVoice is \(ZenVoicePricing.oneTimePrice), paid once")
-                            .font(ZenDesign.Typography.bodyStrong)
-                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        Text(
-                            "No subscription and no account. Every feature works before you pay; activate whenever you like from Help & About."
-                        )
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: ZenDesign.Spacing.sm)
-                }
-            }
             Text(
                 "Replay this setup anytime from Help & FAQ. ZenVoice lives in your menu bar after you close this window."
             )

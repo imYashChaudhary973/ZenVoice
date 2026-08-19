@@ -94,7 +94,6 @@ struct ZenVoiceSettingsView: View {
         ApplicationProfileViewModel
     @ObservedObject var onboardingViewModel:
         OnboardingViewModel
-    @ObservedObject var licenceViewModel: LicenceViewModel
     @ObservedObject var appState: AppState
     let toggleRecording: () -> Void
     @State private var selection: Section = .home
@@ -552,7 +551,6 @@ struct ZenVoiceSettingsView: View {
                 viewModel: viewModel,
                 updatesViewModel: updatesViewModel,
                 onboardingViewModel: onboardingViewModel,
-                licenceViewModel: licenceViewModel,
                 openShortcuts: { selection = .dictation }
             )
         }

@@ -29,7 +29,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let applicationProfileViewModel:
         ApplicationProfileViewModel
     private let onboardingViewModel: OnboardingViewModel
-    private let licenceViewModel: LicenceViewModel
     private var hasCenteredWindow = false
 
     init(
@@ -44,7 +43,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         applicationProfileViewModel:
             ApplicationProfileViewModel,
         onboardingViewModel: OnboardingViewModel,
-        licenceViewModel: LicenceViewModel,
         appState: AppState,
         toggleRecording: @escaping () -> Void
     ) {
@@ -59,7 +57,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.applicationProfileViewModel =
             applicationProfileViewModel
         self.onboardingViewModel = onboardingViewModel
-        self.licenceViewModel = licenceViewModel
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1_200, height: 800),
             styleMask: [
@@ -103,7 +100,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 applicationProfileViewModel:
                     applicationProfileViewModel,
                 onboardingViewModel: onboardingViewModel,
-                licenceViewModel: licenceViewModel,
                 appState: appState,
                 toggleRecording: toggleRecording
             )
