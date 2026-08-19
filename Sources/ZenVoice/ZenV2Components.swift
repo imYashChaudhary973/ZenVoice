@@ -455,8 +455,9 @@ struct ZenBadge: View {
             }
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.system(size: 9.5, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
             }
+
             // Sentence case, not uppercase. These pills carry model names and
             // capability labels — "Apple Silicon", "AI enhanced" — and
             // uppercasing turned proper nouns into shouting.

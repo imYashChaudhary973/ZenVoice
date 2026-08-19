@@ -389,10 +389,11 @@ struct ZenBarView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
                 .background {
+
                     Circle().fill(ZenDesign.Semantic.textPrimary.opacity(0.09))
                 }
                 .contentShape(Circle())
@@ -411,8 +412,9 @@ struct ZenBarView: View {
                     setMode(mode)
                 } label: {
                     Image(systemName: mode.icon)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(
+
                             isSelected
                                 ? ZenDesign.Semantic.accent
                                 : ZenDesign.Semantic.textTertiary

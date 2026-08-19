@@ -45,21 +45,21 @@ All notable ZenVoice changes are recorded here.
   (compromise). Cohere is local, off by default, and labeled as a slower 3 GB
   option. Flash and Nemotron Ultra Fast are live-preview only; final insert
   stays TDT v3 or Turbo. Nemotron is one row with a Streaming/Offline toggle.
-- New visual theme: graphite surfaces and one green. The chrome is a true
-  neutral ramp — every earlier revision tinted the greys toward the brand
-  green, which read as olive under warm light and fought the accent it was
-  meant to support — so colour now means something wherever it appears.
-  Corner radii are tighter (cards 12pt, controls 6–8pt), the sidebar is denser
-  (216pt wide, 32pt rows), technical values are set in the system monospace,
-  and structure comes from hairlines rather than shadows. All 44
-  foreground/background pairs in the palette clear 4.5:1 in both appearances;
-  the first draft of the quietest text rung did not, at 3.9:1 inside a raised
-  panel, because it had been chosen against the canvas instead of the surface
-  it actually sits on.
-- Selected navigation is a quiet raised row with an accent icon rather than a
-  filled green pill. The filled pill was the loudest mark in a window that
-  stays open all day, and it shouted its own state louder than the setting the
-  user opened it to change.
+- Adopted the apple-design visual system as the product theme: ink canvas,
+  one jade accent, vibrancy materials, and springs. The accent is reserved
+  for three jobs — selected navigation, the primary action, and live state —
+  and nowhere else. Surfaces are separated by a lit top edge plus a shadow;
+  hairlines are the fallback, not the structure. Type spans 11 to 34 with
+  per-size tracking. The settings window and all twenty-six screens compose
+  from `ZenDesignTokens`, `ZenChrome`, and `ZenV2Components`, so this is the
+  vocabulary new UI must use.
+- Selected navigation is a quiet `accentMuted` row with an accent icon rather
+  than a filled green pill. The filled pill was the loudest mark in a window
+  that stays open all day, and it shouted its own state louder than the
+  setting the user opened it to change.
+- ZenBar at rest is a 108×36 capsule (brand mark + flat level meter). Controls
+  reveal on hover. The bar follows the display of the focused app.
+
 - First-run setup is six steps instead of seven, and every one of them either
   asks for something or hands something back: the promise page and the privacy
   page were two consecutive pages of reading before the user could do anything,

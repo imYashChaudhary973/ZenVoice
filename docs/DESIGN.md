@@ -12,22 +12,24 @@ live in [`ZenDesignTokens.swift`](../Sources/ZenVoice/ZenDesignTokens.swift),
 
 ## Principles
 
-**Moss on ink.** A near-black canvas, layered surfaces, and one muted green
-accent. The accent is deliberately desaturated: a saturated green filling
-selected navigation and primary buttons on an almost-black canvas glows, and
-this is an app people leave open all day.
+**Ink, one jade, real materials.** A cool near-black canvas, translucent
+columns over vibrancy, and one jade accent. The accent is spent on exactly
+three jobs: the selected navigation row, the primary action, and live state.
+Everything else is monochrome. Nine jade glyphs on a screen is the same as
+zero — none of them is a signal.
 
-**Cards, not rules.** Content sits in large softly-rounded cards with a single
-hairline edge. Horizontal rules between sections are not used — a card already
-has an edge, and adding a rule above it draws two boundaries a few points
-apart.
+**Depth from light, not boxes.** A card is a surface with a shadow and a
+bright top edge (light catching the lip). Hairlines survive only as the
+faintest fallback. Nested `ZenInsetRow`s draw no border; a stack of 1px
+rectangles is what the previous revision shipped.
 
-**Depth by nesting.** A card holds inset rows on a lighter surface. Radius
-tightens as you nest (16 → 12 → 8) so the stack reads as depth rather than as
-one blurry shape.
+**Type carries the hierarchy.** The scale spans 11 to 34 with per-size
+tracking: negative on display sizes, slightly positive at the floor. Four
+sizes inside five points is how the old window had no lead.
 
 **Native controls stay native.** Switches, pop-up buttons, and text fields are
 the system's, tinted once at the window root. There is no hand-drawn switch.
+
 
 ## Colour
 
@@ -37,8 +39,8 @@ The accent exists twice because one green cannot do both jobs:
 
 | Token | Use | Contrast |
 | --- | --- | --- |
-| `Semantic.accent` | Accent *text*, icons, meters, hairlines drawn on the canvas | ≥ 4.5:1 on ink |
-| `Semantic.accentFill` | Selected navigation, primary buttons — anything carrying a white label | white on it ≥ 4.5:1 |
+| `Semantic.accent` | Accent *text*, selected-row icon, live meters | ≥ 4.5:1 on ink |
+| `Semantic.accentFill` | Primary buttons — anything carrying a white label | white on it ≥ 4.5:1 |
 
 Using one mid-green for both is the specific mistake this split prevents: a
 single mid-green lands near 3.8:1 in each direction, so accent text on the
@@ -48,9 +50,12 @@ the window should use a raw green — pick the weight that matches the job.
 `accentStrong` is the pressed state for a filled control. It always moves away
 from the label colour: darker in light mode, brighter in dark.
 
-In light mode both weights resolve to the same deep moss. On a white canvas a
+In light mode both weights resolve to the same deep jade. On a white canvas a
 light green cannot clear 4.5:1 as text, and does not need lightening to carry
-white as a fill.
+white as a fill. Selected navigation uses `accentMuted` plus an accent icon,
+never a filled `accentFill` pill — the fill weight is for buttons that carry
+a white label, not for a row that stays selected all day.
+
 
 ### Surfaces
 
@@ -69,13 +74,15 @@ Each column paints its own surface instead, and the window's
 
 | Token | Size / weight | Use |
 | --- | --- | --- |
-| `display` | 34 bold | The one hero number or word on a page |
-| `pageTitle` | 24 bold | Page heading, beside its icon chip |
-| `metric` | 34 bold | The number in a stat tile |
+| `display` | 32 semibold, tracking −0.7 | The one hero word on a page |
+| `pageTitle` | 24 semibold, tracking −0.5 | Page heading |
+| `sectionTitle` | 17 semibold, tracking −0.3 | Card heading |
+| `metric` | 34 semibold, monospaced digits | The number in a stat tile |
 | `body` / `bodyStrong` | 13 | Everything else |
-| `caption` | 11.5 | Supporting text under a label |
-| `eyebrow` | 11 semibold, tracked 1.0 | Uppercase label *above a number* |
-| `badge` | 11 semibold | Pill text |
+| `caption` | 11.5, tracking 0.05 | Supporting text under a label |
+| `eyebrow` | 11 semibold, tracking 0.9 | Uppercase label *above a number* |
+| `badge` | 11 medium | Pill text |
+
 
 **11pt is the floor.** Nothing in the window renders type smaller;
 `Scripts/check-ui-invariants.sh` enforces it. The exported share card is not
@@ -90,13 +97,14 @@ weight.
 
 | Token | Value | Note |
 | --- | --- | --- |
-| `Layout.sidebarWidth` | 240 | One named value. The title bar used to hand-copy it and the two drifted apart. |
+| `Layout.sidebarWidth` | 224 | One named value. The title bar used to hand-copy it and the two drifted apart. |
 | `Layout.titleBar` | 52 | Clears the traffic lights, which the window draws over the sidebar. |
-| `Layout.navRow` | 40 | Painted height of a navigation row. |
-| `Layout.navIcon` | 26 | Icon slot in a navigation row, so labels share a baseline. |
+| `Layout.navRow` | 34 | Painted height of a navigation row. |
+| `Layout.navIcon` | 22 | Icon slot in a navigation row, so labels share a baseline. |
 | `Layout.hitTarget` | 44 | Clickable frame of anything interactive. |
-| `Layout.control` | 32 | Painted height of a compact control inside a row that already meets the hit target. |
-| `Layout.proseColumn` | 720 | Measure for running prose. Cards are **not** capped — see below. |
+| `Layout.control` | 30 | Painted height of a compact control inside a row that already meets the hit target. |
+| `Layout.proseColumn` | 620 | Measure for running prose. Cards are **not** capped — see below. |
+
 
 **Cards fill the window; only prose is capped.** The page used to hold its
 whole stack inside a fixed column and centre it, which is invisible in a small
@@ -112,8 +120,9 @@ which is exactly what "Replay setup guide" did.
 
 A painted control is compact; the frame the user can hit is 44pt. Drawing 44pt
 boxes would make a dense settings window look like a touch UI, and making only
-the *painted* box 32pt is hostile to trackpad users, anyone with a tremor, and
+the *painted* box 30pt is hostile to trackpad users, anyone with a tremor, and
 every assistive technology that targets by frame.
+
 
 ## The window shell
 
@@ -122,7 +131,7 @@ every assistive technology that targets by frame.
 │             │  ZenVoice        ( status ⌘ ☾ ) Dictate│  ← top bar, 52pt
 │  ● Home     ├──────────────────────────────────────┤
 │             │                                      │
-│  Configure  │   [chip]  Page title                 │
+│  Configure  │           Page title                 │
 │    Dictation│           Page subtitle              │
 │    …        │                                      │
 │             │   ┌────────────────────────────────┐ │
@@ -132,6 +141,7 @@ every assistive technology that targets by frame.
 └─────────────┴──────────────────────────────────────┘
    vibrancy                     canvas
 ```
+
 
 The sidebar runs the **full height** of the window, under the traffic lights,
 and the content column carries its own top bar. A single title bar spanning
@@ -144,21 +154,17 @@ help (Help). Every entry previously had its own one-item heading, so the
 headings carried no information — each label was just the row beneath it,
 restated.
 
-The selected row is a filled `accentFill` pill with a white label: the
-strongest single mark in the window, and the only place the fill weight appears
-at rest. Unselected icons are accent-tinted, because grey icons on a
-translucent panel disappear against a busy wallpaper.
+The selected row is `accentMuted` with an accent icon and a semibold label.
+Unselected icons are monochrome. Colouring every glyph jade made the selected
+row invisible among nine green marks; one tinted icon is now the signal.
 
-**The rail is scanned by its icons, not read.** Glyphs are drawn at 19pt in a
-26pt slot, larger than the 15pt label beside them. At 13pt they were *smaller*
-than their own label and read as decoration. Group headings sit at 12pt in
+**The rail is scanned by its icons, not read.** Glyphs sit at 13pt in a 22pt
+slot, matching the 13pt label beside them. Group headings sit at 11pt in
 `textSecondary` — tertiary vanished against a light wallpaper showing through
 the material.
 
-The painted pill is 40pt against a 44pt clickable frame, so consecutive rows
-nearly touch. The approved design packs them tighter still, at roughly 36pt
-pitch; ZenVoice does not follow it that far, because a 36pt row cannot hold a
-44pt hit target and the rail is the most-clicked surface in the app.
+The painted row is 34pt against a 44pt clickable frame. Tighter than a touch
+UI, loose enough that consecutive hit targets do not collide.
 
 Appearance cycles System → Light → Dark from one toolbar button that names both
 its current value and its next one. A three-way segmented control used to sit
@@ -172,12 +178,12 @@ than hand-rolling it locally.
 
 | Component | Use |
 | --- | --- |
-| `ZenScreen` | The one page scaffold: icon chip, title, subtitle, optional tab strip, content. |
-| `ZenCard` | A card that heads itself: icon chip, title, subtitle, content. |
+| `ZenScreen` | The one page scaffold: title, subtitle, optional tab strip, content. |
+| `ZenCard` | A card that heads itself: title, subtitle, content. |
 | `ZenPanel` | A bare card, for content that supplies its own heading or none. |
-| `ZenInsetRow` | A row nested inside a card, on its own inset surface. |
+| `ZenInsetRow` | A row nested inside a card, on its own inset surface. No border. |
 | `ZenRow` | A flat row in a divided list. |
-| `ZenCardHeader` / `ZenIconChip` | The heading block and its tinted glyph container. |
+| `ZenCardHeader` / `ZenIconChip` | The heading block, and a monochrome glyph. Pass `tint` only when colour encodes state. |
 | `ZenStatTile` | Uppercase eyebrow, then the number, then one line of context. |
 | `ZenBadge` | Sentence-case capsule pill. Not uppercase — these carry proper nouns. |
 | `ZenBanner` | Coloured glyph, body-contrast text, tinted background. |
@@ -185,6 +191,7 @@ than hand-rolling it locally.
 | `ZenSegmentedControl` | A choice between ranges or modes, on a sunken track. |
 | `ZenToolbarCluster` | The capsule of global actions in the top bar. |
 | `ZenChoiceCard` | Mutually exclusive picker cards. |
+
 
 ### One scaffold per section
 
@@ -236,11 +243,16 @@ and that shortcut still reaches the app.
 
 ## Motion
 
-Quick `easeOut` fades and slides everywhere: 0.15s for state flips, 0.22s for
-anything that moves. The single spring is reserved for the ZenBar waveform, the
-one living element in the app. Every helper in `ZenDesign.Motion` returns `nil`
-when Reduce Motion is on, so call sites pass
+Springs, never durations. A fixed-duration curve cannot be interrupted without
+a jump; a spring starts from the current on-screen value and carries velocity
+through a re-target. `Motion.standard` is critically damped (`response` 0.34,
+`dampingFraction` 1.0). `Motion.fast` is the same shape at 0.2, for press and
+hover. `Motion.momentum` adds overshoot (`dampingFraction` 0.78) only when a
+gesture threw the motion — the ZenBar width morph. Controls scale to 0.97 on
+pointer-down via `ZenPressableStyle`. Every helper in `ZenDesign.Motion`
+returns `nil` when Reduce Motion is on, so call sites pass
 `@Environment(\.accessibilityReduceMotion)` straight through.
+
 
 ## Checking the work
 
