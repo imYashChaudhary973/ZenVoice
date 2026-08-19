@@ -382,7 +382,7 @@ final class ModelManagerViewModel: ObservableObject {
                 )
                 let modelURL = modelsDirectory?
                     .appendingPathComponent(
-                        ParakeetTDTv3Engine.modelFilename,
+                        ParakeetTDTEngine.Configuration.v3.modelFilename,
                         isDirectory: false
                     )
                 isInstalled = modelURL.map {
@@ -802,14 +802,14 @@ final class ModelManagerViewModel: ObservableObject {
     private func downloadParakeetTDTv2() async throws {
         try await downloadEngineModel(
             engineID: EngineIdentifiers.parakeetTDTv2,
-            filename: ParakeetTDTv2Engine.modelFilename
+            filename: ParakeetTDTEngine.Configuration.v2.modelFilename
         )
     }
 
     private func downloadParakeetTDTv3() async throws {
         try await downloadEngineModel(
             engineID: EngineIdentifiers.parakeetTDTv3,
-            filename: ParakeetTDTv3Engine.modelFilename
+            filename: ParakeetTDTEngine.Configuration.v3.modelFilename
         )
     }
 

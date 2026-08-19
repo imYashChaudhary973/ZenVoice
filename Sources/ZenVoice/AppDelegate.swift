@@ -533,8 +533,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func makeEngineRegistry(whisper: WhisperSpeechEngine) -> EngineRegistry {
         let apple = AppleSpeechEngine()
         let parakeetFlash = makeParakeetFlashEngine()
-        let parakeetTDTv2 = makeParakeetTDTv2Engine()
-        let parakeetTDTv3 = makeParakeetTDTv3Engine()
+        let parakeetTDTv2 = makeParakeetTDTEngine(.v2)
+        let parakeetTDTv3 = makeParakeetTDTEngine(.v3)
         let nemotronUltraFast = makeNemotronSpeechUltraFastEngine()
         let nemotronMultilingual = makeNemotronSpeechMultilingualEngine()
         let cohere = makeCohereTranscribeEngine()
@@ -577,19 +577,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func makeParakeetTDTv2Engine() -> ParakeetTDTv2Engine? {
+    private func makeParakeetTDTEngine(
+        _ configuration: ParakeetTDTEngine.Configuration
+    ) -> ParakeetTDTEngine? {
         makeEngineIfModelExists(
-            filename: ParakeetTDTv2Engine.modelFilename
+            filename: configuration.modelFilename
         ) { url in
-            ParakeetTDTv2Engine(modelURL: url)
-        }
-    }
-
-    private func makeParakeetTDTv3Engine() -> ParakeetTDTv3Engine? {
-        makeEngineIfModelExists(
-            filename: ParakeetTDTv3Engine.modelFilename
-        ) { url in
-            ParakeetTDTv3Engine(modelURL: url)
+            ParakeetTDTEngine(configuration: configuration, modelURL: url)
         }
     }
 

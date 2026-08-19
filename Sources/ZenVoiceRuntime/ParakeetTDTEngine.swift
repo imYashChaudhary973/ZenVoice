@@ -16,21 +16,52 @@ import AVFoundation
 import Foundation
 import ZenVoiceCore
 
-/// Parakeet TDT v3 (multilingual) via parakeet.cpp.
+/// Parakeet TDT (v2 English, v3 multilingual) via parakeet.cpp.
 ///
 /// Model weights are downloaded as a GGUF file into the shared `Models`
 /// directory. The runtime is the vendored `parakeet.xcframework`, which uses
-/// Metal on Apple Silicon and CPU on Intel.
-public final class ParakeetTDTv3Engine: @unchecked Sendable, SpeechEngine {
-    public static let engineID = EngineIdentifiers.parakeetTDTv3
+/// Metal on Apple Silicon and CPU on Intel. The two variants differ only in
+/// metadata, so they share one engine class and a `Configuration`.
+public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
+    public struct Configuration: Sendable {
+        let engineID: String
+        public let modelFilename: String
+        let displayName: String
+        let languageCapability: ModelLanguageCapability
+        let attribution: String
+        let queueLabel: String
 
-    /// Expected GGUF filename in the Models directory.
-    public static let modelFilename = "tdt-0.6b-v3-q8_0.gguf"
+        /// TDT 0.6B v2 (English-only).
+        public static let v2 = Configuration(
+            engineID: EngineIdentifiers.parakeetTDTv2,
+            modelFilename: "tdt-0.6b-v2-q8_0.gguf",
+            displayName: "Parakeet TDT v2",
+            languageCapability: .english,
+            attribution:
+                "Parakeet TDT 0.6B v2 by NVIDIA. English-only. Runtime: "
+                + "parakeet.cpp v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
+            queueLabel: "dev.yashchaudhary.ZenVoice.parakeet-tdt-v2"
+        )
+
+        /// TDT 0.6B v3 (multilingual).
+        public static let v3 = Configuration(
+            engineID: EngineIdentifiers.parakeetTDTv3,
+            modelFilename: "tdt-0.6b-v3-q8_0.gguf",
+            displayName: "Parakeet TDT v3",
+            languageCapability: .multilingual,
+            attribution:
+                "Parakeet TDT 0.6B v3 by NVIDIA. Runtime: parakeet.cpp "
+                + "v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
+            queueLabel: "dev.yashchaudhary.ZenVoice.parakeet-tdt-v3"
+        )
+    }
+
+    public let configuration: Configuration
 
     public var descriptor: EngineDescriptor {
         EngineDescriptor(
-            id: Self.engineID,
-            displayName: "Parakeet TDT v3",
+            id: configuration.engineID,
+            displayName: configuration.displayName,
             family: .parakeetTDT,
             supportedLanguages: [],
             requiresDownload: true,
@@ -39,9 +70,7 @@ public final class ParakeetTDTv3Engine: @unchecked Sendable, SpeechEngine {
             publisher: "NVIDIA",
             license: "CC-BY-4.0",
             licenseURL: "https://creativecommons.org/licenses/by/4.0/",
-            attribution:
-                "Parakeet TDT 0.6B v3 by NVIDIA. Runtime: parakeet.cpp "
-                + "v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
+            attribution: configuration.attribution,
             privacyNote:
                 "Runs entirely on this Mac. No audio leaves the device."
         )
@@ -52,17 +81,18 @@ public final class ParakeetTDTv3Engine: @unchecked Sendable, SpeechEngine {
     }
 
     public var languageCapability: ModelLanguageCapability {
-        .multilingual
+        configuration.languageCapability
     }
 
     private let modelURL: URL
     private var context: ParakeetContext?
     private let queue: DispatchQueue
 
-    public init(modelURL: URL) {
+    public init(configuration: Configuration, modelURL: URL) {
+        self.configuration = configuration
         self.modelURL = modelURL
         self.queue = DispatchQueue(
-            label: "dev.yashchaudhary.ZenVoice.parakeet-tdt-v3",
+            label: configuration.queueLabel,
             qos: .userInitiated
         )
     }
@@ -77,7 +107,7 @@ public final class ParakeetTDTv3Engine: @unchecked Sendable, SpeechEngine {
     /// Without this the idle unload only reclaimed Whisper, and whichever
     /// engine the user had actually selected stayed resident forever.
     public func release() async {
-        await withCheckedContinuation { continuation in
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             queue.async { [weak self] in
                 self?.context = nil
                 continuation.resume()
@@ -173,7 +203,7 @@ public final class ParakeetTDTv3Engine: @unchecked Sendable, SpeechEngine {
                         finalTranscript: transcript,
                         correctionCount: 0,
                         isPartial: false,
-                        modelID: Self.engineID,
+                        modelID: self.configuration.engineID,
                         processingDurationSeconds: 0
                     )
                     continuation.resume(returning: result)

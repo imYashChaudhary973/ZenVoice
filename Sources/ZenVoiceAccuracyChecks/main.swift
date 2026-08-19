@@ -295,10 +295,10 @@ private func makeEngineRegistry(
     if let parakeetFlash = makeParakeetFlashEngine() {
         engines.append(parakeetFlash)
     }
-    if let parakeetTDTv2 = makeParakeetTDTv2Engine() {
+    if let parakeetTDTv2 = makeParakeetTDTEngine(.v2) {
         engines.append(parakeetTDTv2)
     }
-    if let parakeetTDTv3 = makeParakeetTDTv3Engine() {
+    if let parakeetTDTv3 = makeParakeetTDTEngine(.v3) {
         engines.append(parakeetTDTv3)
     }
     if let nemotronUltraFast = makeNemotronSpeechUltraFastEngine() {
@@ -339,20 +339,22 @@ private func makeParakeetFlashEngine() -> ParakeetFlashEngine? {
     return ParakeetFlashEngine(modelURL: modelURL)
 }
 
-private func makeParakeetTDTv2Engine() -> ParakeetTDTv2Engine? {
+private func makeParakeetTDTEngine(
+    _ configuration: ParakeetTDTEngine.Configuration
+) -> ParakeetTDTEngine? {
     let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
     guard let modelsDirectory else {
         return nil
     }
     let modelURL = modelsDirectory
         .appendingPathComponent(
-            ParakeetTDTv2Engine.modelFilename,
+            configuration.modelFilename,
             isDirectory: false
         )
     guard FileManager.default.fileExists(atPath: modelURL.path) else {
         return nil
     }
-    return ParakeetTDTv2Engine(modelURL: modelURL)
+    return ParakeetTDTEngine(configuration: configuration, modelURL: modelURL)
 }
 
 private func makeNemotronSpeechUltraFastEngine()
@@ -389,21 +391,6 @@ private func makeNemotronSpeechMultilingualEngine()
     return NemotronSpeechMultilingualEngine(modelURL: modelURL)
 }
 
-private func makeParakeetTDTv3Engine() -> ParakeetTDTv3Engine? {
-    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
-    guard let modelsDirectory else {
-        return nil
-    }
-    let modelURL = modelsDirectory
-        .appendingPathComponent(
-            ParakeetTDTv3Engine.modelFilename,
-            isDirectory: false
-        )
-    guard FileManager.default.fileExists(atPath: modelURL.path) else {
-        return nil
-    }
-    return ParakeetTDTv3Engine(modelURL: modelURL)
-}
 
 private func makeCohereTranscribeEngine() -> CohereTranscribeEngine? {
     guard let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
