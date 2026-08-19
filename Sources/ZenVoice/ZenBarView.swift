@@ -15,15 +15,44 @@
 import SwiftUI
 import ZenVoiceCore
 
+/// The floating dictation bar.
+///
+/// This is the surface the user sees more than any other, and it is the one
+/// that has to justify sitting permanently on top of their work. So it is small
+/// and it is quiet: at rest it is a capsule about the size of a word, showing a
+/// flat waveform and nothing else.
+///
+/// The previous version was a 580pt-wide rectangle carrying, simultaneously, a
+/// logo, the mode name, the word "Ready", a three-way mode switcher, a Start
+/// button and the shortcut in key caps — six clusters, permanently, for an
+/// operation the user performs with a key they already know. That is a toolbar,
+/// and a toolbar that never goes away is furniture.
+///
+/// **Controls are revealed on hover, not displayed.** Every action here has a
+/// keyboard route: the shortcut starts and finishes, and the mode is a setting.
+/// So the controls do not need to be on screen — they need to be *reachable*,
+/// which is what pointing at the bar does. The one exception is an error, which
+/// is the only state that can't be resolved by pressing the shortcut again.
+///
+/// The resting waveform is the same `WaveformView` used while listening, fed
+/// the same level model. At rest the level is zero, so the bars sit flat; when
+/// speech arrives the identical component comes alive. Nothing swaps out, which
+/// is why starting dictation reads as the bar *waking up* rather than as one
+/// view being replaced by another.
 struct ZenBarView: View {
     /// Room left around the bar for its shadow to land in.
     ///
     /// The panel clips its hosting view, so a shadow with nowhere to go is
     /// simply not drawn. These are the margins the panel is sized against in
-    /// ``ZenBarPanelController``.
+    /// ``OverlayKind/defaultSize``.
     static let shadowInset: CGFloat = 26
-    static let barHeight: CGFloat = 44
-    static let maximumBarWidth: CGFloat = 580
+
+    /// A capsule the height of a menu-bar item, not of a toolbar.
+    static let barHeight: CGFloat = 36
+
+    /// The widest the bar ever gets — an error carrying a message and two
+    /// actions. Every other state is far narrower.
+    static let maximumBarWidth: CGFloat = 380
 
     @AppStorage(ZenAppearance.storageKey)
     private var appearance = ZenAppearance.system.rawValue
@@ -36,6 +65,9 @@ struct ZenBarView: View {
     let dismissError: () -> Void
     let setMode: (ZenBarMode) -> Void
     let cancelAgenticGoal: () -> Void
+
+    /// Whether the pointer is over the bar. Drives the control reveal.
+    @State private var hovering = false
 
     var body: some View {
         bar
@@ -52,12 +84,12 @@ struct ZenBarView: View {
 
     private var bar: some View {
         ZStack {
-            // Identity changes on the *content* only. The container keeps
-            // its own, so the bar's width and background morph between phases
-            // while the contents cross-fade. Putting `.id` on the whole bar —
-            // as this once did — destroyed and rebuilt it instead, which is
-            // why every state change read as a hard cut.
-            controlBar
+            // Identity changes on the *content* only. The container keeps its
+            // own, so the bar's width and background morph between phases while
+            // the contents cross-fade. Putting `.id` on the whole bar — as this
+            // once did — destroyed and rebuilt it instead, which is why every
+            // state change read as a hard cut.
+            content
                 .id(state.phase.label)
                 .transition(.opacity)
         }
@@ -65,297 +97,385 @@ struct ZenBarView: View {
         .background(barBackground)
         .clipShape(barShape)
         .contentShape(barShape)
+        .onHover { isInside in
+            hovering = isInside
+        }
         .animation(ZenDesign.Motion.standard(reduceMotion), value: state.phase)
+        .animation(ZenDesign.Motion.standard(reduceMotion), value: hovering)
         // The width morph gets the *momentum* spring while the contents get the
         // critically damped one. The bar changing size is the one moment this
-        // interface behaves like a physical object being resized, and a few
-        // percent of overshoot on the geometry — with none on the text riding
-        // inside it — is what makes the change read as elastic rather than as a
-        // window being programmatically resized.
+        // interface behaves like a physical object, and a few percent of
+        // overshoot on the geometry — with none on the text riding inside it —
+        // is what makes the change read as elastic rather than as a window
+        // being programmatically resized.
         .animation(ZenDesign.Motion.momentum(reduceMotion), value: barWidth)
         .accessibilityElement(children: .contain)
     }
 
+    /// A true capsule, derived from the height rather than set by hand, so the
+    /// two can never drift apart. At 36pt tall this is what makes the bar read
+    /// as an object hovering over the desktop instead of a panel docked to it.
     private var barShape: RoundedRectangle {
         RoundedRectangle(
-            cornerRadius: ZenDesign.Radius.bar,
+            cornerRadius: Self.barHeight / 2,
             style: .continuous
         )
     }
 
+    // MARK: - Content
+
     @ViewBuilder
-    private var controlBar: some View {
+    private var content: some View {
         switch state.phase {
         case .idle:
             if let event = state.agenticStatusEvent {
-                HStack(spacing: 9) {
-                    Image(
-                        systemName: state.isAgenticGoalActive
-                            ? "gearshape.2.fill"
-                            : terminalAgenticIcon(event)
-                    )
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(
-                        state.isAgenticGoalActive
-                            ? ZenDesign.Semantic.accent
-                            : agenticEventTint(event)
-                    )
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(state.agenticGoalTitle ?? "Agentic goal")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                            .lineLimit(1)
-                        Text(event.message)
-                            .font(ZenDesign.Typography.caption)
-                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 6)
-                    if state.isAgenticGoalActive {
-                        OverlayBarButton(
-                            title: "Stop",
-                            action: cancelAgenticGoal
-                        )
-                    }
-                }
-                .padding(.horizontal, 14)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityLabel(
-                    "\(state.agenticGoalTitle ?? "Agentic goal"). \(event.message)"
-                )
+                agenticContent(event)
             } else {
-                Button(action: toggleRecording) {
-                    HStack(spacing: 9) {
-                        BrandLogo(size: 22)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(state.mode.displayName)
-                                .font(.system(size: 12.5, weight: .medium))
-                                .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                            Text("Ready")
-                                .font(ZenDesign.Typography.caption)
-                                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        }
-                        Spacer()
-                        modeSwitcher
-                        OverlayBarButton(title: "Start", emphasized: true, action: toggleRecording)
-                        ZenKbdGroup(combo: HotKeyPreferences.load().displayName)
-                    }
-                    .padding(.horizontal, 14)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Start ZenVoice \(state.mode.displayName)")
-                .accessibilityHint("Press \(HotKeyPreferences.load().displayName) or activate this button.")
+                idleContent
             }
-
         case .listening:
-            HStack(spacing: 10) {
-                ZenStatusLabel(
-                    text: "listening",
-                    tint: ZenDesign.Semantic.accent,
-                    pulses: true
-                )
-
-                WaveformView(model: state.audioLevel)
-
-                // Only present when stable-phrase detection is switched on.
-                // The text was computed and thrown away before this: nothing
-                // read `liveTranscriptPreview` at all.
-                if !state.liveTranscriptPreview.isEmpty {
-                    Text(state.liveTranscriptPreview)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                } else {
-                    Spacer()
-                }
-
-                OverlayBarButton(title: "Cancel", action: cancelRecording)
-                OverlayBarButton(
-                    title: "Finish",
-                    emphasized: true,
-                    action: finishRecording
-                )
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, ZenDesign.Spacing.xs)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel("ZenVoice is listening")
-
+            listeningContent
         case .transcribing:
-            // Transcribing and inserting were pixel-identical before, during
-            // the slowest part of the interaction. Decoding is the part with
-            // no upper bound the user can feel, so it is the one that gets a
-            // progress hairline.
-            VStack(spacing: 6) {
-                HStack(spacing: 10) {
-                    ZenStatusLabel(text: "transcribing…", pulses: true)
-                    Spacer()
-                }
-                IndeterminateBar()
-            }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel("Transcribing locally")
-
+            workingContent(
+                "transcribing",
+                tint: ZenDesign.Semantic.accent
+            )
         case .awaitingCloudReview:
-            // The review panel does not take focus, so without this the bar
-            // sat on "transcribing…" while nothing was happening and the
-            // shortcut appeared to have died. Says what it is waiting for and
-            // how to get out of it.
-            VStack(alignment: .leading, spacing: 2) {
-                ZenStatusLabel(
-                    text: "review cloud text…",
-                    tint: ZenDesign.Semantic.accent,
-                    pulses: false
-                )
-                Text("Press your dictation shortcut to keep the local text.")
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .lineLimit(1)
-            }
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: .infinity,
-                alignment: .leading
-            )
-            .padding(.horizontal, 14)
-            .accessibilityLabel(
-                "Waiting for your cloud review. Press your dictation "
-                + "shortcut to keep the local text."
-            )
-
+            reviewContent
         case .inserting:
-            HStack(spacing: 10) {
-                ZenStatusLabel(
-                    text: "inserting…",
-                    tint: ZenDesign.Semantic.success,
-                    pulses: true
-                )
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel("Inserting text")
-
-        case .success:
-            HStack(spacing: 9) {
-                if let warning = state.lastDecodeWarning {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(ZenDesign.Semantic.danger)
-                    Text("inserted — \(warning)")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                } else {
-                    ZenStatusLabel(
-                        text: successMessage,
-                        tint: ZenDesign.Semantic.success
-                    )
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel(
-                state.lastDecodeWarning.map { "Inserted, but \($0)" }
-                    ?? "Inserted"
+            workingContent(
+                "inserting",
+                tint: ZenDesign.Semantic.success
             )
-
+        case .success:
+            successContent
         case .error(let message):
-            HStack(spacing: 9) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(ZenDesign.Semantic.danger)
-                Text(displayedError(message))
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 6)
-                OverlayBarButton(
-                    title: "Try again",
-                    emphasized: true,
-                    action: toggleRecording
-                )
-                OverlayBarButton(title: "Dismiss", action: dismissError)
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, ZenDesign.Spacing.xs)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel(displayedError(message))
+            errorContent(message)
         }
     }
 
+    /// At rest: a flat waveform. That is the whole idle interface.
+    ///
+    /// Hovering widens the bar and reveals the mode switcher and the shortcut,
+    /// so the two things a user might want to check are one pointer-move away
+    /// rather than permanently occupying the screen.
+    private var idleContent: some View {
+        Button(action: toggleRecording) {
+            HStack(spacing: 10) {
+                BrandLogo(size: 16)
+
+                WaveformView(model: state.audioLevel, barCount: 14)
+                    // Dimmed, not hidden. A flat waveform at reading contrast
+                    // looks like a broken meter; at this opacity it reads as
+                    // the instrument being idle.
+                    .opacity(0.4)
+
+                if hovering {
+                    hairline
+                    modeSwitcher
+                    ZenKbdGroup(combo: HotKeyPreferences.load().displayName)
+                        .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(ZenPressableStyle())
+        .accessibilityLabel("Start ZenVoice \(state.mode.displayName)")
+        .accessibilityHint(
+            "Press \(HotKeyPreferences.load().displayName) or activate this button."
+        )
+    }
+
+    /// While listening the waveform *is* the interface — it is the only thing
+    /// on screen that proves the microphone is hearing anything.
+    private var listeningContent: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(ZenDesign.Semantic.accent)
+                .frame(width: 7, height: 7)
+
+            WaveformView(model: state.audioLevel, barCount: 20)
+
+            if !state.liveTranscriptPreview.isEmpty {
+                Text(state.liveTranscriptPreview)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+
+            if hovering {
+                hairline
+                // Icons, not labels. "Cancel" and "Finish" as words cost 90pt
+                // of a bar this size, and both already have a keyboard route —
+                // the shortcut finishes, and this is the fallback for a pointer.
+                barIconButton(
+                    "xmark",
+                    label: "Cancel dictation",
+                    action: cancelRecording
+                )
+                barIconButton(
+                    "checkmark",
+                    label: "Finish dictation",
+                    tint: ZenDesign.Semantic.accent,
+                    action: finishRecording
+                )
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel("ZenVoice is listening")
+    }
+
+    /// Decoding and inserting: a pulsing dot and one lowercase word.
+    ///
+    /// These used to be a status label stacked over a travelling progress
+    /// hairline, which needed a 44pt bar to hold. In a capsule this size the
+    /// pulse carries the same message — *still going* — in a fifth of the room.
+    private func workingContent(_ label: String, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            ZenStatusLabel(text: label, tint: tint, pulses: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel(label)
+    }
+
+    /// The review panel does not take focus, so without this the bar sat on
+    /// "transcribing…" while nothing was happening and the shortcut appeared to
+    /// have died. Says what it is waiting for and how to get out of it.
+    private var reviewContent: some View {
+        HStack(spacing: 8) {
+            ZenStatusLabel(
+                text: "review cloud text",
+                tint: ZenDesign.Semantic.accent
+            )
+            Text("· shortcut keeps local")
+                .font(.system(size: 11))
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel(
+            "Waiting for your cloud review. Press your dictation shortcut to "
+            + "keep the local text."
+        )
+    }
+
+    private var successContent: some View {
+        HStack(spacing: 8) {
+            if let warning = state.lastDecodeWarning {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.warn)
+                Text("inserted — \(warning)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            } else {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(ZenDesign.Semantic.success)
+                Text(successMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel(
+            state.lastDecodeWarning.map { "Inserted, but \($0)" } ?? "Inserted"
+        )
+    }
+
+    /// The one state whose controls are *not* hidden behind hover.
+    ///
+    /// Everything else here can be resolved by pressing the shortcut again. An
+    /// error cannot: the user has to be told what happened and given a way out,
+    /// and hiding that behind a pointer-move would be hiding the only thing on
+    /// screen that still needs a decision.
+    private func errorContent(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ZenDesign.Semantic.danger)
+            Text(displayedError(message))
+                .font(.system(size: 11))
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            barIconButton(
+                "arrow.clockwise",
+                label: "Try again",
+                tint: ZenDesign.Semantic.accent,
+                action: toggleRecording
+            )
+            barIconButton(
+                "xmark",
+                label: "Dismiss",
+                action: dismissError
+            )
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel(displayedError(message))
+    }
+
+    private func agenticContent(_ event: GoalStatusEvent) -> some View {
+        HStack(spacing: 8) {
+            Image(
+                systemName: state.isAgenticGoalActive
+                    ? "gearshape.2.fill"
+                    : terminalAgenticIcon(event)
+            )
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(
+                state.isAgenticGoalActive
+                    ? ZenDesign.Semantic.accent
+                    : agenticEventTint(event)
+            )
+
+            Text(event.message)
+                .font(.system(size: 11))
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 4)
+
+            if state.isAgenticGoalActive {
+                barIconButton(
+                    "stop.fill",
+                    label: "Stop agentic goal",
+                    action: cancelAgenticGoal
+                )
+            }
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, state.isAgenticGoalActive ? 6 : 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel(
+            "\(state.agenticGoalTitle ?? "Agentic goal"). \(event.message)"
+        )
+    }
+
+    // MARK: - Parts
+
+    private var hairline: some View {
+        Rectangle()
+            .fill(ZenDesign.Semantic.border)
+            .frame(width: 1, height: 16)
+            .transition(.opacity)
+            .accessibilityHidden(true)
+    }
+
+    /// A 24pt round icon button — the only kind of button the bar has room for.
+    private func barIconButton(
+        _ systemImage: String,
+        label: String,
+        tint: Color = ZenDesign.Semantic.textSecondary,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 24, height: 24)
+                .background {
+                    Circle().fill(ZenDesign.Semantic.textPrimary.opacity(0.09))
+                }
+                .contentShape(Circle())
+        }
+        .buttonStyle(ZenPressableStyle())
+        .transition(.opacity)
+        .accessibilityLabel(label)
+        .help(label)
+    }
+
     private var modeSwitcher: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 2) {
             ForEach(ZenBarMode.allCases, id: \.self) { mode in
                 let isSelected = state.mode == mode
                 Button {
                     setMode(mode)
                 } label: {
                     Image(systemName: mode.icon)
-                        .font(ZenDesign.Typography.captionStrong)
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(
                             isSelected
-                                ? ZenDesign.Semantic.textPrimary
-                                : ZenDesign.Semantic.textSecondary
+                                ? ZenDesign.Semantic.accent
+                                : ZenDesign.Semantic.textTertiary
                         )
-                        .frame(width: 28, height: 26)
+                        .frame(width: 24, height: 24)
                         .background {
-                            RoundedRectangle(
-                                cornerRadius: ZenDesign.Radius.barControl,
-                                style: .continuous
-                            )
-                            .fill(
-                                isSelected
-                                    ? ZenDesign.Semantic.surfaceSunken
-                                    : Color.clear
-                            )
+                            Circle()
+                                .fill(
+                                    isSelected
+                                        ? ZenDesign.Semantic.accentMuted
+                                        : Color.clear
+                                )
                         }
-                        .contentShape(Rectangle())
+                        .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ZenPressableStyle())
                 .accessibilityLabel(mode.displayName)
-                .accessibilityAddTraits(
-                    isSelected ? .isSelected : []
-                )
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
+        .transition(.opacity)
     }
 
+    // MARK: - Geometry
+
+    /// Every width is the smallest that holds its own contents.
+    ///
+    /// The old set started at 310 and ran to 560. These start at 96 — about the
+    /// width of a word — because at rest the bar has nothing to say.
     private var barWidth: CGFloat {
         switch state.phase {
         case .idle:
-            return state.agenticStatusEvent == nil ? 380 : 540
+            if state.agenticStatusEvent != nil {
+                return state.isAgenticGoalActive ? 300 : 268
+            }
+            // 108 holds the mark and a fourteen-bar meter and nothing else.
+            // Hovering adds the hairline, the three modes and the shortcut.
+            return hovering ? 300 : 108
         case .listening:
-            return state.liveTranscriptPreview.isEmpty ? 400 : 560
+            let base: CGFloat = state.liveTranscriptPreview.isEmpty ? 132 : 288
+            // The reveal adds two 24pt buttons and the rule between them.
+            return hovering ? base + 88 : base
         case .transcribing, .inserting:
-            return 310
+            return 148
         case .awaitingCloudReview:
-            return 460
+            return 268
         case .success:
-            return state.lastDecodeWarning == nil ? 420 : 530
+            return state.lastDecodeWarning == nil ? 190 : 320
         case .error:
-            return 530
+            return 380
         }
     }
+
+    // MARK: - Material
 
     /// The bar reads as a piece of glass hovering over whatever the user is
     /// working in, not as a panel docked to the screen.
     ///
     /// It used to be a 96%-opaque rectangle with a hard border on all four
     /// sides — which is to say, opaque. At that alpha the material was doing no
-    /// work, and the bar sat on top of the desktop like a sticker rather than
-    /// belonging to the same surface as the menu bar and Spotlight. A real
-    /// material samples what is behind it, so the bar picks up the colour of
-    /// the window it is floating over and stays legible on both a white
-    /// document and a dark terminal.
+    /// work. A real material samples what is behind it, so the bar picks up the
+    /// colour of the window it is floating over and stays legible on both a
+    /// white document and a dark terminal.
     private var barBackground: some View {
         barShape
             .fill(.ultraThinMaterial)
@@ -366,14 +486,10 @@ struct ZenBarView: View {
                 barShape.fill(ZenDesign.Semantic.surface.opacity(0.55))
             }
             .overlay {
-                barShape
-                    .strokeBorder(
-                        ZenDesign.Semantic.border,
-                        lineWidth: 1
-                    )
+                barShape.strokeBorder(ZenDesign.Semantic.border, lineWidth: 1)
             }
-            // The lit top lip, same treatment every raised surface in the app
-            // carries — and the reason this looks like an object with a
+            // The lit top lip, the same treatment every raised surface in the
+            // app carries — and the reason this looks like an object with a
             // thickness rather than a rounded rectangle.
             .overlay {
                 barShape
@@ -390,9 +506,11 @@ struct ZenBarView: View {
                         lineWidth: 1
                     )
             }
-            .shadow(color: Color.black.opacity(0.30), radius: 24, y: 10)
-            .shadow(color: Color.black.opacity(0.16), radius: 4, y: 1)
+            .shadow(color: Color.black.opacity(0.28), radius: 18, y: 8)
+            .shadow(color: Color.black.opacity(0.14), radius: 3, y: 1)
     }
+
+    // MARK: - Text
 
     private func terminalAgenticIcon(_ event: GoalStatusEvent) -> String {
         switch event.event {
@@ -420,19 +538,20 @@ struct ZenBarView: View {
         guard let summary = state.lastInsertionSummary else {
             return "inserted"
         }
-        return "inserted · \(summary.wordCount) words · \(summary.wordsPerMinute) wpm"
+        return "\(summary.wordCount) words · \(summary.wordsPerMinute) wpm"
     }
 
     private func displayedError(_ message: String) -> String {
         if message.hasPrefix("Copied—") {
             let reason = String(message.dropFirst("Copied—".count))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return "Couldn’t insert — \(reason) Text copied to clipboard."
+            return "Couldn’t insert — \(reason) Copied instead."
         }
         return message
     }
 }
 
+/// The level meter.
 ///
 /// Observes ``AudioLevelModel`` rather than ``AppState`` so that a level
 /// arriving fifteen times a second repaints these bars and nothing else.
@@ -442,24 +561,36 @@ struct ZenBarView: View {
 /// trailing window of levels should look like is this view's business.
 struct WaveformView: View {
     @ObservedObject var model: AudioLevelModel
+    /// How many samples the trail holds.
+    ///
+    /// A parameter rather than a constant because the meter now appears at two
+    /// very different scales: 14 bars inside a 36pt capsule, 23 on a settings
+    /// card. One count sized for the card overflowed the capsule; one sized for
+    /// the capsule looked like a stub on the card.
+    let barCount: Int
+
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
 
-    private static let barCount = 23
     private static let barWidth: CGFloat = 2
     private static let barSpacing: CGFloat = 2
-    private static let maximumHeight: CGFloat = 18
+    private static let maximumHeight: CGFloat = 16
     private static let minimumHeight: CGFloat = 2
 
-    static var width: CGFloat {
-        CGFloat(barCount) * barWidth
-            + CGFloat(barCount - 1) * barSpacing
+    @State private var history: [Double]
+
+    init(model: AudioLevelModel, barCount: Int = 23) {
+        self.model = model
+        self.barCount = barCount
+        _history = State(
+            initialValue: [Double](repeating: 0, count: barCount)
+        )
     }
 
-    @State private var history = [Double](
-        repeating: 0,
-        count: barCount
-    )
+    private var width: CGFloat {
+        CGFloat(barCount) * Self.barWidth
+            + CGFloat(barCount - 1) * Self.barSpacing
+    }
 
     var body: some View {
         HStack(spacing: Self.barSpacing) {
@@ -478,7 +609,7 @@ struct WaveformView: View {
         // Older samples fade out at the leading edge instead of ending on a
         // hard vertical line. The trail is a *history*, and history should
         // dissolve — a sharp left edge reads as the graphic being clipped by
-        // its container, which is exactly what it looked like before.
+        // its container.
         .mask(
             LinearGradient(
                 stops: [
@@ -493,7 +624,7 @@ struct WaveformView: View {
         // Capsules are centre-aligned in the row, so a bar of height h extends
         // equally above and below the midline. That mirrored shape is what
         // reads as a voice rather than as a graphic equaliser.
-        .frame(width: Self.width, height: Self.maximumHeight)
+        .frame(width: width, height: Self.maximumHeight)
         .animation(ZenDesign.Motion.waveform(reduceMotion), value: history)
         .onChange(of: model.level) { _, level in
             var next = history
@@ -507,7 +638,7 @@ struct WaveformView: View {
     /// Newest sample sits at the trailing edge; older ones are damped so the
     /// trail falls away instead of ending on a cliff.
     private func taper(at index: Int) -> Double {
-        let age = Double(index) / Double(max(1, Self.barCount - 1))
+        let age = Double(index) / Double(max(1, barCount - 1))
         return 0.4 + (0.6 * age)
     }
 
@@ -529,6 +660,10 @@ struct WaveformView: View {
 /// whisper reports no progress, so there is nothing honest to fill a
 /// determinate bar with. What this can truthfully say is "still going", which
 /// is the thing a frozen-looking bar fails to say.
+///
+/// No longer used by the ZenBar, which says the same thing with a pulsing dot
+/// in a fifth of the space; the live-preview overlays, which are large enough
+/// to hold it, still do.
 struct IndeterminateBar: View {
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
