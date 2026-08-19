@@ -44,7 +44,9 @@ import ZenVoiceRuntime
 //   ZENVOICE_ACCURACY_VERBOSE  set to 1 to print every hypothesis
 //   ZENVOICE_ACCURACY_MAX_SYNTHETIC_CLIPS
 //                               cap synthetic clips; real/long-form stay intact
-//   ZENVOICE_ACCURACY_SMOKE    decode one real recording for fast PR coverage
+//   ZENVOICE_ACCURACY_ENGINE    baseline one engine on the real corpus
+//                               through its own SpeechEngine path ("list"
+//                               prints the registry's engine ids)
 //   ZENVOICE_SCORING_ONLY      validate deterministic scoring without a model
 //   ZENVOICE_CORPUS_VALIDATE_ONLY
 //                               validate corpus paths/audio without a model
@@ -293,10 +295,10 @@ private func makeEngineRegistry(
     if let parakeetFlash = makeParakeetFlashEngine() {
         engines.append(parakeetFlash)
     }
-    if let parakeetTDTv2 = makeParakeetTDTv2Engine() {
+    if let parakeetTDTv2 = makeParakeetTDTEngine(.v2) {
         engines.append(parakeetTDTv2)
     }
-    if let parakeetTDTv3 = makeParakeetTDTv3Engine() {
+    if let parakeetTDTv3 = makeParakeetTDTEngine(.v3) {
         engines.append(parakeetTDTv3)
     }
     if let nemotronUltraFast = makeNemotronSpeechUltraFastEngine() {
@@ -337,20 +339,22 @@ private func makeParakeetFlashEngine() -> ParakeetFlashEngine? {
     return ParakeetFlashEngine(modelURL: modelURL)
 }
 
-private func makeParakeetTDTv2Engine() -> ParakeetTDTv2Engine? {
+private func makeParakeetTDTEngine(
+    _ configuration: ParakeetTDTEngine.Configuration
+) -> ParakeetTDTEngine? {
     let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
     guard let modelsDirectory else {
         return nil
     }
     let modelURL = modelsDirectory
         .appendingPathComponent(
-            ParakeetTDTv2Engine.modelFilename,
+            configuration.modelFilename,
             isDirectory: false
         )
     guard FileManager.default.fileExists(atPath: modelURL.path) else {
         return nil
     }
-    return ParakeetTDTv2Engine(modelURL: modelURL)
+    return ParakeetTDTEngine(configuration: configuration, modelURL: modelURL)
 }
 
 private func makeNemotronSpeechUltraFastEngine()
@@ -387,21 +391,6 @@ private func makeNemotronSpeechMultilingualEngine()
     return NemotronSpeechMultilingualEngine(modelURL: modelURL)
 }
 
-private func makeParakeetTDTv3Engine() -> ParakeetTDTv3Engine? {
-    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
-    guard let modelsDirectory else {
-        return nil
-    }
-    let modelURL = modelsDirectory
-        .appendingPathComponent(
-            ParakeetTDTv3Engine.modelFilename,
-            isDirectory: false
-        )
-    guard FileManager.default.fileExists(atPath: modelURL.path) else {
-        return nil
-    }
-    return ParakeetTDTv3Engine(modelURL: modelURL)
-}
 
 private func makeCohereTranscribeEngine() -> CohereTranscribeEngine? {
     guard let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
@@ -475,6 +464,297 @@ private func runRealSpeechSmoke() -> Bool {
         )
     }
     report("ZenVoiceAccuracyChecks smoke passed.")
+    return true
+}
+
+// MARK: - Per-engine real-speech baseline
+
+/// A one-line summary of why an engine is unavailable, for fail-closed
+/// messages that name the cause instead of a bare id.
+private func describeUnavailability(
+    _ reason: EngineUnavailabilityReason?
+) -> String {
+    switch reason {
+    case .unsupportedLanguage(let language):
+        return "unsupported language \(language)"
+    case .requiresDownload:
+        return "model download required"
+    case .requiresInternet:
+        return "internet required"
+    case .runtimeNotReady(let detail):
+        return detail
+    case .platformNotSupported:
+        return "platform not supported"
+    case .none:
+        return "unknown"
+    }
+}
+
+/// Nearest-rank percentile over per-clip decode durations.
+private func percentile(
+    _ values: [TimeInterval],
+    _ fraction: Double
+) -> Double {
+    guard !values.isEmpty else { return 0 }
+    let sorted = values.sorted()
+    let rank = max(
+        1,
+        Int((fraction * Double(sorted.count)).rounded(.up))
+    )
+    return sorted[min(sorted.count - 1, rank - 1)]
+}
+
+/// Prints every engine the registry can see on this machine, with the exact
+/// descriptor id `ZENVOICE_ACCURACY_ENGINE` accepts.
+private func listEngineBaselineCandidates() -> Bool {
+    let registry = makeEngineRegistry(configuration: discoverConfiguration())
+    let rows = registry.availability(for: .english)
+    guard !rows.isEmpty else {
+        fail("no engines are visible to the registry on this machine")
+    }
+    report("engines visible to the registry:")
+    for row in rows {
+        let state = row.isAvailable
+            ? "available"
+            : "unavailable (\(describeUnavailability(row.reason)))"
+        report(
+            "  "
+                + row.engine.id.padding(
+                    toLength: 30, withPad: " ", startingAt: 0
+                )
+                + state
+        )
+    }
+    return true
+}
+
+/// Baselines one engine on the operator-supplied real-speech corpus.
+///
+/// Unlike the Whisper numbers in `measure()`, which decode through
+/// `WhisperTranscriber`, this path resolves the engine through
+/// `EngineRegistry` and decodes through `SpeechEngine.transcribe(audioURL:)`
+/// — the same entry the app uses. Reported columns match the Whisper
+/// real-speech table (whole and segmented WER, protected-token failures)
+/// plus p50/p95 decode latency, so engine recommendation can rest on
+/// measured accuracy rather than hardware heuristics.
+///
+/// The engine id must match a registry descriptor exactly; a miss fails
+/// closed with the list of ids this machine actually has. Apple Speech only
+/// joins the registry when this process is already authorized, so it is
+/// effectively gated behind a manual QA step rather than unattended CI.
+private func measureEngineBaseline(engineID: String) -> Bool {
+    guard let corpusPath = environment["ZENVOICE_ACCURACY_CORPUS"] else {
+        fail("ZENVOICE_ACCURACY_ENGINE requires ZENVOICE_ACCURACY_CORPUS")
+    }
+    let corpus = (
+        try? Fixtures.corpus(at: URL(fileURLWithPath: corpusPath))
+    ) ?? []
+    guard !corpus.isEmpty else {
+        fail("engine baseline corpus is empty at \(corpusPath)")
+    }
+
+    let registry = makeEngineRegistry(configuration: discoverConfiguration())
+    let rows = registry.availability(for: .english)
+    guard let row = rows.first(where: { $0.engine.id == engineID }) else {
+        fail(
+            "engine \"\(engineID)\" is not in the registry. Visible ids: "
+                + rows.map(\.engine.id).joined(separator: ", ")
+        )
+    }
+    guard row.isAvailable,
+          let engine = registry.resolve(
+              for: .english,
+              selectedID: engineID
+          ) else {
+        fail(
+            "engine \"\(engineID)\" is not available: "
+                + describeUnavailability(row.reason)
+        )
+    }
+
+    let verbose = flag("ZENVOICE_ACCURACY_VERBOSE")
+    let skipSegments = flag("ZENVOICE_ACCURACY_NOSEGMENT")
+
+    // Filled by the measurement task below; read after the semaphore.
+    var whole = Scoring.Result.zero
+    var segmented = Scoring.Result.zero
+    var quantityFailures = 0
+    var negationFailures = 0
+    var decodeDurations: [TimeInterval] = []
+    var audioSeconds: TimeInterval = 0
+    var decodeErrors: [String] = []
+    var decodedClips = 0
+
+    let semaphore = DispatchSemaphore(value: 0)
+    Task.detached {
+        do {
+            try await engine.prepare()
+        } catch {
+            decodeErrors.append(
+                "prepare failed: \(error.localizedDescription)"
+            )
+            semaphore.signal()
+            return
+        }
+        report()
+        report(
+            "  engine baseline — \(row.engine.displayName) (\(engineID)), "
+                + "\(corpus.count) recordings"
+        )
+        report("  " + String(repeating: "-", count: 60))
+        for clip in corpus {
+            // Real recordings arrive at their captured level; the synthetic
+            // degradation is deliberately not applied (same rule as the
+            // Whisper real-speech path).
+            let samples = (try? Fixtures.samples(at: clip.url)) ?? []
+            guard !samples.isEmpty else {
+                decodeErrors.append("\(clip.name): could not read audio")
+                continue
+            }
+            audioSeconds += Double(samples.count) / 16_000
+
+            let wholeURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "zenvoice-baseline-\(engineID)-whole-\(clip.name).wav"
+                )
+            try? Fixtures.write(samples: samples, to: wholeURL)
+            let wholeText: String
+            do {
+                let startedAt = Date()
+                wholeText = try await engine.transcribe(
+                    audioURL: wholeURL,
+                    languageProfile: .english,
+                    initialPrompt: nil
+                ).finalTranscript
+                decodeDurations.append(Date().timeIntervalSince(startedAt))
+            } catch {
+                decodeErrors.append(
+                    "\(clip.name): \(error.localizedDescription)"
+                )
+                try? FileManager.default.removeItem(at: wholeURL)
+                continue
+            }
+            decodedClips += 1
+            try? FileManager.default.removeItem(at: wholeURL)
+
+            // Segmented decode — the cost of live-dictation chunking through
+            // this engine's own path. Skippable for slow engines, at the
+            // cost of one table column.
+            var segmentedText = ""
+            var segmentCount = 0
+            if !skipSegments {
+                let segments = LiveSegmentation.segments(of: samples)
+                segmentCount = segments.count
+                var segmentTexts: [String] = []
+                for (index, segment) in segments.enumerated() {
+                    let segmentURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(
+                            "zenvoice-baseline-\(engineID)"
+                                + "-seg\(index)-\(clip.name).wav"
+                        )
+                    try? Fixtures.write(
+                        samples: Array(segment),
+                        to: segmentURL
+                    )
+                    if let text = try? await engine.transcribe(
+                        audioURL: segmentURL,
+                        languageProfile: .english,
+                        initialPrompt: nil
+                    ).finalTranscript,
+                       !text.isEmpty {
+                        segmentTexts.append(text)
+                    }
+                    try? FileManager.default.removeItem(at: segmentURL)
+                }
+                segmentedText = segmentTexts.joined(separator: " ")
+            }
+
+            let wholeScore = Scoring.wordErrorRate(
+                reference: clip.sentence.text,
+                hypothesis: wholeText
+            )
+            let segmentedScore = Scoring.wordErrorRate(
+                reference: clip.sentence.text,
+                hypothesis: segmentedText
+            )
+            whole = whole + wholeScore
+            segmented = segmented + segmentedScore
+            let protected = SemanticSafety.transcriptionViolations(
+                reference: clip.sentence.text,
+                hypothesis: wholeText
+            )
+            quantityFailures += protected.filter {
+                $0.kind == .quantity
+            }.count
+            negationFailures += protected.filter {
+                $0.kind == .negation
+            }.count
+            report(
+                "  "
+                    + clip.name.padding(
+                        toLength: 28, withPad: " ", startingAt: 0
+                    )
+                    + wholeScore.percentage.leftPadded(to: 7)
+                    + (skipSegments
+                        ? "         —"
+                        : segmentedScore.percentage.leftPadded(to: 11))
+                    + "  \(segmentCount) seg"
+            )
+            if verbose {
+                report("      whole:    \(wholeText)")
+                if !skipSegments {
+                    report("      segments: \(segmentedText)")
+                }
+            }
+        }
+        await engine.release()
+        semaphore.signal()
+    }
+    semaphore.wait()
+
+    report(
+        "  "
+            + "ENGINE TOTAL".padding(
+                toLength: 28, withPad: " ", startingAt: 0
+            )
+            + whole.percentage.leftPadded(to: 7)
+            + (skipSegments
+                ? "         —"
+                : segmented.percentage.leftPadded(to: 11))
+    )
+    report(
+        "  ENGINE PROTECTED quantities \(quantityFailures) "
+            + "negations \(negationFailures)"
+    )
+    let decodeSeconds = decodeDurations.reduce(0, +)
+    report(
+        String(
+            format:
+                "  decode p50 %.2fs p95 %.2fs across %d clips "
+                + "(%.0fx real time)",
+            percentile(decodeDurations, 0.5),
+            percentile(decodeDurations, 0.95),
+            decodedClips,
+            decodeSeconds > 0 ? audioSeconds / decodeSeconds : 0
+        )
+    )
+    for error in decodeErrors {
+        report("  error: \(error)")
+    }
+    report()
+
+    guard decodedClips > 0 else {
+        fail(
+            "engine \"\(engineID)\" decoded no clips: "
+                + decodeErrors.joined(separator: "; ")
+        )
+    }
+    report(
+        "ZenVoiceAccuracyChecks engine baseline passed "
+            + "(\(engineID): whole \(whole.percentage)"
+            + (skipSegments ? "" : ", segmented \(segmented.percentage)")
+            + ")."
+    )
     return true
 }
 
@@ -1940,6 +2220,10 @@ if flag("ZENVOICE_SCORING_ONLY") {
     outcome = runRealSpeechSmoke()
 } else if flag("ZENVOICE_STRUCTURE_PROBE") {
     outcome = probeSpokenStructure()
+} else if let engineID = environment["ZENVOICE_ACCURACY_ENGINE"] {
+    outcome = engineID == "list"
+        ? listEngineBaselineCandidates()
+        : measureEngineBaseline(engineID: engineID)
 } else if let corpus = environment["ZENVOICE_REFINE_TEXTEVAL"] {
     outcome = evaluateTextCorpus(path: corpus)
 } else {

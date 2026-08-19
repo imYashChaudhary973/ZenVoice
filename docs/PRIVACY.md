@@ -144,15 +144,20 @@ that window rather than the whole database.
 
 - Instant Refine processes the completed transcript in memory after the
   selected local speech runtime finishes and before storage or paste.
-- Off, Clean, and Agent Prompt modes use deterministic application code.
-- Refinement is deterministic and local. No transcript is sent to an API,
-  analytics endpoint, or cloud service.
-- Its meaning guard rejects destructive or vocabulary-expanding candidates,
-  including dropped negations.
-- Private Dictation can use the same in-memory refinement while saving no
+- Off and Clean use deterministic application code. Smart runs Clean first and,
+  on macOS 26 or later, may ask Apple's on-device `SystemLanguageModel` only
+  for punctuation and layout.
+- Smart creates a fresh model session for the completed transcript, supplies no
+  API key, and never constructs `PrivateCloudComputeLanguageModel`. Unsupported,
+  disabled, ineligible, not-ready, timed-out, or rejected model work falls back
+  to deterministic local formatting.
+- The lexical and semantic guards reject invention, deletion, paraphrasing,
+  changed quantities, and changed negations before model output can replace the
+  local transcript.
+- Private Dictation can use the same in-memory formatting while saving no
   transcript or correction-usage event.
-- The former downloadable refinement-model path was measured and removed; no
-  refinement weights are downloaded or loaded by the current application.
+- The former downloadable Qwen/llama.cpp path remains removed; ZenVoice
+  downloads and loads no refinement weights.
 
 ### Cloud AI Enhancement
 
@@ -192,18 +197,17 @@ that window rather than the whole database.
   verification failure rejects the update and changes nothing.
 - Full rationale in [ADR 0012](decisions/0012-auto-updates.md).
 
-### ZenIntelligence
+### Local formatting
 
-- ZenIntelligence is an opt-in, local post-processing layer that runs after
-  Instant Refine.
-- Format mode uses deterministic local rules for capitalization, spoken-digit
-  conversion, punctuation spacing, and whitespace cleanup.
-- Context Aware mode may use the same bounded 500-character next-dictation
-  context described under Application context. That context is held in memory,
-  is not persisted, and is only used to join sentence fragments conservatively.
-- A local meaning guard rejects candidates that invent words, change numeric
-  values, or alter facts.
-- No transcript or context is sent to a remote model, API, or analytics service.
+- The unified Formatting ladder replaces the former ZenIntelligence UI.
+- Clean uses deterministic local rules. Smart adds the OS-managed on-device
+  language model behind strict lexical and semantic guards.
+- A bounded 500-character next-dictation context may still be used only by the
+  deterministic context join. It is held in memory and is never persisted or
+  sent to a model.
+- No transcript or context is sent to a remote model, API, analytics service,
+  or Private Cloud Compute. Cloud formatting is the separate opt-in feature
+  described above.
 
 ### Command Mode
 
@@ -220,6 +224,32 @@ that window rather than the whole database.
   before they run.
 - Approved command actions are recorded only in the same local History record as
   a normal dictation; no separate command log is kept.
+
+### Agentic Mode
+
+- Agentic Mode is off by default and is reached only after Command Mode's
+  deterministic phrase matching declines a transcript.
+- Planning is local: deterministic templates first, then Apple's on-device
+  system model. No transcript, plan, or goal is sent to a ZenVoice server, and
+  ZenVoice has no cloud planner.
+- Nothing runs until you approve the exact steps shown. High-risk steps require
+  their own approval, and only an unchanged low-risk step can be remembered.
+- The plan, every approval decision, and captured step output are stored in the
+  same encrypted local vault as transcripts (`agentic_tasks`). Output is passed
+  through a secret redactor before it is written, retained output is capped per
+  step, and the plan validator refuses commands that contain secret-shaped
+  strings.
+- Approved steps spawn local command-line tools (`codex`, `claude`, `zsh`,
+  `shortcuts`) with a minimal environment that contains no ZenVoice keychain
+  material and no provider API keys. **Those tools are separate products with
+  their own accounts, credentials, and network behaviour: when you approve a
+  Codex or Claude step, that tool contacts its own provider under its own
+  configuration.** ZenVoice neither supplies nor inspects those credentials.
+- Network egress in the agentic path is only whatever an approved step does
+  itself, and any step whose command surface implies egress or writes outside
+  the working directory is classified high risk and approved individually.
+- Cancelling from ZenBar signals the whole child process group; relaunching
+  ZenVoice never resumes an interrupted step.
 
 ### Write Mode
 

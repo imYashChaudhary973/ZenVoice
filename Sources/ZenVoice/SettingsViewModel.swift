@@ -137,6 +137,8 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var voiceCommandsEnabled: Bool
     @Published private(set) var commandModeEnabled: Bool
     @Published private(set) var commandModeManifest: CommandManifest
+    @Published private(set) var agenticModeEnabled: Bool
+    @Published private(set) var remembersAgenticLowRiskApprovals: Bool
     @Published private(set) var writeModeSubMode: WriteModeSubMode
     @Published private(set) var writeModeDefaultPrompt: String
     @Published private(set) var activeOverlayKind: OverlayKind
@@ -224,6 +226,9 @@ final class SettingsViewModel: ObservableObject {
         commandModeManifest =
             CommandModePreferences.loadManifest()
             ?? CommandModeEngine.defaultManifest
+        agenticModeEnabled = AgenticModePreferences.isEffectivelyEnabled()
+        remembersAgenticLowRiskApprovals =
+            AgenticApprovalPreferences.remembersLowRisk()
         writeModeSubMode = WriteModePreferences.loadSubMode()
         writeModeDefaultPrompt = WriteModePreferences.defaultPrompt()
         activeOverlayKind = OverlayPreferences.loadActiveOverlay()
@@ -436,6 +441,18 @@ final class SettingsViewModel: ObservableObject {
     func setCommandModeEnabled(_ enabled: Bool) {
         CommandModePreferences.setEnabled(enabled)
         commandModeEnabled = enabled
+        agenticModeEnabled = AgenticModePreferences.isEffectivelyEnabled()
+    }
+
+    func setAgenticModeEnabled(_ enabled: Bool) {
+        AgenticModePreferences.setEnabled(enabled)
+        agenticModeEnabled = AgenticModePreferences.isEffectivelyEnabled()
+        commandModeEnabled = CommandModePreferences.isEnabled()
+    }
+
+    func setRemembersAgenticLowRiskApprovals(_ enabled: Bool) {
+        AgenticApprovalPreferences.setRemembersLowRisk(enabled)
+        remembersAgenticLowRiskApprovals = enabled
     }
 
     func setCommandModeManifest(_ manifest: CommandManifest) {

@@ -189,10 +189,22 @@ public enum ModelRecommendationEngine {
             )
         }
 
-        if model.id == recommendedModelID(
+        let recommendedID = recommendedModelID(
             for: profile,
             language: language
-        ) {
+        )
+        if model.id == recommendedID {
+            if language.prefersParakeetTDTv3,
+               profile.hasGPUAcceleratedTranscription {
+                return ModelRecommendation(
+                    level: .supported,
+                    title: "99-language fallback",
+                    rationale:
+                        "English and European dictation defaults to Parakeet "
+                        + "TDT v3 (6.9% WER). This Whisper model is the "
+                        + "fallback for other languages."
+                )
+            }
             return ModelRecommendation(
                 level: .recommended,
                 title: "Recommended",
@@ -201,7 +213,7 @@ public enum ModelRecommendationEngine {
                     ? "Built for Hindi-English code-switching and Latin-script output."
                     : profile.hasGPUAcceleratedTranscription
                         ? "Best accuracy for its size on this Mac's GPU, and it handles every supported language."
-                        : "The best accuracy this Mac can transcribe without a noticeable wait."
+                        : "The best accuracy this Mac can transcribe without a noticeable wait. Intel compromise."
             )
         }
 

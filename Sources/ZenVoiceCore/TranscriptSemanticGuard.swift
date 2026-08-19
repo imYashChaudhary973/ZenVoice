@@ -28,6 +28,21 @@ public enum TranscriptSemanticGuard {
         protectedCounts(in: original) == protectedCounts(in: candidate)
     }
 
+    /// Returns true only when formatting changed punctuation, whitespace, or
+    /// letter case. Word and number tokens must remain in the same order with
+    /// the same multiplicity.
+    ///
+    /// Smart formatting applies this stricter gate to untrusted model output.
+    /// It deliberately forbids paraphrasing: formatting may clarify what the
+    /// user said, but it may not rewrite what they said.
+    public static func preservesLexicalContent(
+        original: String,
+        candidate: String
+    ) -> Bool {
+        lexicalTokens(in: original) == lexicalTokens(in: candidate)
+    }
+
+
     private static let negations: Set<String> = [
         "no", "not", "never", "none", "nothing", "nobody", "nowhere",
         "cannot", "cant", "dont", "doesnt", "didnt", "wont", "wouldnt",
@@ -50,6 +65,16 @@ public enum TranscriptSemanticGuard {
     private static let correctionCueExpression = try! NSRegularExpression(
         pattern: #"(?i)[,—-]\s*no\s*,?\s*wait\b\s*[,—-]?"#
     )
+
+    private static func lexicalTokens(in text: String) -> [String] {
+        let range = NSRange(text.startIndex..., in: text)
+        return tokenExpression.matches(in: text, range: range).compactMap {
+            guard let range = Range($0.range, in: text) else { return nil }
+            return text[range]
+                .lowercased()
+                .replacingOccurrences(of: "’", with: "'")
+        }
+    }
 
     private static func protectedCounts(in text: String) -> [String: Int] {
         let range = NSRange(text.startIndex..., in: text)

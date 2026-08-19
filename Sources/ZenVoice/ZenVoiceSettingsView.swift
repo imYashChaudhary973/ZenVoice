@@ -413,13 +413,14 @@ struct ZenVoiceSettingsView: View {
                 Image(systemName: section.icon)
                     .font(ZenDesign.Typography.navIcon)
                     .frame(width: ZenDesign.Layout.navIcon)
-                    // Accent-tinted at rest, white when the row is filled.
-                    // Grey icons on a translucent panel disappear against a
-                    // busy wallpaper; the tint keeps them legible.
+                    // The accent lives on the icon in both states: on the
+                    // active row it is the mark of selection, and on the rest
+                    // it keeps the glyph legible against a busy wallpaper,
+                    // which a grey icon on a translucent panel is not.
                     .foregroundStyle(
                         selected
-                            ? ZenDesign.Semantic.textOnAccent
-                            : ZenDesign.Semantic.accent
+                            ? ZenDesign.Component.selectedNavigationIcon
+                            : ZenDesign.Semantic.textSecondary
                     )
                 Text(section.rawValue)
                     .font(
@@ -429,8 +430,8 @@ struct ZenVoiceSettingsView: View {
                     )
                     .foregroundStyle(
                         selected
-                            ? ZenDesign.Semantic.textOnAccent
-                            : ZenDesign.Semantic.textPrimary
+                            ? ZenDesign.Component.selectedNavigationLabel
+                            : ZenDesign.Semantic.textSecondary
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -439,19 +440,11 @@ struct ZenVoiceSettingsView: View {
                    historyViewModel.recoveryCount > 0 {
                     Text("\(historyViewModel.recoveryCount)")
                         .font(ZenDesign.Typography.badge)
-                        .foregroundStyle(
-                            selected
-                                ? ZenDesign.Semantic.textOnAccent
-                                : ZenDesign.Semantic.accent
-                        )
+                        .foregroundStyle(ZenDesign.Semantic.accent)
                         .padding(.horizontal, 6)
                         .frame(height: 17)
                         .background {
-                            Capsule().fill(
-                                selected
-                                    ? Color.white.opacity(0.22)
-                                    : ZenDesign.Semantic.accentMuted
-                            )
+                            Capsule().fill(ZenDesign.Semantic.accentMuted)
                         }
                         .accessibilityLabel(
                             "\(historyViewModel.recoveryCount) items in Recovery Inbox"
@@ -473,9 +466,9 @@ struct ZenVoiceSettingsView: View {
                             : Color.clear)
                 )
             }
-            // The painted pill is 40pt so consecutive rows nearly touch, as
-            // the approved design shows, while the clickable frame still
-            // meets the 44pt target.
+            // The painted row is 32pt so consecutive rows nearly touch and the
+            // rail reads as one list, while the clickable frame still meets the
+            // 44pt target.
             .frame(minHeight: ZenDesign.Layout.hitTarget)
             .contentShape(Rectangle())
         }

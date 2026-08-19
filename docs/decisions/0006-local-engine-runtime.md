@@ -68,10 +68,9 @@ Integration order executed:
 4. Parakeet Flash (`realtime_eou_120m-v1-q8_0.gguf`)
 5. Cohere Transcribe (`cohere-encoder.int8.onnx`, `cohere-decoder.int8.onnx`, `tokens.txt`)
 
-Each engine is a separate `SpeechEngine` conforming type in `ZenVoiceRuntime`:
+Engines are `SpeechEngine` conforming types in `ZenVoiceRuntime`:
 
-- `ParakeetTDTv3Engine`
-- `ParakeetTDTv2Engine`
+- `ParakeetTDTEngine` (`.v2` English and `.v3` multilingual configurations)
 - `NemotronSpeechUltraFastEngine`
 - `NemotronSpeechMultilingualEngine`
 - `ParakeetFlashEngine`

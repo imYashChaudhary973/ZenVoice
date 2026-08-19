@@ -20,7 +20,7 @@ import parakeet
 /// The C API loads a GGUF model once into a `parakeet_ctx`, then transcribes
 /// mono float PCM or WAV files. This wrapper owns the context and frees the
 /// malloc'd strings the library returns. It is intentionally low-level: the
-/// `ParakeetTDTv3Engine` translates ZenVoice's `LanguageProfile` and audio into
+/// `ParakeetTDTEngine` translates ZenVoice's `LanguageProfile` and audio into
 /// these calls.
 final class ParakeetContext: @unchecked Sendable {
     private let ctx: OpaquePointer

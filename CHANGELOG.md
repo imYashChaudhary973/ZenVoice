@@ -11,20 +11,94 @@ All notable ZenVoice changes are recorded here.
   shipping decision is made. The release checklist and signing pipeline remain
   prepared but inactive.
 
+### Added
+
+- Agentic Command Mode (v2), off by default: a dictated multi-step goal becomes
+  a reviewable plan that runs only after you approve those exact steps. Planning
+  is local — deterministic phrase templates first, Apple's on-device model
+  second — and the validator re-derives each step's risk, rejects working
+  directories outside `~/Developer`, and refuses secret-shaped commands.
+  Approved steps run through `codex`, `claude`, `zsh`, `shortcuts`, or a local
+  notification; high-risk steps always need their own approval. Plans, decisions
+  and captured output are encrypted in the local vault (schema v7), output is
+  redacted before storage, ZenBar shows live progress with a Stop control that
+  kills the whole child process group, and relaunch never resumes an interrupted
+  command. Settings live in Commands → Agentic Mode
+  ([ADR 0013](docs/decisions/0013-agentic-command-mode.md)).
+
 ### Changed
 
+
 - Re-licensed ZenVoice under the Apache License, Version 2.0.
-- Removed the closed-source FluidAudio dependency and the Parakeet CoreML
-  runtime. ZenVoice now uses `whisper.cpp` as its only local speech engine.
+- Removed the closed-source FluidAudio dependency and the Parakeet Unified
+  CoreML runtime. NVIDIA engines now run on open `parakeet.cpp` v0.5.0.
+  Active local engines: Whisper (`whisper.cpp` v1.9.1), Apple Speech,
+  Parakeet TDT v2/v3, Parakeet Flash, Nemotron 3.5, and Cohere Transcribe
+  (on-device ONNX). Do not re-add FluidAudio or Fluid Intelligence.
 - Retired the Parakeet Unified EN CoreML model from the active catalogue; it
   remains resolvable so existing installations do not break.
-- Updated English model recommendations on Apple Silicon to Whisper Large v3
-  Turbo.
+- Whisper Tiny and Base stay retired. The multilingual size ladder is a cliff
+  (Tiny 64.5% WER, Base 55.1%), not a speed tier.
+- One recommender, from the 2026-08-18 Common Voice Spontaneous table:
+  English/European → Parakeet TDT v3; 99-language/auto-detect → Whisper Turbo;
+  Hinglish → Apex; zero-download fallback → Apple Speech; Intel → Whisper Small
+  (compromise). Cohere is local, off by default, and labeled as a slower 3 GB
+  option. Flash and Nemotron Ultra Fast are live-preview only; final insert
+  stays TDT v3 or Turbo. Nemotron is one row with a Streaming/Offline toggle.
+- New visual theme: graphite surfaces and one green. The chrome is a true
+  neutral ramp — every earlier revision tinted the greys toward the brand
+  green, which read as olive under warm light and fought the accent it was
+  meant to support — so colour now means something wherever it appears.
+  Corner radii are tighter (cards 12pt, controls 6–8pt), the sidebar is denser
+  (216pt wide, 32pt rows), technical values are set in the system monospace,
+  and structure comes from hairlines rather than shadows. All 44
+  foreground/background pairs in the palette clear 4.5:1 in both appearances;
+  the first draft of the quietest text rung did not, at 3.9:1 inside a raised
+  panel, because it had been chosen against the canvas instead of the surface
+  it actually sits on.
+- Selected navigation is a quiet raised row with an accent icon rather than a
+  filled green pill. The filled pill was the loudest mark in a window that
+  stays open all day, and it shouted its own state louder than the setting the
+  user opened it to change.
+- First-run setup is six steps instead of seven, and every one of them either
+  asks for something or hands something back: the promise page and the privacy
+  page were two consecutive pages of reading before the user could do anything,
+  and are now one. The header names the current step and counts them, so the
+  length of the flow is visible from the first screen.
+- History retention is now enforced. `HistoryPreferences.retentionDays` was
+  stored and read by nothing: no code path purged old dictations, so an
+  encrypted vault grew for as long as the app was used. Launch now discards
+  records older than the retention window.
+- Agentic shell steps classify risk from the whole command surface. A
+  read-only prefix no longer buys a `low` rating when the command also
+  contains a separator, substitution, or redirection, so `ls; rm -rf x` and
+  `cat a > b` are no longer eligible for blanket plan approval. Working
+  directories resolve symlinks before the `~/Developer` containment check.
+- Plan dependencies must reference earlier steps. The orchestrator runs steps
+  in order, so a forward dependency silently skipped the earlier step; cycles
+  are now impossible by construction rather than detected separately.
+- Whisper live-preview fragments decode on the engine's own serial queue.
+  They previously ran on a second queue, which could put two `whisper_full`
+  calls on one context at the same time.
 
 ### Removed
 
 - FluidAudio package dependency and all Parakeet/CoreML runtime code.
 - Multi-file bundle download, manifest digest, and bundle verification logic.
+- Command Mode's unreachable action branch: `runShortcut`, `appleScript`,
+  `shellScript`, and `openURL` were never produced by the parser and their
+  first-run approval could never be granted, so the actions, the approval
+  store, and their executor methods are gone. Multi-step and script execution
+  belongs to Agentic Mode's plan-approval pipeline.
+- Unused declarations: `EmptyWriteModeTextReader`,
+  `RecordingCommandModeExecutor`, `ZenSegmentedControl`,
+  `GoalOrchestrator.currentRecord`, `SecretRedactor.containsSecret`,
+  `LinkClient.stopObserving`, and `LinkServer.setPolicy`.
+- Superseded documentation: dated QA records, benchmark and fine-tuning
+  experiment write-ups, finished remediation and implementation plans, the
+  open-source strategic plan, the orphaned `docs/hinglish/` workstream, and
+  stale PDF/HTML exports. Git history keeps them; `docs/` describes the
+  product as it is now.
 
 ## [0.2.0] - 2026-08-03
 

@@ -282,6 +282,8 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var selectedEngineID: String?
     @Published private(set) var engineAvailabilities: [EngineAvailability] = []
     @Published private(set) var installedEngineIDs: Set<String> = []
+    @Published private(set) var nemotronMode: NemotronPreferences.Mode =
+        NemotronPreferences.load()
     @Published var errorMessage: String?
 
     private let downloader: VerifiedModelDownloader
@@ -380,7 +382,7 @@ final class ModelManagerViewModel: ObservableObject {
                 )
                 let modelURL = modelsDirectory?
                     .appendingPathComponent(
-                        ParakeetTDTv3Engine.modelFilename,
+                        ParakeetTDTEngine.Configuration.v3.modelFilename,
                         isDirectory: false
                     )
                 isInstalled = modelURL.map {
@@ -406,9 +408,21 @@ final class ModelManagerViewModel: ObservableObject {
 
     func refreshEngineSelection() {
         let profile = LanguagePreferences.load()
-        selectedEngineID = SelectedEnginePreferences.load(for: profile)
+        if let selected = SelectedEnginePreferences.load(for: profile),
+           EngineIdentifiers.isPreviewOnly(selected) {
+            SelectedEnginePreferences.clear(for: profile)
+            selectedEngineID = nil
+        } else {
+            selectedEngineID = SelectedEnginePreferences.load(for: profile)
+        }
         engineAvailabilities =
             engineRegistryProvider()?.availability(for: profile) ?? []
+        nemotronMode = NemotronPreferences.load()
+    }
+
+    func setNemotronMode(_ mode: NemotronPreferences.Mode) {
+        NemotronPreferences.save(mode)
+        nemotronMode = mode
     }
 
     func engineRecommendation() -> EngineRecommendation? {
@@ -427,6 +441,11 @@ final class ModelManagerViewModel: ObservableObject {
     }
 
     func selectEngine(_ engineID: String) {
+        if EngineIdentifiers.isPreviewOnly(engineID) {
+            errorMessage =
+                "Preview only — final insert uses Parakeet TDT v3 or Whisper Turbo."
+            return
+        }
         let profile = LanguagePreferences.load()
         guard let availability = engineAvailabilities.first(
             where: { $0.engine.id == engineID }
@@ -783,14 +802,14 @@ final class ModelManagerViewModel: ObservableObject {
     private func downloadParakeetTDTv2() async throws {
         try await downloadEngineModel(
             engineID: EngineIdentifiers.parakeetTDTv2,
-            filename: ParakeetTDTv2Engine.modelFilename
+            filename: ParakeetTDTEngine.Configuration.v2.modelFilename
         )
     }
 
     private func downloadParakeetTDTv3() async throws {
         try await downloadEngineModel(
             engineID: EngineIdentifiers.parakeetTDTv3,
-            filename: ParakeetTDTv3Engine.modelFilename
+            filename: ParakeetTDTEngine.Configuration.v3.modelFilename
         )
     }
 

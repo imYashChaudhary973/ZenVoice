@@ -17,17 +17,13 @@ import Foundation
 /// A voice command parsed from a transcript.
 ///
 /// The parser returns these values; nothing in `ZenVoiceCore` executes them.
-/// Execution wiring (Shortcuts, NSWorkspace, AppleEvents, shell) is intentionally
-/// out of scope for this module and will be handled by the app layer in later
-/// phases.
+/// Execution wiring is intentionally out of scope for this module and lives
+/// in the app target. Arbitrary script, shell, and URL execution belongs to
+/// Agentic Mode's plan-approval pipeline, not to Command Mode.
 public enum CommandAction: Equatable, Sendable, Codable {
     case none
     case launchApp(bundleID: String)
-    case runShortcut(name: String)
     case systemAction(CommandModeSystemAction)
-    case appleScript(String)
-    case shellScript(String)
-    case openURL(URL)
 }
 
 /// System-level actions that do not need a third-party identifier.

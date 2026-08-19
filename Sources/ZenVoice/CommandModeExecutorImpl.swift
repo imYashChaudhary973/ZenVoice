@@ -21,14 +21,12 @@ import IOKit
 import os
 import ZenVoiceCore
 
-/// Concrete executor for Command Mode actions.
+/// Concrete executor for Command Mode's built-in actions.
 ///
-/// Built-in actions are executed directly. `appleScript`, `shellScript`, and
-/// `openURL` require explicit first-run approval stored in
-/// `CommandModeApprovalPreferences`.
+/// Script, shell, and URL execution belong to Agentic Mode's plan-approval
+/// pipeline; Command Mode launches apps and runs system actions only.
 @MainActor
 final class CommandModeExecutorImpl: CommandModeExecutor {
-    private let inserter: TextInserter
     private let state: AppState
     private let pasteLast: () -> Void
     private let showSettings: () -> Void
@@ -38,12 +36,10 @@ final class CommandModeExecutorImpl: CommandModeExecutor {
     )
 
     init(
-        inserter: TextInserter,
         state: AppState,
         pasteLast: @escaping () -> Void,
         showSettings: @escaping () -> Void
     ) {
-        self.inserter = inserter
         self.state = state
         self.pasteLast = pasteLast
         self.showSettings = showSettings
@@ -52,26 +48,13 @@ final class CommandModeExecutorImpl: CommandModeExecutor {
     func execute(_ action: CommandAction) async throws {
         guard action != .none else { return }
 
-        if CommandModeApprovalPreferences.requiresApproval(action),
-           !CommandModeApprovalPreferences.isApproved(action) {
-            throw CommandModeExecutionError.notApproved
-        }
-
         switch action {
         case .none:
             return
         case .launchApp(let bundleID):
             try launchApp(bundleID: bundleID)
-        case .runShortcut(let name):
-            try runShortcut(name: name)
         case .systemAction(let systemAction):
             try executeSystemAction(systemAction)
-        case .appleScript(let source):
-            try runAppleScript(source)
-        case .shellScript(let command):
-            try runShellScript(command)
-        case .openURL(let url):
-            try openURL(url)
         }
     }
 
@@ -100,14 +83,6 @@ final class CommandModeExecutorImpl: CommandModeExecutor {
         )
     }
 
-    // MARK: - Shortcuts
-
-    private func runShortcut(name: String) throws {
-        let task = Process()
-        task.launchPath = "/usr/bin/shortcuts"
-        task.arguments = ["run", name]
-        try runProcess(task)
-    }
 
     // MARK: - System actions
 
@@ -170,52 +145,11 @@ final class CommandModeExecutorImpl: CommandModeExecutor {
         var components = URLComponents(string: "https://www.google.com/search")
         components?.queryItems = [URLQueryItem(name: "q", value: selected)]
         guard let url = components?.url else {
-            throw CommandModeExecutionError.scriptFailed("Invalid search query: \(selected)")
+            throw CommandModeExecutionError.systemActionFailed(.searchSelectedText)
         }
         NSWorkspace.shared.open(url)
     }
 
-    // MARK: - AppleScript / Shell / URL
-
-    private func runAppleScript(_ source: String) throws {
-        var errorInfo: NSDictionary?
-        guard let appleScript = NSAppleScript(source: source) else {
-            throw CommandModeExecutionError.scriptFailed("Invalid script")
-        }
-        appleScript.executeAndReturnError(&errorInfo)
-        if let errorInfo {
-            let message = errorInfo[NSAppleScript.errorMessage] as? String
-                ?? "Unknown AppleScript error"
-            throw CommandModeExecutionError.scriptFailed(message)
-        }
-    }
-
-    private func runShellScript(_ command: String) throws {
-        let task = Process()
-        task.launchPath = "/bin/zsh"
-        task.arguments = ["-c", command]
-        try runProcess(task)
-    }
-
-    private func openURL(_ url: URL) throws {
-        guard NSWorkspace.shared.open(url) else {
-            throw CommandModeExecutionError.scriptFailed("Failed to open URL: \(url.absoluteString)")
-        }
-    }
-
-    private func runProcess(_ task: Process) throws {
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        try task.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-        guard task.terminationStatus == 0 else {
-            let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                ?? "Process exited with \(task.terminationStatus)"
-            throw CommandModeExecutionError.scriptFailed(message)
-        }
-    }
 
     // MARK: - Volume (CoreAudio)
 

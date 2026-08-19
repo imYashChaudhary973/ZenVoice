@@ -66,7 +66,9 @@ struct HelpAndAboutScreen: View {
                     openShortcuts: openShortcuts
                 )
             case .about:
-                UpdatesScreen(viewModel: updatesViewModel)
+                UpdatesScreen(
+                    viewModel: updatesViewModel
+                )
             }
         }
     }

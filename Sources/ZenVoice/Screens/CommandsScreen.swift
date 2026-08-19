@@ -23,7 +23,7 @@ struct CommandsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case commandMode, writeMode
+        case commandMode, agenticMode, writeMode
 
         var id: String { rawValue }
 
@@ -31,6 +31,8 @@ struct CommandsScreen: View {
             switch self {
             case .commandMode:
                 return "Command Mode"
+            case .agenticMode:
+                return "Agentic Mode"
             case .writeMode:
                 return "Write Mode"
             }
@@ -57,6 +59,8 @@ struct CommandsScreen: View {
             switch selection {
             case .commandMode:
                 CommandModeScreen(viewModel: viewModel)
+            case .agenticMode:
+                AgenticModeScreen(viewModel: viewModel)
             case .writeMode:
                 WriteModeScreen(viewModel: viewModel)
             }

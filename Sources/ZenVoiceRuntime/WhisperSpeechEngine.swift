@@ -117,10 +117,34 @@ public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
         }
     }
 
-    /// Synchronous decode for live preview fragments.
+    /// Queued decode of in-memory samples, for live preview fragments.
     ///
-    /// Callers that already serialize on this engine's queue can call this
-    /// directly; otherwise use the async `transcribe(audioURL:languageProfile:)`.
+    /// Hops to the engine's serial queue like every other decode, so a
+    /// preview fragment can never run whisper_full concurrently with a final
+    /// whole-recording decode on the same context.
+    public func enqueuePreview(
+        samples: [Float],
+        languageProfile: LanguageProfile,
+        initialPrompt: String? = nil
+    ) async throws -> TranscriptionResult {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async { [transcriber] in
+                do {
+                    let result = try transcriber.transcribe(
+                        samples: samples,
+                        languageProfile: languageProfile,
+                        initialPrompt: initialPrompt
+                    )
+                    continuation.resume(returning: result)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// Synchronous decode for callers already serialized on this engine's
+    /// queue. Anything else must use the queued variants above.
     public func transcribe(
         samples: [Float],
         languageProfile: LanguageProfile,

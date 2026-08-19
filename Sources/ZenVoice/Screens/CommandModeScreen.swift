@@ -112,7 +112,7 @@ struct CommandModeScreen: View {
             kind: .info,
             icon: "hand.raised",
             text:
-                "Scripts, shell commands, and URL opens require explicit first-run approval. Built-in system actions do not."
+                "Command Mode runs built-in actions only: app launches and system actions. Scripts, shell commands, and multi-step goals belong to Agentic Mode, which requires approving the exact steps first."
         )
     }
 
@@ -122,16 +122,8 @@ struct CommandModeScreen: View {
             return "No action"
         case .launchApp(let bundleID):
             return "Open app · \(bundleID)"
-        case .runShortcut(let name):
-            return "Run Shortcut · \(name)"
         case .systemAction(let systemAction):
             return systemAction.displayName
-        case .appleScript:
-            return "Run AppleScript (requires approval)"
-        case .shellScript:
-            return "Run shell script (requires approval)"
-        case .openURL(let url):
-            return "Open URL · \(url.absoluteString)"
         }
     }
 }

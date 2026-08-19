@@ -131,3 +131,59 @@ that starts attaching app identity fails the build rather than shipping.
 This Phase 5 review is current as of 2026-08-06. Neither component has had
 manual QA against a live provider endpoint or a real signed feed; both remain
 open in [Release readiness](RELEASE_READINESS.md).
+
+## Phase 6/v2 — Agentic Command Mode
+
+Reviewed 2026-08-18, at implementation. Agentic Mode deliberately introduces the
+largest capability in the product — spawning developer tools that edit files —
+so the controls are stated as an explicit chain rather than a summary.
+
+**Trust boundary:** the planner is untrusted input. Both tiers (deterministic
+templates and Apple's on-device model) produce a `GoalPlan` that only becomes
+executable after `PlanValidator` accepts it. The validator enforces schema
+version, ≤12 contiguous step numbers, the closed agent whitelist, acyclic
+dependencies referencing earlier steps only, timeouts in 1–7200 s, a
+secret-shape scan over title/transcript/commands/paths, and containment of every
+working directory inside `~/Developer` **by path components**, so a sibling such
+as `~/Developer-escape` is rejected rather than accepted by prefix match. The
+planner's self-reported `plannedRisk` is advisory and always overwritten by the
+validator's recomputation from the command surface.
+
+**Authorisation:** no step runs without an `ApprovalDecision` bound to the
+plan's id, its SHA-256 over canonical (sorted-key) JSON, and its version. An
+edited plan becomes a new version and re-enters review, so a decision cannot be
+replayed onto changed bytes. Steps recomputed as high risk always require their
+own decision — `all`-scope approval is refused outright when the plan contains a
+high-risk step. Only an unchanged low-risk step can be remembered, and only when
+the user has switched that memory on; the memory key is a digest of the whole
+step, so changing one character of a command invalidates it.
+
+**Execution containment:** steps are spawned with `Process` and explicit
+argument vectors — never a shell string — except the `shell` agent, which is the
+user-approved shell case by definition. The child environment is rebuilt to
+`HOME`, `PATH`, `TMPDIR`, `LANG`: no Keychain material and no provider API keys
+can reach a child by construction. Each child gets its own process group, so
+cancellation and timeout signal `-pid` and escalate to `SIGKILL` after a polled
+grace window rather than orphaning grandchildren.
+
+**Data at rest and in the HUD:** plans, decisions, per-step state and captured
+output live in the same AES-GCM-sealed vault as transcripts, in `agentic_tasks`
+with field-bound authentication context (schema v7). Every event message and
+every retained output chunk passes `SecretRedactor` before persistence, retained
+output is capped at 5 MB per step and the event log at 500 events per goal.
+`ZenVoiceStorageChecks` scans the raw database file for known plaintext markers,
+so a future change that stores an agentic plan or its output unencrypted fails
+the build.
+
+**Residual risk, accepted:** an approved Codex or Claude step is a delegation to
+a separate product with its own credentials and its own network behaviour.
+ZenVoice can bound *where* it runs, *what* it was asked, and *when* it is
+killed; it cannot bound what that tool then does within those limits. This is
+why the feature is off by default, why the plan is shown verbatim before
+execution, and why approval is never voice-only.
+
+**Not covered:** no live run against a paid provider was performed as part of
+this review. The executor path is exercised end to end with the `shell` agent
+(success, non-zero exit, timeout, process-group cancellation, agent mismatch) in
+`ZenVoiceCoreChecks`; the Codex and Claude adapters share that code path and
+differ only in their verified argument vectors.

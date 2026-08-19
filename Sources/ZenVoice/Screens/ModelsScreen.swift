@@ -17,34 +17,29 @@ import ZenVoiceCore
 import ZenVoiceStorage
 
 private enum EngineGroup: String, CaseIterable {
-    case builtIn
-    case local
-    case cloud
+    case defaults
+    case advanced
 
     var displayName: String {
         switch self {
-        case .builtIn:
-            return "Built-in"
-        case .local:
-            return "Local models"
-        case .cloud:
-            return "Cloud"
+        case .defaults:
+            return "Defaults"
+        case .advanced:
+            return "Advanced"
         }
     }
 
-    func contains(_ family: EngineFamily) -> Bool {
+    func contains(_ engineID: String) -> Bool {
+        let defaults: Set<String> = [
+            EngineIdentifiers.appleSpeech,
+            EngineIdentifiers.parakeetTDTv3,
+            EngineIdentifiers.whisper
+        ]
         switch self {
-        case .builtIn:
-            return family == .appleSpeech
-        case .local:
-            return [
-                .whisper,
-                .parakeetTDT,
-                .parakeetFlash,
-                .nemotronSpeech
-            ].contains(family)
-        case .cloud:
-            return family == .cohereTranscribe
+        case .defaults:
+            return defaults.contains(engineID)
+        case .advanced:
+            return !defaults.contains(engineID)
         }
     }
 }
@@ -97,6 +92,23 @@ struct ModelsScreen: View {
                         icon: "target",
                         detail: "Strongest results · multilingual"
                     )
+                }
+            }
+
+            ZenSection(
+                title: "Measured on this Mac",
+                caption: "Common Voice Spontaneous, 262 clips, 2026-08-18"
+            ) {
+                VStack(alignment: .leading, spacing: 4) {
+                    werRow("Parakeet TDT v3", "6.9% WER · 73× · English/European default")
+                    werRow("Whisper Turbo", "8.2% WER · 11× · 99 languages")
+                    werRow("Cohere Transcribe", "10.8% WER · 5× · local, 3 GB, slower")
+                    werRow("Parakeet Flash", "14.1% WER · preview only")
+                    werRow("Nemotron Ultra Fast", "23.8% WER · preview only")
+                    Text("Hinglish Apex keeps 85% of English loanwords; Turbo keeps 0/31. No telemetry.")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        .padding(.top, 4)
                 }
             }
 
@@ -279,8 +291,50 @@ struct ModelsScreen: View {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
+    private func werRow(_ name: String, _ detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(name)
+                .font(ZenDesign.Typography.captionStrong)
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            Spacer(minLength: ZenDesign.Spacing.sm)
+            Text(detail)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func engineDisplayName(_ engine: EngineDescriptor) -> String {
+        if engine.id == EngineIdentifiers.nemotronSpeechMultilingual {
+            return "Nemotron 3.5"
+        }
+        return engine.displayName
+    }
+
+    private func engineCaption(_ engine: EngineDescriptor) -> String {
+        if engine.id == EngineIdentifiers.cohereTranscribe {
+            return "Local ONNX, 14 languages, ~3 GB, slower. Off by default."
+        }
+        if engine.id == EngineIdentifiers.parakeetFlash {
+            return "Live preview only. Final insert stays TDT v3 or Turbo."
+        }
+        if engine.id == EngineIdentifiers.nemotronSpeechMultilingual {
+            return viewModel.nemotronMode == .streaming
+                ? "Streaming is live preview only (23.8% WER). Final insert stays TDT v3 or Turbo."
+                : "Offline whole-file path. Not the default. Final insert still prefers TDT v3 or Turbo."
+        }
+        if engine.id == EngineIdentifiers.appleSpeech {
+            return "Zero-download fallback. Unmeasured — convenience, not quality."
+        }
+        return engine.privacyNote
+    }
+
     private func engineRow(_ availability: EngineAvailability) -> some View {
-        let isSelected = viewModel.isSelectedEngine(availability.engine.id)
+        let engineID = availability.engine.id
+        let isPreviewOnly = EngineIdentifiers.isPreviewOnly(engineID)
+            || (engineID == EngineIdentifiers.nemotronSpeechMultilingual
+                && viewModel.nemotronMode == .streaming)
+        let isSelected = viewModel.isSelectedEngine(engineID)
         let isAvailable = availability.isAvailable
 
         return VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
@@ -296,14 +350,16 @@ struct ModelsScreen: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: ZenDesign.Spacing.xs) {
-                        Text(availability.engine.displayName)
+                        Text(engineDisplayName(availability.engine))
                             .font(ZenDesign.Typography.bodyStrong)
                             .foregroundStyle(
                                 isAvailable
                                     ? ZenDesign.Semantic.textPrimary
                                     : ZenDesign.Semantic.textSecondary
                             )
-                        if isSelected {
+                        if isPreviewOnly {
+                            ZenBadge(text: "Preview only", kind: .neutral)
+                        } else if isSelected {
                             ZenBadge(
                                 text: "In use",
                                 kind: .success,
@@ -314,33 +370,31 @@ struct ModelsScreen: View {
                                 text: engineStatusLabel(for: availability),
                                 kind: .warn
                             )
-                        } else if viewModel.isRecommendedEngine(
-                            availability.engine.id
-                        ) {
+                        } else if viewModel.isRecommendedEngine(engineID) {
                             ZenBadge(
                                 text: "Recommended",
                                 kind: .accent
                             )
                         }
                     }
-                    Text(availability.engine.privacyNote)
+                    Text(engineCaption(availability.engine))
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        .lineLimit(2)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: ZenDesign.Spacing.sm)
 
-                if isAvailable, !isSelected {
+                if isAvailable, !isSelected, !isPreviewOnly {
                     Button("Use") {
-                        viewModel.selectEngine(availability.engine.id)
+                        viewModel.selectEngine(engineID)
                     }
                     .buttonStyle(ZenPrimaryButtonStyle(minWidth: 60))
                 } else if !isAvailable,
                           availability.engine.requiresDownload,
                           let engine = viewModel.engines.first(where: {
-                              $0.descriptor.id == availability.engine.id
+                              $0.descriptor.id == engineID
                           }) {
                     Button(viewModel.isEngineDownloading(engine)
                            ? "Downloading…"
@@ -350,6 +404,22 @@ struct ModelsScreen: View {
                     .buttonStyle(ZenSecondaryButtonStyle(minWidth: 80))
                     .disabled(viewModel.isEngineDownloading(engine))
                 }
+            }
+
+            if engineID == EngineIdentifiers.nemotronSpeechMultilingual {
+                Picker(
+                    "Nemotron mode",
+                    selection: Binding(
+                        get: { viewModel.nemotronMode },
+                        set: { viewModel.setNemotronMode($0) }
+                    )
+                ) {
+                    ForEach(NemotronPreferences.Mode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.leading, 44)
             }
 
             ZenModelMeta(parts: [
@@ -371,7 +441,8 @@ struct ModelsScreen: View {
         in group: EngineGroup
     ) -> [EngineAvailability] {
         viewModel.engineAvailabilities.filter {
-            group.contains($0.engine.family)
+            $0.engine.id != EngineIdentifiers.nemotronSpeechUltraFast
+                && group.contains($0.engine.id)
         }
     }
 
@@ -386,7 +457,7 @@ struct ModelsScreen: View {
         case .nemotronSpeech:
             return "cpu"
         case .cohereTranscribe:
-            return "cloud"
+            return "internaldrive"
         }
     }
 

@@ -288,8 +288,8 @@ insertions. Semantic quantity/negation guard violations and silence failures
 remain zero, but segmented ASR negation failures rise from 7 for the base to 8
 and 9 for checkpoints 318 and 636. All adapters and Q5 files from this cycle
 remain local evaluation artifacts. The public-corpus representativeness gate
-independently prevents selection or promotion. Full evidence is recorded in
-`docs/WHISPER_SMALL_EN_PUBLIC_SUPPLEMENT_2026-08-15.md`.
+independently prevents selection or promotion. The per-checkpoint evidence
+for that cycle stays in git history rather than in this directory.
 
 ## Retraining gate
 

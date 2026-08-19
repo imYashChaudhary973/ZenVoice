@@ -97,6 +97,9 @@ final class AppState: ObservableObject {
     @Published var languageProfile: LanguageProfile
     @Published var liveTranscriptPreview = ""
     @Published var mode: ZenBarMode = .dictation
+    @Published var agenticGoalTitle: String?
+    @Published var agenticStatusEvent: GoalStatusEvent?
+    @Published var isAgenticGoalActive = false
 
     init(defaults: UserDefaults = .standard) {
         languageProfile = LanguagePreferences.load(defaults: defaults)

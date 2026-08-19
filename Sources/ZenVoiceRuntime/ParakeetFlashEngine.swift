@@ -187,4 +187,40 @@ public final class ParakeetFlashEngine: @unchecked Sendable, SpeechEngine {
             }
         }
     }
+
+    /// Live-preview path: stream in-memory 16 kHz mono samples.
+    public func transcribe(
+        samples: [Float],
+        languageProfile: LanguageProfile,
+        initialPrompt: String? = nil
+    ) async throws -> TranscriptionResult {
+        guard isAvailable else {
+            throw EngineError.noEngineAvailable
+        }
+        let context = try await loadedContext()
+        return try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<TranscriptionResult, Error>)
+            in
+            queue.async {
+                do {
+                    let transcript = try context.transcribeStreaming(
+                        samples: samples,
+                        languageCode: nil
+                    )
+                    continuation.resume(
+                        returning: TranscriptionResult(
+                            rawTranscript: transcript,
+                            finalTranscript: transcript,
+                            correctionCount: 0,
+                            isPartial: true,
+                            modelID: Self.engineID,
+                            processingDurationSeconds: 0
+                        )
+                    )
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
 }
