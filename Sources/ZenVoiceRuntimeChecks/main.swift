@@ -45,6 +45,102 @@ private func makeSilentFixture() throws -> URL {
     return url
 }
 
+/// Parakeet TDT smoke: loads each installed TDT GGUF through
+/// `ParakeetTDTEngine`, decodes one clip, and checks the release round trip.
+///
+/// Silent by default (asserts a clean decode and engine plumbing). Set
+/// `ZENVOICE_PARAKEET_AUDIO` to a real recording to also require a non-empty
+/// transcript. Skips configurations whose model file is absent, matching the
+/// whisper path's local-development skip.
+do {
+    let environment = ProcessInfo.processInfo.environment
+    let modelsDirectory = try VerifiedModelCatalog.modelsDirectory()
+    var exercised = 0
+    for configuration: ParakeetTDTEngine.Configuration in [.v2, .v3] {
+        let modelURL = modelsDirectory
+            .appendingPathComponent(configuration.modelFilename)
+        guard FileManager.default.fileExists(atPath: modelURL.path) else {
+            continue
+        }
+        let engine = ParakeetTDTEngine(
+            configuration: configuration,
+            modelURL: modelURL
+        )
+        try await engine.prepare()
+        guard engine.isLoaded else {
+            throw NSError(
+                domain: "ZenVoiceRuntimeChecks",
+                code: 7,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Parakeet \(configuration.displayName) did not stay "
+                        + "loaded after prepare()."
+                ]
+            )
+        }
+        let audioURL =
+            try environment["ZENVOICE_PARAKEET_AUDIO"].map {
+                URL(fileURLWithPath: $0)
+            } ?? makeSilentFixture()
+        let result = try await engine.transcribe(
+            audioURL: audioURL,
+            languageProfile: .english,
+            initialPrompt: nil
+        )
+        guard result.modelID == configuration.engineID else {
+            throw NSError(
+                domain: "ZenVoiceRuntimeChecks",
+                code: 8,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Parakeet decode reported modelID \(result.modelID), "
+                        + "expected \(configuration.engineID)."
+                ]
+            )
+        }
+        let requiresSpeech = environment["ZENVOICE_PARAKEET_AUDIO"] != nil
+        guard !requiresSpeech || !result.finalTranscript.isEmpty else {
+            throw NSError(
+                domain: "ZenVoiceRuntimeChecks",
+                code: 9,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Parakeet \(configuration.displayName) produced an "
+                        + "empty transcript for real speech audio."
+                ]
+            )
+        }
+        await engine.release()
+        guard !engine.isLoaded else {
+            throw NSError(
+                domain: "ZenVoiceRuntimeChecks",
+                code: 10,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Parakeet \(configuration.displayName) stayed loaded "
+                        + "after release()."
+                ]
+            )
+        }
+        exercised += 1
+        print(
+            "  parakeet \(configuration.displayName) decoded "
+                + "\(result.finalTranscript.isEmpty ? "silence" : "speech") "
+                + "· transcript \"\(result.finalTranscript)\""
+        )
+    }
+    if exercised == 0 {
+        print("Parakeet TDT checks skipped: no TDT model in Models.")
+    } else {
+        print("Parakeet TDT checks passed (\(exercised) configuration(s)).")
+    }
+} catch {
+    FileHandle.standardError.write(
+        Data("ZenVoice Parakeet checks failed: \(error)\n".utf8)
+    )
+    exit(1)
+}
+
 /// This process's physical footprint, which is what macOS charges the app.
 ///
 /// `ps`-style RSS counts shared and file-backed pages and reads far higher

@@ -24,9 +24,10 @@ import ZenVoiceCore
 /// metadata, so they share one engine class and a `Configuration`.
 public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
     public struct Configuration: Sendable {
-        let engineID: String
+        public let engineID: String
         public let modelFilename: String
-        let displayName: String
+        public let displayName: String
+
         let languageCapability: ModelLanguageCapability
         let attribution: String
         let queueLabel: String
