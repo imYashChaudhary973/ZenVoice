@@ -252,6 +252,16 @@ public struct InstantRefineEngine: Sendable {
             candidate = recased
             correctionCount += 1
         }
+        guard TranscriptSemanticGuard.preservesProtectedTerms(
+            original: transcript,
+            candidate: candidate
+        ) else {
+            return InstantRefineResult(
+                text: transcript,
+                correctionCount: 0,
+                wasRejected: true
+            )
+        }
         guard meaningIsPreserved(
             original: transcript,
             candidate: candidate

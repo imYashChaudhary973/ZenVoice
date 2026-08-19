@@ -24,21 +24,22 @@ import Foundation
 /// absolute number. One violation in a thousand dictations is a product
 /// failure, and a percentage would hide it.
 ///
-/// Comparison is raw-transcript against refined-transcript, never against the
-/// fixture reference. Refinement's contract is that it does not alter meaning
-/// relative to *what it was handed*; whether Whisper heard the word correctly
-/// in the first place is a transcription question and is already scored by WER.
+/// Refinement is compared with its raw ASR input. Transcription safety uses the
+/// same protected-token accounting against the human reference, separately
+/// from WER, so a fluent-looking number or negation error cannot hide in an
+/// average score.
 enum SemanticSafety {
+    enum ProtectedKind {
+        case negation
+        case quantity
+    }
+
     /// Negations, including the contracted forms. Scoring.normalize strips
     /// apostrophes, so "don't" arrives here as "dont".
     ///
-    /// Bare "no" is deliberately absent. It is the one negation that is also a
-    /// correction cue — "a login page, no wait, a sign-up page" — where
-    /// deleting it is exactly the behaviour we want, so protecting it would
-    /// flag correct refinement as a safety violation. It costs real coverage
-    /// ("no changes needed" is a genuine negation), and the honest fix is
-    /// structural: once the alignment guard understands correction phrases as
-    /// units, "no" can be protected everywhere it is not part of one.
+    /// Bare "no" is handled separately: ASR scoring always protects it, while
+    /// refinement's product guard recognizes punctuation-delimited correction
+    /// cues such as "no, wait" structurally.
     static let negations: Set<String> = [
         "not", "never", "none", "nothing", "nobody", "nowhere",
         "cannot", "cant", "dont", "doesnt", "didnt", "wont", "wouldnt",
@@ -69,6 +70,7 @@ enum SemanticSafety {
         let token: String
         let rawCount: Int
         let refinedCount: Int
+        let kind: ProtectedKind
 
         var description: String {
             "\(token) \(rawCount)→\(refinedCount)"
@@ -83,27 +85,53 @@ enum SemanticSafety {
         raw: String,
         refined: String
     ) -> [Violation] {
-        let rawCounts = protectedCounts(in: raw)
-        let refinedCounts = protectedCounts(in: refined)
-        let tokens = Set(rawCounts.keys).union(refinedCounts.keys)
+        compareProtectedCounts(
+            before: protectedCounts(in: raw, includeBareNo: false),
+            after: protectedCounts(in: refined, includeBareNo: false)
+        )
+    }
+
+    /// ASR safety is measured against the spoken reference, so bare "no" is
+    /// protected here even though refinement has a structural correction-cue
+    /// exception for phrases such as "no, wait".
+    static func transcriptionViolations(
+        reference: String,
+        hypothesis: String
+    ) -> [Violation] {
+        compareProtectedCounts(
+            before: protectedCounts(in: reference, includeBareNo: true),
+            after: protectedCounts(in: hypothesis, includeBareNo: true)
+        )
+    }
+
+    private static func compareProtectedCounts(
+        before: [String: Int],
+        after: [String: Int]
+    ) -> [Violation] {
+        let tokens = Set(before.keys).union(after.keys)
         return tokens.compactMap { token in
-            let before = rawCounts[token] ?? 0
-            let after = refinedCounts[token] ?? 0
-            guard before != after else { return nil }
+            let beforeCount = before[token] ?? 0
+            let afterCount = after[token] ?? 0
+            guard beforeCount != afterCount else { return nil }
             return Violation(
                 token: token,
-                rawCount: before,
-                refinedCount: after
+                rawCount: beforeCount,
+                refinedCount: afterCount,
+                kind: negations.contains(token) || token == "no"
+                    ? .negation
+                    : .quantity
             )
         }
         .sorted { $0.token < $1.token }
     }
 
     private static func protectedCounts(
-        in text: String
+        in text: String,
+        includeBareNo: Bool
     ) -> [String: Int] {
         var counts: [String: Int] = [:]
-        for token in Scoring.normalize(text) where isProtected(token) {
+        for token in Scoring.normalize(text)
+        where isProtected(token) || (includeBareNo && token == "no") {
             counts[token, default: 0] += 1
         }
         return counts

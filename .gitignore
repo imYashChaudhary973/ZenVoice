@@ -11,6 +11,8 @@ Screenshot *.heic
 /clipboard-*.jpg
 .claude/
 PrivateBenchmarks/
+__pycache__/
+*.pyc
 
 # Local evaluation corpora are fetched on demand and never belong in git.
 /Datasets/

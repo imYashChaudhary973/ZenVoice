@@ -663,6 +663,9 @@ enum Fixtures {
     /// tone, so every number the harness produces from it is optimistic. This
     /// is the escape hatch from that.
     static func corpus(at directory: URL) throws -> [Clip] {
+        if directory.pathExtension.lowercased() == "jsonl" {
+            return try corpus(manifestAt: directory)
+        }
         let contents = try FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: nil
@@ -717,5 +720,91 @@ enum Fixtures {
             let jitter = Float(state % 20_001) / 10_000 - 1
             return sample * gain + jitter * noise
         }
+    }
+
+    /// Loads a checksum-locked JSONL corpus without copying its audio into a
+    /// flat directory. Paths are repository-relative and must resolve inside
+    /// the repository, so a crafted manifest cannot make the harness read an
+    /// unrelated local file.
+    private static func corpus(manifestAt manifest: URL) throws -> [Clip] {
+        struct ManifestRow: Decodable {
+            let audio: String
+            let text: String
+            let audioID: String?
+            let sessionID: String?
+            let promptID: String?
+
+            enum CodingKeys: String, CodingKey {
+                case audio
+                case text
+                case audioID = "audio_id"
+                case sessionID = "session_id"
+                case promptID = "prompt_id"
+            }
+        }
+
+        let repository = URL(
+            fileURLWithPath: FileManager.default.currentDirectoryPath,
+            isDirectory: true
+        )
+        .standardizedFileURL
+        .resolvingSymlinksInPath()
+        let repositoryPrefix = repository.path + "/"
+        let contents = try String(contentsOf: manifest, encoding: .utf8)
+        let lines = contents.split(whereSeparator: \.isNewline)
+        guard !lines.isEmpty, lines.count <= 100_000 else {
+            return []
+        }
+        let decoder = JSONDecoder()
+        var clips: [Clip] = []
+        var names: Set<String> = []
+        for (index, line) in lines.enumerated() {
+            let row = try decoder.decode(
+                ManifestRow.self,
+                from: Data(line.utf8)
+            )
+            guard !row.audio.hasPrefix("/"),
+                  !row.text.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                  ).isEmpty else {
+                return []
+            }
+            let audio = URL(
+                fileURLWithPath: row.audio,
+                relativeTo: repository
+            )
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            guard audio.path.hasPrefix(repositoryPrefix),
+                  FileManager.default.fileExists(atPath: audio.path) else {
+                return []
+            }
+            let sessionPrompt = [row.sessionID, row.promptID]
+                .compactMap { $0 }
+                .joined(separator: "-")
+            let name = row.audioID.flatMap { $0.isEmpty ? nil : "audio-\($0)" }
+                ?? (sessionPrompt.isEmpty
+                    ? "manifest-\(index + 1)"
+                    : sessionPrompt)
+            guard names.insert(name).inserted else {
+                return []
+            }
+            clips.append(
+                Clip(
+                    sentence: Sentence(
+                        id: name,
+                        label: name,
+                        phrases: [
+                            row.text.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+                        ]
+                    ),
+                    wordsPerMinute: 0,
+                    url: audio
+                )
+            )
+        }
+        return clips
     }
 }

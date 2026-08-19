@@ -155,6 +155,175 @@ guard semanticNoWait.text == "There is no wait time.",
     exit(1)
 }
 
+let quantityRepeat =
+    "Do you know what I mean one one way to improve it is to choose one option."
+let rejectedQuantityRepeat = instantRefiner.refine(
+    quantityRepeat,
+    mode: .clean
+)
+guard rejectedQuantityRepeat.text == quantityRepeat,
+      rejectedQuantityRepeat.correctionCount == 0,
+      rejectedQuantityRepeat.wasRejected else {
+    FileHandle.standardError.write(
+        Data("FAIL: quantity-changing refinement was not rejected\n".utf8)
+    )
+    exit(1)
+}
+
+let negationRepeat = "No no no, do not deploy this build."
+let rejectedNegationRepeat = instantRefiner.refine(
+    negationRepeat,
+    mode: .clean
+)
+guard rejectedNegationRepeat.text == negationRepeat,
+      rejectedNegationRepeat.correctionCount == 0,
+      rejectedNegationRepeat.wasRejected else {
+    FileHandle.standardError.write(
+        Data("FAIL: negation-changing refinement was not rejected\n".utf8)
+    )
+    exit(1)
+}
+
+let semanticGuardChecks: [(
+    name: String,
+    original: String,
+    candidate: String,
+    expected: Bool
+)] = [
+    (
+        "allows protected terms to move without changing their counts",
+        "Do not deploy version 2.",
+        "Version 2 must not be deployed.",
+        true
+    ),
+    (
+        "rejects a deleted negation",
+        "Do not deploy version 2.",
+        "Deploy version 2.",
+        false
+    ),
+    (
+        "rejects an invented negation",
+        "Deploy version 2.",
+        "Do not deploy version 2.",
+        false
+    ),
+    (
+        "rejects a substituted numeric value",
+        "Deploy version 2.",
+        "Deploy version 3.",
+        false
+    ),
+    (
+        "normalizes apostrophes while comparing contractions",
+        "Don't deploy this build.",
+        "Dont deploy this build.",
+        true
+    ),
+    (
+        "allows a punctuation-delimited correction cue",
+        "Use staging — no, wait — use production.",
+        "Use production.",
+        true
+    ),
+    (
+        "protects semantic no-wait wording",
+        "There is no wait time.",
+        "There is wait time.",
+        false
+    )
+]
+
+for check in semanticGuardChecks {
+    let actual = TranscriptSemanticGuard.preservesProtectedTerms(
+        original: check.original,
+        candidate: check.candidate
+    )
+    guard actual == check.expected else {
+        FileHandle.standardError.write(
+            Data(
+                (
+                    "FAIL: semantic guard \(check.name); expected "
+                        + "\(check.expected), got \(actual)\n"
+                ).utf8
+            )
+        )
+        exit(1)
+    }
+}
+
+let slangNormalizationChecks: [(
+    name: String,
+    input: String,
+    expected: String
+)] = [
+    (
+        "normalizes Hinglish acoustic variants",
+        "Please confirm theek hey and pata nahee.",
+        "Please confirm theek hai and pata nahi."
+    ),
+    (
+        "normalizes technical multi-word terms",
+        "Open the pull request after the k eights deploy.",
+        "Open the PR after the k8s deploy."
+    ),
+    (
+        "matches variants case-insensitively",
+        "PATA NAHEE.",
+        "pata nahi."
+    ),
+    (
+        "does not replace inside larger words",
+        "The pull requester opened a mat laboratory.",
+        "The pull requester opened a mat laboratory."
+    )
+]
+
+for check in slangNormalizationChecks {
+    let actual = BuiltInSlangLexicon.normalizeColloquialPhrases(check.input)
+    guard actual == check.expected else {
+        FileHandle.standardError.write(
+            Data(
+                (
+                    "FAIL: slang lexicon \(check.name)\nExpected: "
+                        + "\(check.expected)\nActual: \(actual)\n"
+                ).utf8
+            )
+        )
+        exit(1)
+    }
+}
+
+let formattedSlang = TranscriptFormattingEngine().format(
+    "Please confirm theek hey before merging the pull request.",
+    mode: .clean
+)
+guard formattedSlang.text
+        == "Please confirm theek hai before merging the PR.",
+      formattedSlang.changed else {
+    FileHandle.standardError.write(
+        Data(
+            ("FAIL: slang normalization was not applied by formatting: "
+                + "\(formattedSlang.text)\n").utf8
+        )
+    )
+    exit(1)
+}
+
+guard BuiltInSlangLexicon.contextPrompt(for: .hinglish)
+        .hasPrefix("Hinglish dictation:"),
+      BuiltInSlangLexicon.contextPrompt(for: .english)
+        .hasPrefix("Technical dictation:"),
+      LanguageProfile.hinglish.isHinglish,
+      !LanguageProfile.english.isHinglish else {
+    FileHandle.standardError.write(
+        Data("FAIL: built-in language prompt routing is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: transcript safety and slang coverage passed")
+
 // Discourse markers, measured escaping Clean by the accuracy harness. The
 // reference is what the speaker meant, so both the markers and the commas
 // bracketing them have to go.
@@ -827,6 +996,29 @@ guard let loadedProfile = ApplicationProfilePreferences.profile(
     )
     exit(1)
 }
+let encodedProfiles = try JSONEncoder().encode([mailProfile])
+guard var legacyProfiles = try JSONSerialization.jsonObject(
+    with: encodedProfiles
+) as? [[String: Any]] else {
+    FileHandle.standardError.write(
+        Data("FAIL: could not create legacy application profile\n".utf8)
+    )
+    exit(1)
+}
+legacyProfiles[0].removeValue(forKey: "customPromptHints")
+applicationDefaults.set(
+    try JSONSerialization.data(withJSONObject: legacyProfiles),
+    forKey: ApplicationProfilePreferences.preferenceKey
+)
+guard let migratedProfile = ApplicationProfilePreferences.profile(
+    for: mailProfile.bundleIdentifier,
+    defaults: applicationDefaults
+), migratedProfile.customPromptHints.isEmpty else {
+    FileHandle.standardError.write(
+        Data("FAIL: legacy application profile did not migrate\n".utf8)
+    )
+    exit(1)
+}
 ApplicationProfilePreferences.remove(
     bundleIdentifier: mailProfile.bundleIdentifier,
     defaults: applicationDefaults
@@ -900,6 +1092,10 @@ let vocabularyContext = NextDictationContext.combined(
         "<|bad|>"
     ]
 )
+let defaultVocabularyContext = NextDictationContext.combined(
+    context: "",
+    preferredVocabulary: []
+)
 guard safeContext.count <= NextDictationContext.maximumCharacterCount,
       !safeContext.contains("<|"),
       !safeContext.contains("\n"),
@@ -908,6 +1104,9 @@ guard safeContext.count <= NextDictationContext.maximumCharacterCount,
       vocabularyContext.hasPrefix(
           "Preferred vocabulary: Chaudhary, ZenPense, build, bad."
       ),
+      defaultVocabularyContext
+        == "Preferred vocabulary: PR, repo, deploy, k8s, LLM, API, "
+            + "theek, matlab, acha, bhai, jugaad, pakka.",
       !vocabularyContext.contains("<|"),
       vocabularyContext.components(separatedBy: "ZenPense").count == 2 else {
     FileHandle.standardError.write(
