@@ -14,22 +14,10 @@
 
 import SwiftUI
 
-/// Light, dark, or whatever the Mac is set to.
-///
-/// The token layer is built entirely on `NSColor(name:)` providers that already
-/// resolve per appearance, so following the system costs nothing — it only
-/// requires *not* forcing a `preferredColorScheme`. Before this, the stored
-/// preference defaulted to `"light"` and was applied unconditionally, so a
-/// ZenBar floating over a dark desktop was bright white until the user found
-/// the setting.
-///
-/// Absent key means System. `@AppStorage` writes its default only when the
-/// value is set, so an untouched preference is distinguishable from a
-/// deliberate `"light"` — the same trick `AppState` uses for
-/// `showsStatusMessage`. Anyone who explicitly picked light or dark keeps it.
+/// The v3 redesign is dark-only. This type is retained as a thin wrapper so
+/// existing `@AppStorage` call sites compile and any stored legacy value
+/// resolves to dark.
 enum ZenAppearance: String, CaseIterable, Identifiable {
-    case system
-    case light
     case dark
 
     static let storageKey = "zenvoice.appearance"
@@ -37,40 +25,12 @@ enum ZenAppearance: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     static func resolved(_ raw: String) -> ZenAppearance {
-        ZenAppearance(rawValue: raw) ?? .system
+        ZenAppearance(rawValue: raw) ?? .dark
     }
 
-    /// `nil` hands the decision back to macOS.
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system:
-            return nil
-        case .light:
-            return .light
-        case .dark:
-            return .dark
-        }
-    }
+    var colorScheme: ColorScheme { .dark }
 
-    var title: String {
-        switch self {
-        case .system:
-            return "System"
-        case .light:
-            return "Light"
-        case .dark:
-            return "Dark"
-        }
-    }
+    var title: String { "Dark" }
 
-    var systemImage: String {
-        switch self {
-        case .system:
-            return "circle.lefthalf.filled"
-        case .light:
-            return "sun.max"
-        case .dark:
-            return "moon"
-        }
-    }
+    var systemImage: String { "moon" }
 }

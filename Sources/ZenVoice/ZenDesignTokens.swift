@@ -15,215 +15,141 @@
 import AppKit
 import SwiftUI
 
-/// ZenVoice design tokens — graphite and one green.
+/// ZenVoice v3 design tokens — "Ink & Brass", dark only.
 ///
-/// The room this window lives in: a developer at the end of the day, terminal
-/// and editor already open, dictating into whichever window has focus. The
-/// settings window is the third window they reach for, so it is built to be
-/// read at a glance and never to flash bright.
+/// The brand mark (`Resources/Brand/ZenLogo.png`) is antique-brass concentric
+/// voice ripples on a warm ink background. The v2 graphite-and-green system
+/// was an invented UI skin; v3 returns to the mark itself.
 ///
 /// Three rules hold the theme together.
 ///
-/// **The chrome is neutral.** Surfaces are a true graphite ramp with no hue in
-/// them. Every earlier revision tinted the greys toward the brand green, which
-/// read as olive under warm room light and fought the accent it was supposed to
-/// support. Colour is information here, not decoration: if something on screen
-/// is coloured, it means something.
+/// **The canvas is ink.** Warm near-black, taken from the logo's own
+/// background. Never pure black (it kills card edges), never cool blue-grey
+/// (the default "tool dark" monoculture), and never graphite (v2).
 ///
-/// **One accent carries the brand.** Zen green, in two weights, because one
-/// colour cannot do both jobs:
+/// **Brass carries the brand.** Selection, primary actions, focus, and
+/// navigation affordances use the mark's metal. Accent text, icons, hairlines
+/// and meters drawn on a dark surface use the light foreground weight
+/// (`accent`). Buttons and selected fills use the deep background weight
+/// (`accentFill`) so the ink-black label clears 4.5:1.
 ///
-///   * `accent` is the *foreground* weight — accent text, icons, hairlines and
-///     meters drawn on a dark surface. Light enough to clear 4.5:1.
-///   * `accentFill` is the *background* weight — primary buttons and anything
-///     carrying a white label. Deep enough that white on it clears 4.5:1.
-///
-/// A single mid-green for both lands near 3.8:1 in each direction, so accent
-/// text and the button label are simultaneously too faint. That is the mistake
-/// this split exists to prevent.
+/// **Green is the voice.** Green appears only when the microphone is live,
+/// audio is being processed, or a transcript is being produced. If it is
+/// green, it is listening.
 ///
 /// **Structure comes from hairlines, not shadows.** Nothing in the window casts
-/// a shadow. Edges are 1px borders and a step in surface value, which is what
-/// keeps a dense settings window legible instead of soft.
+/// a shadow. Edges are 1px borders and a step in surface value.
 enum ZenDesign {
     enum Primitive {
-        // Graphite ramp. Never pure black: pure black kills the card edges and
-        // makes the translucent sidebar look like a hole punched in the screen.
-        static let base = Color(nsColor: NSColor(red: 0.043, green: 0.043, blue: 0.047, alpha: 1))
-        static let base900 = Color(nsColor: NSColor(red: 0.063, green: 0.063, blue: 0.071, alpha: 1))
-        static let base800 = Color(nsColor: NSColor(red: 0.118, green: 0.118, blue: 0.129, alpha: 1))
+        // Ink ramp — warm near-black, never pure black, never grey.
+        static let ink = Color(nsColor: NSColor(red: 0.071, green: 0.063, blue: 0.047, alpha: 1))
+        static let ink950 = Color(nsColor: NSColor(red: 0.086, green: 0.076, blue: 0.055, alpha: 1))
+        static let ink900 = Color(nsColor: NSColor(red: 0.102, green: 0.090, blue: 0.071, alpha: 1))
+        static let ink800 = Color(nsColor: NSColor(red: 0.129, green: 0.114, blue: 0.090, alpha: 1))
 
-        // Surfaces float above the base by value alone.
-        static let surface = Color(nsColor: NSColor(red: 0.082, green: 0.082, blue: 0.090, alpha: 1))
-        static let surfaceRaised = Color(nsColor: NSColor(red: 0.118, green: 0.118, blue: 0.129, alpha: 1))
-        static let surfaceSunken = Color(nsColor: NSColor(red: 0.063, green: 0.063, blue: 0.071, alpha: 1))
+        // Surfaces float above the canvas by value alone.
+        static let surface = Color(nsColor: NSColor(red: 0.102, green: 0.090, blue: 0.071, alpha: 1))       // #1A1712
+        static let surfaceRaised = Color(nsColor: NSColor(red: 0.133, green: 0.118, blue: 0.090, alpha: 1))   // #221E17
+        static let surfaceSunken = Color(nsColor: NSColor(red: 0.086, green: 0.076, blue: 0.055, alpha: 1))   // #161310
 
-        // Zen green.
-        static let accent = Color(nsColor: NSColor(red: 0.208, green: 0.769, blue: 0.541, alpha: 1))
-        static let accentFill = Color(nsColor: NSColor(red: 0.082, green: 0.498, blue: 0.353, alpha: 1))
-        static let accentMuted = Color(nsColor: NSColor(red: 0.208, green: 0.769, blue: 0.541, alpha: 0.14))
+        // Brass — the mark's metal. Two weights so neither text nor label fails contrast.
+        static let brass = Color(nsColor: NSColor(red: 0.788, green: 0.663, blue: 0.455, alpha: 1))           // #C9A874
+        static let brassFill = Color(nsColor: NSColor(red: 0.663, green: 0.541, blue: 0.361, alpha: 1))       // #A98A5C
+        static let brassHover = Color(nsColor: NSColor(red: 0.706, green: 0.584, blue: 0.416, alpha: 1))      // #B4956A
+        static let brassPressed = Color(nsColor: NSColor(red: 0.612, green: 0.494, blue: 0.322, alpha: 1))    // #9C7E52
+        static let brassMuted = Color(nsColor: NSColor(red: 0.788, green: 0.663, blue: 0.455, alpha: 0.14))
 
-        // Text.
-        static let text = Color(nsColor: NSColor(red: 0.925, green: 0.925, blue: 0.933, alpha: 1))
-        static let muted = Color(nsColor: NSColor(red: 0.647, green: 0.647, blue: 0.678, alpha: 1))
-        static let subtle = Color(nsColor: NSColor(red: 0.553, green: 0.553, blue: 0.603, alpha: 1))
+        // Ink label that sits on brass fills.
+        static let inkOnBrass = Color(nsColor: NSColor(red: 0.078, green: 0.067, blue: 0.035, alpha: 1))       // #141109
 
-        // Functional colours. Amber and red are the only hues besides the
-        // accent, and both are reserved for state the user must act on.
-        static let success = Color(nsColor: NSColor(red: 0.247, green: 0.796, blue: 0.533, alpha: 1))
-        static let warn = Color(nsColor: NSColor(red: 0.890, green: 0.702, blue: 0.255, alpha: 1))
-        static let danger = Color(nsColor: NSColor(red: 0.937, green: 0.420, blue: 0.420, alpha: 1))
+        // Voice / live — the only green in the product.
+        static let live = Color(nsColor: NSColor(red: 0.290, green: 0.871, blue: 0.549, alpha: 1))             // #4ADE8C
+        static let liveFill = Color(nsColor: NSColor(red: 0.180, green: 0.420, blue: 0.278, alpha: 1))        // #2E6B47
+        static let liveMuted = Color(nsColor: NSColor(red: 0.290, green: 0.871, blue: 0.549, alpha: 0.14))
+
+        // Text — warm paper ramp.
+        static let text = Color(nsColor: NSColor(red: 0.929, green: 0.906, blue: 0.863, alpha: 1))             // #EDE7DC
+        static let muted = Color(nsColor: NSColor(red: 0.659, green: 0.627, blue: 0.576, alpha: 1))           // #A8A093
+        static let subtle = Color(nsColor: NSColor(red: 0.580, green: 0.529, blue: 0.490, alpha: 1))           // #948C7D
+
+        // Functional colours. Amber and red are separated from brass by saturation.
+        static let success = Color(nsColor: NSColor(red: 0.290, green: 0.871, blue: 0.549, alpha: 1))           // same as live
+        static let warn = Color(nsColor: NSColor(red: 0.941, green: 0.694, blue: 0.243, alpha: 1))             // #F0B13E
+        static let danger = Color(nsColor: NSColor(red: 0.949, green: 0.439, blue: 0.439, alpha: 1))            // #F27070
 
         static let white = Color.white
         static let black = Color.black
     }
 
     enum Semantic {
-        static let canvas = adaptive(
-            light: NSColor(red: 0.980, green: 0.980, blue: 0.984, alpha: 1),
-            dark: NSColor(red: 0.043, green: 0.043, blue: 0.047, alpha: 1)
-        )
+        static let canvas = Primitive.ink
 
         /// Tint painted *over* the sidebar's vibrancy material.
         ///
         /// Low alpha on purpose: the material carries most of the value, and
         /// this only settles it enough that navigation text stays readable
         /// against a bright wallpaper.
-        static let sidebar = adaptive(
-            light: NSColor(red: 0.965, green: 0.965, blue: 0.972, alpha: 0.62),
-            dark: NSColor(red: 0.035, green: 0.035, blue: 0.039, alpha: 0.62)
+        static let sidebar = Color(
+            nsColor: NSColor(red: 0.055, green: 0.047, blue: 0.035, alpha: 0.62)
         )
-        static let surface = adaptive(
-            light: NSColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1),
-            dark: NSColor(red: 0.082, green: 0.082, blue: 0.090, alpha: 1)
-        )
-        static let surfaceRaised = adaptive(
-            light: NSColor(red: 0.945, green: 0.945, blue: 0.953, alpha: 1),
-            dark: NSColor(red: 0.118, green: 0.118, blue: 0.129, alpha: 1)
-        )
-        static let surfaceSunken = adaptive(
-            light: NSColor(red: 0.918, green: 0.918, blue: 0.933, alpha: 1),
-            dark: NSColor(red: 0.063, green: 0.063, blue: 0.071, alpha: 1)
-        )
-        static let border = adaptive(
-            light: NSColor(white: 0.0, alpha: 0.10),
-            dark: NSColor(white: 1.0, alpha: 0.085)
-        )
-        static let borderStrong = adaptive(
-            light: NSColor(white: 0.0, alpha: 0.17),
-            dark: NSColor(white: 1.0, alpha: 0.16)
-        )
-        static let textPrimary = adaptive(
-            light: NSColor(red: 0.090, green: 0.090, blue: 0.102, alpha: 1),
-            dark: NSColor(red: 0.925, green: 0.925, blue: 0.933, alpha: 1)
-        )
-        static let textSecondary = adaptive(
-            light: NSColor(red: 0.310, green: 0.310, blue: 0.345, alpha: 1),
-            dark: NSColor(red: 0.647, green: 0.647, blue: 0.678, alpha: 1)
-        )
+        static let surface = Primitive.surface
+        static let surfaceRaised = Primitive.surfaceRaised
+        static let surfaceSunken = Primitive.surfaceSunken
+        static let border = Color(nsColor: NSColor(white: 1.0, alpha: 0.085))
+        static let borderStrong = Color(nsColor: NSColor(white: 1.0, alpha: 0.16))
+        static let textPrimary = Primitive.text
+        static let textSecondary = Primitive.muted
+        static let textTertiary = Primitive.subtle
 
-        /// The quietest text that still has to be read: placeholders, units,
-        /// row metadata.
+        /// Foreground weight of the brand accent: accent text, icons, meters.
+        static let accent = Primitive.brass
+
+        /// Background weight of the brand accent: primary buttons.
+        static let accentFill = Primitive.brassFill
+
+        /// Hover and pressed states for a filled accent control.
         ///
-        /// Chosen against the *raised* surface, not the canvas, because that is
-        /// the worst case it actually appears on: 5.1:1 in dark and 4.9:1 in
-        /// light, so it clears the 4.5:1 body-text floor everywhere it is used.
-        /// The first draft of this ramp was picked against the canvas alone and
-        /// landed at 3.9:1 inside a raised panel — which is the single commonest
-        /// reason a dense settings window feels unreadable.
-        static let textTertiary = adaptive(
-            light: NSColor(red: 0.408, green: 0.408, blue: 0.447, alpha: 1),
-            dark: NSColor(red: 0.553, green: 0.553, blue: 0.603, alpha: 1)
-        )
+        /// `accentHover` is the mouse-over state; `accentStrong` is the
+        /// pressed/active state. Both move *away* from the ink label they carry,
+        /// never toward it.
+        static let accentHover = Primitive.brassHover
+        static let accentStrong = Primitive.brassPressed
+        static let accentMuted = Primitive.brassMuted
 
-        /// Foreground weight of the accent: accent text, icons, meters.
-        ///
-        /// Light mode uses one deep green for both weights — on a white canvas
-        /// a light green cannot clear 4.5:1 as text, and does not need to be
-        /// lightened to carry a white label.
-        static let accent = adaptive(
-            light: NSColor(red: 0.043, green: 0.420, blue: 0.294, alpha: 1),
-            dark: NSColor(red: 0.208, green: 0.769, blue: 0.541, alpha: 1)
-        )
+        /// Live / voice accent. The only green in the product.
+        static let live = Primitive.live
+        static let liveFill = Primitive.liveFill
+        static let liveMuted = Primitive.liveMuted
 
-        /// Background weight of the accent: primary buttons — anything that
-        /// carries a white label.
-        static let accentFill = adaptive(
-            light: NSColor(red: 0.043, green: 0.420, blue: 0.294, alpha: 1),
-            dark: NSColor(red: 0.082, green: 0.498, blue: 0.353, alpha: 1)
+        static let success = Primitive.success
+        static let successMuted = Primitive.liveMuted
+        static let danger = Primitive.danger
+        static let dangerMuted = Color(
+            nsColor: NSColor(red: 0.949, green: 0.439, blue: 0.439, alpha: 0.14)
         )
-
-        /// Pressed state for a filled accent control. Always moves *away* from
-        /// the white label it carries, never toward it.
-        static let accentStrong = adaptive(
-            light: NSColor(red: 0.031, green: 0.322, blue: 0.224, alpha: 1),
-            dark: NSColor(red: 0.063, green: 0.408, blue: 0.282, alpha: 1)
-        )
-        static let accentMuted = adaptive(
-            light: NSColor(red: 0.043, green: 0.420, blue: 0.294, alpha: 0.10),
-            dark: NSColor(red: 0.208, green: 0.769, blue: 0.541, alpha: 0.14)
-        )
-        static let success = adaptive(
-            light: NSColor(red: 0.055, green: 0.420, blue: 0.255, alpha: 1),
-            dark: NSColor(red: 0.247, green: 0.796, blue: 0.533, alpha: 1)
-        )
-        static let successMuted = adaptive(
-            light: NSColor(red: 0.055, green: 0.420, blue: 0.255, alpha: 0.10),
-            dark: NSColor(red: 0.247, green: 0.796, blue: 0.533, alpha: 0.14)
-        )
-        static let danger = adaptive(
-            light: NSColor(red: 0.753, green: 0.204, blue: 0.180, alpha: 1),
-            dark: NSColor(red: 0.937, green: 0.420, blue: 0.420, alpha: 1)
-        )
-        static let dangerMuted = adaptive(
-            light: NSColor(red: 0.753, green: 0.204, blue: 0.180, alpha: 0.10),
-            dark: NSColor(red: 0.937, green: 0.420, blue: 0.420, alpha: 0.14)
-        )
-        static let warn = adaptive(
-            light: NSColor(red: 0.541, green: 0.353, blue: 0.067, alpha: 1),
-            dark: NSColor(red: 0.890, green: 0.702, blue: 0.255, alpha: 1)
-        )
-        static let warnMuted = adaptive(
-            light: NSColor(red: 0.541, green: 0.353, blue: 0.067, alpha: 0.10),
-            dark: NSColor(red: 0.890, green: 0.702, blue: 0.255, alpha: 0.14)
+        static let warn = Primitive.warn
+        static let warnMuted = Color(
+            nsColor: NSColor(red: 0.941, green: 0.694, blue: 0.243, alpha: 0.14)
         )
 
         /// Text drawn on top of `accentFill`.
         ///
-        /// White in both appearances, which is only true because `accentFill`
-        /// is the deep weight of the accent in both. It clears 4.5:1 on each.
-        static let textOnAccent = adaptive(
-            light: NSColor(white: 1.0, alpha: 1),
-            dark: NSColor(white: 1.0, alpha: 1)
-        )
+        /// Ink black, which is only possible because `accentFill` is the deep
+        /// brass weight. It clears 4.5:1 on brass fill across all states.
+        static let textOnAccent = Primitive.inkOnBrass
 
         /// Text drawn on top of a `danger`-filled control.
-        static let textOnDanger = adaptive(
-            light: NSColor(white: 1.0, alpha: 1),
-            dark: NSColor(white: 1.0, alpha: 1)
-        )
+        static let textOnDanger = Primitive.white
 
-        private static func adaptive(light: NSColor, dark: NSColor) -> Color {
-            Color(
-                nsColor: NSColor(name: nil) { appearance in
-                    let match = appearance.bestMatch(from: [.aqua, .darkAqua])
-                    return match == .darkAqua ? dark : light
-                }
-            )
-        }
+        /// Text drawn on top of `liveFill`.
+        static let textOnLive = Primitive.white
     }
 
     enum Component {
         static let cardBackground = Semantic.surface
         static let cardBorder = Semantic.border
 
-        /// Selected navigation is a *quiet* raised row, not a saturated pill.
-        ///
-        /// A filled green row is the loudest possible mark in a window the user
-        /// keeps open all day, and it made the sidebar shout its own state
-        /// louder than the setting the user came to change. The active row is
-        /// now identified the way an editor does it: a step up in surface, a
-        /// heavier label, and the accent moved onto the icon alone.
+        /// Selected navigation: a quiet raised row, brass icon, primary label.
         static let selectedNavigation = Semantic.surfaceRaised
         static let selectedNavigationLabel = Semantic.textPrimary
         static let selectedNavigationIcon = Semantic.accent
@@ -285,17 +211,26 @@ enum ZenDesign {
 
     /// Type is one family in several weights — the system face, plus the system
     /// monospace for anything the user could retype: shortcuts, model
-    /// identifiers, error rates, licence keys. Pairing two sans faces on a
-    /// contrast axis this small only makes the window look uncertain.
+    /// identifiers, error rates, licence keys. Page titles and dictated text
+    /// use New York serif because "your words become print" is the product's
+    /// entire point.
+    ///
+    /// Pairing two sans faces on a contrast axis this small only makes the
+    /// window look uncertain.
     enum Typography {
         static let display = Font.system(size: 30, weight: .semibold)
+        static let displaySerif = Font.system(size: 30, weight: .semibold, design: .serif)
         static let pageTitle = Font.system(size: 21, weight: .semibold)
+        static let pageTitleSerif = Font.system(size: 21, weight: .semibold, design: .serif)
         static let pageContext = Font.system(size: 12, weight: .medium)
         static let sectionTitle = Font.system(size: 11, weight: .semibold)
         static let body = Font.system(size: 13)
         static let bodyStrong = Font.system(size: 13, weight: .semibold)
+        static let bodySerif = Font.system(size: 13, design: .serif)
         static let caption = Font.system(size: 11.5)
         static let captionStrong = Font.system(size: 11.5, weight: .semibold)
+        static let transcript = Font.system(size: 14, design: .serif)
+        static let transcriptLarge = Font.system(size: 17, design: .serif)
 
         /// Button labels are medium, not semibold. At 13pt semibold on a filled
         /// control the label reads as shouting next to the row it belongs to.
@@ -376,5 +311,18 @@ enum ZenDesign {
 
         /// Fully rounded — the toolbar cluster and status pills.
         static let pill: CGFloat = 999
+    }
+}
+
+// MARK: - Semantic helpers
+
+extension ZenDesign {
+    /// A token that resolves to a different color depending on the current
+    /// macOS appearance. Retained for call sites that still need it, but the
+    /// v3 redesign forces dark everywhere and does not ship a light token set.
+    enum Legacy {
+        static func darkOnly(_ dark: NSColor) -> Color {
+            Color(nsColor: dark)
+        }
     }
 }

@@ -25,8 +25,6 @@ struct ZenBarView: View {
     static let barHeight: CGFloat = 44
     static let maximumBarWidth: CGFloat = 580
 
-    @AppStorage(ZenAppearance.storageKey)
-    private var appearance = ZenAppearance.system.rawValue
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
     @ObservedObject var state: AppState
@@ -45,9 +43,7 @@ struct ZenBarView: View {
                 alignment: .bottom
             )
             .padding(.bottom, Self.shadowInset)
-            .preferredColorScheme(
-                ZenAppearance.resolved(appearance).colorScheme
-            )
+            .preferredColorScheme(.dark)
     }
 
     private var bar: some View {
@@ -147,7 +143,7 @@ struct ZenBarView: View {
             HStack(spacing: 10) {
                 ZenStatusLabel(
                     text: "listening",
-                    tint: ZenDesign.Semantic.accent,
+                    tint: ZenDesign.Semantic.live,
                     pulses: true
                 )
 
@@ -186,7 +182,11 @@ struct ZenBarView: View {
             // progress hairline.
             VStack(spacing: 6) {
                 HStack(spacing: 10) {
-                    ZenStatusLabel(text: "transcribing…", pulses: true)
+                    ZenStatusLabel(
+                        text: "transcribing…",
+                        tint: ZenDesign.Semantic.live,
+                        pulses: true
+                    )
                     Spacer()
                 }
                 IndeterminateBar()
@@ -346,12 +346,7 @@ struct ZenBarView: View {
             .overlay {
                 barShape
                     .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
-                    .overlay {
-                        barShape
-                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                    }
             }
-            .shadow(color: Color.black.opacity(0.28), radius: 20, y: 9)
     }
 
     private func terminalAgenticIcon(_ event: GoalStatusEvent) -> String {
@@ -426,7 +421,7 @@ struct WaveformView: View {
             ForEach(history.indices, id: \.self) { index in
                 Capsule()
                     .fill(
-                        ZenDesign.Semantic.accent
+                        ZenDesign.Semantic.live
                             .opacity(opacity(at: index))
                     )
                     .frame(
@@ -488,10 +483,10 @@ struct IndeterminateBar: View {
                 Capsule()
                     .fill(ZenDesign.Semantic.surfaceSunken)
                 if reduceMotion {
-                    // No travelling segment; a static accent hairline still
-                    // distinguishes this phase from the ones without one.
+                    // No travelling segment; a static live hairline still
+                    // distinguishes this voice-processing phase.
                     Capsule()
-                        .fill(ZenDesign.Semantic.accent.opacity(0.45))
+                        .fill(ZenDesign.Semantic.live.opacity(0.45))
                 } else {
                     TimelineView(.animation) { context in
                         let elapsed = context.date
@@ -500,7 +495,7 @@ struct IndeterminateBar: View {
                             dividingBy: Self.period
                         )) / Self.period
                         Capsule()
-                            .fill(ZenDesign.Semantic.accent)
+                            .fill(ZenDesign.Semantic.live)
                             .frame(width: segment)
                             .offset(
                                 x: CGFloat(phase)

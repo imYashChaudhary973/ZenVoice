@@ -318,7 +318,7 @@ private struct SpellingCorrectionSheet: View {
 
             ZenPanel {
                 Text(record.finalTranscript ?? "")
-                    .font(ZenDesign.Typography.body)
+                    .font(ZenDesign.Typography.transcript)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     .textSelection(.enabled)
                     .lineLimit(6)
@@ -481,7 +481,7 @@ private struct HistoryRecordRow: View {
                 }
 
                 Text(transcript)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ZenDesign.Typography.transcript)
                     .foregroundStyle(
                         record.status == .failed
                             ? ZenDesign.Semantic.textSecondary

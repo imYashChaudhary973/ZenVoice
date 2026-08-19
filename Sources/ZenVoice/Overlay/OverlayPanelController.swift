@@ -79,6 +79,7 @@ final class OverlayPanelController {
         panel.level = .screenSaver
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.collectionBehavior = Self.overlayCollectionBehavior
 
         let content = AnyView(

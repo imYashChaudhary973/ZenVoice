@@ -78,6 +78,7 @@ struct ZenScreen<Content: View, Tabs: View>: View {
                     systemImage: icon,
                     title: title,
                     subtitle: subtitle,
+                    titleFont: ZenDesign.Typography.pageTitleSerif,
                     iconSize: 40
                 )
                 .frame(

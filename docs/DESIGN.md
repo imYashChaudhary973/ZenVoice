@@ -1,256 +1,123 @@
-# Design
+# ZenVoice v3 — "Ink & Brass" Design System
 
-The ZenVoice interface is one window: a translucent navigation rail on the
-left, a content column of cards on the right. Everything the app can do is
-reachable from that rail, and the window opens when the app launches.
+Dark-only. Derived from the actual brand mark (`Resources/Brand/ZenLogo.png`):
+antique-brass voice ripples on warm ink. Replaces the v2 graphite+green
+system (`ZenDesign` in `Sources/ZenVoice/ZenDesignTokens.swift`).
 
-This document is the contract for the visual system. It describes what the
-tokens mean and when to reach for each component, not every pixel — the pixels
-live in [`ZenDesignTokens.swift`](../Sources/ZenVoice/ZenDesignTokens.swift),
-[`ZenChrome.swift`](../Sources/ZenVoice/ZenChrome.swift), and
-[`ZenV2Components.swift`](../Sources/ZenVoice/ZenV2Components.swift).
+## Theme
 
-## Principles
+One theme: **Ink & Brass**, forced dark. There is no light token set and no
+appearance switcher. Windows set `NSAppearance(named: .darkAqua)` so native
+controls never render light chrome.
 
-**Moss on ink.** A near-black canvas, layered surfaces, and one muted green
-accent. The accent is deliberately desaturated: a saturated green filling
-selected navigation and primary buttons on an almost-black canvas glows, and
-this is an app people leave open all day.
+Physical scene: a developer at 11pm, dark room, warm desk lamp. The canvas
+is the warm near-black of the logo's own background — not grey graphite,
+not blue "dark mode". Warmth comes from the ink itself and the brass
+accent; nothing else is warm.
 
-**Cards, not rules.** Content sits in large softly-rounded cards with a single
-hairline edge. Horizontal rules between sections are not used — a card already
-has an edge, and adding a rule above it draws two boundaries a few points
-apart.
+Color strategy: **Restrained with a two-role accent.** Brass (the brand
+metal) carries affordance; green appears only for live voice. Everything
+else is warm ink and paper-white text.
 
-**Depth by nesting.** A card holds inset rows on a lighter surface. Radius
-tightens as you nest (16 → 12 → 8) so the stack reads as depth rather than as
-one blurry shape.
+## Palette
 
-**Native controls stay native.** Switches, pop-up buttons, and text fields are
-the system's, tinted once at the window root. There is no hand-drawn switch.
+Warm ink ramp (hue drifts toward 60–80°, chroma ≤0.01 — barely tinted,
+never olive):
 
-## Colour
+| Token | Hex | Role |
+|---|---|---|
+| `ink` | `#12100C` | window canvas |
+| `inkSunken` | `#161310` | wells, code blocks, sunken panels |
+| `inkSurface` | `#1A1712` | cards, panels |
+| `inkRaised` | `#221E17` | nested rows, hover fills, inputs |
+| `border` | white @ 8% | hairlines |
+| `borderStrong` | white @ 16% | input focus edges, dividers that must read |
 
-### The two accent weights
+Text (warm paper ramp):
 
-The accent exists twice because one green cannot do both jobs:
+| Token | Hex | Contrast on `inkRaised` |
+|---|---|---|
+| `textPrimary` | `#EDE7DC` | 12.6:1 |
+| `textSecondary` | `#A8A093` | 5.9:1 |
+| `textTertiary` | `#948C7D` | 4.98:1 (the floor; verified on raised, the worst case) |
 
-| Token | Use | Contrast |
-| --- | --- | --- |
-| `Semantic.accent` | Accent *text*, icons, meters, hairlines drawn on the canvas | ≥ 4.5:1 on ink |
-| `Semantic.accentFill` | Selected navigation, primary buttons — anything carrying a white label | white on it ≥ 4.5:1 |
+Accent — brass, two weights plus pressed:
 
-Using one mid-green for both is the specific mistake this split prevents: a
-single mid-green lands near 3.8:1 in each direction, so accent text on the
-canvas and white text on the button are *simultaneously* too faint. Nothing in
-the window should use a raw green — pick the weight that matches the job.
+| Token | Hex | Use |
+|---|---|---|
+| `brass` (fg) | `#C9A874` | accent text, icons, meters, active nav glyph — 7.9:1 on surface |
+| `brassFill` | `#A98A5C` | primary buttons; label is `inkLabel` |
+| `brassHover` | `#B4956A` | primary-button hover |
+| `brassPressed` | `#9C7E52` | primary-button pressed |
+| `brassMuted` | brass @ 14% | selected-row fills, quiet badges |
+| `inkOnBrass` | `#141109` | label on any brass fill — 4.96–6.7:1 across states |
 
-`accentStrong` is the pressed state for a filled control. It always moves away
-from the label colour: darker in light mode, brighter in dark.
+Voice — the only green in the system:
 
-In light mode both weights resolve to the same deep moss. On a white canvas a
-light green cannot clear 4.5:1 as text, and does not need lightening to carry
-white as a fill.
+| Token | Hex | Use |
+|---|---|---|
+| `live` | `#4ADE8C` | listening/processing text, waveform, live dot — 10.3:1 |
+| `liveFill` | `#2E6B47` | "Dictate" button fill; white label 6.3:1 |
+| `liveMuted` | live @ 14% | live-state chips and banners |
 
-### Surfaces
+Functional (bright enough to read, hue-separated from muted brass):
 
-`canvas` → `surface` (cards) → `surfaceRaised` (inset rows) → `surfaceSunken`
-(tracks and wells). The sidebar is not in this family: it is an
-`NSVisualEffectView` with `behindWindow` blending, with `Semantic.sidebar`
-painted over it at low alpha to settle navigation text against a bright
-wallpaper.
+| Token | Hex | Muted fill |
+|---|---|---|
+| `warn` | `#F0B13E` | @14% on ink |
+| `danger` | `#F27070` | `#8C3A3A` fill (white label 7.6:1), @14% muted |
 
-The root view deliberately paints **no** window-wide background. An opaque fill
-there sits behind the sidebar's material and flattens it to a plain grey panel.
-Each column paints its own surface instead, and the window's
-`backgroundColor` is `.clear` for the same reason.
+## Typography
 
-## Type
+One family — the system face — in weights, plus two deliberate guests:
 
-| Token | Size / weight | Use |
-| --- | --- | --- |
-| `display` | 34 bold | The one hero number or word on a page |
-| `pageTitle` | 24 bold | Page heading, beside its icon chip |
-| `metric` | 34 bold | The number in a stat tile |
-| `body` / `bodyStrong` | 13 | Everything else |
-| `caption` | 11.5 | Supporting text under a label |
-| `eyebrow` | 11 semibold, tracked 1.0 | Uppercase label *above a number* |
-| `badge` | 11 semibold | Pill text |
+- **UI text**: SF Pro, fixed 12/13/15/17/20/24 scale, ratio ≈1.2. No fluid
+  sizes; product UI viewed at fixed DPI.
+- **Transcript & page titles**: New York (`.fontDesign(.serif)`), where
+  dictated words and screen titles read like print. Never in labels,
+  buttons, or data — product-register ban holds.
+- **Retypable strings**: SF Mono — shortcuts, model IDs, error rates,
+  checksums, sizes. Existing v2 discipline, kept.
 
-**11pt is the floor.** Nothing in the window renders type smaller;
-`Scripts/check-ui-invariants.sh` enforces it. The exported share card is not
-window chrome and has its own canvas scale.
+Tracking: display titles −0.01em; nothing tighter below 20pt.
 
-**Uppercase tracking is for eyebrows only** — the label above a metric, where
-it says what the number is. Used as a section heading it reads as a system
-warning rather than as a title. Section headings are sentence case at body
-weight.
+## Signature motif — the ripple
 
-## Layout
+The logo's concentric voice ripples become the system's mark:
 
-| Token | Value | Note |
-| --- | --- | --- |
-| `Layout.sidebarWidth` | 240 | One named value. The title bar used to hand-copy it and the two drifted apart. |
-| `Layout.titleBar` | 52 | Clears the traffic lights, which the window draws over the sidebar. |
-| `Layout.navRow` | 40 | Painted height of a navigation row. |
-| `Layout.navIcon` | 26 | Icon slot in a navigation row, so labels share a baseline. |
-| `Layout.hitTarget` | 44 | Clickable frame of anything interactive. |
-| `Layout.control` | 32 | Painted height of a compact control inside a row that already meets the hit target. |
-| `Layout.proseColumn` | 720 | Measure for running prose. Cards are **not** capped — see below. |
-
-**Cards fill the window; only prose is capped.** The page used to hold its
-whole stack inside a fixed column and centre it, which is invisible in a small
-window and obvious in full screen — the content floated in the middle of the
-pane behind margins that lined up with neither the sidebar nor the top bar.
-Cards now stretch, and the page heading caps its own subtitle at
-`proseColumn` so long sentences still have a measure.
-
-**A button label never wraps.** `ZenButtonShape` sets `lineLimit(1)` and
-`fixedSize(horizontal:)`. The painted background is a fixed height, so a label
-allowed onto a second line is drawn straight through the button's own border —
-which is exactly what "Replay setup guide" did.
-
-A painted control is compact; the frame the user can hit is 44pt. Drawing 44pt
-boxes would make a dense settings window look like a touch UI, and making only
-the *painted* box 32pt is hostile to trackpad users, anyone with a tremor, and
-every assistive technology that targets by frame.
-
-## The window shell
-
-```
-┌─────────────┬──────────────────────────────────────┐
-│             │  ZenVoice        ( status ⌘ ☾ ) Dictate│  ← top bar, 52pt
-│  ● Home     ├──────────────────────────────────────┤
-│             │                                      │
-│  Configure  │   [chip]  Page title                 │
-│    Dictation│           Page subtitle              │
-│    …        │                                      │
-│             │   ┌────────────────────────────────┐ │
-│  Use        │   │ card                           │ │
-│  Activity   │   └────────────────────────────────┘ │
-│  Help       │                                      │
-└─────────────┴──────────────────────────────────────┘
-   vibrancy                     canvas
-```
-
-The sidebar runs the **full height** of the window, under the traffic lights,
-and the content column carries its own top bar. A single title bar spanning
-both would cut the sidebar material off below the window's rounded top
-corners.
-
-Navigation is four labelled groups plus an unlabelled Home: what you set up
-(Configure), what you use (Use), what it recorded (Activity), and where to get
-help (Help). Every entry previously had its own one-item heading, so the
-headings carried no information — each label was just the row beneath it,
-restated.
-
-The selected row is a filled `accentFill` pill with a white label: the
-strongest single mark in the window, and the only place the fill weight appears
-at rest. Unselected icons are accent-tinted, because grey icons on a
-translucent panel disappear against a busy wallpaper.
-
-**The rail is scanned by its icons, not read.** Glyphs are drawn at 19pt in a
-26pt slot, larger than the 15pt label beside them. At 13pt they were *smaller*
-than their own label and read as decoration. Group headings sit at 12pt in
-`textSecondary` — tertiary vanished against a light wallpaper showing through
-the material.
-
-The painted pill is 40pt against a 44pt clickable frame, so consecutive rows
-nearly touch. The approved design packs them tighter still, at roughly 36pt
-pitch; ZenVoice does not follow it that far, because a 36pt row cannot hold a
-44pt hit target and the rail is the most-clicked surface in the app.
-
-Appearance cycles System → Light → Dark from one toolbar button that names both
-its current value and its next one. A three-way segmented control used to sit
-in the sidebar footer, spending a permanent 44pt of navigation space on a
-setting most people touch once.
+- **Selection**: active sidebar row carries a 2pt brass ripple-tick (three
+  short concentric arcs) instead of a plain bar.
+- **Live states**: the ZenBar waveform sits inside a faint ripple ring that
+  expands once per phrase commit (state change, not decoration).
+- **Progress**: model downloads and agentic steps draw a thin arc, not a
+  bar.
+- **Empty states**: one brass ripple glyph, 28pt, above teaching copy.
 
 ## Components
 
-Compose screens from these. If a screen needs something new, add it here rather
-than hand-rolling it locally.
+v2 component vocabulary survives structurally (`ZenScreen`, `ZenCard`,
+`ZenRow`, `ZenKbd`, `ZenBadge`, `ZenStatTile`, `ZenTabStrip`,
+`ZenChoiceCard`, `ZenSwitch`, `ZenSearchField`, …) — same names, same
+semantics, restyled onto ink & brass. Buttons: `primary` = brassFill +
+inkLabel; `secondary` = inkRaised + hairline; `destructive` = dangerFill.
+Focus ring: 2pt brass @ 60% outside the hairline. Radii: cards 12, rows 8,
+controls 6, pills full. Switches/tint use brass; the "Dictate" control is
+the single liveFill element per screen.
 
-| Component | Use |
-| --- | --- |
-| `ZenScreen` | The one page scaffold: icon chip, title, subtitle, optional tab strip, content. |
-| `ZenCard` | A card that heads itself: icon chip, title, subtitle, content. |
-| `ZenPanel` | A bare card, for content that supplies its own heading or none. |
-| `ZenInsetRow` | A row nested inside a card, on its own inset surface. |
-| `ZenRow` | A flat row in a divided list. |
-| `ZenCardHeader` / `ZenIconChip` | The heading block and its tinted glyph container. |
-| `ZenStatTile` | Uppercase eyebrow, then the number, then one line of context. |
-| `ZenBadge` | Sentence-case capsule pill. Not uppercase — these carry proper nouns. |
-| `ZenBanner` | Coloured glyph, body-contrast text, tinted background. |
-| `ZenTabStrip` | Views *within* a section. Its underline hugs its label. |
-| `ZenSegmentedControl` | A choice between ranges or modes, on a sunken track. |
-| `ZenToolbarCluster` | The capsule of global actions in the top bar. |
-| `ZenChoiceCard` | Mutually exclusive picker cards. |
+## Layout
 
-### One scaffold per section
-
-A screen shown as a tab supplies **content only**; its container owns the
-`ZenScreen`. Without that rule a section grows a second title, a second rule,
-and a nested scroll view. `Scripts/check-ui-invariants.sh` enforces it in both
-directions: tab children must not construct a `ZenScreen`, and every container
-must construct exactly one and carry a tab strip.
-
-## The menu bar
-
-ZenVoice installs a real `NSApp.mainMenu` — App, Edit, Window — in
-`AppDelegate.configureMainMenu()`.
-
-It had none. Running as an accessory with only a status-item menu is fine while
-the app is invisible, but the window flips it to `.regular`, and AppKit routes
-every standard key equivalent through the main menu. With no main menu there
-was nothing to route to: ⌘Q, ⌘W and ⌘M did nothing, and neither did ⌘C, ⌘V or
-⌘A inside the app's own text fields.
-
-The Edit menu is not decoration. Every text field in the window — the Cloud AI
-key field included — depends on those responder actions existing somewhere in
-the menu bar.
-
-Closing is not quitting, and a menu-bar app has to be able to say so:
-
-- **⌘W** closes the window. `windowWillClose` drops the app back to
-  `.accessory`, so the status item and the global shortcut survive.
-- **⌘Q** quits.
-
-`NSApp.windowsMenu` is set to the Window menu so AppKit contributes Enter Full
-Screen and the window list itself.
-
-## Waiting on the user
-
-The cloud review panel is deliberately non-activating — it must not take focus,
-because taking it would move the caret the enhanced text is about to replace.
-That makes it easy to miss, and it holds the dictation open while it waits, so
-three things keep it from being a dead end:
-
-- the ZenBar switches to `.awaitingCloudReview` and says what it is waiting for,
-  rather than sitting on "transcribing…" while nothing happens;
-- pressing the dictation shortcut dismisses it and keeps the local transcript,
-  so the way out is the key the user already pressed;
-- it resolves itself after two minutes.
-
-`awaitingCloudReview` is a phase of its own precisely so `isBusy` stays false
-and that shortcut still reaches the app.
+Existing geometry holds: sidebar 232, title bar 52, content max 720 with
+`.zen-content` padding 28. One page scaffold per screen (`ZenScreen`),
+cards stack in one column, groups labelled in sentence case.
 
 ## Motion
 
-Quick `easeOut` fades and slides everywhere: 0.15s for state flips, 0.22s for
-anything that moves. The single spring is reserved for the ZenBar waveform, the
-one living element in the app. Every helper in `ZenDesign.Motion` returns `nil`
-when Reduce Motion is on, so call sites pass
-`@Environment(\.accessibilityReduceMotion)` straight through.
+Quick ease-out 150–220ms (quart), no springs except the ZenBar waveform.
+Ripple commits: 240ms scale + fade, disabled under Reduce Motion. Nothing
+animates layout properties; overlays crossfade.
 
-## Checking the work
+## Bans carried from the shared rules
 
-```sh
-swift build
-./Scripts/check-ui-invariants.sh
-```
-
-The invariant script encodes decisions the compiler cannot see, each of which
-was a real defect at some point: a tab child growing its own scaffold, the
-sidebar width drifting between two files, the cloud preview stealing focus from
-the app a transcript was about to be inserted into, and type below the 11pt
-floor.
+No side-stripe accents, no gradient text, no glass, no hero-metric
+templates, no identical card grids, no tracked-uppercase eyebrows, no
+border+wide-shadow pairs, radius ceiling 12, no decorative grid overlays.

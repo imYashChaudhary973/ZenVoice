@@ -41,6 +41,7 @@ runtime truth lives in the code and executable checks.
 | [Cloud providers](CLOUD_PROVIDERS.md) | Cloud refinement providers, wire shapes, and the privacy boundary. |
 | [PR and merge policy](PR_AND_MERGE_POLICY.md) | How changes get reviewed and landed. |
 | [Build order](BUILD_ORDER.md) | Milestone ledger and verification gates. |
+| [UI redesign](REDESIGN.md) | Working plan for the dark-only redesign. |
 | [Phased plan](PHASED_PLAN.md) | Feature phases and their status. |
 | [Phase 6](PHASE_6.md) | The phase currently in progress. |
 | [Engine gap analysis](FluidVoice_Gap_Analysis_Report.md) | Which engine wins each language, and the rules that keep the catalogue honest. |

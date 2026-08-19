@@ -48,6 +48,7 @@ final class AgenticApprovalWindowController: NSWindowController,
         window.minSize = NSSize(width: 620, height: 480)
         window.isReleasedWhenClosed = false
         window.center()
+        window.appearance = NSAppearance(named: .darkAqua)
         window.contentViewController = NSHostingController(rootView: content)
         super.init(window: window)
         window.delegate = self

@@ -80,6 +80,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // over it. `.clear` lets each column own its own surface; the content
         // column paints the canvas itself.
         window.backgroundColor = .clear
+        window.appearance = NSAppearance(named: .darkAqua)
         window.isMovableByWindowBackground = true
         window.minSize = NSSize(width: 940, height: 660)
         // Menu-bar apps don't get full screen for free: the green zoom

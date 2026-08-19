@@ -28,8 +28,6 @@ struct LivePreviewOverlayView: View {
     let cancelRecording: () -> Void
     let finishRecording: () -> Void
 
-    @AppStorage(ZenAppearance.storageKey)
-    private var appearance = ZenAppearance.system.rawValue
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     /// Motion is reduced when either the system or ZenVoice asks for it.
@@ -46,13 +44,12 @@ struct LivePreviewOverlayView: View {
                     )
                     .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
                 }
-                .shadow(color: Color.black.opacity(0.28), radius: 18, y: 6)
 
             content
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
         }
-        .preferredColorScheme(ZenAppearance.resolved(appearance).colorScheme)
+        .preferredColorScheme(.dark)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -64,7 +61,7 @@ struct LivePreviewOverlayView: View {
         case .listening:
             listeningContent
         case .transcribing:
-            statusContent("transcribing…", pulses: true)
+            statusContent("transcribing…", pulses: true, tint: ZenDesign.Semantic.live)
         case .awaitingCloudReview:
             statusContent(
                 "review cloud text…",
@@ -101,7 +98,7 @@ struct LivePreviewOverlayView: View {
             HStack(spacing: 10) {
                 ZenStatusLabel(
                     text: "listening",
-                    tint: ZenDesign.Semantic.accent,
+                    tint: ZenDesign.Semantic.live,
                     pulses: !motionReduced
                 )
                 Spacer()
@@ -118,7 +115,7 @@ struct LivePreviewOverlayView: View {
                     .frame(height: 24)
                 if !state.liveTranscriptPreview.isEmpty {
                     Text(state.liveTranscriptPreview)
-                        .font(.system(size: 12.5))
+                        .font(ZenDesign.Typography.transcript)
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         .lineLimit(kind.lineCount)
                         .truncationMode(.head)

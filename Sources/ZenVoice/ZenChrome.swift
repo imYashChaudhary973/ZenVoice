@@ -155,6 +155,28 @@ struct ZenToolbarDivider: View {
     }
 }
 
+/// The brand motif: three concentric arcs, like the voice ripples in the
+/// logo. Used as the selection mark in the sidebar and as the live-state
+/// glyph in empty states.
+struct ZenRippleTick: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let base = min(rect.width, rect.height) / 2 - 1
+        let radii: [CGFloat] = [base * 0.35, base * 0.62, base * 0.92]
+        for radius in radii {
+            path.addArc(
+                center: center,
+                radius: radius,
+                startAngle: .degrees(-55),
+                endAngle: .degrees(55),
+                clockwise: false
+            )
+        }
+        return path
+    }
+}
+
 /// Card or page heading: tinted icon chip, title, one line of subtitle.
 struct ZenCardHeader<Trailing: View>: View {
     let systemImage: String

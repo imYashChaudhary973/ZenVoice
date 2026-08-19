@@ -281,6 +281,7 @@ final class CloudAIPreviewWindowController: NSWindowController {
         panel.hidesOnDeactivate = false
         panel.level = .floating
         panel.collectionBehavior.insert(.moveToActiveSpace)
+        panel.appearance = NSAppearance(named: .darkAqua)
         let window: NSWindow = panel
         super.init(window: window)
         let viewModel = CloudAIDictationPreviewViewModel(

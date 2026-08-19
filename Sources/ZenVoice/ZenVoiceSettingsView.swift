@@ -100,12 +100,6 @@ struct ZenVoiceSettingsView: View {
     @State private var hoveredSection: Section?
     @State private var showsCommandPalette = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(ZenAppearance.storageKey)
-    private var appearance = ZenAppearance.system.rawValue
-
-    private var selectedAppearance: ZenAppearance {
-        ZenAppearance.resolved(appearance)
-    }
 
     var body: some View {
         Group {
@@ -164,7 +158,7 @@ struct ZenVoiceSettingsView: View {
         // had, so the Formatting screen mixed blue switches with green ones.
         .tint(ZenDesign.Semantic.accent)
         .frame(minWidth: 940, minHeight: 660)
-        .preferredColorScheme(selectedAppearance.colorScheme)
+        .preferredColorScheme(.dark)
         .onAppear {
             viewModel.refreshSystemStatus()
         }
@@ -215,20 +209,7 @@ struct ZenVoiceSettingsView: View {
                 action: onboardingViewModel.show
             ),
         ]
-        let appearances = ZenAppearance.allCases.map { option in
-            ZenCommand(
-                id: "appearance-\(option.rawValue)",
-                title: "\(option.title) appearance",
-                subtitle: option == selectedAppearance
-                    ? "Appearance · current"
-                    : "Appearance",
-                icon: option.systemImage,
-                keywords: "theme dark light system mode appearance"
-            ) {
-                appearance = option.rawValue
-            }
-        }
-        return sections + models + actions + appearances
+        return sections + models + actions
     }
 
     private func sectionKeywords(_ section: Section) -> String {
@@ -284,13 +265,6 @@ struct ZenVoiceSettingsView: View {
                 ) {
                     showsCommandPalette = true
                 }
-                ZenToolbarDivider()
-                ZenToolbarButton(
-                    systemImage: selectedAppearance.systemImage,
-                    label: appearanceButtonLabel
-                ) {
-                    appearance = nextAppearance.rawValue
-                }
             }
 
             dictateButton
@@ -309,11 +283,10 @@ struct ZenVoiceSettingsView: View {
                 Text(isListening ? "Stop" : "Dictate")
                     .font(ZenDesign.Typography.captionStrong)
             }
-            // Both fills are deep enough to carry white, so the label colour
-            // does not have to move when the fill switches to red.
+            // v3: brass when ready to dictate, green only when listening.
             .foregroundStyle(
                 isListening
-                    ? ZenDesign.Semantic.textOnDanger
+                    ? ZenDesign.Semantic.textOnLive
                     : ZenDesign.Semantic.textOnAccent
             )
             .padding(.horizontal, 14)
@@ -322,7 +295,7 @@ struct ZenVoiceSettingsView: View {
                 Capsule(style: .continuous)
                     .fill(
                         isListening
-                            ? ZenDesign.Semantic.danger
+                            ? ZenDesign.Semantic.liveFill
                             : ZenDesign.Semantic.accentFill
                     )
             }
@@ -333,28 +306,6 @@ struct ZenVoiceSettingsView: View {
         .accessibilityLabel(
             isListening ? "Stop dictating" : "Start dictating"
         )
-    }
-
-    /// Appearance cycles System → Light → Dark on click.
-    ///
-    /// A three-way segmented control used to sit in the sidebar footer, which
-    /// spent a permanent 44pt of navigation space on a setting most people
-    /// touch once. One toolbar button that names both its current value and
-    /// its next one carries the same information.
-    private var nextAppearance: ZenAppearance {
-        switch selectedAppearance {
-        case .system:
-            return .light
-        case .light:
-            return .dark
-        case .dark:
-            return .system
-        }
-    }
-
-    private var appearanceButtonLabel: String {
-        "Appearance: \(selectedAppearance.title). "
-            + "Switch to \(nextAppearance.title)."
     }
 
     private var sidebar: some View {
@@ -422,6 +373,12 @@ struct ZenVoiceSettingsView: View {
                             ? ZenDesign.Component.selectedNavigationIcon
                             : ZenDesign.Semantic.textSecondary
                     )
+                if selected {
+                    ZenRippleTick()
+                        .stroke(ZenDesign.Semantic.accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .frame(width: 12, height: 18)
+                        .accessibilityHidden(true)
+                }
                 Text(section.rawValue)
                     .font(
                         selected
@@ -581,9 +538,9 @@ private extension AppState.Phase {
     var statusTint: Color {
         switch self {
         case .idle:
-            return ZenDesign.Semantic.success
-        case .listening:
             return ZenDesign.Semantic.accent
+        case .listening:
+            return ZenDesign.Semantic.live
         case .transcribing, .inserting:
             return ZenDesign.Semantic.warn
         case .awaitingCloudReview:
@@ -624,6 +581,20 @@ struct ErrorBanner: View {
 /// actually hit is `Layout.hitTarget` tall. Drawing a 44pt box would make a
 /// dense settings window look like a touch UI; making the *target* 44pt costs
 /// nothing visually and is what the approved design asks for.
+/// Button background that tracks hover so every style gets default, hover,
+/// pressed, and focus states without duplicating the gesture plumbing.
+private struct ZenButtonBackground<Content: View>: View {
+    @State private var isHovered = false
+    @ViewBuilder let content: (Bool) -> Content
+
+    var body: some View {
+        content(isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+}
+
 private struct ZenButtonShape<Background: View>: View {
     let label: AnyView
     let minWidth: CGFloat?
@@ -633,11 +604,6 @@ private struct ZenButtonShape<Background: View>: View {
     var body: some View {
         label
             .font(ZenDesign.Typography.button)
-            // A button label never wraps. The painted background is a fixed
-            // `height`, so a label allowed to run onto a second line is drawn
-            // straight through the button's own border — "Replay setup guide"
-            // broke onto two lines and spilled out of its rounded rect. The
-            // button takes the width its label needs instead.
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 13)
@@ -662,24 +628,28 @@ struct ZenSecondaryButtonStyle: ButtonStyle {
             minWidth: minWidth,
             height: height
         ) {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.small,
-                style: .continuous
-            )
-            .fill(
-                configuration.isPressed
-                    ? ZenDesign.Semantic.surfaceRaised
-                    : ZenDesign.Component.shortcutBackground
-            )
-            .overlay {
+            ZenButtonBackground { isHovered in
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,
                     style: .continuous
                 )
-                .strokeBorder(
-                    ZenDesign.Semantic.borderStrong,
-                    lineWidth: 1
+                .fill(
+                    configuration.isPressed
+                        ? ZenDesign.Semantic.surfaceRaised
+                        : (isHovered
+                            ? ZenDesign.Semantic.surfaceRaised.opacity(0.62)
+                            : ZenDesign.Component.shortcutBackground)
                 )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .strokeBorder(
+                        ZenDesign.Semantic.borderStrong,
+                        lineWidth: 1
+                    )
+                }
             }
         }
     }
@@ -697,22 +667,19 @@ struct ZenPrimaryButtonStyle: ButtonStyle {
             minWidth: minWidth,
             height: ZenDesign.Layout.control
         ) {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.small,
-                style: .continuous
-            )
-            // `accentStrong` moves the right way in both appearances:
-            // darker than `accent` in light, brighter in dark — always away
-            // from the label colour, never toward it. The regression this
-            // guards against was a `gold500` alias that resolved to `rust400`,
-            // *lighter* than the resting accent in light mode, so pressing the
-            // button lifted its background to roughly 2.4:1 against the label
-            // and the text vanished at the moment of the click.
-            .fill(
-                configuration.isPressed
-                    ? ZenDesign.Semantic.accentStrong
-                    : ZenDesign.Semantic.accent
-            )
+            ZenButtonBackground { isHovered in
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(
+                    configuration.isPressed
+                        ? ZenDesign.Semantic.accentStrong
+                        : (isHovered
+                            ? ZenDesign.Semantic.accentHover
+                            : ZenDesign.Semantic.accentFill)
+                )
+            }
         }
     }
 }
@@ -729,15 +696,19 @@ struct ZenDestructiveButtonStyle: ButtonStyle {
             minWidth: minWidth,
             height: ZenDesign.Layout.control
         ) {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.small,
-                style: .continuous
-            )
-            .fill(
-                ZenDesign.Semantic.danger.opacity(
-                    configuration.isPressed ? 0.78 : 1
+            ZenButtonBackground { isHovered in
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
                 )
-            )
+                .fill(
+                    ZenDesign.Semantic.danger.opacity(
+                        configuration.isPressed
+                            ? 0.78
+                            : (isHovered ? 0.9 : 1)
+                    )
+                )
+            }
         }
     }
 }
