@@ -14,6 +14,7 @@
 
 import AVFoundation
 import Foundation
+import Metal
 import ZenVoiceCore
 import whisper
 
@@ -191,7 +192,7 @@ public final class WhisperTranscriber: @unchecked Sendable {
             parameters.beam_search.beam_size = WhisperDecoding.beamSize
         }
         parameters.n_threads = isReproducible
-            ? 4
+            ? Int32(min(4, ProcessInfo.processInfo.activeProcessorCount))
             : ProcessorTopology.decodeThreadCount
         // `audio_ctx` is deliberately left at the model default. See
         // ``WhisperDecoding`` for the measurement that settled it.
@@ -434,8 +435,18 @@ public final class WhisperTranscriber: @unchecked Sendable {
             return context
         }
         var parameters = whisper_context_default_params()
-        parameters.use_gpu = true
-        parameters.flash_attn = true
+        // ZenVoice runs on real Macs with hardware Metal. Hosted CI VMs can
+        // expose a paravirtualized Metal device that compiles pipelines in
+        // ~14 s and decodes speech ~40x slower than the CPU backend, which
+        // looks exactly like a stuck decode to the deadline guard.
+        // ZENVOICE_DISABLE_GPU forces the CPU backend for those hosts.
+        let cpuOnly =
+            ProcessInfo.processInfo.environment["ZENVOICE_DISABLE_GPU"] == "1"
+        parameters.use_gpu = !cpuOnly
+        // Flash Attention in whisper.cpp is only fast on the Metal backend;
+        // it stays off on CPU-only hosts.
+        parameters.flash_attn =
+            !cpuOnly && MTLCreateSystemDefaultDevice() != nil
         let loaded = configuration.modelURL.path.withCString { path in
             whisper_init_from_file_with_params(path, parameters)
         }

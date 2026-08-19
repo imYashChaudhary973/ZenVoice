@@ -20,12 +20,27 @@ concurrency:
 jobs:
   real-speech:
     name: Real-speech smoke gate
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 30
 
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # Same cache as ci.yml: without it the runner re-downloads the pinned
+      # XCFrameworks and the uncached build has been SIGKILLed (exit 137)
+      # mid-compilation on hosted runners.
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            .build/checkouts
+            .build/repositories
+            .build/artifacts
+            .build/workspace-state.json
+          key: >-
+            ${{ runner.os }}-swiftpm-${{ hashFiles('Package.swift',
+            'Package.resolved') }}
 
       - name: Cache pinned accuracy assets
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -53,11 +68,33 @@ jobs:
           python3 Scripts/build-librispeech-corpus.py \
             --output "$accuracy_root/corpus"
 
+      # Secondary coverage plus decode-speed diagnostics for the smoke step:
+      # prints warm-up and decode timings for the same pinned model. The
+      # memory-reclaim floor assumes a larger model, so a base.en failure here
+      # must not mask the smoke result. PR CI already runs these checks as a
+      # required step with small.en.
+      - name: Run runtime checks with the same pinned model
+        continue-on-error: true
+        env:
+          ZENVOICE_MODEL_PATH: ${{ runner.temp }}/zenvoice-accuracy/models/ggml-base.en.bin
+          ZENVOICE_RUNTIME_REQUIRED: "1"
+          ZENVOICE_DISABLE_GPU: "1"
+        run: swift run ZenVoiceRuntimeChecks
+
       - name: Run real-speech accuracy smoke gate
         env:
           ZENVOICE_ACCURACY_REQUIRED: "1"
           ZENVOICE_ACCURACY_REQUIRE_REAL: "1"
           ZENVOICE_ACCURACY_SMOKE: "1"
           ZENVOICE_MODEL_PATH: ${{ runner.temp }}/zenvoice-accuracy/models/ggml-base.en.bin
-          ZENVOICE_ACCURACY_CORPUS: ${{ runner.temp }}/zenvoice-accuracy/corpus/dictation
+          # The hosted macOS VM exposes a paravirtualized Metal device whose
+          # compute is ~40x slower than its own CPU backend; force CPU so the
+          # decode completes inside the product's own decode deadline.
+          ZENVOICE_DISABLE_GPU: "1"
+          # single/ holds one real utterance (~5 s). The multi-sentence
+          # dictation/ clips are ~40 s, which the VM cannot decode inside
+          # that deadline (it exists to catch stuck decodes for real users,
+          # so it must not be loosened for CI). Long-form coverage stays
+          # with local full-harness runs on real hardware.
+          ZENVOICE_ACCURACY_CORPUS: ${{ runner.temp }}/zenvoice-accuracy/corpus/single
         run: swift run ZenVoiceAccuracyChecks
