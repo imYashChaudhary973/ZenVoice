@@ -99,6 +99,9 @@ struct ZenVoiceSettingsView: View {
     @State private var selection: Section = .home
     @State private var hoveredSection: Section?
     @State private var showsCommandPalette = false
+    /// Shared namespace for the sidebar's selection highlight, so it slides
+    /// between rows instead of cross-fading in place.
+    @Namespace private var navSelection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ZenAppearance.storageKey)
     private var appearance = ZenAppearance.system.rawValue
@@ -125,11 +128,48 @@ struct ZenVoiceSettingsView: View {
                 // material off below the window's rounded top corners.
                 HStack(spacing: 0) {
                     sidebar
-                    VStack(spacing: 0) {
-                        topBar
+                    ZStack(alignment: .top) {
+                        // The window is created with a clear background, so
+                        // this column has to bring its own material — without
+                        // it the translucent canvas above would be showing
+                        // straight through to an unblurred desktop.
+                        //
+                        // `.underWindowBackground` rather than the sidebar's
+                        // material: it is the heavier of the two, which is
+                        // exactly the hierarchy wanted. The structural column
+                        // (sidebar) reads as the thinner, more transparent
+                        // glass; the content it frames sits on something more
+                        // solid, so text has a stable surface to live on.
+                        ZenVisualEffect(material: .underWindowBackground)
+
+                        // A *translucent* tint over that material, not an
+                        // opaque fill. That single point of alpha is what keeps
+                        // a trace of the desktop under the page and stops the
+                        // window reading as a rectangle of dead grey pasted
+                        // onto the screen.
+                        ZenDesign.Semantic.canvas
+
                         content
+                            // Sections cross-fade and rise a few points rather
+                            // than cutting. The offset is small on purpose: it
+                            // says "this replaced that" without the page
+                            // appearing to physically travel, which at this
+                            // size would read as a slide-in animation from a
+                            // web framework.
+                            .id(selection)
+                            .transition(
+                                .opacity.combined(
+                                    with: .offset(y: 6)
+                                )
+                            )
+                            .padding(.top, ZenDesign.Layout.titleBar)
+
+                        topBar
                     }
-                    .background(ZenDesign.Semantic.canvas)
+                    .animation(
+                        ZenDesign.Motion.standard(reduceMotion),
+                        value: selection
+                    )
                 }
                 .overlay {
                     if showsCommandPalette {
@@ -262,9 +302,15 @@ struct ZenVoiceSettingsView: View {
     /// unbroken vertical edge between the two columns.
     private var topBar: some View {
         HStack(spacing: ZenDesign.Spacing.sm) {
+            // The wordmark, not a page title. The page states its own name at
+            // display size a few points below this, and the sidebar states it a
+            // third time — three labels for one fact was the clearest thing
+            // wrong with the old header.
+            ZenBrandMark(size: 18)
             Text("ZenVoice")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(-0.1)
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
 
             Spacer()
 
@@ -325,11 +371,23 @@ struct ZenVoiceSettingsView: View {
                             ? ZenDesign.Semantic.danger
                             : ZenDesign.Semantic.accentFill
                     )
+                    // The one saturated object in the chrome, so it gets a
+                    // coloured shadow rather than a black one — a lit control
+                    // spills its own colour onto what it sits on, and this is
+                    // what separates a primary action from a green rectangle.
+                    .shadow(
+                        color: (isListening
+                            ? ZenDesign.Semantic.danger
+                            : ZenDesign.Semantic.accentFill).opacity(0.35),
+                        radius: 8,
+                        y: 3
+                    )
             }
             .frame(minHeight: ZenDesign.Layout.hitTarget)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ZenPressableStyle())
+        .animation(ZenDesign.Motion.standard(reduceMotion), value: isListening)
         .accessibilityLabel(
             isListening ? "Stop dictating" : "Start dictating"
         )
@@ -365,18 +423,19 @@ struct ZenVoiceSettingsView: View {
                     id: \.offset
                 ) { index, group in
                     if let title = group.title {
-                        Text(title)
+                        Text(title.uppercased())
                             .font(ZenDesign.Typography.navGroup)
+                            .tracking(ZenDesign.Tracking.eyebrow)
                             // Secondary, not tertiary. These headings sit on a
                             // translucent panel over whatever wallpaper is
                             // behind the window; at tertiary they vanished
                             // against a light one.
                             .foregroundStyle(
-                                ZenDesign.Semantic.textSecondary
+                                ZenDesign.Semantic.textTertiary
                             )
-                            .padding(.horizontal, 12)
-                            .padding(.top, index == 0 ? 4 : 22)
-                            .padding(.bottom, 4)
+                            .padding(.horizontal, 10)
+                            .padding(.top, index == 0 ? 4 : 20)
+                            .padding(.bottom, 5)
                             .accessibilityAddTraits(.isHeader)
                     }
                     ForEach(group.sections) { section in
@@ -384,19 +443,26 @@ struct ZenVoiceSettingsView: View {
                     }
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
             // Clears the traffic lights, which the window draws over this
             // column rather than over a separate title bar.
             .padding(.top, ZenDesign.Layout.titleBar)
             .padding(.bottom, ZenDesign.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(
+                ZenDesign.Motion.standard(reduceMotion),
+                value: selection
+            )
         }
         .scrollIndicators(.hidden)
         .frame(width: ZenDesign.Layout.sidebarWidth)
         .background {
-            ZenVisualEffect()
+            ZenVisualEffect(material: .sidebar)
                 .overlay(ZenDesign.Semantic.sidebar)
         }
+        // A single hairline, and it is the *only* hard edge in the window.
+        // Two columns of different material meeting need one line to say
+        // where; everything else here is separated by light and value.
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(ZenDesign.Semantic.border)
@@ -409,18 +475,20 @@ struct ZenVoiceSettingsView: View {
         return Button {
             selection = section
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Image(systemName: section.icon)
                     .font(ZenDesign.Typography.navIcon)
                     .frame(width: ZenDesign.Layout.navIcon)
-                    // The accent lives on the icon in both states: on the
-                    // active row it is the mark of selection, and on the rest
-                    // it keeps the glyph legible against a busy wallpaper,
-                    // which a grey icon on a translucent panel is not.
+                    // Monochrome unless selected. Every one of these nine
+                    // glyphs used to be jade at rest, which is the single
+                    // change that most flattened the old rail: with all nine
+                    // accented, the accent on the *selected* one carried no
+                    // information, so the active row had to be found by
+                    // reading rather than by looking.
                     .foregroundStyle(
                         selected
                             ? ZenDesign.Component.selectedNavigationIcon
-                            : ZenDesign.Semantic.textSecondary
+                            : ZenDesign.Semantic.textTertiary
                     )
                 Text(section.rawValue)
                     .font(
@@ -451,31 +519,45 @@ struct ZenVoiceSettingsView: View {
                         )
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .frame(height: ZenDesign.Layout.navRow)
             .background {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.medium,
-                    style: .continuous
-                )
-                .fill(
-                    selected
-                        ? ZenDesign.Component.selectedNavigation
-                        : (hoveredSection == section
-                            ? ZenDesign.Semantic.textPrimary.opacity(0.06)
-                            : Color.clear)
-                )
+                // The selection is one shape that *moves* between rows rather
+                // than one that fades out here and in over there. Because the
+                // move is a spring, clicking a third row part-way through
+                // redirects the highlight from wherever it currently is — no
+                // waiting for the first move to land, and no jump.
+                ZStack {
+                    if selected {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.medium,
+                            style: .continuous
+                        )
+                        .fill(ZenDesign.Component.selectedNavigation)
+                        .matchedGeometryEffect(
+                            id: "nav-selection",
+                            in: navSelection
+                        )
+                    } else if hoveredSection == section {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.medium,
+                            style: .continuous
+                        )
+                        .fill(ZenDesign.Semantic.textPrimary.opacity(0.055))
+                    }
+                }
             }
-            // The painted row is 32pt so consecutive rows nearly touch and the
-            // rail reads as one list, while the clickable frame still meets the
-            // 44pt target.
+            // The painted row is shorter than the clickable one so consecutive
+            // rows nearly touch and the rail reads as one list, while the hit
+            // frame still meets the 44pt target.
             .frame(minHeight: ZenDesign.Layout.hitTarget)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ZenPressableStyle())
         .onHover { hovering in
             hoveredSection = hovering ? section : nil
         }
+        .animation(ZenDesign.Motion.fast(reduceMotion), value: hoveredSection)
         .accessibilityLabel(section.rawValue)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -628,7 +710,12 @@ private struct ZenButtonShape<Background: View>: View {
     let label: AnyView
     let minWidth: CGFloat?
     let height: CGFloat
+    /// Whether the control is currently held. Drives the press scale, which has
+    /// to live here rather than in each style so all three respond identically.
+    var isPressed = false
     @ViewBuilder let background: Background
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         label
@@ -644,6 +731,16 @@ private struct ZenButtonShape<Background: View>: View {
             .frame(minWidth: minWidth)
             .frame(height: height)
             .background { background }
+            // Feedback on press-*down*, not on the click completing. The
+            // previous styles changed only their fill colour, which on a dark
+            // surface is a few percent of luminance and effectively invisible;
+            // scale is felt even when it is not consciously seen.
+            .scaleEffect(
+                isPressed && !reduceMotion
+                    ? ZenDesign.Motion.pressScale
+                    : 1
+            )
+            .animation(ZenDesign.Motion.fast(reduceMotion), value: isPressed)
             .frame(minHeight: ZenDesign.Layout.hitTarget)
             .contentShape(Rectangle())
     }
@@ -660,24 +757,34 @@ struct ZenSecondaryButtonStyle: ButtonStyle {
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
             ),
             minWidth: minWidth,
-            height: height
+            height: height,
+            isPressed: configuration.isPressed
         ) {
             RoundedRectangle(
                 cornerRadius: ZenDesign.Radius.small,
                 style: .continuous
             )
             .fill(
-                configuration.isPressed
-                    ? ZenDesign.Semantic.surfaceRaised
-                    : ZenDesign.Component.shortcutBackground
+                ZenDesign.Semantic.textPrimary
+                    .opacity(configuration.isPressed ? 0.14 : 0.08)
             )
-            .overlay {
+            .overlay(alignment: .top) {
+                // The same lit top edge every raised surface in the window
+                // carries, so a secondary button reads as the same material as
+                // the card it sits on rather than as an outlined shape.
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,
                     style: .continuous
                 )
                 .strokeBorder(
-                    ZenDesign.Semantic.borderStrong,
+                    LinearGradient(
+                        colors: [
+                            ZenDesign.Semantic.edgeHighlight,
+                            .clear,
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
                     lineWidth: 1
                 )
             }
@@ -695,7 +802,8 @@ struct ZenPrimaryButtonStyle: ButtonStyle {
                     .foregroundStyle(ZenDesign.Semantic.textOnAccent)
             ),
             minWidth: minWidth,
-            height: ZenDesign.Layout.control
+            height: ZenDesign.Layout.control,
+            isPressed: configuration.isPressed
         ) {
             RoundedRectangle(
                 cornerRadius: ZenDesign.Radius.small,
@@ -708,10 +816,23 @@ struct ZenPrimaryButtonStyle: ButtonStyle {
             // *lighter* than the resting accent in light mode, so pressing the
             // button lifted its background to roughly 2.4:1 against the label
             // and the text vanished at the moment of the click.
+            // `accentFill`, not `accent`. These two weights exist precisely so
+            // that a control carrying a white label uses the deep one — and
+            // this style was reaching for the *foreground* weight, which in
+            // dark mode is the light mint. White on that lands near 2.3:1, so
+            // every primary button in the window was failing contrast while the
+            // token that would have fixed it sat one line away.
             .fill(
                 configuration.isPressed
                     ? ZenDesign.Semantic.accentStrong
-                    : ZenDesign.Semantic.accent
+                    : ZenDesign.Semantic.accentFill
+            )
+            .shadow(
+                color: ZenDesign.Semantic.accentFill.opacity(
+                    configuration.isPressed ? 0.16 : 0.34
+                ),
+                radius: 8,
+                y: 3
             )
         }
     }
@@ -727,7 +848,8 @@ struct ZenDestructiveButtonStyle: ButtonStyle {
                     .foregroundStyle(ZenDesign.Semantic.textOnDanger)
             ),
             minWidth: minWidth,
-            height: ZenDesign.Layout.control
+            height: ZenDesign.Layout.control,
+            isPressed: configuration.isPressed
         ) {
             RoundedRectangle(
                 cornerRadius: ZenDesign.Radius.small,

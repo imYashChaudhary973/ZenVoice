@@ -20,27 +20,43 @@ struct OverlayBarButton: View {
     var emphasized = false
     let action: () -> Void
 
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 11.5, weight: emphasized ? .semibold : .medium))
-                .foregroundStyle(emphasized ? ZenDesign.Semantic.accent : ZenDesign.Semantic.textSecondary)
-                .padding(.horizontal, 10)
-                .frame(height: 30)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(
+                    emphasized
+                        ? ZenDesign.Semantic.textOnAccent
+                        : ZenDesign.Semantic.textSecondary
+                )
+                .padding(.horizontal, 11)
+                .frame(height: 28)
                 .background {
+                    // The emphasised button is *filled*, not tinted. On the
+                    // bar's translucent material a 13%-alpha wash behind accent
+                    // text is barely a shape at all, so the one action the user
+                    // is meant to take looked identical to the one that cancels
+                    // it. A solid fill is also the only version that survives
+                    // the bar sitting over an arbitrary window.
                     RoundedRectangle(
                         cornerRadius: ZenDesign.Radius.barControl,
                         style: .continuous
                     )
                     .fill(
                         emphasized
-                            ? ZenDesign.Semantic.accentMuted
-                            : Color.clear
+                            ? ZenDesign.Semantic.accentFill
+                            : ZenDesign.Semantic.textPrimary
+                                .opacity(hovering ? 0.10 : 0)
                     )
                 }
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ZenPressableStyle())
+        .onHover { hovering = $0 }
+        .animation(ZenDesign.Motion.fast(reduceMotion), value: hovering)
         .accessibilityLabel(title)
     }
 }

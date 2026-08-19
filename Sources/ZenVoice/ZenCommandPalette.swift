@@ -86,21 +86,12 @@ struct ZenCommandPalette: View {
             footer
         }
         .frame(width: 560)
-        .background(ZenDesign.Semantic.surface)
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.large,
-                style: .continuous
-            )
-        )
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.large,
-                style: .continuous
-            )
-            .strokeBorder(ZenDesign.Semantic.borderStrong)
-        }
-        .shadow(color: .black.opacity(0.30), radius: 28, y: 12)
+        // Glass, like every other floating object in the app — and like
+        // Spotlight, which is the thing this control is borrowing its shape and
+        // its keystroke from. Matching that expectation is most of why a
+        // palette feels native or does not.
+        .background(.regularMaterial)
+        .zenFloatingSurface(cornerRadius: ZenDesign.Radius.large)
         .accessibilityAddTraits(.isModal)
     }
 
@@ -175,13 +166,13 @@ struct ZenCommandPalette: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: command.icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .frame(width: 24, height: 24)
-                    .background {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(ZenDesign.Semantic.surfaceRaised)
-                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(
+                        index == highlighted
+                            ? ZenDesign.Semantic.accent
+                            : ZenDesign.Semantic.textTertiary
+                    )
+                    .frame(width: 20)
                     .accessibilityHidden(true)
                 Text(command.title)
                     .font(ZenDesign.Typography.body)
@@ -205,15 +196,18 @@ struct ZenCommandPalette: View {
                     cornerRadius: ZenDesign.Radius.small,
                     style: .continuous
                 )
+                // The highlighted row is a selection, which is one of the three
+                // jobs the accent is reserved for. A grey highlight on a grey
+                // material is not a selection, it is a smudge.
                 .fill(
                     index == highlighted
-                        ? ZenDesign.Semantic.surfaceRaised
+                        ? ZenDesign.Semantic.accentMuted
                         : Color.clear
                 )
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ZenPressableStyle())
         .onHover { hovering in
             if hovering {
                 highlighted = index

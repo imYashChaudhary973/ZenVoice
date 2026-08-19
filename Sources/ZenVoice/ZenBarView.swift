@@ -66,7 +66,13 @@ struct ZenBarView: View {
         .clipShape(barShape)
         .contentShape(barShape)
         .animation(ZenDesign.Motion.standard(reduceMotion), value: state.phase)
-        .animation(ZenDesign.Motion.standard(reduceMotion), value: barWidth)
+        // The width morph gets the *momentum* spring while the contents get the
+        // critically damped one. The bar changing size is the one moment this
+        // interface behaves like a physical object being resized, and a few
+        // percent of overshoot on the geometry — with none on the text riding
+        // inside it — is what makes the change read as elastic rather than as a
+        // window being programmatically resized.
+        .animation(ZenDesign.Motion.momentum(reduceMotion), value: barWidth)
         .accessibilityElement(children: .contain)
     }
 
@@ -340,18 +346,52 @@ struct ZenBarView: View {
         }
     }
 
+    /// The bar reads as a piece of glass hovering over whatever the user is
+    /// working in, not as a panel docked to the screen.
+    ///
+    /// It used to be a 96%-opaque rectangle with a hard border on all four
+    /// sides — which is to say, opaque. At that alpha the material was doing no
+    /// work, and the bar sat on top of the desktop like a sticker rather than
+    /// belonging to the same surface as the menu bar and Spotlight. A real
+    /// material samples what is behind it, so the bar picks up the colour of
+    /// the window it is floating over and stays legible on both a white
+    /// document and a dark terminal.
     private var barBackground: some View {
         barShape
-            .fill(ZenDesign.Semantic.surface.opacity(0.96))
+            .fill(.ultraThinMaterial)
+            // A thin scrim over the material. The material alone is too
+            // transparent to carry small text over a busy window; this settles
+            // it just enough without going back to being a solid fill.
+            .overlay {
+                barShape.fill(ZenDesign.Semantic.surface.opacity(0.55))
+            }
             .overlay {
                 barShape
-                    .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
-                    .overlay {
-                        barShape
-                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                    }
+                    .strokeBorder(
+                        ZenDesign.Semantic.border,
+                        lineWidth: 1
+                    )
             }
-            .shadow(color: Color.black.opacity(0.28), radius: 20, y: 9)
+            // The lit top lip, same treatment every raised surface in the app
+            // carries — and the reason this looks like an object with a
+            // thickness rather than a rounded rectangle.
+            .overlay {
+                barShape
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.28),
+                                Color.white.opacity(0.02),
+                                .clear,
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(color: Color.black.opacity(0.30), radius: 24, y: 10)
+            .shadow(color: Color.black.opacity(0.16), radius: 4, y: 1)
     }
 
     private func terminalAgenticIcon(_ event: GoalStatusEvent) -> String {
@@ -435,6 +475,21 @@ struct WaveformView: View {
                     )
             }
         }
+        // Older samples fade out at the leading edge instead of ending on a
+        // hard vertical line. The trail is a *history*, and history should
+        // dissolve — a sharp left edge reads as the graphic being clipped by
+        // its container, which is exactly what it looked like before.
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .black, location: 0.22),
+                    .init(color: .black, location: 1),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
         // Capsules are centre-aligned in the row, so a bar of height h extends
         // equally above and below the midline. That mirrored shape is what
         // reads as a voice rather than as a graphic equaliser.
