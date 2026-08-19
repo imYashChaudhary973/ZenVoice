@@ -24,6 +24,7 @@ struct HelpAndAboutScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var updatesViewModel: UpdatesViewModel
     @ObservedObject var onboardingViewModel: OnboardingViewModel
+    @ObservedObject var licenceViewModel: LicenceViewModel
     let openShortcuts: () -> Void
 
     private enum Tab: String, CaseIterable, Identifiable {
@@ -66,7 +67,10 @@ struct HelpAndAboutScreen: View {
                     openShortcuts: openShortcuts
                 )
             case .about:
-                UpdatesScreen(viewModel: updatesViewModel)
+                UpdatesScreen(
+                    viewModel: updatesViewModel,
+                    licenceViewModel: licenceViewModel
+                )
             }
         }
     }

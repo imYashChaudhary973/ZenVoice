@@ -160,9 +160,18 @@ Phase 5 shipped a settings-only preview. It is not usable during dictation.
       rather than `choices[0].message.content`. `CloudAIRequest` currently
       hardcodes the OpenAI shape, so this needs a per-provider request builder
       and response parser.
-- [ ] Verify Groq and OpenAI against live endpoints. Neither has ever run against
-      a real provider — current confidence is fixture-level only. Needs a real
-      API key; the request shapes and privacy assertions are covered by checks.
+- [x] Verify Groq against the live endpoint (2026-08-18, `ZenVoiceCloudLiveChecks`:
+      2xx on four models, cleanup changes the transcript, wrong key yields
+      `provider(401)` with a readable message — evidence in
+      [CLOUD_PROVIDERS.md §5.1](CLOUD_PROVIDERS.md)). En route this caught a
+      real outage: Groq shut down `llama-3.3-70b-versatile` (the app default)
+      on 2026-08-16; the curated list was refreshed to live-verified models
+      and the stored configuration migrated.
+- [ ] Verify OpenAI and Anthropic against live endpoints — **credential-blocked
+      (user opted to skip, 2026-08-18)**. Wire shapes stay covered by
+      `ZenVoiceCoreChecks`; one command per provider closes each when a key
+      is stored: `ZENVOICE_CLOUD_LIVE_PROVIDER=openai|anthropic swift run
+      ZenVoiceCloudLiveChecks`.
 - [x] Make refinement reachable from the dictation flow, not only from settings.
       `CloudAIPreviewWindowController` is presented from `finishRecording()` when
       the active formatting mode is Cloud; Accept inserts the enhanced transcript,
@@ -182,9 +191,16 @@ dictation.
       self-recorded) are needed for the dictation case. Record provenance and
       licence for each source.
 - [x] Extend `ZenVoiceAccuracyChecks` to report per-engine WER on the new corpus.
-- [ ] Baseline every installed engine so engine recommendation rests on measured
-      accuracy rather than hardware heuristics. Needs the real-speech corpus
-      fetched to `Datasets/`; synthetic fixture baselines already run in CI.
+- [x] Baseline every installed engine (2026-08-18). `ZENVOICE_ACCURACY_ENGINE`
+      added to `ZenVoiceAccuracyChecks`; all seven registry engines measured on
+      the frozen Common Voice Spontaneous test through their own
+      `SpeechEngine` paths — Parakeet TDT v3 6.9 % whole WER at 73× real time
+      (best accuracy *and* speed), Whisper Turbo 8.2 %, Cohere 10.8 %,
+      Nemotron Multilingual 13.8 %, Parakeet Flash 14.1 %, Nemotron Ultra Fast
+      23.8 %. Apple Speech remains behind the manual-QA authorization gate.
+      Full table + re-run command:
+      [REAL_SPEECH_CORPUS.md §5](REAL_SPEECH_CORPUS.md); recommendation note
+      in [MODEL_CATALOG.md](MODEL_CATALOG.md).
 - [x] Keep corpora out of git (`/Datasets/` is already ignored); fetch on demand.
 
 ## Sequencing
@@ -208,5 +224,9 @@ block the interface work.
 - No control in the app does nothing when clicked.
 - Nine navigation entries, none of which duplicate another.
 - A screenshot of any screen is recognisably the same product as any other.
-- Cloud refinement works against OpenAI, Groq, and Anthropic from a real key.
+- Cloud refinement works against a real key: **Groq verified end to end
+      2026-08-18** (plus a fixed dead default model); OpenAI and Anthropic
+      remain credential-blocked by user choice — one stored key each closes
+      them via `ZENVOICE_CLOUD_LIVE_PROVIDER=openai|anthropic swift run
+      ZenVoiceCloudLiveChecks`.
 - Engine accuracy claims trace to a measured number on real dictation audio.

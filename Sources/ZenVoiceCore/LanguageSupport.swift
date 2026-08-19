@@ -131,6 +131,21 @@ public struct LanguageProfile:
         self == Self.hinglish
     }
 
+    /// NVIDIA Parakeet TDT v3 coverage: 25 European languages, including
+    /// English. Hindi, Japanese, Mandarin, and auto-detect are outside this
+    /// set and stay on Whisper Turbo.
+    public static let parakeetTDTv3LanguageCodes: Set<String> = [
+        "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de", "el",
+        "hu", "it", "lv", "lt", "mt", "pl", "pt", "ro", "sk", "sl", "es",
+        "sv", "uk", "ru"
+    ]
+
+    public var prefersParakeetTDTv3: Bool {
+        !isHinglish
+            && inputLanguageCode != Self.automaticCode
+            && Self.parakeetTDTv3LanguageCodes.contains(inputLanguageCode)
+    }
+
     public var requiresMultilingualModel: Bool {
         inputLanguageCode != "en"
     }

@@ -36,18 +36,22 @@ Local audio
   “वो क्या कहते हैं” are removed alongside their English counterparts. Measured
   on 400 human-annotated Hindi pairs, this took refinement from 0.5 points of
   improvement to 8.2.
-- **Agent Prompt:** includes Clean behavior and honors the explicit spoken
-  commands “new line” and “new paragraph.”
-There is no language-model mode. There used to be, and it was removed rather
-than kept for later: measured against 400 human-annotated disfluent/fluent
-pairs, the deterministic rules cut word error rate from 23.2% to 7.2%, and the
-model added **0.0** on top of that. An oracle allowed to read the reference
-would have added 0.1. There was no work left for a model to do, so the
-download, the wait and the `llama.cpp` dependency were all buying nothing.
+- **Smart:** runs Clean first, then asks Apple's on-device system language model
+  to improve capitalization, punctuation, whitespace, and paragraph breaks.
+  The model must preserve every word and number in order. A strict lexical
+  guard plus `TranscriptSemanticGuard` rejects invention, deletion,
+  paraphrasing, changed quantities, and changed negations. Model absence,
+  refusal, timeout, malformed output, or a rejected candidate falls back to
+  the prior deterministic Smart formatter without losing the local transcript.
 
-The investigation that settled this — five architectures tried, each measured
-and each rejected — is not kept as a document: the conclusion is the code, and
-the numbers above are the part worth carrying.
+The system model path is available on macOS 26 or later when Apple Intelligence
+is enabled and ready. Older or ineligible Macs keep the deterministic local
+fallback. Smart never invokes Private Cloud Compute or any network client.
+
+The former downloadable Qwen/llama.cpp experiment remains retired: measured
+against 400 human-annotated disfluent/fluent pairs, deterministic cleanup cut
+word error rate from 23.2% to 7.2%, while that model added **0.0**. Phase 2 uses
+the OS-managed model only for punctuation and layout, behind a stricter guard.
 
 Clean is the default. The selected mode is stored in local user defaults.
 Instant Refine runs after recording stops and before text is saved or pasted.
@@ -90,12 +94,15 @@ transcript.
 
 ## Model responsibilities
 
-Speech models convert audio into text. They are not general-purpose rewriting
-models. Instant Refine therefore uses only deterministic application code and
-has no downloadable refinement-model catalogue. The former M14 Qwen/llama.cpp
-path was measured, contributed no useful accuracy beyond deterministic rules,
-and was removed. Current speech-model provenance and verification remain in the
-[Verified Model Catalogue](MODEL_CATALOG.md).
+Speech models convert audio into text. Smart formatting is a separate,
+post-transcription stage backed by Apple's OS-managed on-device language model.
+ZenVoice supplies no model URL, stores no refinement weights, sends no API key,
+and does not use Private Cloud Compute. The model's output is untrusted until
+both formatting guards pass.
+
+The former M14 Qwen/llama.cpp path remains removed because it did not improve
+measured correction quality. Current speech-model provenance and verification
+remain in the [Verified Model Catalogue](MODEL_CATALOG.md).
 
 ## Next guarded stages
 

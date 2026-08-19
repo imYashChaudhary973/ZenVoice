@@ -282,6 +282,8 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var selectedEngineID: String?
     @Published private(set) var engineAvailabilities: [EngineAvailability] = []
     @Published private(set) var installedEngineIDs: Set<String> = []
+    @Published private(set) var nemotronMode: NemotronPreferences.Mode =
+        NemotronPreferences.load()
     @Published var errorMessage: String?
 
     private let downloader: VerifiedModelDownloader
@@ -406,9 +408,21 @@ final class ModelManagerViewModel: ObservableObject {
 
     func refreshEngineSelection() {
         let profile = LanguagePreferences.load()
-        selectedEngineID = SelectedEnginePreferences.load(for: profile)
+        if let selected = SelectedEnginePreferences.load(for: profile),
+           EngineIdentifiers.isPreviewOnly(selected) {
+            SelectedEnginePreferences.clear(for: profile)
+            selectedEngineID = nil
+        } else {
+            selectedEngineID = SelectedEnginePreferences.load(for: profile)
+        }
         engineAvailabilities =
             engineRegistryProvider()?.availability(for: profile) ?? []
+        nemotronMode = NemotronPreferences.load()
+    }
+
+    func setNemotronMode(_ mode: NemotronPreferences.Mode) {
+        NemotronPreferences.save(mode)
+        nemotronMode = mode
     }
 
     func engineRecommendation() -> EngineRecommendation? {
@@ -427,6 +441,11 @@ final class ModelManagerViewModel: ObservableObject {
     }
 
     func selectEngine(_ engineID: String) {
+        if EngineIdentifiers.isPreviewOnly(engineID) {
+            errorMessage =
+                "Preview only — final insert uses Parakeet TDT v3 or Whisper Turbo."
+            return
+        }
         let profile = LanguagePreferences.load()
         guard let availability = engineAvailabilities.first(
             where: { $0.engine.id == engineID }

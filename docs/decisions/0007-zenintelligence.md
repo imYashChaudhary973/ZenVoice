@@ -2,7 +2,8 @@
 
 ## Status
 
-Superseded by Phase 6 — merged into **Formatting** as the `Smart` rung.
+Amended by Phase 2 — the `Smart` rung now uses Apple's on-device system
+language model behind the existing meaning guard.
 
 ## Context
 
@@ -24,20 +25,23 @@ stop calling it artificial intelligence. In Phase 6 it becomes the **Smart**
 rung of the single **Formatting** ladder:
 
 1. `TranscriptFormattingMode`: `.off`, `.clean`, `.smart`, `.cloud`.
-2. The `Smart` rung currently runs deterministic cleanup plus formatting
-   (capitalisation, number formatting, spacing, and a conservative context
-   join). A local model can replace the formatter later without changing the
-   API or the meaning-guard contract.
-3. The meaning guard still rejects any candidate that adds, removes, or
+2. The `Smart` rung runs deterministic cleanup, then uses
+   `SystemLanguageModel` for punctuation, capitalization, whitespace, and
+   paragraph layout on macOS 26 or later. It uses greedy generation with no
+   session history and never calls Private Cloud Compute.
+3. Model output must preserve every lexical token in order and pass the
+   protected quantity/negation guard. Any failure falls back to the existing
+   deterministic formatter.
+4. The meaning guard still rejects any candidate that adds, removes, or
    alters facts, names, numbers, dates, quantities, or negations.
-4. `ZenIntelligenceMode` and `ZenIntelligencePreferences` remain internally
+5. `ZenIntelligenceMode` and `ZenIntelligencePreferences` remain internally
    for migration, but the UI no longer exposes the name.
 
 ## Consequences
 
 - Users see one coherent control instead of two overlapping ladders.
-- The `Smart` rung is reserved for a future local model; until then it is
-  deterministic and stays on the Mac.
+- Supported Macs get model-backed local formatting without a separate download.
+  Older, ineligible, disabled, or not-ready systems keep deterministic Smart.
 - The meaning guard continues to prevent hallucination or fact drift.
 - Cloud formatting is a separate, explicit rung with its own provider and key.
 
@@ -46,6 +50,8 @@ rung of the single **Formatting** ladder:
 - The `Smart` rung never sends transcript text off-device.
 - Cloud formatting sends only the transcript and the user-supplied prompt to
   the provider chosen by the user, using the user's own API key.
+- Apple's system model is OS-managed; ZenVoice supplies no model URL or API key.
+- `PrivateCloudComputeLanguageModel` is not constructed anywhere in this path.
 
 ## Related decisions
 

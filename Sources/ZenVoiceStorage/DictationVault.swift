@@ -1041,6 +1041,17 @@ public actor DictationVault {
                 ON audio_archive(started_at DESC);
             CREATE INDEX IF NOT EXISTS idx_audio_archive_dictation
                 ON audio_archive(dictation_id);
+            CREATE TABLE IF NOT EXISTS agentic_tasks (
+                id TEXT PRIMARY KEY NOT NULL,
+                state TEXT NOT NULL,
+                record_blob BLOB NOT NULL,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_agentic_tasks_state
+                ON agentic_tasks(state);
+            CREATE INDEX IF NOT EXISTS idx_agentic_tasks_updated_at
+                ON agentic_tasks(updated_at DESC);
             """
         )
         if version == 1 {
@@ -1060,8 +1071,8 @@ public actor DictationVault {
                 )
             }
         }
-        if version < 6 {
-            try execute("PRAGMA user_version = 6;")
+        if version < 7 {
+            try execute("PRAGMA user_version = 7;")
         }
     }
 
@@ -1641,6 +1652,102 @@ public actor DictationVault {
                 "Directory permissions are \(String(permissions, radix: 8, uppercase: false)) instead of 700: \(resolved.path)"
             )
         }
+    }
+}
+
+extension DictationVault: GoalRecordPersisting {
+    public func saveAgenticTask(_ record: AgenticTaskRecord) async throws {
+        let encoder = JSONEncoder()
+        // Whole microseconds, matching `AgenticTimestamp`: decimal seconds do
+        // not round-trip a `Date` exactly, and a reloaded plan that no longer
+        // hashes equal to the approved one would invalidate the user's
+        // decision.
+        encoder.dateEncodingStrategy = AgenticTimestamp.encoding
+        let encoded = try encoder.encode(record)
+        guard let cleartext = String(data: encoded, encoding: .utf8) else {
+            throw DictationVaultError.invalidRecord
+        }
+        let encrypted = try cipher.seal(
+            cleartext,
+            context: agenticEncryptionContext(id: record.id)
+        )
+        let statement = try prepare(
+            """
+            INSERT INTO agentic_tasks (
+                id, state, record_blob, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                state = excluded.state,
+                record_blob = excluded.record_blob,
+                updated_at = excluded.updated_at;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        bind(record.id.uuidString.lowercased(), at: 1, in: statement)
+        bind(record.state.rawValue, at: 2, in: statement)
+        bind(encrypted, at: 3, in: statement)
+        sqlite3_bind_double(
+            statement,
+            4,
+            record.createdAt.timeIntervalSince1970
+        )
+        sqlite3_bind_double(
+            statement,
+            5,
+            record.updatedAt.timeIntervalSince1970
+        )
+        try stepDone(statement)
+    }
+
+    public func loadActiveAgenticTasks() async throws -> [AgenticTaskRecord] {
+        let terminal = [
+            GoalState.succeeded.rawValue,
+            GoalState.failed.rawValue,
+            GoalState.cancelled.rawValue,
+            GoalState.interrupted.rawValue,
+        ]
+        let statement = try prepare(
+            """
+            SELECT id, record_blob
+            FROM agentic_tasks
+            WHERE state NOT IN (?, ?, ?, ?)
+            ORDER BY created_at ASC;
+            """
+        )
+        defer { sqlite3_finalize(statement) }
+        for (offset, state) in terminal.enumerated() {
+            bind(state, at: Int32(offset + 1), in: statement)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = AgenticTimestamp.decoding
+        var records: [AgenticTaskRecord] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let rawID = text(at: 0, in: statement),
+                  let id = UUID(uuidString: rawID),
+                  let encrypted = data(at: 1, in: statement)
+            else {
+                throw DictationVaultError.invalidRecord
+            }
+            let cleartext = try cipher.open(
+                encrypted,
+                context: agenticEncryptionContext(id: id)
+            )
+            guard let encoded = cleartext.data(using: .utf8) else {
+                throw DictationVaultError.invalidRecord
+            }
+            records.append(try decoder.decode(AgenticTaskRecord.self, from: encoded))
+        }
+        guard sqlite3_errcode(database) == SQLITE_OK
+                || sqlite3_errcode(database) == SQLITE_DONE
+        else {
+            throw DictationVaultError.database(databaseMessage)
+        }
+        return records
+    }
+
+    private func agenticEncryptionContext(id: UUID) -> String {
+        "ZenVoice.agentic.v1.\(id.uuidString.lowercased())"
     }
 }
 

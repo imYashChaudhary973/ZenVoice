@@ -57,12 +57,17 @@ analytics, or cloud transcription services in the current application.
   insertion.
 - Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
   private local timing samples.
-- Deterministic Instant Refine with Off, Clean, and Agent Prompt modes.
+- Unified Formatting ladder: Off, deterministic Clean, guarded on-device Smart,
+  and explicit BYO-key Cloud.
 - Per-application language, refinement, and voice-command profiles.
 - A memory-only context box for names and topic hints that clears when the
   next recording starts.
 - Local layout and punctuation commands with English controls plus Hindi,
   Spanish, French, Mandarin, and Arabic aliases.
+- Optional Agentic Mode, off by default: a spoken multi-step goal becomes a
+  reviewable plan that runs only after you approve those exact steps, with
+  local planning, recomputed per-step risk, live ZenBar progress, and a Stop
+  control.
 - Explicit controls to pause personal rules or local pattern analysis and to
   delete correction rules independently from History.
 - A Recovery Inbox for failed and usable partial dictations with Copy, Retry,
@@ -151,9 +156,10 @@ Hinglish-specialist model.
 Open **Audio** to follow the macOS default input, pin a connected microphone,
 or run a local signal and format test.
 
-Open **Instant Refine** to choose Off, Clean, or Agent Prompt and control stable
-live preview. Experimental commit-on-pause insertion is opt-in and stays locked
-to the app where dictation started.
+Open **Formatting** to choose Off, Clean, Smart, or Cloud. Smart uses Apple's
+on-device system model on supported macOS 26+ systems and falls back locally;
+Cloud remains a separate opt-in BYO-key path. Stable live preview and guarded
+commit-on-pause insertion stay controlled from **Dictation**.
 
 ## Use ZenVoice
 

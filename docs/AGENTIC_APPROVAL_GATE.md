@@ -1,9 +1,12 @@
 # Agentic Approval Gate — Risk Policy and UX
 
-> **Status: future design.** Part of [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md).
-> Extends the non-coercion principle of
-> [ADR 0008](decisions/0008-command-mode.md) (first-run approvals for
-> AppleScript/shell/URL) to multi-step plans.
+> **Status: implemented — 2026-08-18.** Part of
+> [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md). Extends the
+> non-coercion principle of [ADR 0008](decisions/0008-command-mode.md)
+> (first-run approvals for AppleScript/shell/URL) to multi-step plans. Code:
+> `Sources/ZenVoice/AgenticApprovalWindowController.swift` for the panel and
+> `GoalOrchestrator`/`AgenticApprovalPreferences` for decision records and the
+> exact-match low-risk memory.
 
 ## 1. Invariant
 
@@ -90,12 +93,18 @@ vault) at decision time:
 public struct ApprovalDecision: Codable, Equatable, Sendable {
     public var planID: UUID
     public var planSHA256: String     // exact plan bytes approved
-    public var mode: ApprovalMode     // approveAll | upToNextHigh | perStep | edit | reject | cancel
+    public var action: ApprovalAction // approved(.all|.upToNextHigh|.perStep) | edited | rejected | cancelled
     public var stepNumbers: [Int]     // steps covered by this decision
     public var decidedAt: Date
     public var planVersion: Int       // edits bump the version
 }
 ```
+
+`ApprovalAction` is deliberately **not** the planner's
+`PlanApprovalProposal` type ([AGENTIC_PLANNER.md §3](AGENTIC_PLANNER.md)):
+proposals suggest a starting offer; decisions record what the user actually
+did, including refusals. One type for both would let a plan field legally
+claim "rejected".
 
 Edits create a new version; prior approvals do **not** carry over to
 materially changed steps (a changed command re-risks and re-asks). The
@@ -103,7 +112,10 @@ hash binding is what makes "I approved exactly this" auditable later.
 
 First-run memory: like v1's `CommandModeApprovalPreferences`, a *low-risk*
 command shape the user approved repeatedly may be offered "remember this
-command shape" (goal templates). **Never for medium or high.**
+command shape" (goal templates). **Never for medium or high.** A remembered
+shape never bypasses the §1 invariant — it only changes what the gate
+**offers** (Approve focused, no re-reading nudge); every run still records
+an explicit per-goal decision bound to that run's plan bytes.
 
 ## 6. Edge cases
 
@@ -114,7 +126,7 @@ command shape" (goal templates). **Never for medium or high.**
 | Screen asleep / app hidden | `UNUserNotificationCenter` banner with Reject/Approve for low/medium-only plans (high requires the sheet) |
 | Plan edited during a run | Run halts (finish current step, cancel rest); edited plan re-validates and re-asks |
 | Executor reports a surface riskier than planned | Step aborts before effect; re-approval required at the higher class |
-| Two goals queued | v2 executes one goal at a time; second goal waits in `planning` (serialized by design) |
+| Two goals queued | v2 activates one goal at a time; the second waits in the queue at `idle` (planning has not started) and activates when the first reaches a terminal state |
 | App relaunch mid-run | Goal marked `interrupted`; **no auto-resume**; user may re-approve a fresh run of remaining steps |
 | Voice "approve" spoken at the prompt | **Ignored in v2** (pinned unknown U4): approval is deliberately non-voice so a mis-transcription can never authorize a high-risk action |
 | Power/autonomy loss mid-step | Orchestrator's persisted state shows step `running` at relaunch; recorded as `interrupted`; no re-execution without approval |

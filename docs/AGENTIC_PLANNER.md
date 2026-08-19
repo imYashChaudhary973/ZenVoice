@@ -1,7 +1,11 @@
 # Agentic Planner — Design
 
-> **Status: future design.** Part of [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md).
-> Audience: the coding agent implementing it. Nothing here is built.
+> **Status: implemented — 2026-08-18.** Part of
+> [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md). Tier 1 lives in
+> `Sources/ZenVoiceCore/GoalPlanner.swift`, Tier 2 in
+> `Sources/ZenVoiceCore/FoundationModelsGoalPlanner.swift`, and the schema and
+> validation in `AgenticPlanner.swift` / `PlanValidator.swift`. `GoalPlan` also
+> carries an `id: UUID` so an approval cannot be replayed onto another plan.
 
 ## 1. Requirement
 
@@ -36,7 +40,7 @@ and zero hallucination surface. Recognized shapes in v1 of this tier:
 
 | Shape | Example | Produced plan |
 |---|---|---|
-| `open <app> [and] <verb-phrase>` | "open bridgemind and run the tests" | launchApp + shell/codex step |
+| `open <app> [and] <verb-phrase>` | "open bridgemind and run the tests" | shell step `open -a Bridgemind` (low risk, v1-equivalent) + shell/codex step |
 | `<imperative> in/on <known project>` | "run e2e tests in bridgemind" | one agent step with resolved cwd |
 | `notify me when <condition>` (as a step) | "…and notify me when done" | notification step depending on all prior |
 | `ask me before <anything>` | any plan | forces step approval mode |
@@ -44,13 +48,20 @@ and zero hallucination surface. Recognized shapes in v1 of this tier:
 Rules: templates match on normalized transcripts (the same normalization
 `CommandModeEngine` applies); unknown tokens end the match — **no partial
 guesses**. A shape that does not consume the whole goal falls through to
-Tier 2.
+Tier 2. Tier 1 never emits a non-whitelisted action: "open app" is a `shell`
+step running `open -a <name>`, not a special launch agent.
+
+Latency arithmetic: the ≤ 2 s budget is **end-to-end** (all tiers + validator).
+Each tier gets the remainder of the budget before deferring; the 4 s hard
+cap in §5 bounds the degenerate case where two tiers each burn their
+remainder.
 
 ### 2.3 Tier 2 — local LLM planner (new)
 
 A small instruct model running on-device, prompted for **JSON only**, parsed
-strictly. Runtime choice (pinned unknown U1 in the master doc) is shared
-with the Smart-rung local model work so one runtime serves both. Prompt:
+strictly. It uses the same Apple `SystemLanguageModel` runtime implemented by
+the Smart formatting rung. If the system model is unavailable, Tier 1 either
+produces the plan or the goal fails toward text; no cloud fallback is allowed.
 
 ```text
 You are ZenVoice Planner, a local goal parser running on the user's Mac.
@@ -110,10 +121,14 @@ Versioned, `Codable`, stable field names — this is a persistence format.
 public struct GoalPlan: Codable, Equatable, Sendable {
     public var schemaVersion: Int          // == 1
     public var title: String               // ≤ 80 chars, non-empty
+    public var proposedApprovalMode: PlanApprovalProposal
+    // proposeAll | proposeUpToNextHigh | proposePerStep — a *suggestion* for
+    // the gate's default offer. Distinct type from ApprovalDecision in the
+    // approval-gate doc: decisions record what the user did (including
+    // reject/edit/cancel), proposals only suggest a starting mode.
     public var createdAt: Date
     public var transcript: String          // verbatim source
     public var steps: [GoalStep]           // 1...12, step numbers 1...n unique
-    public var approvalMode: ApprovalMode  // proposed by planner, decided by gate
 }
 
 public struct GoalStep: Codable, Equatable, Sendable {
@@ -156,7 +171,9 @@ text, with a one-line reason surfaced):
 3. **Risk recomputation:** `computedRisk` is derived from the **action
    surface**, overwriting `plannedRisk`:
    - `notification`, read-only commands (`ls`, `cat`, `git status`, `npm
-     test` without writes) → low
+     test` without writes), and `open -a <app>` → low (app launch is a
+     visible but non-destructive effect, equivalent to v1's "open <app>"
+     phrase and covered by the same first-run memory rules)
    - file-editing agents, builds, test runs → medium
    - `git push`, deploys, network calls, `rm`, anything writing outside the
      working directory, any command the classifier cannot parse → **high**
@@ -189,14 +206,14 @@ risk is provably ignored (fixture where `plannedRisk: low` but surface is
 
 ## 6. Model-runtime notes (shared with Smart rung)
 
-- One resident model serves Tier 2 and (later) Smart formatting; the
-  orchestrator holds it warm during an active goal, idle-unloads with the
-  same policy as ASR models (~5 min, reference-counted).
-- Model must ship through the verified-catalogue contract (pinned URL,
-  revision, size, SHA-256, licence, attribution) — same as every other model
-  in ZenVoice.
-- Determinism: `temperature 0`; a goal transcript must produce the same plan
-  on re-run (checked in tests with a stub model).
+- `SystemLanguageModel` is OS-managed and may remain warm across requests;
+  ZenVoice creates a fresh `LanguageModelSession` per independent task so prior
+  transcript content cannot leak into a new plan.
+- No model URL, weights, API key, or Private Cloud Compute client belongs in
+  this path. Unsupported, disabled, ineligible, or not-ready systems fall back
+  to the deterministic Tier 1 planner.
+- Determinism: greedy sampling and temperature 0; a goal transcript must
+  produce the same plan on re-run (checked in tests with a stub model).
 
 ## 7. Worked examples
 

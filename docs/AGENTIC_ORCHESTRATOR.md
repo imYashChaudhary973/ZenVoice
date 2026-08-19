@@ -1,15 +1,22 @@
 # Agentic Orchestrator — Execution State Machine
 
-> **Status: future design.** Part of [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md).
-> The orchestrator owns execution after an approval exists; it produces the
-> events defined in [AGENTIC_STATUS_STREAMING.md](AGENTIC_STATUS_STREAMING.md)
-> and persists state through the encrypted task store.
+> **Status: implemented — 2026-08-18.** Part of
+> [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md). The orchestrator owns
+> execution after an approval exists; it produces the events defined in
+> [AGENTIC_STATUS_STREAMING.md](AGENTIC_STATUS_STREAMING.md) and persists state
+> through the encrypted task store. Code:
+> `Sources/ZenVoiceCore/GoalOrchestrator.swift` with the process adapters in
+> `AgenticExecutors.swift`; relaunch marks non-terminal records `interrupted`
+> and never resumes a process.
 
 ## 1. Model overview
 
 One `GoalOrchestrator` instance per goal; a session-level `GoalQueue`
-serializes goals (v2 runs at most one at a time). The orchestrator is an
-actor; all state transitions happen inside it.
+serializes goals. **One goal is active at a time, end to end**: a queued
+goal stays in `idle` — its planning does not start until it becomes active
+(predictability beats throughput at personal scale, and it keeps the
+planner model's warm/idle policy trivial). The orchestrator is an actor; all
+state transitions happen inside it.
 
 ```swift
 // Sketch of the model surface (interfaces for the coding agent, not code to paste)
@@ -33,6 +40,8 @@ public enum GoalState: String, Codable, Sendable {
 public enum StepState: String, Codable, Sendable {
     case pending, running, awaitingApproval
     case succeeded, failed, skipped, cancelled, interrupted
+    // waitingInput is an event, not a state: a child blocking on stdin stays
+    // `running` (headless agents should never block; the timeout reaps it).
 }
 ```
 
@@ -156,16 +165,16 @@ machine never special-cases an agent.
 
 ## 5. Cancellation
 
-1. Transition to `cancelling`; scheduler stops starting steps immediately.
+1. Transition to `cancelling`; emit `goal.cancelling` immediately (the HUD
+   must reflect the press before children are reaped — termination can take
+   up to 5 s); scheduler stops starting steps immediately.
 2. `SIGTERM` to each child process group; after 5 s, `SIGKILL`.
 3. Steps not started → `skipped(cancelled)`; running step → `cancelled` with
-   partial output retained.
+   partial output retained (`step.cancelled` event).
 4. Persist, emit `goal.cancelled`, notify.
 5. Cancel is **idempotent** — pressing it N times is safe, and it is
    available in every non-terminal state (the one UI invariant from the
    approval gate doc).
-
-## 6. Persistence
 
 - Every state transition and step outcome is written to the encrypted task
   record (`ZenVoiceStorage` vault) **at transition time**, not at goal end —

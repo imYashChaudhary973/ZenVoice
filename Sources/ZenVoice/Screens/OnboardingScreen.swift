@@ -17,14 +17,31 @@ import ZenVoiceCore
 import ZenVoiceStorage
 
 struct OnboardingScreen: View {
+    /// Six steps, and every one of them either asks for something or hands
+    /// something back. The old flow opened with two consecutive pages of
+    /// reading — a promise page and a privacy page — before the user could do
+    /// anything, which is the most expensive place in an app to spend
+    /// somebody's patience. They are one page now.
     private enum Step: Int, CaseIterable {
         case welcome
-        case privacy
         case permissions
         case shortcut
         case language
         case model
         case test
+
+        /// Shown beside the progress dots. A user who can see where the flow
+        /// ends stops wondering how long it is.
+        var title: String {
+            switch self {
+            case .welcome: return "Welcome"
+            case .permissions: return "Permissions"
+            case .shortcut: return "Shortcut"
+            case .language: return "Language"
+            case .model: return "Model"
+            case .test: return "Try it"
+            }
+        }
     }
 
     @ObservedObject var onboardingViewModel:
@@ -40,26 +57,31 @@ struct OnboardingScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(alignment: .center) {
                 brand
                 Spacer()
-                HStack(spacing: 6) {
-                    ForEach(
-                        Step.allCases,
-                        id: \.rawValue
-                    ) { item in
-                        Capsule()
-                            .fill(
-                                item.rawValue <= step.rawValue
-                                    ? ZenDesign.Semantic.accent
-                                    : ZenDesign.Semantic.borderStrong
-                            )
-                            .frame(
-                                width:
-                                    item == step ? 20 : 6,
-                                height: 6
-                            )
-                            .accessibilityHidden(true)
+                HStack(spacing: ZenDesign.Spacing.sm) {
+                    Text("Step \(step.rawValue + 1) of \(Step.allCases.count) · \(step.title)")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .monospacedDigit()
+                    HStack(spacing: 5) {
+                        ForEach(
+                            Step.allCases,
+                            id: \.rawValue
+                        ) { item in
+                            Capsule()
+                                .fill(
+                                    item.rawValue <= step.rawValue
+                                        ? ZenDesign.Semantic.accent
+                                        : ZenDesign.Semantic.borderStrong
+                                )
+                                .frame(
+                                    width: item == step ? 18 : 5,
+                                    height: 5
+                                )
+                                .accessibilityHidden(true)
+                        }
                     }
                 }
             }
@@ -71,8 +93,6 @@ struct OnboardingScreen: View {
                     switch step {
                     case .welcome:
                         welcome
-                    case .privacy:
-                        privacy
                     case .permissions:
                         permissions
                     case .shortcut:
@@ -162,26 +182,12 @@ struct OnboardingScreen: View {
             icon: "waveform.badge.mic",
             title: "Speak. It types. Nothing leaves your Mac.",
             detail:
-                "ZenVoice turns speech into text on this Mac and inserts it wherever your cursor is — in any app.",
+                "ZenVoice turns speech into text on this Mac and inserts it wherever your cursor is — in any app. Audio, transcripts, correction rules, and model inference all stay here; the only network use is a model download you ask for.",
             facts: [
-                ("network.slash", "No account or cloud transcription — everything runs on-device"),
-                ("bolt.fill", "One shortcut works everywhere: Mail, Slack, Xcode, anything with a cursor"),
-                ("lock.fill", "Encrypted local history — recover any dictation, even partial ones")
-            ]
-        )
-    }
-
-    /* ---- 2 · privacy ---- */
-    private var privacy: some View {
-        onboardingPage(
-            icon: "lock.shield.fill",
-            title: "Local-first by design.",
-            detail:
-                "Audio, transcripts, correction rules, insights, and model inference stay on this Mac. The only network use is model downloads you ask for.",
-            facts: [
+                ("network.slash", "No account, no subscription, no cloud transcription"),
+                ("bolt.fill", "One shortcut everywhere: Mail, Slack, Xcode, anything with a cursor"),
                 ("key.fill", "Saved transcripts are encrypted — unreadable without this Mac's key"),
-                ("eye.slash", "Private Dictation stores nothing at all"),
-                ("trash", "Privacy shows a live inventory — delete anything, anytime")
+                ("eye.slash", "Private Dictation stores nothing at all")
             ]
         )
     }
@@ -457,7 +463,7 @@ struct OnboardingScreen: View {
         }
     }
 
-    /* ---- 7 · test drive ---- */
+    /* ---- 6 · test drive ---- */
     private var test: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
             onboardingHeading(
@@ -508,6 +514,27 @@ struct OnboardingScreen: View {
                 isReady:
                     settingsViewModel.isLocalModelReady
             )
+            // The price is stated once, here, after the app has done the thing
+            // it is being sold for — not as a step of its own, and never
+            // between the user and their first dictation. Setup is setup;
+            // buying is a separate decision the user makes when they are ready,
+            // from Help & About.
+            ZenPanel(padding: ZenDesign.Spacing.md) {
+                HStack(alignment: .firstTextBaseline, spacing: ZenDesign.Spacing.md) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("ZenVoice is \(ZenVoicePricing.oneTimePrice), paid once")
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text(
+                            "No subscription and no account. Every feature works before you pay; activate whenever you like from Help & About."
+                        )
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: ZenDesign.Spacing.sm)
+                }
+            }
             Text(
                 "Replay this setup anytime from Help & FAQ. ZenVoice lives in your menu bar after you close this window."
             )

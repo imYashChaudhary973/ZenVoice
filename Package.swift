@@ -25,7 +25,15 @@ let package = Package(
         .executable(
             name: "ZenVoiceLanguageBench",
             targets: ["ZenVoiceLanguageBench"]
-        )
+        ),
+        .executable(
+            name: "ZenVoiceCloudLiveChecks",
+            targets: ["ZenVoiceCloudLiveChecks"]
+        ),
+        .executable(
+            name: "ZenVoiceLinkChecks",
+            targets: ["ZenVoiceLinkChecks"]
+        ),
     ],
     dependencies: [
         .package(
@@ -45,6 +53,10 @@ let package = Package(
             ]
         ),
         .target(
+            name: "ZenVoiceLink",
+            dependencies: ["ZenVoiceCore"]
+        ),
+        .target(
             name: "ZenVoiceRuntime",
             dependencies: [
                 "ZenVoiceCore",
@@ -59,6 +71,7 @@ let package = Package(
                 "ZenVoiceCore",
                 "ZenVoiceStorage",
                 "ZenVoiceRuntime",
+                "ZenVoiceLink",
             ]
         ),
         .executableTarget(
@@ -67,7 +80,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "ZenVoiceStorageChecks",
-            dependencies: ["ZenVoiceStorage"]
+            dependencies: ["ZenVoiceCore", "ZenVoiceStorage"]
         ),
         .executableTarget(
             name: "ZenVoiceRuntimeChecks",
@@ -89,6 +102,14 @@ let package = Package(
                 "ZenVoiceCore",
                 "ZenVoiceRuntime",
             ]
+        ),
+        .executableTarget(
+            name: "ZenVoiceCloudLiveChecks",
+            dependencies: ["ZenVoiceCore"]
+        ),
+        .executableTarget(
+            name: "ZenVoiceLinkChecks",
+            dependencies: ["ZenVoiceCore", "ZenVoiceLink"]
         ),
         .binaryTarget(
             name: "whisper",

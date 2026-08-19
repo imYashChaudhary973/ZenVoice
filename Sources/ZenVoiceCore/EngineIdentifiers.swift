@@ -28,4 +28,16 @@ public enum EngineIdentifiers {
     public static let nemotronSpeechUltraFast = "nemotron-speech-ultra-fast"
     public static let nemotronSpeechMultilingual = "nemotron-speech-multilingual"
     public static let cohereTranscribe = "cohere-transcribe"
+
+    /// Streaming engines used for live preview only. Final insert never
+    /// resolves to these IDs — they are too inaccurate as whole-file decoders
+    /// (Flash 14.1% WER, Nemotron Ultra Fast 23.8% on the 2026-08-18 table).
+    public static let previewOnlyIDs: Set<String> = [
+        parakeetFlash,
+        nemotronSpeechUltraFast
+    ]
+
+    public static func isPreviewOnly(_ engineID: String) -> Bool {
+        previewOnlyIDs.contains(engineID)
+    }
 }

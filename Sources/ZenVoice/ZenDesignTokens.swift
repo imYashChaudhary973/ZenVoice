@@ -15,57 +15,64 @@
 import AppKit
 import SwiftUI
 
-/// ZenVoice design tokens — moss on ink.
+/// ZenVoice design tokens — graphite and one green.
 ///
-/// The window is a near-black canvas holding large, softly rounded cards, with
-/// a translucent sidebar that lets the desktop through. One background family,
-/// one surface family, one accent family, one text family.
+/// The room this window lives in: a developer at the end of the day, terminal
+/// and editor already open, dictating into whichever window has focus. The
+/// settings window is the third window they reach for, so it is built to be
+/// read at a glance and never to flash bright.
 ///
-/// The accent is a muted moss green. It is deliberately desaturated: a
-/// saturated green at this size, filling selected navigation rows and primary
-/// buttons on an almost-black canvas, glows and tires the eye over a long
-/// session. Muted reads as considered, and still carries the brand.
+/// Three rules hold the theme together.
 ///
-/// The accent exists in two weights because one colour cannot do both jobs:
+/// **The chrome is neutral.** Surfaces are a true graphite ramp with no hue in
+/// them. Every earlier revision tinted the greys toward the brand green, which
+/// read as olive under warm room light and fought the accent it was supposed to
+/// support. Colour is information here, not decoration: if something on screen
+/// is coloured, it means something.
+///
+/// **One accent carries the brand.** Zen green, in two weights, because one
+/// colour cannot do both jobs:
 ///
 ///   * `accent` is the *foreground* weight — accent text, icons, hairlines and
-///     meters drawn directly on the canvas. It is light enough to clear 4.5:1
-///     against ink.
-///   * `accentFill` is the *background* weight — selected navigation, primary
-///     buttons, anything that carries a white label. It is deep enough that
-///     white on it clears 4.5:1.
+///     meters drawn on a dark surface. Light enough to clear 4.5:1.
+///   * `accentFill` is the *background* weight — primary buttons and anything
+///     carrying a white label. Deep enough that white on it clears 4.5:1.
 ///
-/// Using one mid-green for both is the mistake this split prevents: it lands
-/// near 3.8:1 in each direction, so accent text on ink and white text on the
-/// button are simultaneously too faint.
+/// A single mid-green for both lands near 3.8:1 in each direction, so accent
+/// text and the button label are simultaneously too faint. That is the mistake
+/// this split exists to prevent.
+///
+/// **Structure comes from hairlines, not shadows.** Nothing in the window casts
+/// a shadow. Edges are 1px borders and a step in surface value, which is what
+/// keeps a dense settings window legible instead of soft.
 enum ZenDesign {
     enum Primitive {
-        // Base ink background. Never pure black — pure black kills the card
-        // edges and makes the translucent sidebar look like a hole.
-        static let base = Color(nsColor: NSColor(red: 0.043, green: 0.051, blue: 0.049, alpha: 1))
-        static let base900 = Color(nsColor: NSColor(red: 0.063, green: 0.071, blue: 0.069, alpha: 1))
-        static let base800 = Color(nsColor: NSColor(red: 0.125, green: 0.141, blue: 0.137, alpha: 1))
+        // Graphite ramp. Never pure black: pure black kills the card edges and
+        // makes the translucent sidebar look like a hole punched in the screen.
+        static let base = Color(nsColor: NSColor(red: 0.043, green: 0.043, blue: 0.047, alpha: 1))
+        static let base900 = Color(nsColor: NSColor(red: 0.063, green: 0.063, blue: 0.071, alpha: 1))
+        static let base800 = Color(nsColor: NSColor(red: 0.118, green: 0.118, blue: 0.129, alpha: 1))
 
-        // Surfaces float above the base.
-        static let surface = Color(nsColor: NSColor(red: 0.086, green: 0.098, blue: 0.094, alpha: 1))
-        static let surfaceRaised = Color(nsColor: NSColor(red: 0.125, green: 0.141, blue: 0.137, alpha: 1))
-        static let surfaceSunken = Color(nsColor: NSColor(red: 0.063, green: 0.071, blue: 0.069, alpha: 1))
+        // Surfaces float above the base by value alone.
+        static let surface = Color(nsColor: NSColor(red: 0.082, green: 0.082, blue: 0.090, alpha: 1))
+        static let surfaceRaised = Color(nsColor: NSColor(red: 0.118, green: 0.118, blue: 0.129, alpha: 1))
+        static let surfaceSunken = Color(nsColor: NSColor(red: 0.063, green: 0.063, blue: 0.071, alpha: 1))
 
-        // Moss accent family.
-        static let accent = Color(nsColor: NSColor(red: 0.310, green: 0.659, blue: 0.549, alpha: 1))
-        static let accentFill = Color(nsColor: NSColor(red: 0.208, green: 0.502, blue: 0.416, alpha: 1))
-        static let accentMuted = Color(nsColor: NSColor(red: 0.310, green: 0.659, blue: 0.549, alpha: 0.16))
+        // Zen green.
+        static let accent = Color(nsColor: NSColor(red: 0.208, green: 0.769, blue: 0.541, alpha: 1))
+        static let accentFill = Color(nsColor: NSColor(red: 0.082, green: 0.498, blue: 0.353, alpha: 1))
+        static let accentMuted = Color(nsColor: NSColor(red: 0.208, green: 0.769, blue: 0.541, alpha: 0.14))
 
         // Text.
-        static let text = Color(nsColor: NSColor(red: 0.937, green: 0.945, blue: 0.941, alpha: 1))
-        static let muted = Color(nsColor: NSColor(red: 0.647, green: 0.671, blue: 0.663, alpha: 1))
-        static let subtle = Color(nsColor: NSColor(red: 0.486, green: 0.510, blue: 0.502, alpha: 1))
+        static let text = Color(nsColor: NSColor(red: 0.925, green: 0.925, blue: 0.933, alpha: 1))
+        static let muted = Color(nsColor: NSColor(red: 0.647, green: 0.647, blue: 0.678, alpha: 1))
+        static let subtle = Color(nsColor: NSColor(red: 0.553, green: 0.553, blue: 0.603, alpha: 1))
 
-        // Functional colours, pulled toward the same muted register so nothing
-        // on screen is brighter than the accent.
-        static let success = Color(nsColor: NSColor(red: 0.365, green: 0.769, blue: 0.549, alpha: 1))
-        static let warn = Color(nsColor: NSColor(red: 0.902, green: 0.694, blue: 0.353, alpha: 1))
-        static let danger = Color(nsColor: NSColor(red: 0.910, green: 0.427, blue: 0.412, alpha: 1))
+        // Functional colours. Amber and red are the only hues besides the
+        // accent, and both are reserved for state the user must act on.
+        static let success = Color(nsColor: NSColor(red: 0.247, green: 0.796, blue: 0.533, alpha: 1))
+        static let warn = Color(nsColor: NSColor(red: 0.890, green: 0.702, blue: 0.255, alpha: 1))
+        static let danger = Color(nsColor: NSColor(red: 0.937, green: 0.420, blue: 0.420, alpha: 1))
 
         static let white = Color.white
         static let black = Color.black
@@ -73,101 +80,112 @@ enum ZenDesign {
 
     enum Semantic {
         static let canvas = adaptive(
-            light: NSColor(red: 0.965, green: 0.969, blue: 0.965, alpha: 1),
-            dark: NSColor(red: 0.043, green: 0.051, blue: 0.049, alpha: 1)
+            light: NSColor(red: 0.980, green: 0.980, blue: 0.984, alpha: 1),
+            dark: NSColor(red: 0.043, green: 0.043, blue: 0.047, alpha: 1)
         )
+
         /// Tint painted *over* the sidebar's vibrancy material.
         ///
-        /// Low alpha on purpose: the material carries most of the colour, and
+        /// Low alpha on purpose: the material carries most of the value, and
         /// this only settles it enough that navigation text stays readable
         /// against a bright wallpaper.
         static let sidebar = adaptive(
-            light: NSColor(red: 0.937, green: 0.945, blue: 0.941, alpha: 0.55),
-            dark: NSColor(red: 0.035, green: 0.043, blue: 0.041, alpha: 0.55)
+            light: NSColor(red: 0.965, green: 0.965, blue: 0.972, alpha: 0.62),
+            dark: NSColor(red: 0.035, green: 0.035, blue: 0.039, alpha: 0.62)
         )
         static let surface = adaptive(
             light: NSColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1),
-            dark: NSColor(red: 0.086, green: 0.098, blue: 0.094, alpha: 1)
+            dark: NSColor(red: 0.082, green: 0.082, blue: 0.090, alpha: 1)
         )
         static let surfaceRaised = adaptive(
-            light: NSColor(red: 0.949, green: 0.957, blue: 0.953, alpha: 1),
-            dark: NSColor(red: 0.125, green: 0.141, blue: 0.137, alpha: 1)
+            light: NSColor(red: 0.945, green: 0.945, blue: 0.953, alpha: 1),
+            dark: NSColor(red: 0.118, green: 0.118, blue: 0.129, alpha: 1)
         )
         static let surfaceSunken = adaptive(
-            light: NSColor(red: 0.910, green: 0.922, blue: 0.914, alpha: 1),
-            dark: NSColor(red: 0.063, green: 0.071, blue: 0.069, alpha: 1)
+            light: NSColor(red: 0.918, green: 0.918, blue: 0.933, alpha: 1),
+            dark: NSColor(red: 0.063, green: 0.063, blue: 0.071, alpha: 1)
         )
         static let border = adaptive(
-            light: NSColor(white: 0.0, alpha: 0.08),
-            dark: NSColor(white: 1.0, alpha: 0.07)
+            light: NSColor(white: 0.0, alpha: 0.10),
+            dark: NSColor(white: 1.0, alpha: 0.085)
         )
         static let borderStrong = adaptive(
-            light: NSColor(white: 0.0, alpha: 0.14),
-            dark: NSColor(white: 1.0, alpha: 0.13)
+            light: NSColor(white: 0.0, alpha: 0.17),
+            dark: NSColor(white: 1.0, alpha: 0.16)
         )
         static let textPrimary = adaptive(
-            light: NSColor(red: 0.078, green: 0.094, blue: 0.086, alpha: 1),
-            dark: NSColor(red: 0.937, green: 0.945, blue: 0.941, alpha: 1)
+            light: NSColor(red: 0.090, green: 0.090, blue: 0.102, alpha: 1),
+            dark: NSColor(red: 0.925, green: 0.925, blue: 0.933, alpha: 1)
         )
         static let textSecondary = adaptive(
-            light: NSColor(red: 0.373, green: 0.400, blue: 0.388, alpha: 1),
-            dark: NSColor(red: 0.647, green: 0.671, blue: 0.663, alpha: 1)
+            light: NSColor(red: 0.310, green: 0.310, blue: 0.345, alpha: 1),
+            dark: NSColor(red: 0.647, green: 0.647, blue: 0.678, alpha: 1)
         )
+
+        /// The quietest text that still has to be read: placeholders, units,
+        /// row metadata.
+        ///
+        /// Chosen against the *raised* surface, not the canvas, because that is
+        /// the worst case it actually appears on: 5.1:1 in dark and 4.9:1 in
+        /// light, so it clears the 4.5:1 body-text floor everywhere it is used.
+        /// The first draft of this ramp was picked against the canvas alone and
+        /// landed at 3.9:1 inside a raised panel — which is the single commonest
+        /// reason a dense settings window feels unreadable.
         static let textTertiary = adaptive(
-            light: NSColor(red: 0.494, green: 0.518, blue: 0.506, alpha: 1),
-            dark: NSColor(red: 0.486, green: 0.510, blue: 0.502, alpha: 1)
+            light: NSColor(red: 0.408, green: 0.408, blue: 0.447, alpha: 1),
+            dark: NSColor(red: 0.553, green: 0.553, blue: 0.603, alpha: 1)
         )
 
         /// Foreground weight of the accent: accent text, icons, meters.
         ///
-        /// Light mode uses one deep moss for both weights — on a white canvas
+        /// Light mode uses one deep green for both weights — on a white canvas
         /// a light green cannot clear 4.5:1 as text, and does not need to be
-        /// lightened to carry white as a fill.
+        /// lightened to carry a white label.
         static let accent = adaptive(
-            light: NSColor(red: 0.102, green: 0.373, blue: 0.294, alpha: 1),
-            dark: NSColor(red: 0.310, green: 0.659, blue: 0.549, alpha: 1)
+            light: NSColor(red: 0.043, green: 0.420, blue: 0.294, alpha: 1),
+            dark: NSColor(red: 0.208, green: 0.769, blue: 0.541, alpha: 1)
         )
 
-        /// Background weight of the accent: selected navigation, primary
-        /// buttons — anything that carries a white label.
+        /// Background weight of the accent: primary buttons — anything that
+        /// carries a white label.
         static let accentFill = adaptive(
-            light: NSColor(red: 0.102, green: 0.373, blue: 0.294, alpha: 1),
-            dark: NSColor(red: 0.208, green: 0.502, blue: 0.416, alpha: 1)
+            light: NSColor(red: 0.043, green: 0.420, blue: 0.294, alpha: 1),
+            dark: NSColor(red: 0.082, green: 0.498, blue: 0.353, alpha: 1)
         )
 
         /// Pressed state for a filled accent control. Always moves *away* from
         /// the white label it carries, never toward it.
         static let accentStrong = adaptive(
-            light: NSColor(red: 0.071, green: 0.286, blue: 0.224, alpha: 1),
-            dark: NSColor(red: 0.161, green: 0.404, blue: 0.333, alpha: 1)
+            light: NSColor(red: 0.031, green: 0.322, blue: 0.224, alpha: 1),
+            dark: NSColor(red: 0.063, green: 0.408, blue: 0.282, alpha: 1)
         )
         static let accentMuted = adaptive(
-            light: NSColor(red: 0.102, green: 0.373, blue: 0.294, alpha: 0.10),
-            dark: NSColor(red: 0.310, green: 0.659, blue: 0.549, alpha: 0.16)
+            light: NSColor(red: 0.043, green: 0.420, blue: 0.294, alpha: 0.10),
+            dark: NSColor(red: 0.208, green: 0.769, blue: 0.541, alpha: 0.14)
         )
         static let success = adaptive(
-            light: NSColor(red: 0.129, green: 0.510, blue: 0.302, alpha: 1),
-            dark: NSColor(red: 0.365, green: 0.769, blue: 0.549, alpha: 1)
+            light: NSColor(red: 0.055, green: 0.420, blue: 0.255, alpha: 1),
+            dark: NSColor(red: 0.247, green: 0.796, blue: 0.533, alpha: 1)
         )
         static let successMuted = adaptive(
-            light: NSColor(red: 0.129, green: 0.510, blue: 0.302, alpha: 0.10),
-            dark: NSColor(red: 0.365, green: 0.769, blue: 0.549, alpha: 0.14)
+            light: NSColor(red: 0.055, green: 0.420, blue: 0.255, alpha: 0.10),
+            dark: NSColor(red: 0.247, green: 0.796, blue: 0.533, alpha: 0.14)
         )
         static let danger = adaptive(
-            light: NSColor(red: 0.769, green: 0.235, blue: 0.220, alpha: 1),
-            dark: NSColor(red: 0.910, green: 0.427, blue: 0.412, alpha: 1)
+            light: NSColor(red: 0.753, green: 0.204, blue: 0.180, alpha: 1),
+            dark: NSColor(red: 0.937, green: 0.420, blue: 0.420, alpha: 1)
         )
         static let dangerMuted = adaptive(
-            light: NSColor(red: 0.769, green: 0.235, blue: 0.220, alpha: 0.10),
-            dark: NSColor(red: 0.910, green: 0.427, blue: 0.412, alpha: 0.14)
+            light: NSColor(red: 0.753, green: 0.204, blue: 0.180, alpha: 0.10),
+            dark: NSColor(red: 0.937, green: 0.420, blue: 0.420, alpha: 0.14)
         )
         static let warn = adaptive(
-            light: NSColor(red: 0.639, green: 0.443, blue: 0.129, alpha: 1),
-            dark: NSColor(red: 0.902, green: 0.694, blue: 0.353, alpha: 1)
+            light: NSColor(red: 0.541, green: 0.353, blue: 0.067, alpha: 1),
+            dark: NSColor(red: 0.890, green: 0.702, blue: 0.255, alpha: 1)
         )
         static let warnMuted = adaptive(
-            light: NSColor(red: 0.639, green: 0.443, blue: 0.129, alpha: 0.10),
-            dark: NSColor(red: 0.902, green: 0.694, blue: 0.353, alpha: 0.14)
+            light: NSColor(red: 0.541, green: 0.353, blue: 0.067, alpha: 0.10),
+            dark: NSColor(red: 0.890, green: 0.702, blue: 0.255, alpha: 0.14)
         )
 
         /// Text drawn on top of `accentFill`.
@@ -198,10 +216,17 @@ enum ZenDesign {
     enum Component {
         static let cardBackground = Semantic.surface
         static let cardBorder = Semantic.border
-        /// Selected navigation is a *filled* accent pill carrying a white
-        /// label — the strongest single mark in the window, and the only place
-        /// the fill weight is used at rest.
-        static let selectedNavigation = Semantic.accentFill
+
+        /// Selected navigation is a *quiet* raised row, not a saturated pill.
+        ///
+        /// A filled green row is the loudest possible mark in a window the user
+        /// keeps open all day, and it made the sidebar shout its own state
+        /// louder than the setting the user came to change. The active row is
+        /// now identified the way an editor does it: a step up in surface, a
+        /// heavier label, and the accent moved onto the icon alone.
+        static let selectedNavigation = Semantic.surfaceRaised
+        static let selectedNavigationLabel = Semantic.textPrimary
+        static let selectedNavigationIcon = Semantic.accent
         static let shortcutBackground = Semantic.surfaceRaised
         static let focusRing = Semantic.accent.opacity(0.55)
     }
@@ -223,15 +248,19 @@ enum ZenDesign {
     /// exactly the same width for the brand block. Two hand-copied constants
     /// drifted apart; one named value cannot.
     enum Layout {
-        static let sidebarWidth: CGFloat = 240
+        /// Narrower than the previous rail. The longest label ("Languages and
+        /// Models") sets the floor, and everything past that was padding that
+        /// pushed the content column right for no gain.
+        static let sidebarWidth: CGFloat = 216
+
         /// Measure for running prose — a page subtitle, a paragraph of
         /// explanation. Cards themselves are not capped: they fill the window,
         /// so full screen looks deliberate rather than centred in a column.
-        static let proseColumn: CGFloat = 720
+        static let proseColumn: CGFloat = 680
 
         /// Height of the transparent title bar. Tall enough to clear the
         /// traffic lights, which the window draws over the sidebar material.
-        static let titleBar: CGFloat = 52
+        static let titleBar: CGFloat = 48
 
         /// Minimum hit target for anything clickable.
         static let hitTarget: CGFloat = 44
@@ -240,57 +269,74 @@ enum ZenDesign {
         /// meets `hitTarget`, such as paired buttons on a single line.
         static let control: CGFloat = 32
 
-        /// Painted height of a navigation row in the sidebar.
+        /// Painted height of a navigation row.
         ///
-        /// Four points short of `hitTarget`, so consecutive rows nearly touch
-        /// — as the approved design shows. At 36 the 8pt gutters read as
-        /// deliberate separators and broke the rail into floating chips.
-        static let navRow: CGFloat = 40
+        /// Denser than before: at 40pt the rail held nine rows and a scroll
+        /// bar, and the window's own navigation was the least efficient part of
+        /// the screen. 32pt is the height an editor sidebar uses, and the rows
+        /// still nearly touch so the rail reads as one list.
+        static let navRow: CGFloat = 32
 
         /// Icon slot in a navigation row. The glyph is drawn at
         /// `Typography.navIcon`; the slot keeps every label on one baseline
         /// regardless of how wide its symbol is.
-        static let navIcon: CGFloat = 26
+        static let navIcon: CGFloat = 22
     }
 
+    /// Type is one family in several weights — the system face, plus the system
+    /// monospace for anything the user could retype: shortcuts, model
+    /// identifiers, error rates, licence keys. Pairing two sans faces on a
+    /// contrast axis this small only makes the window look uncertain.
     enum Typography {
-        static let display = Font.system(size: 34, weight: .bold)
-        static let pageTitle = Font.system(size: 24, weight: .bold)
-        static let pageContext = Font.system(size: 12, weight: .semibold)
+        static let display = Font.system(size: 30, weight: .semibold)
+        static let pageTitle = Font.system(size: 21, weight: .semibold)
+        static let pageContext = Font.system(size: 12, weight: .medium)
         static let sectionTitle = Font.system(size: 11, weight: .semibold)
         static let body = Font.system(size: 13)
         static let bodyStrong = Font.system(size: 13, weight: .semibold)
         static let caption = Font.system(size: 11.5)
         static let captionStrong = Font.system(size: 11.5, weight: .semibold)
-        static let button = Font.system(size: 13, weight: .semibold)
-        static let metric = Font.system(size: 34, weight: .bold)
+
+        /// Button labels are medium, not semibold. At 13pt semibold on a filled
+        /// control the label reads as shouting next to the row it belongs to.
+        static let button = Font.system(size: 13, weight: .medium)
+
+        /// Figures that change while the user watches them — words per minute,
+        /// download percentage, decode time. Monospaced digits so the number
+        /// stops jittering as it counts.
+        static let metric = Font.system(size: 28, weight: .semibold).monospacedDigit()
         static let metricCaption = Font.system(size: 11, weight: .medium)
+
+        /// Tabular figures at body size, for rows of numbers in a table.
+        static let numeric = Font.system(size: 13).monospacedDigit()
+
         static let mono = Font.system(size: 12, design: .monospaced)
         static let monoSmall = Font.system(size: 11, design: .monospaced)
 
-        /// Uppercase label above a column, card or field. Pair with
-        /// `tracking(1.2)`. Sits at the 11pt floor — uppercase text tracked
-        /// out below that is the least legible type an app can ship.
+        /// Uppercase label above a group of settings. Pair with
+        /// `tracking(1.1)`. Sits at the 11pt floor — uppercase text tracked out
+        /// below that is the least legible type an app can ship. Used for
+        /// sidebar groups and nothing else; an eyebrow over every card is
+        /// scaffolding, not hierarchy.
         static let eyebrow = Font.system(size: 11, weight: .semibold)
 
         /// Text inside a badge or pill.
-        static let badge = Font.system(size: 11, weight: .semibold)
+        static let badge = Font.system(size: 11, weight: .medium)
 
         /// Sidebar group heading.
-        static let navGroup = Font.system(size: 12, weight: .semibold)
+        static let navGroup = Font.system(size: 11, weight: .semibold)
 
         /// Sidebar row label.
-        static let navRow = Font.system(size: 15, weight: .medium)
+        static let navRow = Font.system(size: 13, weight: .regular)
 
-        /// Selected sidebar row label. Weight, not colour, is what separates
-        /// it from its neighbours once the pill is already carrying the
-        /// accent.
-        static let navRowSelected = Font.system(size: 15, weight: .semibold)
+        /// Selected sidebar row label. Weight is what marks the active row now
+        /// that the row itself is quiet.
+        static let navRowSelected = Font.system(size: 13, weight: .semibold)
 
-        /// Sidebar row glyph. Deliberately larger than the label: in the
-        /// approved design the icons are the thing you scan, and at 13pt they
-        /// were smaller than the text beside them and read as decoration.
-        static let navIcon = Font.system(size: 19, weight: .medium)
+        /// Sidebar row glyph. Slightly larger than its label so the column of
+        /// icons stays scannable, but no longer the outsized mark it was when
+        /// the rail was 40pt tall.
+        static let navIcon = Font.system(size: 14, weight: .medium)
     }
 
     /// Motion vocabulary: quick easeOut fades/slides everywhere; the single
@@ -317,14 +363,15 @@ enum ZenDesign {
         }
     }
 
-    /// Corner radii. Cards are large and soft; controls inside them are
-    /// tighter, so nesting reads as depth rather than as one blurry shape.
-    /// The ZenBar floats above the desktop and keeps its own tight radius.
+    /// Corner radii. Tighter than the previous set across the board: large soft
+    /// corners read as consumer-friendly, and this is a tool that sits beside a
+    /// terminal. Controls stay a step tighter than the card holding them, so
+    /// nesting reads as depth rather than as one blurry shape.
     enum Radius {
-        static let small: CGFloat = 8
-        static let medium: CGFloat = 12
-        static let large: CGFloat = 16
-        static let bar: CGFloat = 9
+        static let small: CGFloat = 6
+        static let medium: CGFloat = 8
+        static let large: CGFloat = 12
+        static let bar: CGFloat = 10
         static let barControl: CGFloat = 6
 
         /// Fully rounded — the toolbar cluster and status pills.

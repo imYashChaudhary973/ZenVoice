@@ -142,7 +142,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let inserter = TextInserter()
     private lazy var commandExecutor: CommandModeExecutorImpl = {
         CommandModeExecutorImpl(
-            inserter: inserter,
             state: state,
             pasteLast: { [weak self] in self?.pasteLastTranscript() },
             showSettings: { [weak self] in self?.settingsWindowController.show() }
@@ -375,6 +374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private var updatesViewModel: UpdatesViewModel!
+    private var licenceViewModel: LicenceViewModel!
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
@@ -388,6 +388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let audioHistoryPreferences = AudioHistoryPreferences()
     private let learningPreferences = LocalLearningPreferences()
     private var dictationVault: DictationVault?
+    private var agenticModeCoordinator: AgenticModeCoordinator?
     private var activeHistoryID: UUID?
     private var transcribingHistoryID: UUID?
     private var nonPersistentHistoryIDs: Set<UUID> = []
@@ -756,10 +757,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let policy = try RuntimeIdentity.policy()
             let vault = try await DictationVault.live(policy: policy)
             dictationVault = vault
+            let coordinator = AgenticModeCoordinator(state: state, vault: vault)
+            agenticModeCoordinator = coordinator
+            coordinator.recoverAfterRelaunch()
             try await vault.recoverInterrupted(
                 retainAudio: historyPreferences.retainsFailedAudio
             )
             try await vault.purgeExpiredRecoveryAudio()
+            // History retention is a published promise ("keep N days"), so it
+            // is enforced rather than merely stored: anything older than the
+            // preference says is discarded on launch, recovery audio and all.
+            let retentionCutoff = Date().addingTimeInterval(
+                -TimeInterval(historyPreferences.retentionDays * 24 * 60 * 60)
+            )
+            try await vault.purgeRecords(startedBefore: retentionCutoff)
             scheduleRecoveryExpiry()
             await enforceAudioHistoryBudgets()
             Task(priority: .background) { [weak self] in
@@ -780,6 +791,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return InMemoryCloudAIKeyStore()
         }
         return CloudAIKeychainKeyStore(policy: policy)
+    }
+
+    /// The Keychain store for the licence token.
+    ///
+    /// Falls back to an in-memory store when the runtime identity cannot be
+    /// resolved, matching the Cloud AI key: a misconfigured build must not
+    /// write a purchase record to an unexpected Keychain service.
+    private func makeLicenceStore() -> any LicenceStoring {
+        guard let policy = try? RuntimeIdentity.policy() else {
+            return InMemoryLicenceStore()
+        }
+        return LicenceKeychainStore(policy: policy)
     }
 
     /// Copies a completed recording into the Audio History archive.
@@ -1133,6 +1156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             setMode: { [weak self] mode in
                 self?.state.mode = mode
+            },
+            cancelAgenticGoal: { [weak self] in
+                self?.agenticModeCoordinator?.cancelActiveGoal()
             }
         )
     }
@@ -1391,6 +1417,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         )
         updatesViewModel = UpdatesViewModel()
+        licenceViewModel = LicenceViewModel(store: makeLicenceStore())
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
@@ -1403,6 +1430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             applicationProfileViewModel:
                 applicationProfileViewModel,
             onboardingViewModel: onboardingViewModel,
+            licenceViewModel: licenceViewModel,
             appState: state,
             toggleRecording: { [weak self] in
                 self?.toggleRecording()
@@ -2405,10 +2433,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         guard recorder.isRecording,
               !livePreviewInFlight,
-              let whisperEngine,
               let segment = recorder.stableSegment(
                 after: liveCommittedSampleIndex
               ) else {
+            return
+        }
+        let previewEngine = engineRegistry?.resolvePreview(
+            for: activeDictationBehavior.languageProfile
+        )
+        guard previewEngine != nil || whisperEngine != nil else {
             return
         }
 
@@ -2418,67 +2451,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let correctionVault = dictationVault
         let appliesCorrectionRules =
             learningPreferences.appliesCorrectionRules
-        transcriptionQueue.async { [weak self] in
+        let whisper = whisperEngine
+        Task { [weak self] in
+            guard let self else { return }
             do {
-                let result = try whisperEngine.transcribe(
+                let result = try await self.transcribePreview(
+                    engine: previewEngine,
+                    whisperFallback: whisper,
                     samples: segment.samples,
                     languageProfile: behavior.languageProfile,
                     initialPrompt: behavior.context
                 )
-                let refinement =
-                    TranscriptRefinement.refine(
-                        result.finalTranscript,
-                        mode: behavior.formattingMode.instantRefineMode,
-                        languageCode:
-                            behavior.languageProfile
-                                .inputLanguageCode,
-                        voiceCommandsEnabled:
-                            behavior.voiceCommandsEnabled
+                let refinement = TranscriptRefinement.refine(
+                    result.finalTranscript,
+                    mode: behavior.formattingMode.instantRefineMode,
+                    languageCode: behavior.languageProfile.inputLanguageCode,
+                    voiceCommandsEnabled: behavior.voiceCommandsEnabled
+                )
+                let correctionApplication = appliesCorrectionRules
+                    ? try? await correctionVault?.applyCorrections(
+                        to: refinement.text,
+                        activeScope: behavior.correctionScope
                     )
-                Task { @MainActor [weak self] in
-                    let correctionApplication = appliesCorrectionRules
-                        ? try? await correctionVault?.applyCorrections(
-                            to: refinement.text,
-                            activeScope: behavior.correctionScope
-                        )
-                        : nil
+                    : nil
+                await MainActor.run {
                     let processed = ProcessedTranscription(
                         result: result,
                         refinement: refinement,
                         correctionApplication: correctionApplication
                     )
-                    self?.acceptStablePhrase(
+                    self.acceptStablePhrase(
                         processed,
                         endSampleIndex: segment.endSampleIndex,
                         sessionID: sessionID
                     )
                 }
             } catch WhisperTranscriber.TranscriptionError.noSpeech {
-                DispatchQueue.main.async {
-                    guard let self,
-                          self.liveSessionID == sessionID else {
-                        return
-                    }
+                await MainActor.run {
+                    guard self.liveSessionID == sessionID else { return }
                     self.livePreviewInFlight = false
-                    // Keep this segment for final transcription. A short phrase
-                    // can be misclassified during preview and must not be lost.
-                    self.stopLivePreviewScheduling(
-                        invalidatePending: false
-                    )
+                    self.stopLivePreviewScheduling(invalidatePending: false)
                 }
             } catch {
-                DispatchQueue.main.async {
-                    guard let self,
-                          self.liveSessionID == sessionID else {
-                        return
-                    }
+                await MainActor.run {
+                    guard self.liveSessionID == sessionID else { return }
                     self.livePreviewInFlight = false
-                    self.stopLivePreviewScheduling(
-                        invalidatePending: false
-                    )
+                    self.stopLivePreviewScheduling(invalidatePending: false)
                 }
             }
         }
+    }
+
+    private func transcribePreview(
+        engine: (any SpeechEngine)?,
+        whisperFallback: WhisperSpeechEngine?,
+        samples: [Float],
+        languageProfile: LanguageProfile,
+        initialPrompt: String?
+    ) async throws -> TranscriptionResult {
+        if let flash = engine as? ParakeetFlashEngine {
+            return try await flash.transcribe(
+                samples: samples,
+                languageProfile: languageProfile,
+                initialPrompt: initialPrompt
+            )
+        }
+        if let nemotron = engine as? NemotronSpeechUltraFastEngine {
+            return try await nemotron.transcribe(
+                samples: samples,
+                languageProfile: languageProfile,
+                initialPrompt: initialPrompt
+            )
+        }
+        let whisper = (engine as? WhisperSpeechEngine) ?? whisperFallback
+        guard let whisper else {
+            throw EngineError.noEngineAvailable
+        }
+        // Whisper preview fragments must go through the engine's async API:
+        // it serializes on the engine's own queue, the same queue the final
+        // whole-recording decode uses. Calling the synchronous samples API on
+        // this side's transcriptionQueue could run whisper_full on the same
+        // context at the same time as a final decode — whisper.cpp contexts
+        // are not thread-safe, and the result is corruption or a crash that
+        // looks like a flaky decoder.
+        return try await whisper.enqueuePreview(
+            samples: samples,
+            languageProfile: languageProfile,
+            initialPrompt: initialPrompt
+        )
     }
 
     private func acceptStablePhrase(
@@ -2809,7 +2869,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // unconditionally made the top rung produce *less* formatting than
             // the one beneath it: the text came out only `.clean`-refined
             // while the app said it had "used local formatting".
-            textToInsert = enhanceForMode(
+            textToInsert = await enhanceForMode(
                 result.finalTranscript,
                 formattingMode: resolvedFormattingMode
             )
@@ -2817,7 +2877,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         switch state.mode {
         case .command:
-            handleCommandModeTranscript(textToInsert)
+            handleCommandModeTranscript(
+                textToInsert,
+                historyID: historyID,
+                shouldPersist: shouldPersist,
+                historySaveError: historySaveError
+            )
             return
         case .write:
             handleWriteModeTranscript(
@@ -2972,9 +3037,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func enhanceForMode(
         _ transcript: String,
         formattingMode: TranscriptFormattingMode? = nil
-    ) -> String {
-        let mode = (formattingMode ?? activeDictationBehavior.formattingMode)
-            .zenIntelligenceMode
+    ) async -> String {
+        let formattingMode = formattingMode ?? activeDictationBehavior.formattingMode
+        if formattingMode == .smart {
+            return await SmartFormattingEngine().format(
+                transcript,
+                languageCode: state.languageProfile.inputLanguageCode,
+                context: settingsViewModel?.sanitizedNextDictationContext
+            ).text
+        }
+
+        let mode = formattingMode.zenIntelligenceMode
         guard mode != .off else { return transcript }
         let result = ZenIntelligenceEngine().enhance(
             transcript,
@@ -2985,7 +3058,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return result.wasRejected ? transcript : result.text
     }
 
-    private func handleCommandModeTranscript(_ transcript: String) {
+    private func handleCommandModeTranscript(
+        _ transcript: String,
+        historyID: UUID?,
+        shouldPersist: Bool,
+        historySaveError: Error?
+    ) {
         guard CommandModePreferences.isEnabled() else {
             showError("Command Mode is disabled. Enable it in settings.")
             return
@@ -2996,22 +3074,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             transcript: transcript,
             manifest: manifest
         )
-        guard action != .none else {
+        if action != .none {
+            Task { [weak self] in
+                do {
+                    try await self?.commandExecutor.execute(action)
+                    await MainActor.run {
+                        self?.state.phase = .success
+                        self?.scheduleIdleReset(
+                            after: self?.successResetDelay ?? 1.2
+                        )
+                    }
+                } catch {
+                    await MainActor.run {
+                        self?.showError(error.localizedDescription)
+                    }
+                }
+            }
+            return
+        }
+
+        guard AgenticModePreferences.isEffectivelyEnabled(),
+              let agenticModeCoordinator
+        else {
             showError("No command matched what you said.")
             return
         }
-        Task { [weak self] in
-            do {
-                try await self?.commandExecutor.execute(action)
-                await MainActor.run {
-                    self?.state.phase = .success
-                    self?.scheduleIdleReset(after: self?.successResetDelay ?? 1.2)
-                }
-            } catch {
-                await MainActor.run {
-                    self?.showError(error.localizedDescription)
-                }
-            }
+        state.phase = .idle
+        agenticModeCoordinator.handleTranscript(transcript) { [weak self] in
+            guard let self else { return }
+            self.state.phase = .inserting
+            self.insertText(
+                transcript,
+                historyID: historyID,
+                shouldPersist: shouldPersist,
+                historySaveError: historySaveError
+            )
         }
     }
 

@@ -222,6 +222,44 @@ public class NemotronSpeechEngineBase: @unchecked Sendable, SpeechEngine {
         }
     }
 
+    func transcribeStreamingSamples(
+        samples: [Float],
+        languageProfile: LanguageProfile
+    ) async throws -> TranscriptionResult {
+        guard isAvailable else {
+            throw EngineError.noEngineAvailable
+        }
+        let context = try await loadedContext()
+        return try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<TranscriptionResult, Error>)
+            in
+            queue.async {
+                do {
+                    let startTime = Date()
+                    let transcript = try context.transcribeStreaming(
+                        samples: samples,
+                        languageCode: Self.nemotronLanguageCode(
+                            for: languageProfile
+                        )
+                    )
+                    continuation.resume(
+                        returning: TranscriptionResult(
+                            rawTranscript: transcript,
+                            finalTranscript: transcript,
+                            correctionCount: 0,
+                            isPartial: true,
+                            modelID: self.engineID,
+                            processingDurationSeconds:
+                                Date().timeIntervalSince(startTime)
+                        )
+                    )
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     private static func nemotronLanguageCode(
         for profile: LanguageProfile
     ) -> String? {
@@ -305,6 +343,18 @@ public final class NemotronSpeechUltraFastEngine: NemotronSpeechEngineBase,
     ) async throws -> TranscriptionResult {
         try await transcribeStreaming(
             audioURL: audioURL,
+            languageProfile: languageProfile
+        )
+    }
+
+    /// Live-preview path: stream in-memory 16 kHz mono samples.
+    public func transcribe(
+        samples: [Float],
+        languageProfile: LanguageProfile,
+        initialPrompt: String? = nil
+    ) async throws -> TranscriptionResult {
+        try await transcribeStreamingSamples(
+            samples: samples,
             languageProfile: languageProfile
         )
     }

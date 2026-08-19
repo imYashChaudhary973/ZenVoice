@@ -23,8 +23,7 @@ import Foundation
 /// allowed to read the reference — would have added 0.1. There was no work
 /// left for a model to do, so a 1.1 GB download and a per-dictation wait were
 /// buying nothing.
-///
-/// See docs/REFINEMENT_RD.md section 8.9.
+/// The measurement lives in git history with the R&D report that produced it.
 public enum TranscriptRefinement {
     public static func refine(
         _ transcript: String,

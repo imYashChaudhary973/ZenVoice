@@ -14,6 +14,7 @@
 
 import Foundation
 import SQLite3
+import ZenVoiceCore
 import ZenVoiceStorage
 
 private final class StaticKeyProvider: VaultKeyProviding {
@@ -1638,6 +1639,97 @@ private func checkTodayUsageInsight() async throws {
     )
 }
 
+private func checkAgenticTaskPersistence() async throws {
+    let fixture = try await VaultFixture()
+    defer { fixture.cleanup() }
+
+    // A deliberately awkward fraction of a second: an approval is bound to the
+    // plan's SHA-256, so a lossy date round-trip would silently invalidate the
+    // decision the user made.
+    let plan = GoalPlan(
+        title: "Run checks and notify",
+        createdAt: Date(timeIntervalSince1970: 1_700_000_000.123_456),
+        transcript: "run the core checks and notify me when done",
+        steps: [
+            GoalStep(
+                number: 1,
+                agent: .codex,
+                command: "Run ZenVoiceCoreChecks and report failures.",
+                description: "Run core checks",
+                workingDirectory: FileManager.default
+                    .homeDirectoryForCurrentUser
+                    .appendingPathComponent("Developer", isDirectory: true).path,
+                plannedRisk: .medium,
+                computedRisk: .medium
+            ),
+            GoalStep(
+                number: 2,
+                agent: .notification,
+                command: "Core checks finished",
+                description: "Notify",
+                dependsOn: [1]
+            ),
+        ]
+    )
+    var record = AgenticTaskRecord(plan: plan)
+    record.steps[0].state = .running
+    record.events.append(
+        GoalStatusEvent(
+            goalID: record.id,
+            sequence: 1,
+            event: .stepOutput,
+            step: 1,
+            message: "ZenVoiceCoreChecks: distinctive-output-marker"
+        )
+    )
+    try await fixture.vault.saveAgenticTask(record)
+
+    let active = try await fixture.vault.loadActiveAgenticTasks()
+    try await require(active.count == 1, "agentic record did not round-trip")
+    try await require(
+        active[0].plan == plan,
+        "agentic plan changed across encryption"
+    )
+    try await require(
+        GoalPlanDigest.sha256(active[0].plan) == GoalPlanDigest.sha256(plan),
+        "agentic plan hash changed across encryption"
+    )
+    try await require(
+        active[0].plan.createdAt == plan.createdAt,
+        "agentic plan createdAt lost precision across encryption"
+    )
+    try await require(
+        active[0].events.first?.message
+            == "ZenVoiceCoreChecks: distinctive-output-marker",
+        "agentic event text changed across encryption"
+    )
+    try await require(
+        active[0].steps[0].state == .running,
+        "agentic step state changed across encryption"
+    )
+
+    let raw = try Data(contentsOf: fixture.databaseURL)
+    for plaintext in [
+        "distinctive-output-marker",
+        "Run ZenVoiceCoreChecks and report failures.",
+        "run the core checks and notify me when done",
+    ] {
+        guard raw.range(of: Data(plaintext.utf8)) == nil else {
+            throw CheckError.failed(
+                "agentic record stored plaintext on disk: \(plaintext)"
+            )
+        }
+    }
+
+    record.state = .succeeded
+    try await fixture.vault.saveAgenticTask(record)
+    let afterTerminal = try await fixture.vault.loadActiveAgenticTasks()
+    try await require(
+        afterTerminal.isEmpty,
+        "a terminal agentic record stayed in the active set"
+    )
+}
+
 do {
     try await checkEncryptedStorage()
     try await checkRecoveryExpiry()
@@ -1661,7 +1753,8 @@ do {
     try await checkAudioArchiveExport()
     try await checkAudioHistoryPreferenceDefaults()
     try await checkTodayUsageInsight()
-    print("ZenVoiceStorageChecks: 22 checks passed")
+    try await checkAgenticTaskPersistence()
+    print("ZenVoiceStorageChecks: 23 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

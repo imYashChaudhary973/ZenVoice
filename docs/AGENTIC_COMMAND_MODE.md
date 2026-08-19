@@ -1,8 +1,13 @@
 # Agentic Command Mode (v2) — Master Design
 
-> **Status: future design. Nothing in this document is implemented.**
-> Command Mode **v1** is current and deterministic
-> ([ADR 0008](decisions/0008-command-mode.md)); v2 extends it and must not
+> **Status: Phase 2 implemented — 2026-08-18.** The planner, validator,
+> orchestrator, approval gate, status contract, process adapters, encrypted
+> task store, settings surface, and ZenBar HUD row all exist in `Sources/` and
+> are covered by `ZenVoiceCoreChecks` and `ZenVoiceStorageChecks`. Agentic Mode
+> ships **off by default** and, when switched on, enables Command Mode with it:
+> the agentic path is only reached after the deterministic v1 phrase parser
+> declines. Command Mode **v1** remains current and unchanged
+> ([ADR 0008](decisions/0008-command-mode.md)); v2 extends it and does not
 > break a single v1 phrase behavior. This is the master document; the four
 > component designs are:
 >
@@ -45,7 +50,7 @@ required at any point in v2.
 | State | Status |
 |---|---|
 | 1. Passive Dictation | current |
-| 2. Smart Local Formatting (local LLM behind the meaning guard) | future (Phase 2 work) |
+| 2. Smart Local Formatting (system LLM behind the meaning guard) | **current on macOS 26+; deterministic fallback elsewhere** |
 | 3. Command Mode v1 (deterministic) | **current** |
 | 4. **Agentic Command Mode v2 (this document)** | **design phase** |
 | 5. Project-Aware Agent | future |
@@ -66,7 +71,7 @@ Hotkey / hold-to-dictate (deliberate act)
   │   3. otherwise                             → normal text insertion (unchanged)
   → Planner (structured parser → local LLM fallback)      [AGENTIC_PLANNER]
   → Plan validation (schema + whitelists + lint)
-  → Approval Gate (risk-based; risk computed by orchestrator)   [AGENTIC_APPROVAL_GATE]
+  → Approval Gate (risk-based; risk computed by the PlanValidator)   [AGENTIC_APPROVAL_GATE]
   → Orchestrator state machine runs steps       [AGENTIC_ORCHESTRATOR]
        ├─ executors: codex | claude | shell | shortcut | notification
        └─ status events → Mac HUD (v2), iPhone (future)  [AGENTIC_STATUS_STREAMING]
@@ -135,28 +140,97 @@ with app-layer implementations, exactly like `CommandModeExecutor` today.
 ## 8. Dependencies and sequencing for implementation
 
 ```text
-Phase 0 (close Phase 6: live cloud verification, per-engine baselines)
-  └─ Phase 1 (these documents) — no agentic code before this set is reviewed
-       └─ Implementation order:
+Phase 0 (close Phase 6) — DONE 2026-08-18: Groq verified live (model
+  catalogue refreshed after Groq shut down the previous default on
+  2026-08-16; OpenAI/Anthropic live checks deferred by user choice), all
+  seven engines baselined on the frozen real-speech corpus, UI audit clean.
+  └─ Phase 1 (this document set) — COMPLETE 2026-08-18.
+       └─ Phase 2 (implementation) — COMPLETE 2026-08-18, in this order:
             1. GoalPlan schema + validator + checks (pure Core, no execution)
-            2. Orchestrator state machine with shell executor + fake agents
+            2. Orchestrator state machine with real process executor
             3. Approval gate UI (mac) + decision records
-            4. Status streaming to ZenBar/HUD
+            4. Status streaming to ZenBar
             5. codex / claude executor adapters
-            6. Local-LLM planner tier (after Smart-rung runtime decision)
+            6. On-device planner tier behind the deterministic tier
 ```
 
 Rationale: every step is testable without the next; schema-first prevents
 the LLM tail wagging the system; the shell executor proves the whole loop
 before any coding-agent integration.
 
-## 9. Pinned unknowns (must be decided before or during implementation)
+## 8a. Phase 1 exit checklist — verified against the implementation
 
-| # | Question | Default assumption |
+- [x] Cross-doc types line up: `PlanApprovalProposal` (planner) vs
+      `ApprovalAction` (decision records) are distinct types with distinct
+      value sets
+- [x] Every `GoalState`/`StepState` maps to a status event, and every event
+      maps to a state or is declared event-only
+- [x] Tier 1 templates emit only whitelisted agents (`open -a` shell step,
+      no phantom launch agent)
+- [x] Risk recomputation is attributed to the validator everywhere; the
+      planner's `plannedRisk` is advisory and overwritten
+- [x] Queue semantics: one active goal end to end; queued goals sit at
+      `idle`, not `planning`
+- [x] Cancel is visible immediately (`goal.cancelling`) and idempotent;
+      `step.cancelled` is distinct from `step.failed`
+- [x] Fail-toward-text paths exist for every planner/validator failure mode
+- [x] Non-coercion checklist in the approval-gate doc still holds
+- [x] No secret can enter any event, record, or environment by construction
+      (validator secret scan, `SecretRedactor` on every message and retained
+      chunk, minimal child environment with no provider keys)
+
+## 8b. What exists in code (2026-08-18)
+
+| Piece | File |
+|---|---|
+| Plan and step schema, agent whitelist, risk levels | `Sources/ZenVoiceCore/AgenticPlanner.swift` |
+| Validation, risk recomputation, path and secret policy | `Sources/ZenVoiceCore/PlanValidator.swift` |
+| Preferences, states, events, decisions, redaction, plan digest | `Sources/ZenVoiceCore/AgenticExecution.swift` |
+| Deterministic planner tier (Tier 1) | `Sources/ZenVoiceCore/GoalPlanner.swift` |
+| On-device planner tier (Tier 2) | `Sources/ZenVoiceCore/FoundationModelsGoalPlanner.swift` |
+| Orchestrator, queue, approval flow, low-risk memory | `Sources/ZenVoiceCore/GoalOrchestrator.swift` |
+| `codex` / `claude` / shell / shortcut process adapters | `Sources/ZenVoiceCore/AgenticExecutors.swift` |
+| Encrypted `agentic_tasks` store (schema v7) | `Sources/ZenVoiceStorage/DictationVault.swift` |
+| Planning, approval, status coordination, notifications | `Sources/ZenVoice/AgenticModeCoordinator.swift` |
+| Approval and step-approval panel | `Sources/ZenVoice/AgenticApprovalWindowController.swift` |
+| Settings surface (Commands → Agentic Mode) | `Sources/ZenVoice/Screens/AgenticModeScreen.swift` |
+| Live status row and Stop control | `Sources/ZenVoice/ZenBarView.swift` |
+| Router from transcript to plan, fail-toward-text | `Sources/ZenVoice/AppDelegate.swift` |
+| Checks | `Sources/ZenVoiceCoreChecks/AgenticChecks.swift`, `Sources/ZenVoiceStorageChecks/main.swift` |
+
+### Deltas from the Phase 1 design
+
+- `GoalPlan` gained an `id: UUID`. Approval records bind to plan id **and**
+  SHA-256 **and** version, so a decision cannot be replayed onto an edited or
+  different plan.
+- Verified CLI contracts (U3 closed): `codex exec --json --ephemeral --sandbox
+  workspace-write --approve-for-me --skip-git-repo-check --cd <dir> <prompt>`
+  and `claude --print --verbose --output-format stream-json --permission-mode
+  acceptEdits --no-session-persistence <prompt>`.
+- Cancellation signals the child **process group** (`kill(-pid, SIGTERM)` after
+  `setpgid`), then escalates to `SIGKILL` after a polled five-second grace
+  window rather than a flat sleep, so the HUD reports `cancelled` as soon as
+  the tree is gone.
+- Retained step output is capped at 5 MB per step (tail kept) and the event log
+  at 500 events per goal; every event message and retained chunk passes through
+  `SecretRedactor` before it is persisted.
+- Enabling Agentic Mode enables Command Mode with it, and every runtime gate
+  reads `AgenticModePreferences.isEffectivelyEnabled()`, so switching Command
+  Mode off neutralises the agentic path without a second write.
+- Relaunch marks any non-terminal record `interrupted` and never resumes a
+  process (U-part of the orchestrator contract, now enforced in code).
+- Agentic records encode dates as seconds since 1970, not milliseconds: the
+  milliseconds strategy multiplies on write and divides on read, which is not
+  exactly reversible, so a reloaded plan stopped hashing equal to the one the
+  user approved. A storage check now pins the digest across the round trip.
+
+## 9. Pinned unknowns — resolutions
+
+| # | Question | Resolution |
 |---|---|---|
-| U1 | Local LLM runtime for the planner (MLX vs llama.cpp C API) | llama.cpp C API, matching the whisper.cpp integration pattern; decided in the Smart-rung work |
-| U2 | Planner model (Llama 3.2 3B vs 8B vs Qwen) | 3B first; plan quality measured before 8B ships |
-| U3 | Codex / Claude Code headless invocation contract (flags, exit codes, machine-readable output) | prototype on real CLIs before the adapter spec is frozen |
-| U4 | Whether voice-only approval ("confirm") is ever allowed | **No for v2** — approval is a deliberate non-voice interaction; revisit with an explicit ADR |
-| U5 | Working-directory policy for agent steps before Project-Aware Agent exists | plan must name an absolute path inside `~/Developer` or the step is rejected |
-| U6 | Retention period for encrypted task records | follow History retention settings; separate knob deferred |
+| U1 | Local LLM runtime for the planner | **Closed:** Apple `FoundationModels` / `SystemLanguageModel` via `FoundationModelsGoalPlanningModel`; the deterministic tier answers first and is also the fallback when the system model is unavailable |
+| U2 | Planner model | **Closed:** the OS-managed `SystemLanguageModel`; no app-selected weights, no separate download |
+| U3 | Codex / Claude Code headless invocation contract | **Closed:** flags verified against the installed CLIs and pinned in `AgenticExecutors.swift` (see §8b deltas); exit status is the step outcome, stdout/stderr stream to the HUD |
+| U4 | Whether voice-only approval ("confirm") is ever allowed | **No for v2** — approval stays a deliberate non-voice interaction; revisit with an explicit ADR |
+| U5 | Working-directory policy for agent steps before Project-Aware Agent exists | **Closed:** the validator requires a path contained in `~/Developer` by path components, so a sibling such as `~/Developer-escape` is rejected rather than prefix-matched |
+| U6 | Retention period for encrypted task records | Open: follows History retention settings; a separate knob is still deferred |

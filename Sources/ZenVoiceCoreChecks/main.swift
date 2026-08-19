@@ -294,7 +294,7 @@ for check in slangNormalizationChecks {
     }
 }
 
-let formattedSlang = TranscriptFormattingEngine().format(
+let formattedSlang = await TranscriptFormattingEngine().format(
     "Please confirm theek hey before merging the pull request.",
     mode: .clean
 )
@@ -1592,18 +1592,39 @@ WhisperDecoding.usesBeamSearch(modelFileSizeBytes: 147_964_211),
     exit(1)
 }
 
-// Exactly one model may carry the recommendation badge, otherwise the UI is
-// telling the user two different things at once.
+// English/European Apple Silicon defaults to Parakeet TDT v3, so no Whisper
+// model carries the Recommended badge for that profile.
 let recommendedCount = VerifiedModelCatalog.models.filter {
     ModelRecommendationEngine.recommendation(
         for: $0,
         profile: twentyFourGigabyteProfile
     ).level == .recommended
 }.count
-guard recommendedCount == 1 else {
+guard recommendedCount == 0 else {
     FileHandle.standardError.write(
         Data(
-            "FAIL: \(recommendedCount) models marked recommended, expected 1\n"
+            "FAIL: \(recommendedCount) models marked recommended, expected 0\n"
+                .utf8
+        )
+    )
+    exit(1)
+}
+
+let autoDetectProfile = LanguageProfile(
+    inputLanguageCode: LanguageProfile.automaticCode,
+    outputMode: .spokenLanguage
+)
+let autoRecommendedCount = VerifiedModelCatalog.models.filter {
+    ModelRecommendationEngine.recommendation(
+        for: $0,
+        profile: twentyFourGigabyteProfile,
+        language: autoDetectProfile
+    ).level == .recommended
+}.count
+guard autoRecommendedCount == 1 else {
+    FileHandle.standardError.write(
+        Data(
+            "FAIL: \(autoRecommendedCount) auto-detect models marked recommended, expected 1\n"
                 .utf8
         )
     )
@@ -2549,6 +2570,67 @@ guard let noAppleRec,
     failEngineCheck("Unavailable Apple Speech should fall back to Whisper")
 }
 
+let fakeTDTv3 = fakeEngineWithID(
+    id: EngineIdentifiers.parakeetTDTv3,
+    capability: .multilingual
+)
+let tdtRegistry = EngineRegistry(
+    engines: [fakeWhisper, fakeAppleSpeech, fakeTDTv3]
+)
+let tdtEnglishRec = EngineRecommendationEngine.recommendation(
+    for: .english,
+    hardware: HardwareProfile.current(),
+    registry: tdtRegistry
+)
+guard let tdtEnglishRec,
+      tdtEnglishRec.preferredEngineID == EngineIdentifiers.parakeetTDTv3,
+      tdtEnglishRec.fallbackEngineIDs
+        == [EngineIdentifiers.appleSpeech, EngineIdentifiers.whisper] else {
+    failEngineCheck("English with TDT v3 installed should prefer TDT v3")
+}
+
+let intelEngineRec = EngineRecommendationEngine.recommendation(
+    for: .english,
+    hardware: intelProfile,
+    registry: tdtRegistry
+)
+guard let intelEngineRec,
+      intelEngineRec.preferredEngineID == EngineIdentifiers.whisper else {
+    failEngineCheck("Intel should prefer Whisper Small, not TDT v3")
+}
+
+let autoEngineRec = EngineRecommendationEngine.recommendation(
+    for: autoDetectProfile,
+    hardware: HardwareProfile.current(),
+    registry: tdtRegistry
+)
+guard let autoEngineRec,
+      autoEngineRec.preferredEngineID == EngineIdentifiers.whisper else {
+    failEngineCheck("Auto-detect should prefer Whisper Turbo")
+}
+
+let fakeFlash = fakeEngineWithID(
+    id: EngineIdentifiers.parakeetFlash,
+    capability: .english
+)
+let previewRegistry = EngineRegistry(
+    engines: [fakeWhisper, fakeFlash, fakeTDTv3],
+    fallbackOrder: [
+        EngineIdentifiers.parakeetTDTv3,
+        EngineIdentifiers.whisper
+    ]
+)
+guard previewRegistry.resolve(
+        for: .english,
+        selectedID: EngineIdentifiers.parakeetFlash
+      )?.descriptor.id == EngineIdentifiers.parakeetTDTv3 else {
+    failEngineCheck("Flash must not win final resolve")
+}
+guard previewRegistry.resolvePreview(for: .english)?.descriptor.id
+        == EngineIdentifiers.parakeetFlash else {
+    failEngineCheck("Flash should win live preview resolve")
+}
+
 print("ZenVoiceCoreChecks: engine recommendation passed")
 
 // MARK: - Command mode checks
@@ -2730,24 +2812,16 @@ guard WriteModePreferences.loadSubMode(defaults: writeDefaults) == .rewrite else
 
 print("ZenVoiceCoreChecks: Write Mode passed")
 
-// MARK: - Action serialization and approval checks
+// MARK: - Action serialization checks
 
-let action = CommandAction.openURL(URL(string: "https://zenvoice.app")!)
+let action = CommandAction.launchApp(bundleID: "com.zenvoice.ZenVoice")
 let actionData = try! JSONEncoder().encode(action)
 let decodedAction = try! JSONDecoder().decode(CommandAction.self, from: actionData)
 guard action == decodedAction else {
     failEngineCheck("CommandAction did not round-trip through JSON")
 }
 
-guard CommandModeApprovalPreferences.requiresApproval(.openURL(URL(string: "x")!)),
-      CommandModeApprovalPreferences.requiresApproval(.appleScript("")),
-      CommandModeApprovalPreferences.requiresApproval(.shellScript("")),
-      !CommandModeApprovalPreferences.requiresApproval(.systemAction(.mute)),
-      !CommandModeApprovalPreferences.requiresApproval(.launchApp(bundleID: "x")) else {
-    failEngineCheck("CommandModeApprovalPreferences approval boundaries are wrong")
-}
-
-print("ZenVoiceCoreChecks: action serialization and approval passed")
+print("ZenVoiceCoreChecks: action serialization passed")
 
 // MARK: - Update feed verification checks
 
@@ -3325,3 +3399,365 @@ guard try !VerifiedModelCatalog.verify(listingURL, for: verifierModel) else {
 }
 
 print("ZenVoiceCoreChecks: formatting migration passed")
+
+// MARK: - Agentic planner and validator checks
+
+let validatorRoot = FileManager.default.temporaryDirectory
+    .appendingPathComponent("zenvoice-validator-checks-\(UUID().uuidString)")
+try? FileManager.default.createDirectory(at: validatorRoot, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: validatorRoot) }
+let validator = PlanValidator(allowedRoot: validatorRoot)
+
+func step(
+    number: Int,
+    agent: GoalAgent,
+    command: String,
+    dependsOn: [Int] = [],
+    plannedRisk: RiskLevel = .low,
+    computedRisk: RiskLevel = .low,
+    workingDirectory: String? = nil
+) -> GoalStep {
+    GoalStep(
+        number: number,
+        agent: agent,
+        command: command,
+        description: "\(agent.displayName) step \(number)",
+        workingDirectory: workingDirectory,
+        dependsOn: dependsOn,
+        plannedRisk: plannedRisk,
+        computedRisk: computedRisk
+    )
+}
+
+// 1. Valid plan passes and recomputes risk from the surface, ignoring
+//    the planner's self-reported risk.
+let validPlan = GoalPlan(
+    title: "Run tests",
+    transcript: "run the tests in bridgemind",
+    steps: [
+        step(number: 1, agent: .codex, command: "cd bridgemind && codex 'run tests'", plannedRisk: .low),
+        step(number: 2, agent: .shell, command: "git status", plannedRisk: .high),
+    ]
+)
+let validated = try validator.validate(validPlan)
+guard validated.steps[0].computedRisk == .medium else {
+    failEngineCheck("codex test step should recompute to medium, got \(validated.steps[0].computedRisk)")
+}
+guard validated.steps[1].computedRisk == .low else {
+    failEngineCheck("git status shell step should recompute to low, got \(validated.steps[1].computedRisk)")
+}
+
+// 2. Empty plan rejected.
+do {
+    _ = try validator.validate(GoalPlan(title: "Empty", transcript: "", steps: []))
+    failEngineCheck("empty plan should be rejected")
+} catch PlanValidationError.emptyPlan { }
+
+// 3. Missing title rejected.
+do {
+    _ = try validator.validate(GoalPlan(title: "   ", transcript: "", steps: [step(number: 1, agent: .notification, command: "hello")]))
+    failEngineCheck("missing title should be rejected")
+} catch PlanValidationError.missingTitle { }
+
+// 4. Unsupported schema version rejected.
+do {
+    var bad = validPlan
+    bad.schemaVersion = 99
+    _ = try validator.validate(bad)
+    failEngineCheck("unsupported schema version should be rejected")
+} catch PlanValidationError.unsupportedSchemaVersion(let v) {
+    guard v == 99 else { failEngineCheck("wrong schema version in error") }
+}
+
+// 5. Non-contiguous step numbers rejected.
+do {
+    let plan = GoalPlan(title: "Gaps", transcript: "", steps: [
+        step(number: 1, agent: .notification, command: "a"),
+        step(number: 3, agent: .notification, command: "b", dependsOn: [1])
+    ])
+    _ = try validator.validate(plan)
+    failEngineCheck("non-contiguous step numbers should be rejected")
+} catch PlanValidationError.nonContiguousStepNumbers { }
+
+// 6. Duplicate step number rejected.
+do {
+    let plan = GoalPlan(title: "Dup", transcript: "", steps: [
+        step(number: 1, agent: .notification, command: "a"),
+        step(number: 1, agent: .notification, command: "b")
+    ])
+    _ = try validator.validate(plan)
+    failEngineCheck("duplicate step number should be rejected")
+} catch PlanValidationError.duplicateStepNumber(1) { }
+
+// 7. Invalid dependency rejected.
+do {
+    let plan = GoalPlan(title: "Bad dep", transcript: "", steps: [
+        step(number: 1, agent: .notification, command: "a", dependsOn: [2])
+    ])
+    _ = try validator.validate(plan)
+    failEngineCheck("invalid dependency should be rejected")
+} catch PlanValidationError.invalidDependency(1, 2) { }
+
+// 8. Forward dependencies rejected. The orchestrator runs steps in order, so a
+// dependency on a later step would silently skip the earlier one — and since a
+// cycle needs a forward edge, this also makes circular plans impossible.
+do {
+    let plan = GoalPlan(title: "Forward", transcript: "", steps: [
+        step(number: 1, agent: .notification, command: "a", dependsOn: [2]),
+        step(number: 2, agent: .notification, command: "b", dependsOn: [1])
+    ])
+    _ = try validator.validate(plan)
+    failEngineCheck("forward dependencies should be rejected")
+} catch PlanValidationError.invalidDependency(1, 2) { }
+
+// 9. Orphaned notification step rejected (unless it's the only step).
+do {
+    let plan = GoalPlan(title: "Orphan", transcript: "", steps: [
+        step(number: 1, agent: .shell, command: "git status"),
+        step(number: 2, agent: .notification, command: "done")
+    ])
+    _ = try validator.validate(plan)
+    failEngineCheck("orphaned notification step should be rejected")
+} catch PlanValidationError.orphanedNotificationStep(2) { }
+
+// 10. Secret-shaped value rejected.
+do {
+    let plan = GoalPlan(title: "Secret", transcript: "", steps: [
+        step(number: 1, agent: .shell, command: "sk-test12345678901234567890")
+    ])
+    _ = try validator.validate(plan)
+    failEngineCheck("secret-shaped command should be rejected")
+} catch PlanValidationError.secretDetected { }
+
+// 11. Working directory outside allowed root rejected.
+do {
+    let plan = GoalPlan(title: "Path", transcript: "", steps: [
+        step(number: 1, agent: .shell, command: "ls", workingDirectory: "/tmp")
+    ])
+    _ = try validator.validate(plan)
+    failEngineCheck("working directory outside root should be rejected")
+} catch PlanValidationError.workingDirectoryNotAllowed { }
+
+// 12. Empty command rejected.
+do {
+    let plan = GoalPlan(title: "Empty cmd", transcript: "", steps: [
+        step(number: 1, agent: .shell, command: "  ")
+    ])
+    _ = try validator.validate(plan)
+    failEngineCheck("empty command should be rejected")
+} catch PlanValidationError.emptyCommand(1) { }
+
+// 13. open -a classified low.
+let openPlan = GoalPlan(title: "Open", transcript: "", steps: [
+    step(number: 1, agent: .shell, command: "open -a Safari")
+])
+let openValidated = try validator.validate(openPlan)
+guard openValidated.steps[0].computedRisk == .low else {
+    failEngineCheck("open -a should be low risk")
+}
+
+// 14. git push classified high.
+let pushPlan = GoalPlan(title: "Push", transcript: "", steps: [
+    step(number: 1, agent: .shell, command: "git push origin main")
+])
+let pushValidated = try validator.validate(pushPlan)
+guard pushValidated.steps[0].computedRisk == .high else {
+    failEngineCheck("git push should be high risk, got \(pushValidated.steps[0].computedRisk)")
+}
+
+// 15. Dangerous codex command classified high.
+let deployPlan = GoalPlan(title: "Deploy", transcript: "", steps: [
+    step(number: 1, agent: .codex, command: "codex 'deploy to production'")
+])
+let deployValidated = try validator.validate(deployPlan)
+guard deployValidated.steps[0].computedRisk == .high else {
+    failEngineCheck("codex deploy command should be high risk, got \(deployValidated.steps[0].computedRisk)")
+}
+
+// 16. Notification with a dependency is allowed.
+let notifyPlan = GoalPlan(title: "Notify", transcript: "", steps: [
+    step(number: 1, agent: .shell, command: "git status"),
+    step(number: 2, agent: .notification, command: "done", dependsOn: [1])
+])
+_ = try validator.validate(notifyPlan)
+
+print("ZenVoiceCoreChecks: agentic planner and validator passed")
+
+// MARK: - Smart local formatting checks
+
+enum LocalModelStubBehavior: Sendable {
+    case output(String)
+    case failure
+    case slow(String)
+}
+
+struct LocalModelStub: LocalLanguageModel {
+    let availability: LocalIntelligenceAvailability
+    let behavior: LocalModelStubBehavior
+
+    func generate(
+        prompt: String,
+        maximumResponseTokens: Int
+    ) async throws -> String {
+        guard availability == .available else {
+            throw LocalIntelligenceError.unavailable(availability)
+        }
+        switch behavior {
+        case .output(let text):
+            return text
+        case .failure:
+            throw LocalIntelligenceError.emptyResponse
+        case .slow(let text):
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            return text
+        }
+    }
+}
+
+guard TranscriptSemanticGuard.preservesLexicalContent(
+    original: "hello world this is five",
+    candidate: "Hello, world. This is five."
+) else {
+    failEngineCheck("lexical guard rejected punctuation-only formatting")
+}
+guard !TranscriptSemanticGuard.preservesLexicalContent(
+    original: "hello world",
+    candidate: "hello helpful world"
+) else {
+    failEngineCheck("lexical guard accepted an invented word")
+}
+guard !TranscriptSemanticGuard.preservesLexicalContent(
+    original: "deploy version two",
+    candidate: "deploy version three"
+) else {
+    failEngineCheck("lexical guard accepted a changed number word")
+}
+
+let modelFormatted = await SmartFormattingEngine(
+    model: LocalModelStub(
+        availability: .available,
+        behavior: .output("Hello, world. This is five.")
+    )
+).format("hello world this is five")
+guard modelFormatted.text == "Hello, world. This is five.",
+      modelFormatted.modelUsed,
+      modelFormatted.fallback == nil else {
+    failEngineCheck("safe local model formatting was not accepted")
+}
+
+let unsafeModelOutput = await SmartFormattingEngine(
+    model: LocalModelStub(
+        availability: .available,
+        behavior: .output("Hello, helpful world.")
+    )
+).format("hello world")
+guard unsafeModelOutput.text == "hello world",
+      !unsafeModelOutput.modelUsed,
+      unsafeModelOutput.fallback == .unsafeOutput else {
+    failEngineCheck("unsafe model output fallback was \(unsafeModelOutput.text) / \(String(describing: unsafeModelOutput.fallback))")
+}
+
+let unavailableModel = await SmartFormattingEngine(
+    model: LocalModelStub(
+        availability: .modelNotReady,
+        behavior: .failure
+    )
+).format("hello world")
+guard unavailableModel.text == "hello world",
+      !unavailableModel.modelUsed,
+      unavailableModel.fallback == .modelUnavailable(.modelNotReady) else {
+    failEngineCheck("unavailable local model did not fall back")
+}
+
+let failedModel = await SmartFormattingEngine(
+    model: LocalModelStub(
+        availability: .available,
+        behavior: .failure
+    )
+).format("hello world")
+guard failedModel.text == "hello world",
+      failedModel.fallback == .generationFailed else {
+    failEngineCheck("failed local generation did not fall back")
+}
+
+let timedOutModel = await SmartFormattingEngine(
+    model: LocalModelStub(
+        availability: .available,
+        behavior: .slow("Hello, world.")
+    ),
+    timeoutSeconds: 0.01
+).format("hello world")
+guard timedOutModel.text == "hello world",
+      timedOutModel.fallback == .generationFailed else {
+    failEngineCheck("timed-out local generation did not fall back")
+}
+
+let unifiedSmart = await TranscriptFormattingEngine(
+    localModel: LocalModelStub(
+        availability: .available,
+        behavior: .output("Hello, world.")
+    )
+).format("hello world", mode: .smart)
+guard unifiedSmart.text == "Hello, world.",
+      unifiedSmart.localModelUsed,
+      unifiedSmart.smartFallback == nil else {
+    failEngineCheck("unified formatting engine did not use the local model")
+}
+
+print("ZenVoiceCoreChecks: Smart local formatting passed")
+
+// MARK: - Licence checks
+
+// The signing key is deliberately absent from this repository, so these checks
+// verify against a throwaway pair — the same shape the release signer uses.
+// What is being defended is the token format and the rejection paths: a licence
+// that verifies against the wrong key, a truncated paste, or a tampered payload
+// must all fail closed.
+let licenceStore = InMemoryLicenceStore()
+guard LicenceResolver.status(from: licenceStore) == .unlicensed else {
+    failEngineCheck("an empty store should resolve to unlicensed")
+}
+
+try licenceStore.save("ZV1-not-a-real-key")
+guard LicenceResolver.status(from: licenceStore) == .unlicensed else {
+    failEngineCheck("a malformed token should resolve to unlicensed")
+}
+
+do {
+    _ = try LicenceVerifier.verify("hello")
+    failEngineCheck("a token without the ZV1- prefix should be rejected")
+} catch LicenceError.malformed { }
+
+let licencePayload = LicenceVerifier.payload(
+    orderID: 4242,
+    issuedAt: Date(timeIntervalSince1970: 1_777_000_000)
+)
+guard licencePayload.count == 9, licencePayload.first == 1 else {
+    failEngineCheck("licence payload layout changed")
+}
+
+// A signature from a key the app does not trust must not verify, whatever the
+// payload says.
+let foreignKey = Curve25519.Signing.PrivateKey()
+let foreignToken = LicenceVerifier.token(
+    payload: licencePayload,
+    signature: try foreignKey.signature(for: licencePayload)
+)
+do {
+    _ = try LicenceVerifier.verify(foreignToken)
+    failEngineCheck("a licence signed by an untrusted key should be rejected")
+} catch LicenceError.signatureRejected { }
+
+// Base64URL round-trip, including the padding the encoder strips.
+for length in 1...80 {
+    let sample = Data((0..<length).map { UInt8($0 % 251) })
+    guard LicenceVerifier.decodeBase64URL(
+        LicenceVerifier.encodeBase64URL(sample)
+    ) == sample else {
+        failEngineCheck("licence base64url round-trip failed at \(length) bytes")
+    }
+}
+
+print("ZenVoiceCoreChecks: licence verification passed")
+
+await runAgenticChecks()

@@ -231,16 +231,32 @@ When history is enabled, a record moves through `recording`, `transcribing`,
 `ready`, and `inserted` or `copiedOnly`. An interrupted or failed operation
 moves to `failed` and can retain its local audio for retry.
 
-The completed speech transcript passes through deterministic Instant Refine and
-then encrypted personal correction rules. The resulting text is what history
+The completed speech transcript passes through the unified Formatting ladder
+and then encrypted personal correction rules. Clean is deterministic; Smart
+may use Apple's on-device system model behind strict lexical and semantic
+guards, with deterministic local fallback. The resulting text is what history
 and insertion receive; the raw speech transcript remains available in the
 encrypted record for local recovery and comparison.
+
+## Agentic path
+
+In Command mode the deterministic phrase parser runs first and wins ties. When
+it declines and Agentic Mode is effectively enabled, `AgenticModeCoordinator`
+asks `GoalPlanner` for a plan — deterministic templates first, Apple's
+on-device model second — and `PlanValidator` re-derives each step's risk,
+enforces the `~/Developer` working-directory policy, and rejects
+secret-shaped commands. `GoalOrchestrator` is an actor that runs one goal at a
+time: it obtains an approval decision bound to the plan's id, SHA-256, and
+version, then executes steps serially through `ProcessGoalExecutor`, emitting
+`GoalStatusEvent`s and persisting the whole record to the encrypted
+`agentic_tasks` table after every transition. Any planner or validator failure
+falls back to inserting the transcript as ordinary text.
 
 ## Concurrency
 
 UI and application state remain on the main actor. Local speech transcription
-and deterministic text refinement run on a dedicated user-initiated serial
-queue so model processing does not block ZenBar.
+and deterministic cleanup run off the UI path. Smart model generation is
+asynchronous and bounded by a timeout, so it cannot block ZenBar indefinitely.
 
 ## Memory
 

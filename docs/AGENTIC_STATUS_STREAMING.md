@@ -1,9 +1,12 @@
 # Agentic Status Streaming — Event Contract
 
-> **Status: future design.** Part of [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md).
-> One event vocabulary serves the Mac HUD in v2 and the future iPhone
-> companion unchanged; the iPhone is a consumer of the same envelope, not a
-> second schema.
+> **Status: implemented — 2026-08-18.** Part of
+> [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md). One event vocabulary
+> serves the Mac HUD in v2 and a future iPhone companion unchanged; the iPhone
+> would be a consumer of the same envelope, not a second schema. Code:
+> `GoalStatusEvent` in `Sources/ZenVoiceCore/AgenticExecution.swift`, emitted by
+> `GoalOrchestrator` and rendered by the ZenBar status row. Messages are
+> redacted and the per-goal log is capped at 500 events.
 
 ## 1. Envelope
 
@@ -44,18 +47,20 @@ public struct GoalStatusEvent: Codable, Equatable, Sendable {
 | `goal.planning_failed` | `reason` (short, no transcript) | planner declined / invalid |
 | `goal.awaiting_approval` | `planVersion`, `modeOffered` | approval prompt shown |
 | `goal.approved` | `mode`, `coveredSteps` | decision recorded |
-| `goal.rejected` | `planVersion` | user rejected |
+| `goal.plan_edited` | `oldVersion`, `newVersion` | plan editor saved; re-validation + re-ask follow |
 | `goal.approval_timeout` | — | 10-min expiry |
 | `goal.started` | `firstStep` | execution begins |
 | `step.started` | `agent`, `risk`, `workingDirectory` | step process spawned |
 | `step.output` | `channel: stdout|stderr`, `text` (chunk), `truncated: Bool` | streamed child output |
 | `step.waiting_input` | `prompt` | child blocks on stdin (rare; agents run headless) |
 | `step.succeeded` | `exitStatus`, `durationMs`, `summaryText?` | exit 0 |
-| `step.failed` | `exitStatus`, `durationMs`, `reason: error|timeout|cancelled` | non-zero / timeout / kill |
+| `step.failed` | `exitStatus`, `durationMs`, `reason: error|timeout` | non-zero / timeout |
+| `step.cancelled` | `durationMs`, `partialOutputRetained: Bool` | killed by cancel (distinct from failure — the step did not fail, we stopped it) |
 | `step.skipped` | `because: dependency_failed | cancelled` | scheduler skip |
 | `goal.step_approval_required` | `step`, `risk`, `commandPreview` | paused before high-risk step |
 | `goal.completed` | `stepsSucceeded`, `stepsSkipped`, `durationMs` | all done |
 | `goal.failed` | `failedStep`, `stepsRan[]` | halt policy fired |
+| `goal.cancelling` | — | cancel pressed; children terminating (emitted immediately, before reap) |
 | `goal.cancelled` | `stepsCancelled[]` | cancel completed |
 | `goal.interrupted` | `lastKnownStep` | relaunch discovery |
 | `goal.notification` | `title`, `body`, `intent: completed|failed|cancelled|approval` | terminal/attention states |

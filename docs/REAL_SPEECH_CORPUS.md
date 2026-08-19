@@ -1,15 +1,16 @@
 # Real-Speech Evaluation Corpus
 
-> **Status:** The corpus foundation is built and Whisper-family baselines are
-> measured. Two gaps remain: **per-engine baselines for Apple Speech,
-> Parakeet, Nemotron, and Cohere**, and the **consented representative
-> dictation cohort** (pre-registered, zero sessions recorded). This document
-> tells the coding agent exactly what exists, where, under which licence, and
-> how to run a baseline — no discovery required.
+> **Status:** The corpus foundation is built, Whisper-family baselines are
+> measured, and **per-engine baselines for Parakeet, Nemotron, and Cohere
+> landed 2026-08-18** (§5) — one re-runnable command per engine. Remaining
+> gaps: **Apple Speech** (manual-QA authorization gate) and the **consented
+> representative dictation cohort** (pre-registered, zero sessions
+> recorded). This document tells the coding agent exactly what exists,
+> where, under which licence, and how to run a baseline — no discovery
+> required.
 >
 > Related: [Consented Dictation Model Cycle](CONSENTED_DICTATION_MODEL_CYCLE.md),
-> [Accuracy Harness](ACCURACY_HARNESS.md),
-> [2026-08-17 QA record](DAILY_RELIABILITY_QA_2026-08-17.md).
+> [Accuracy Harness](ACCURACY_HARNESS.md).
 
 ## 1. What "real speech" means here
 
@@ -104,29 +105,58 @@ gates correctly block promotion without representative data.
 options are recorded in the QA record. Do not "fix" it by widening the
 suppression list without an explicit decision.
 
-## 5. Per-engine baselines (the open Phase 6 item)
+## 5. Per-engine baselines (measured 2026-08-18)
 
-**Current limitation:** `ZenVoiceAccuracyChecks` decodes through the
-Whisper path. Apple Speech, Parakeet, Nemotron, and Cohere have runtime
-coverage but no WER baseline on real speech. Plan for the coding agent:
+**Done, except Apple Speech** (manual-QA gate below). The harness grew
+`ZENVOICE_ACCURACY_ENGINE`, which baselines one engine through its own
+`SpeechEngine` path — resolved via `EngineRegistry`, decoded via
+`transcribe(audioURL:)`, the same entry the app uses. One re-runnable
+command per engine:
 
-1. Extend the harness with an engine-selection switch that mirrors
-   `EngineRegistry` selection (for example
-   `ZENVOICE_ACCURACY_ENGINE=parakeet|nemotron|cohere|appleSpeech`), reusing
-   the existing corpus loader, scoring, and report — do not fork the harness.
-2. Per engine, run the same frozen Common Voice test plus the LibriSpeech
-   clean set; record the same table columns as §4 plus p50/p95 decode
-   latency.
-3. Apple Speech runs on-device only and may require authorization prompts —
-   gate it behind a manual QA step, not unattended CI.
-4. Record results in this file and refresh the recommendation table in the
-   architecture reference.
-5. Definition of done: one table row per installed engine, produced by a
-   command a reviewer can re-run.
+```bash
+ZENVOICE_MODEL_PATH="<whisper model for registry construction>" \
+ZENVOICE_ACCURACY_ENGINE=parakeet-flash \
+ZENVOICE_ACCURACY_CORPUS=Datasets/common-voice-spontaneous-4.0/prepared-v1/test.jsonl \
+swift run ZenVoiceAccuracyChecks
+```
 
-**Pinned unknowns:** whether Apple Speech permits reproducible batch decode
-(some locales cache); Cohere CoreML warm-up cost on cold CI runners;
-Nemotron streaming-mode accuracy vs non-streaming.
+- `ZENVOICE_ACCURACY_ENGINE=list` prints the exact ids this machine has;
+  an unknown id fails closed with the same list.
+- Output columns match §4 (whole and segmented WER, protected-token
+  failures) plus p50/p95 decode latency and the real-time multiple.
+- `ZENVOICE_ACCURACY_NOSEGMENT=1` skips the segmented pass for slow
+  engines. On this corpus every clip is a single utterance
+  (`LiveSegmentation` yields one segment), so the segmented column
+  re-measures the whole decode rather than a chunking penalty.
+- Apple Speech still requires an authorized process (manual QA), per the
+  rule below.
+
+Frozen Common Voice Spontaneous test (262 clips, 3,084 s), 2026-08-18,
+MacBook Pro M5, every installed engine through its own
+`SpeechEngine.transcribe(audioURL:)` path:
+
+| Engine | Whole / Segmented WER | Protected q / n | p50 / p95 decode | Real time |
+|---|---|---|---|---|
+| Parakeet TDT v3 Q8 | **6.9 % / 8.3 %** | 7 / 5 | 0.13 s / 0.37 s | **73×** |
+| Parakeet TDT v2 Q8 | 7.3 % / 9.3 % | 2 / 5 | 0.12 s / 0.37 s | 73× |
+| Whisper Turbo Q5 | 8.2 % / 9.8 % | 10 / 5 | 1.00 s / 2.19 s | 11× |
+| Cohere Transcribe INT8 | 10.8 % / 12.5 % | 8 / 9 | 1.93 s / 5.75 s | 5× |
+| Nemotron 3.5 Multilingual Q8 | 13.8 % / 14.0 % | 4 / 8 | 0.20 s / 0.60 s | 45× |
+| Parakeet Flash Q8 | 14.1 % / 14.6 % | 11 / 8 | 0.58 s / 1.67 s | 16× |
+| Nemotron Speech 3.5 Ultra Fast Q8 | 23.8 % / 29.1 % | 4 / 8 | 0.83 s / 2.37 s | 12× |
+| Apple Speech | not measured | — | — | manual-QA gate |
+
+Cross-check: the Whisper row through the engine path (8.2 % / 9.8 %) matches
+the §4 `WhisperTranscriber` numbers (8.1 % / 9.6 %) within rounding — the
+two paths measure the same decoder.
+
+**Recommendation-relevant reading:** on this corpus Parakeet TDT v3 is both
+the most accurate engine installed *and* ~7× faster than Whisper Turbo,
+with fewer protected-token failures (7 vs 10 quantities). It is
+English-only; multilingual users still need Whisper. Nemotron Ultra Fast —
+marketed for streaming latency — is the least accurate non-streaming
+decoder here, consistent with its streaming-first design. No engine except
+Whisper-family has a Hinglish story.
 
 ## 6. Baseline procedure rules
 

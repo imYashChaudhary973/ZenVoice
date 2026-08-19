@@ -110,15 +110,6 @@ public protocol WriteModeTextReader: Sendable {
     func read(_ request: WriteModeReadRequest) async throws -> WriteModeReadResult
 }
 
-/// A no-op reader suitable for tests and previews.
-public struct EmptyWriteModeTextReader: WriteModeTextReader, Sendable {
-    public init() {}
-
-    public func read(_ request: WriteModeReadRequest) async throws -> WriteModeReadResult {
-        WriteModeReadResult(text: "", source: .accessibility, isVerified: false)
-    }
-}
-
 /// Result of a Write Mode rewrite.
 public struct WriteModeRewriteResult: Equatable, Sendable {
     public let text: String

@@ -54,7 +54,8 @@ final class OverlayPanelController {
         cancelRecording: @escaping () -> Void,
         finishRecording: @escaping () -> Void,
         dismissError: @escaping () -> Void,
-        setMode: @escaping (ZenBarMode) -> Void
+        setMode: @escaping (ZenBarMode) -> Void,
+        cancelAgenticGoal: @escaping () -> Void
     ) {
         self.kind = kind
         reduceMotion = OverlayPreferences.loadReduceMotion()
@@ -88,7 +89,8 @@ final class OverlayPanelController {
                 cancelRecording: cancelRecording,
                 finishRecording: finishRecording,
                 dismissError: dismissError,
-                setMode: setMode
+                setMode: setMode,
+                cancelAgenticGoal: cancelAgenticGoal
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         )
@@ -157,7 +159,8 @@ final class OverlayPanelController {
         cancelRecording: @escaping () -> Void,
         finishRecording: @escaping () -> Void,
         dismissError: @escaping () -> Void,
-        setMode: @escaping (ZenBarMode) -> Void
+        setMode: @escaping (ZenBarMode) -> Void,
+        cancelAgenticGoal: @escaping () -> Void
     ) -> some View {
         switch kind {
         case .zenBar:
@@ -168,7 +171,8 @@ final class OverlayPanelController {
                     cancelRecording: cancelRecording,
                     finishRecording: finishRecording,
                     dismissError: dismissError,
-                    setMode: setMode
+                    setMode: setMode,
+                    cancelAgenticGoal: cancelAgenticGoal
                 )
             )
         case .livePreviewPill,

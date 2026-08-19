@@ -113,10 +113,15 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
             ]
         case .groq:
             return [
-                "llama-3.3-70b-versatile",
-                "llama-3.1-8b-instant",
-                "mixtral-8x7b-32768",
-                "gemma2-9b-it",
+                // Verified live 2026-08-18 against api.groq.com with a real
+                // key. llama-3.3-70b-versatile (the previous default) was
+                // shut down by Groq on 2026-08-16; their deprecation notice
+                // names openai/gpt-oss-120b as the replacement.
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
+                "groq/compound",
+                "groq/compound-mini",
+                "qwen/qwen3.6-27b",
             ]
         case .anthropic:
             return [

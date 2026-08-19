@@ -102,6 +102,19 @@ format, licence, attribution, and privacy posture.
 | Nemotron 3.5 Multilingual | `nemotronSpeech` | Required | No | GGUF (parakeet.cpp v0.5.0) | OpenMDW-1.1 | Active |
 | Cohere Transcribe | `cohereTranscribe` | Required | No | ONNX INT8 (encoder-decoder, CoreML provider) | Apache-2.0 | Active (Beta / High Accuracy) |
 
+### Measured engine accuracy (2026-08-18)
+
+Every installable engine now has a measured WER on the frozen Common Voice
+Spontaneous test — one table row per engine, produced by a re-runnable
+command. Full numbers, provenance, and the command:
+[REAL_SPEECH_CORPUS.md §5](REAL_SPEECH_CORPUS.md). Headline for
+recommendation: **Parakeet TDT v3 (6.9 % whole WER, 73× real time) beats
+Whisper Turbo (8.2 %, 11×) on English** while remaining English-only;
+multilingual and Hinglish users still need Whisper-family. Engine selection
+UI copy may cite these numbers; `ModelRecommendationEngine` itself still
+recommends Whisper models (the badge), so the measured table is the
+authoritative engine comparison.
+
 ### Active GGUF downloads
 
 All NVIDIA engines ship as quantized GGUF files converted for `parakeet.cpp`.
@@ -138,37 +151,33 @@ audio never leaves the Mac. Whisper, the NVIDIA engines, and Cohere Transcribe
 run entirely on-device using downloaded weights. Cohere's cloud API remains an
 optional later path that requires explicit opt-in and an API key.
 
-## Which model gets recommended
+## Which engine and model get recommended
 
-`ModelRecommendationEngine.recommendedModelID(for:)` names exactly one model per
-Mac, and only that model carries the "Recommended" badge.
+One policy, from the 2026-08-18 table. `EngineRecommendationEngine` picks the
+final insert engine. `ModelRecommendationEngine.recommendedModelID(for:)` only
+names the Whisper file to keep around as fallback.
 
-| Condition | Recommendation | Why |
+| Condition | Final engine / model | Why |
 | --- | --- | --- |
-| Hinglish profile | Hinglish Apex | Preserves code-switched English words in Latin script |
-| English profile, Apple Silicon | Whisper Turbo | Best open multilingual model on the GPU |
-| Apple Silicon, ≥ 8 GB | Whisper Turbo | Best measured accuracy/size trade-off on the GPU, and multilingual |
-| Apple Silicon, < 8 GB | Whisper Small (multilingual) | Keeps memory pressure down; the only smaller multilingual option that works at all |
-| Intel, any memory | Whisper Small (multilingual) | No Metal path; large models are too slow without GPU transcription |
+| English or European (TDT v3 locale list) on Apple Silicon | Parakeet TDT v3 | 6.9% WER, 73× real time |
+| Auto-detect / non-European | Whisper Turbo | 99-language coverage |
+| Hinglish | Apex only | 85% English loanwords kept; Turbo/Medium keep 0/31 |
+| No TDT v3 installed | Apple Speech | Zero-download fallback. Unmeasured. |
+| Intel, any memory | Whisper Small (multilingual) | No Metal path. Compromise, not a tier. |
 
-Two rules were replaced here. The first picked a tier from installed memory
-alone, which sent capable 16 GB Apple Silicon Macs to Whisper Base — measured at
-roughly one word in three wrong when the speaker is fast. Memory says nothing
-about whether a Mac can transcribe quickly; the presence of a Metal path does.
+Whisper Turbo no longer carries the Recommended badge on English/European
+Apple Silicon. It is the 99-language fallback. Tiny and Base stay retired.
+Flash and Nemotron Ultra Fast are preview-only. Cohere is local and off by
+default.
 
-The second sent small Intel Macs to Whisper Tiny multilingual on the theory that
-responsiveness has to win. At 64.5% word error rate Tiny is not a faster option,
-it is a broken one, so those Macs now get Small and a slower answer that is
-actually usable. Recommending a model that cannot do the job is worse than
-recommending one that is merely slow.
+See [REAL_SPEECH_CORPUS.md](REAL_SPEECH_CORPUS.md) §5 and
+[FluidVoice_Gap_Analysis_Report.md](FluidVoice_Gap_Analysis_Report.md).
 
-English users were previously sent to multilingual Turbo; now they remain on
-Turbo on Apple Silicon and Small on Intel. See
-[ACCURACY_HARNESS.md](ACCURACY_HARNESS.md) for how the underlying numbers are
-produced.
-
-Text refinement is deterministic. The former Qwen/llama.cpp path was removed
-after human-annotated evaluation found no accuracy gain beyond the rule engine.
+Smart text formatting can use Apple's OS-managed on-device
+`SystemLanguageModel` for punctuation and layout. It is not a downloadable
+ZenVoice model and therefore does not appear in this catalogue. The former
+Qwen/llama.cpp refinement path remains removed after human-annotated evaluation
+found no correction-accuracy gain beyond the rule engine.
 
 ## Installation contract
 

@@ -47,7 +47,8 @@ public struct EngineRegistry: Sendable {
         for profile: LanguageProfile,
         selectedID: String?
     ) -> (any SpeechEngine)? {
-        guard let selectedID else {
+        guard let selectedID,
+              !EngineIdentifiers.isPreviewOnly(selectedID) else {
             return nil
         }
         guard let engine = engines.first(where: { $0.descriptor.id == selectedID }),
@@ -73,7 +74,7 @@ public struct EngineRegistry: Sendable {
             return preferred
         }
 
-        for id in fallbackOrder {
+        for id in fallbackOrder where !EngineIdentifiers.isPreviewOnly(id) {
             guard let engine = engines.first(where: { $0.descriptor.id == id }),
                   isCompatible(engine: engine, profile: profile),
                   engine.isAvailable else {
@@ -83,7 +84,9 @@ public struct EngineRegistry: Sendable {
         }
 
         return engines.first {
-            isCompatible(engine: $0, profile: profile) && $0.isAvailable
+            !EngineIdentifiers.isPreviewOnly($0.descriptor.id)
+                && isCompatible(engine: $0, profile: profile)
+                && $0.isAvailable
         }
     }
 
@@ -97,6 +100,28 @@ public struct EngineRegistry: Sendable {
             defaults: defaults
         )
         return resolve(for: profile, selectedID: selectedID)
+    }
+
+    /// Live-preview engine: Flash, then Nemotron Ultra Fast (streaming mode),
+    /// then Whisper. Never used for final insert.
+    public func resolvePreview(
+        for profile: LanguageProfile,
+        nemotronMode: NemotronPreferences.Mode = NemotronPreferences.load()
+    ) -> (any SpeechEngine)? {
+        var order = [EngineIdentifiers.parakeetFlash]
+        if nemotronMode == .streaming {
+            order.append(EngineIdentifiers.nemotronSpeechUltraFast)
+        }
+        order.append(EngineIdentifiers.whisper)
+        for id in order {
+            guard let engine = engines.first(where: { $0.descriptor.id == id }),
+                  engine.isAvailable,
+                  isCompatible(engine: engine, profile: profile) else {
+                continue
+            }
+            return engine
+        }
+        return nil
     }
 
     /// Prepares the resolved engine for the profile.
@@ -247,7 +272,8 @@ public struct EngineRegistry: Sendable {
         var seen: Set<String> = []
 
         func append(_ engine: any SpeechEngine) {
-            guard !seen.contains(engine.descriptor.id),
+            guard !EngineIdentifiers.isPreviewOnly(engine.descriptor.id),
+                  !seen.contains(engine.descriptor.id),
                   isCompatible(engine: engine, profile: profile),
                   engine.isAvailable else {
                 return

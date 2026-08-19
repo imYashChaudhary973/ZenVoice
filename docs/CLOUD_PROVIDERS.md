@@ -1,10 +1,12 @@
 # Cloud Providers
 
-> **Status:** Implemented and UI-reachable; **live endpoint verification is the
-> one open Phase 6 item** (requires real API keys). This document describes
-> what exists in code today, the exact wire shapes each provider uses, and the
-> procedure that closes the open item. It is written for the coding agent
-> (Zcode Harness) implementing changes against
+> **Status:** Implemented and UI-reachable. **Groq was verified against the
+> live endpoint on 2026-08-18** (see §5.1). OpenAI and Anthropic live
+> verification is still open — no credentials were provided; their wire
+> shapes remain fixture-verified only. This document describes what exists
+> in code today, the exact wire shapes each provider uses, and the
+> procedure that closes the remaining items. It is written for the coding
+> agent (Zcode Harness) implementing changes against
 > `Sources/ZenVoiceCore/CloudAIEnhancement.swift`.
 >
 > Related: [ADR 0011](decisions/0011-cloud-ai-enhancement.md) records the
@@ -21,8 +23,9 @@
 | Preview window before replacing local text (`CloudAIPreviewWindowController`) | Done |
 | Never lose the local transcript on dismiss/timeout/error (`CloudTranscriptResolution`) | Done |
 | Deterministic checks for request shape and Anthropic shape | Done (`ZenVoiceCoreChecks`) |
-| Live verification against real OpenAI/Groq endpoints | **Not done — needs real API keys** |
-| Live verification against real Anthropic endpoint | Not done (same reason) |
+| Live verification against real Groq endpoint | **Done 2026-08-18** (`ZenVoiceCloudLiveChecks`, §5.1) |
+| Live verification against real OpenAI endpoint | **Open — needs a real API key** (user opted to skip for now) |
+| Live verification against real Anthropic endpoint | Open (same reason) |
 
 Everything below marked **Current** describes shipped behavior. Anything else
 is explicitly marked **Future**.
@@ -63,7 +66,7 @@ Design rules the coding agent must preserve:
 | Auth header | `Authorization: Bearer <key>` | `Authorization: Bearer <key>` | `x-api-key: <key>` | Bearer |
 | Extra headers | — | — | `anthropic-version: 2023-06-01` | — |
 | Body extras | `temperature: 0.2` | `temperature: 0.2` | `temperature: 0.2`, `max_tokens: 4096`, top-level `system` | same as OpenAI |
-| Known models | `gpt-4o-mini`, `gpt-4o`, `gpt-4.1-mini`, `gpt-4.1` | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `mixtral-8x7b-32768`, `gemma2-9b-it` | `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229`, `claude-3-7-sonnet-20250219` | open field |
+| Known models | `gpt-4o-mini`, `gpt-4o`, `gpt-4.1-mini`, `gpt-4.1` | `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `groq/compound`, `groq/compound-mini`, `qwen/qwen3.6-27b` | `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229`, `claude-3-7-sonnet-20250219` | open field |
 
 **Custom exists so data can stay on infrastructure the user controls** (for
 example a self-hosted OpenAI-compatible endpoint). It has no default URL on
@@ -146,24 +149,47 @@ piece; no new error cases are expected from it.
 ## 5. Closing the open item: live endpoint verification
 
 Phase 6 item *"Verify Groq and OpenAI against live endpoints"* (also Anthropic)
-needs real API keys, which the coding agent must never fabricate. Procedure
-for the human-assisted run:
+needs real API keys, which the coding agent must never fabricate.
 
-1. **Ask the user** for a test key per provider (or ask them to paste keys
-   into the app's Formatting screen directly — keys never belong in the repo
-   or on the command line).
-2. Configure Formatting → Cloud with provider, default model, Clean up
-   template; store the key.
-3. Dictate or paste a non-sensitive two-sentence transcript and run one
-   enhancement per provider.
-4. Record, per provider: HTTP success, enhanced text differs from input,
-   dismiss-keeps-local behavior, wrong-key produces `provider(status,…)`
-   with a readable message.
-5. Delete the keys afterwards (turning the feature off deletes the key).
-6. Record results in the Phase 6 doc and mark the item complete.
+The reproducible path is `ZenVoiceCloudLiveChecks` (added 2026-08-18). It
+sends one real enhancement per provider through the exact production path —
+`makeRequest` → `urlRequest(apiKey:)` → `URLSessionCloudAITransport` →
+`firstMessageContent` — and asserts: HTTP 2xx with parseable per-provider
+content, the Clean up template changes a deliberately messy transcript, and
+a wrong key lands in `provider(status, message)` with a readable message.
+The key is read from the production Keychain item the app's Formatting
+screen writes; it never touches the command line, the repo, or logs.
 
-**Do not** automate step 1–2 or spend the user's money without asking; the
-coaching workflow requires asking before real API usage.
+```bash
+# after storing the provider's key in Formatting → Cloud:
+ZENVOICE_CLOUD_LIVE_PROVIDER=groq swift run ZenVoiceCloudLiveChecks
+```
+
+### 5.1 Evidence — Groq, verified 2026-08-18
+
+| Check | Result |
+|---|---|
+| Endpoint | `api.groq.com/openai/v1/chat/completions` |
+| Stored key, model `openai/gpt-oss-120b` | HTTP 2xx, parsed in 0.70 s; cleanup changed the transcript |
+| Stored key, model `openai/gpt-oss-20b` | HTTP 2xx, parsed in 0.57 s; changed |
+| Stored key, model `groq/compound` | HTTP 2xx, parsed in 1.79 s; changed |
+| Stored key, model `qwen/qwen3.6-27b` | HTTP 2xx, parsed in 3.47 s; changed |
+| Wrong key | `provider(401, "Invalid API Key")` — taxonomy + readable message confirmed |
+
+**Finding fixed en route:** the previous default model
+`llama-3.3-70b-versatile` was shut down by Groq on 2026-08-16 (their
+deprecation notice names `openai/gpt-oss-120b` as the replacement). The
+curated list in `CloudAIProvider.knownModels` was refreshed to live-verified
+models, and the stored configuration was migrated off the dead id — every
+Cloud refinement would otherwise have failed with 404.
+
+OpenAI and Anthropic remain **credential-blocked** (user opted to skip on
+2026-08-18). Their wire shapes stay covered by the deterministic checks in
+`ZenVoiceCoreChecks`; run the same command with `openai` or `anthropic`
+once a key is stored to close them.
+
+**Do not** spend the user's money without asking; the coaching workflow
+requires asking before real API usage.
 
 ## 6. Adding or changing a provider (checklist for the coding agent)
 

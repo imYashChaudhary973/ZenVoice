@@ -84,9 +84,11 @@ final class UpdatesViewModel: ObservableObject {
 
 struct UpdatesScreen: View {
     @ObservedObject var viewModel: UpdatesViewModel
+    @ObservedObject var licenceViewModel: LicenceViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+            licenceSection
             if !viewModel.isFeedConfigured {
                 deferredNotice
             }
@@ -97,6 +99,122 @@ struct UpdatesScreen: View {
                     .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Licence and price, in the one place a user goes looking for them.
+    ///
+    /// Not a paywall and not a step in setup: the app is fully functional
+    /// either way, so this states the price, takes a key, and otherwise stays
+    /// out of the way.
+    private var licenceSection: some View {
+        ZenSection(
+            title: "Licence",
+            caption: licenceViewModel.isLicensed
+                ? nil
+                : ZenVoicePricing.summary
+        ) {
+            ZenPanel {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+                    HStack(spacing: ZenDesign.Spacing.sm) {
+                        Image(
+                            systemName: licenceViewModel.isLicensed
+                                ? "checkmark.seal.fill"
+                                : "seal"
+                        )
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(
+                            licenceViewModel.isLicensed
+                                ? ZenDesign.Semantic.success
+                                : ZenDesign.Semantic.textSecondary
+                        )
+                        Text(licenceViewModel.summary)
+                            .font(ZenDesign.Typography.body)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: ZenDesign.Spacing.sm)
+                        if licenceViewModel.isLicensed {
+                            Button("Remove from this Mac") {
+                                licenceViewModel.deactivate()
+                            }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+                        } else {
+                            Button("Buy \(ZenVoicePricing.oneTimePrice)") {
+                                licenceViewModel.openPurchasePage()
+                            }
+                            .buttonStyle(ZenPrimaryButtonStyle())
+                        }
+                    }
+
+                    if let licence = licenceViewModel.licence {
+                        Text(licence.token)
+                            .font(ZenDesign.Typography.monoSmall)
+                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                            .accessibilityLabel("Licence key")
+                    } else {
+                        Divider().overlay(ZenDesign.Semantic.border)
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                            Text("Already bought it?")
+                                .font(ZenDesign.Typography.captionStrong)
+                                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                            HStack(spacing: ZenDesign.Spacing.xs) {
+                                TextField(
+                                    "ZV1-…",
+                                    text: Binding(
+                                        get: { licenceViewModel.pastedKey },
+                                        set: {
+                                            licenceViewModel.pastedKey = $0
+                                            licenceViewModel.clearError()
+                                        }
+                                    )
+                                )
+                                .textFieldStyle(.plain)
+                                .font(ZenDesign.Typography.mono)
+                                .padding(.horizontal, 10)
+                                .frame(height: ZenDesign.Layout.control)
+                                .background {
+                                    RoundedRectangle(
+                                        cornerRadius: ZenDesign.Radius.small,
+                                        style: .continuous
+                                    )
+                                    .fill(ZenDesign.Semantic.surfaceSunken)
+                                    .overlay {
+                                        RoundedRectangle(
+                                            cornerRadius: ZenDesign.Radius.small,
+                                            style: .continuous
+                                        )
+                                        .strokeBorder(
+                                            ZenDesign.Semantic.border,
+                                            lineWidth: 1
+                                        )
+                                    }
+                                }
+                                .accessibilityLabel("Licence key")
+                                Button("Activate") {
+                                    licenceViewModel.activate()
+                                }
+                                .buttonStyle(ZenSecondaryButtonStyle())
+                            }
+                            if let error = licenceViewModel.activationError {
+                                Text(error)
+                                    .font(ZenDesign.Typography.caption)
+                                    .foregroundStyle(ZenDesign.Semantic.danger)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text(
+                                    "The key is checked on this Mac. Activation makes no network request."
+                                )
+                                .font(ZenDesign.Typography.caption)
+                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            }
+                        }
+                    }
+                }
+                .padding(ZenDesign.Spacing.md)
             }
         }
     }

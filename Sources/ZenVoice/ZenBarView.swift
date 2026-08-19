@@ -35,6 +35,7 @@ struct ZenBarView: View {
     let finishRecording: () -> Void
     let dismissError: () -> Void
     let setMode: (ZenBarMode) -> Void
+    let cancelAgenticGoal: () -> Void
 
     var body: some View {
         bar
@@ -80,29 +81,67 @@ struct ZenBarView: View {
     private var controlBar: some View {
         switch state.phase {
         case .idle:
-            Button(action: toggleRecording) {
+            if let event = state.agenticStatusEvent {
                 HStack(spacing: 9) {
-                    BrandLogo(size: 22)
+                    Image(
+                        systemName: state.isAgenticGoalActive
+                            ? "gearshape.2.fill"
+                            : terminalAgenticIcon(event)
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(
+                        state.isAgenticGoalActive
+                            ? ZenDesign.Semantic.accent
+                            : agenticEventTint(event)
+                    )
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(state.mode.displayName)
+                        Text(state.agenticGoalTitle ?? "Agentic goal")
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        Text("Ready")
+                            .lineLimit(1)
+                        Text(event.message)
                             .font(ZenDesign.Typography.caption)
                             .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                            .lineLimit(1)
                     }
-                    Spacer()
-                    modeSwitcher
-                    OverlayBarButton(title: "Start", emphasized: true, action: toggleRecording)
-                    ZenKbdGroup(combo: HotKeyPreferences.load().displayName)
+                    Spacer(minLength: 6)
+                    if state.isAgenticGoalActive {
+                        OverlayBarButton(
+                            title: "Stop",
+                            action: cancelAgenticGoal
+                        )
+                    }
                 }
                 .padding(.horizontal, 14)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
+                .accessibilityLabel(
+                    "\(state.agenticGoalTitle ?? "Agentic goal"). \(event.message)"
+                )
+            } else {
+                Button(action: toggleRecording) {
+                    HStack(spacing: 9) {
+                        BrandLogo(size: 22)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(state.mode.displayName)
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            Text("Ready")
+                                .font(ZenDesign.Typography.caption)
+                                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        }
+                        Spacer()
+                        modeSwitcher
+                        OverlayBarButton(title: "Start", emphasized: true, action: toggleRecording)
+                        ZenKbdGroup(combo: HotKeyPreferences.load().displayName)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Start ZenVoice \(state.mode.displayName)")
+                .accessibilityHint("Press \(HotKeyPreferences.load().displayName) or activate this button.")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Start ZenVoice \(state.mode.displayName)")
-            .accessibilityHint("Press \(HotKeyPreferences.load().displayName) or activate this button.")
 
         case .listening:
             HStack(spacing: 10) {
@@ -287,7 +326,7 @@ struct ZenBarView: View {
     private var barWidth: CGFloat {
         switch state.phase {
         case .idle:
-            return 380
+            return state.agenticStatusEvent == nil ? 380 : 540
         case .listening:
             return state.liveTranscriptPreview.isEmpty ? 400 : 560
         case .transcribing, .inserting:
@@ -313,6 +352,28 @@ struct ZenBarView: View {
                     }
             }
             .shadow(color: Color.black.opacity(0.28), radius: 20, y: 9)
+    }
+
+    private func terminalAgenticIcon(_ event: GoalStatusEvent) -> String {
+        switch event.event {
+        case .succeeded:
+            return "checkmark.circle.fill"
+        case .cancelled:
+            return "stop.circle.fill"
+        default:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func agenticEventTint(_ event: GoalStatusEvent) -> Color {
+        switch event.event {
+        case .succeeded:
+            return ZenDesign.Semantic.success
+        case .cancelled:
+            return ZenDesign.Semantic.textSecondary
+        default:
+            return ZenDesign.Semantic.danger
+        }
     }
 
     private var successMessage: String {
