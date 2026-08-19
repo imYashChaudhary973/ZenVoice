@@ -104,7 +104,6 @@ public struct AppleOnDeviceLanguageModel: LocalLanguageModel {
             let response = try await session.respond(
                 to: prompt,
                 options: GenerationOptions(
-                    samplingMode: .greedy,
                     temperature: 0,
                     maximumResponseTokens: maximumResponseTokens
                 )
