@@ -83,41 +83,52 @@ struct OverlayScreen: View {
             caption: "Approximate size and shape on screen."
         ) {
             ZenPanel {
-                HStack(spacing: ZenDesign.Spacing.md) {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.bar,
-                        style: .continuous
-                    )
-                    .fill(ZenDesign.Semantic.surface.opacity(0.96))
-                    .overlay {
-                        RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.bar,
-                            style: .continuous
-                        )
-                        .strokeBorder(
-                            ZenDesign.Semantic.borderStrong,
-                            lineWidth: 1
-                        )
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: ZenDesign.Spacing.lg) {
+                        previewSurface
+                        previewDescription
+                            .frame(minWidth: 180, alignment: .leading)
                     }
-                    .frame(
-                        width: viewModel.activeOverlayKind.defaultSize.width,
-                        height: viewModel.activeOverlayKind.defaultSize.height
-                    )
-                    .overlay {
-                        previewContent
-                            .padding(ZenDesign.Spacing.xs)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(viewModel.activeOverlayKind.displayName)
-                            .font(ZenDesign.Typography.bodyStrong)
-                        Text(viewModel.activeOverlayKind.detail)
-                            .font(ZenDesign.Typography.caption)
-                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+                        previewSurface
+                        previewDescription
                     }
                 }
                 .padding(ZenDesign.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+    }
+
+    private var previewSurface: some View {
+        let size = viewModel.activeOverlayKind.defaultSize
+        return RoundedRectangle(
+            cornerRadius: ZenDesign.Radius.bar,
+            style: .continuous
+        )
+        .fill(ZenDesign.Semantic.surface.opacity(0.96))
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.bar,
+                style: .continuous
+            )
+            .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
+        }
+        .aspectRatio(size.width / size.height, contentMode: .fit)
+        .frame(maxWidth: size.width, maxHeight: size.height)
+        .overlay {
+            previewContent
+                .padding(ZenDesign.Spacing.xs)
+        }
+    }
+
+    private var previewDescription: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(viewModel.activeOverlayKind.displayName)
+                .font(ZenDesign.Typography.bodyStrong)
+            Text(viewModel.activeOverlayKind.detail)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
         }
     }
 

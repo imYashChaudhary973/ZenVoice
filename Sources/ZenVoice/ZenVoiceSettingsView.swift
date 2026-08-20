@@ -30,8 +30,9 @@ struct ZenVoiceSettingsView: View {
     private enum Section: String, CaseIterable, Identifiable, Hashable {
         case home = "Home"
         case dictation = "Dictation"
-        case languagesAndModels = "Language & Models"
-        case personalization = "Personalization"
+        case language = "Language"
+        case models = "Models"
+        case personalisation = "Personalisation"
         case history = "History"
         case settings = "Settings"
 
@@ -44,9 +45,11 @@ struct ZenVoiceSettingsView: View {
                 return "house"
             case .dictation:
                 return "mic"
-            case .languagesAndModels:
+            case .language:
                 return "globe"
-            case .personalization:
+            case .models:
+                return "cpu"
+            case .personalisation:
                 return "text.badge.star"
             case .history:
                 return "clock.arrow.circlepath"
@@ -54,13 +57,6 @@ struct ZenVoiceSettingsView: View {
                 return "gearshape"
             }
         }
-
-        static let groups: [(title: String?, sections: [Section])] = [
-            (nil, [.home]),
-            ("Configure", [.dictation, .languagesAndModels, .personalization]),
-            ("Library", [.history]),
-            (nil, [.settings]),
-        ]
     }
 
     @ObservedObject var viewModel: SettingsViewModel
@@ -166,7 +162,7 @@ struct ZenVoiceSettingsView: View {
                 icon: "cpu",
                 keywords: "model speech download \(model.id)"
             ) {
-                selection = .languagesAndModels
+                selection = .models
             }
         }
         let actions = [
@@ -197,9 +193,11 @@ struct ZenVoiceSettingsView: View {
             return "overview status ready start today usage"
         case .dictation:
             return "hotkey microphone audio overlay waveform doctor shortcut"
-        case .languagesAndModels:
-            return "language hinglish model engine whisper parakeet nemotron cohere"
-        case .personalization:
+        case .language:
+            return "language hinglish automatic detection output script"
+        case .models:
+            return "model engine whisper parakeet nemotron cohere"
+        case .personalisation:
             return "formatting vocabulary app rules commands corrections cloud"
         case .history:
             return "transcripts recordings insights audio search export"
@@ -215,7 +213,7 @@ struct ZenVoiceSettingsView: View {
             Image(systemName: "slider.horizontal.3")
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(ZenDesign.Semantic.textSecondary)
-            .frame(width: 28, height: 28)
+            .frame(width: 32, height: 32)
             .zenGlassSurface(
                 cornerRadius: ZenDesign.Radius.small,
                 interactive: true
@@ -236,8 +234,8 @@ struct ZenVoiceSettingsView: View {
                 .font(ZenDesign.Typography.captionStrong)
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
         }
-        .padding(.horizontal, 9)
-        .frame(height: 24)
+        .padding(.horizontal, 12)
+        .frame(minWidth: 104, minHeight: 32)
         .zenGlassSurface(
             cornerRadius: ZenDesign.Radius.pill,
             tint: appState.phase.statusTint
@@ -259,8 +257,8 @@ struct ZenVoiceSettingsView: View {
                     ? ZenDesign.Semantic.textOnDanger
                     : ZenDesign.Semantic.textOnAccent
             )
-            .padding(.horizontal, 11)
-            .frame(height: 28)
+            .padding(.horizontal, 12)
+            .frame(minWidth: 104, minHeight: 32)
             .zenGlassSurface(
                 cornerRadius: ZenDesign.Radius.pill,
                 tint: isListening
@@ -296,55 +294,40 @@ struct ZenVoiceSettingsView: View {
             .padding(.vertical, ZenDesign.Spacing.sm)
 
             List {
-                ForEach(
-                    Array(Section.groups.enumerated()),
-                    id: \.offset
-                ) { _, group in
-                    SwiftUI.Section {
-                        ForEach(group.sections) { section in
-                            Button {
-                                selection = section
-                            } label: {
-                                sidebarLabel(section)
-                            }
-                            .buttonStyle(ZenPressButtonStyle())
-                            .onHover { hovering in
-                                if hovering {
-                                    hoveredSection = section
-                                } else if hoveredSection == section {
-                                    hoveredSection = nil
-                                }
-                            }
-                            .listRowBackground(
-                                RoundedRectangle(
-                                    cornerRadius: ZenDesign.Radius.small,
-                                    style: .continuous
-                                )
-                                .fill(
-                                    selection == section
-                                        ? ZenDesign.Component.selectedNavigation
-                                        : hoveredSection == section
-                                            ? ZenDesign.Semantic.surfaceRaised.opacity(0.5)
-                                            : Color.clear
-                                )
-                                .animation(
-                                    ZenDesign.Motion.fast(reduceMotion),
-                                    value: hoveredSection
-                                )
-                            )
-                            .accessibilityAddTraits(
-                                selection == section ? .isSelected : []
-                            )
-                        }
-                    } header: {
-                        if let title = group.title {
-                            Text(title)
-                                .font(ZenDesign.Typography.navGroup)
-                                .foregroundStyle(
-                                    ZenDesign.Semantic.textSecondary
-                                )
+                ForEach(Section.allCases) { section in
+                    Button {
+                        selection = section
+                    } label: {
+                        sidebarLabel(section)
+                    }
+                    .buttonStyle(ZenPressButtonStyle())
+                    .onHover { hovering in
+                        if hovering {
+                            hoveredSection = section
+                        } else if hoveredSection == section {
+                            hoveredSection = nil
                         }
                     }
+                    .listRowBackground(
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.small,
+                            style: .continuous
+                        )
+                        .fill(
+                            selection == section
+                                ? ZenDesign.Component.selectedNavigation
+                                : hoveredSection == section
+                                    ? ZenDesign.Semantic.surfaceRaised.opacity(0.5)
+                                    : Color.clear
+                        )
+                        .animation(
+                            ZenDesign.Motion.fast(reduceMotion),
+                            value: hoveredSection
+                        )
+                    )
+                    .accessibilityAddTraits(
+                        selection == section ? .isSelected : []
+                    )
                 }
             }
             .listStyle(.sidebar)
@@ -424,8 +407,10 @@ struct ZenVoiceSettingsView: View {
                     switch destination {
                     case .audio, .shortcuts:
                         selection = .dictation
-                    case .models, .languages:
-                        selection = .languagesAndModels
+                    case .models:
+                        selection = .models
+                    case .languages:
+                        selection = .language
                     case .history, .insights:
                         selection = .history
                     case .help:
@@ -435,12 +420,23 @@ struct ZenVoiceSettingsView: View {
             )
         case .dictation:
             DictationScreen(viewModel: viewModel)
-        case .languagesAndModels:
-            LanguagesAndModelsScreen(
-                viewModel: viewModel,
-                modelManagerViewModel: modelManagerViewModel
-            )
-        case .personalization:
+        case .language:
+            ZenScreen(
+                icon: "globe",
+                title: "Language",
+                subtitle: "Choose what you speak and how ZenVoice writes it."
+            ) {
+                LanguagesScreen(viewModel: viewModel)
+            }
+        case .models:
+            ZenScreen(
+                icon: "cpu",
+                title: "Models",
+                subtitle: "Choose the on-device engine used for transcription."
+            ) {
+                ModelsScreen(viewModel: modelManagerViewModel)
+            }
+        case .personalisation:
             PersonalScreen(
                 viewModel: viewModel,
                 cloudAIViewModel: cloudAIViewModel,
@@ -461,6 +457,7 @@ struct ZenVoiceSettingsView: View {
                 historyViewModel: historyViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
+                openModels: { selection = .models },
                 openShortcuts: { selection = .dictation }
             )
         }
@@ -661,6 +658,7 @@ struct ZenPrimaryButtonStyle: ButtonStyle {
 
 struct ZenDestructiveButtonStyle: ButtonStyle {
     var minWidth: CGFloat? = nil
+    var height: CGFloat = ZenDesign.Layout.control
 
     func makeBody(configuration: Configuration) -> some View {
         ZenButtonShape(
@@ -669,7 +667,7 @@ struct ZenDestructiveButtonStyle: ButtonStyle {
                     .foregroundStyle(ZenDesign.Semantic.textOnDanger)
             ),
             minWidth: minWidth,
-            height: ZenDesign.Layout.control,
+            height: height,
             isPressed: configuration.isPressed
         ) {
             RoundedRectangle(

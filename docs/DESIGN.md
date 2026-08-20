@@ -148,11 +148,10 @@ every assistive technology that targets by frame.
 toolbar sidebar button. The detail pane expands from its live width, so the
 motion is interruptible and spatially symmetric.
 
-The sidebar has six top-level destinations: Home, Dictation, Language & Models,
-Personalization, History, and Settings. Formatting, vocabulary, app rules, and
-commands are peer views inside Personalization; transcripts, recordings, and
-insights are peer views inside History. This keeps every capability while
-removing one sidebar row per implementation detail.
+The sidebar has seven flat destinations with no category headings: Home,
+Dictation, Language, Models, Personalisation, History, and Settings. Formatting,
+vocabulary, app rules, and commands are peer views inside Personalisation;
+transcripts, recordings, and insights are peer views inside History.
 
 Sidebar rows use native `List` spacing and SF Symbols. Selection is a quiet
 semantic raised row with a violet icon. The standard toolbar sidebar control
@@ -177,6 +176,8 @@ than hand-rolling it locally.
 | `ZenTabStrip` | Native segmented `Picker` for views within a section. |
 | `ZenMaterialSurface` | Structural AppKit material with a solid accessibility fallback. |
 | `ZenGlassSurfaceModifier` / `ZenGlassContainer` | Versioned Liquid Glass for functional floating controls, with material and solid fallbacks. |
+| `ZenMenuPicker` | Shared 44-point menu selector for languages, providers, models, and scopes. |
+| `ZenTextInput` | Shared icon-led text field for replacement, vocabulary, model, and endpoint inputs. |
 | `ZenPressButtonStyle` | Immediate, interruptible press feedback plus visible keyboard focus and disabled-state contrast for custom controls. |
 | `ZenChoiceCard` | Mutually exclusive picker cards. |
 

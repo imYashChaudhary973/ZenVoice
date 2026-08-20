@@ -20,7 +20,7 @@ struct AudioScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
             inputSection
             doctorSection
 
@@ -45,7 +45,7 @@ struct AudioScreen: View {
                 ? "Following the macOS default"
                 : "Pinned to \(viewModel.selectedMicrophoneName)"
         ) {
-            ZenPanel {
+            ZenPanel(padding: 4) {
                 deviceButton(
                     id: nil,
                     icon: "macbook",

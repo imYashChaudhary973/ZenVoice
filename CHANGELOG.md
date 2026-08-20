@@ -39,9 +39,14 @@ All notable ZenVoice changes are recorded here.
 - Unified engine and Whisper-model selection. The Home screen reports the
   resolved engine, legacy model selections migrate to Whisper, and all verified
   engines are visible without an “Advanced” disclosure.
-- Reworked the app shell into six destinations, restored system light/dark
-  appearance and 900-point window support, and added versioned Liquid Glass to
-  toolbar and floating dictation controls on macOS 26 and newer.
+- Reworked the app shell into seven flat destinations with separate Language
+  and Models screens, restored system light/dark appearance and 900-point
+  window support, and added versioned Liquid Glass to toolbar and floating
+  dictation controls on macOS 26 and newer.
+- Aligned shortcut, toolbar, search, and destructive controls; added a hold-key
+  icon; made preview overlays display-responsive; and introduced shared glass
+  tabs, menu selectors, and text inputs across Personalisation, Language,
+  providers, History, and Settings inventory.
 - Fixed fast process-exit status races and Link transport handshake, replay
   ordering, timeout, and subscriber teardown failures. Core, Link, runtime, UI,
   and deterministic app checks now form the behavioral release gate.

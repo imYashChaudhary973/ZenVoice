@@ -51,7 +51,7 @@ struct PersonalScreen: View {
     var body: some View {
         ZenScreen(
             icon: "text.badge.star",
-            title: "Personalization",
+            title: "Personalisation",
             subtitle:
                 "Control formatting, remembered words, per-app behavior, "
                 + "and voice commands.",

@@ -307,6 +307,13 @@ final class OverlayPanelController {
             return
         }
 
+        let adaptiveSize = kind.size(fitting: screen.visibleFrame.size)
+        if panel.frame.size != adaptiveSize {
+            var frame = panel.frame
+            frame.size = adaptiveSize
+            panel.setFrame(frame, display: true, animate: false)
+        }
+
         switch kind {
         case .zenBar:
             positionAtBottomCenter(screen: screen)

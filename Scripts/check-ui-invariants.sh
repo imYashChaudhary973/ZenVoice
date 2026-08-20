@@ -39,8 +39,8 @@ done
 #    native segmented strip inside that destination instead of filling the
 #    sidebar with one row per subview.
 containers=(
-    DictationScreen LanguagesAndModelsScreen PersonalScreen
-    HistoryContainerScreen HelpAndAboutScreen
+    DictationScreen PersonalScreen HistoryContainerScreen
+    HelpAndAboutScreen
 )
 for screen in $containers; do
     count=$(grep -c "ZenScreen(" "$screens/$screen.swift")
@@ -57,6 +57,12 @@ if ! grep -q "ideal: ZenDesign.Layout.sidebarWidth" "$settings_view"; then
     fail "ZenVoiceSettingsView does not use the shared sidebar-width token"
 else
     pass "sidebar width comes from ZenDesign.Layout"
+fi
+
+if grep -qE '\"Configure\"|\"Library\"|case languagesAndModels' "$settings_view"; then
+    fail "sidebar restores category headings or a combined language/model route"
+else
+    pass "sidebar exposes seven flat destinations without subheadings"
 fi
 
 # 3b. The main shell must use native macOS navigation and toolbar chrome.
@@ -99,10 +105,37 @@ else
 fi
 
 components="$project_dir/Sources/ZenVoice/ZenV2Components.swift"
-if ! grep -q "pickerStyle(.segmented)" "$components"; then
-    fail "subsection tabs do not use the native segmented picker"
+if ! grep -q "struct ZenTabStrip" "$components" \
+    || ! grep -q "zenGlassSurface" "$components"; then
+    fail "subsection navigation does not use the shared glass control"
 else
-    pass "subsection tabs use the native segmented picker"
+    pass "subsection navigation uses the shared glass control"
+fi
+
+overlay_kind="$project_dir/Sources/ZenVoice/Overlay/OverlayKind.swift"
+overlay_panel="$project_dir/Sources/ZenVoice/Overlay/OverlayPanelController.swift"
+if ! grep -q "size(fitting" "$overlay_kind" \
+    || ! grep -q "kind.size(fitting" "$overlay_panel"; then
+    fail "dictation overlays do not adapt to the active display"
+else
+    pass "dictation overlays adapt to compact and full-screen displays"
+fi
+
+shortcuts="$screens/ShortcutsScreen.swift"
+if ! grep -q "shortcutControls" "$shortcuts" \
+    || ! grep -q "keyboard.badge.ellipsis" "$shortcuts"; then
+    fail "dictation hotkeys do not share aligned controls and hold-key icon"
+else
+    pass "dictation hotkeys share aligned controls and hold-key icon"
+fi
+
+languages="$screens/LanguagesScreen.swift"
+cloud_config="$screens/CloudAIConfigurationView.swift"
+if ! grep -q "ZenMenuPicker" "$languages" \
+    || ! grep -q "ZenMenuPicker" "$cloud_config"; then
+    fail "language or provider selectors bypass the shared menu control"
+else
+    pass "language and provider selectors use the shared menu control"
 fi
 
 # 4. The cloud preview must never activate the app.

@@ -182,8 +182,8 @@ struct AudioHistoryScreen: View {
                 ? nil
                 : "\(viewModel.records.count) stored"
         ) {
-            ZenPanel {
-                VStack(alignment: .leading, spacing: 0) {
+            ZenPanel(padding: ZenDesign.Spacing.xs) {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
                     if viewModel.records.isEmpty {
                         ZenRow(
                             icon: "recordingtape",
@@ -191,13 +191,9 @@ struct AudioHistoryScreen: View {
                             subtitle:
                                 "New dictations will be archived from now on."
                         )
-                        .padding(ZenDesign.Spacing.md)
                     } else {
                         ForEach(viewModel.records) { record in
                             recordingRow(record)
-                            if record.id != viewModel.records.last?.id {
-                                ZenPanelDivider()
-                            }
                         }
                     }
                 }
@@ -272,7 +268,14 @@ struct AudioHistoryScreen: View {
             }
         }
         .padding(.horizontal, ZenDesign.Spacing.md)
-        .padding(.vertical, ZenDesign.Spacing.xs)
+        .padding(.vertical, ZenDesign.Spacing.sm)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+            .fill(ZenDesign.Semantic.surfaceRaised.opacity(0.55))
+        }
     }
 
     private func durationLabel(_ seconds: TimeInterval) -> String {
@@ -282,27 +285,25 @@ struct AudioHistoryScreen: View {
 
     private var actionBar: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-            HStack(spacing: ZenDesign.Spacing.xs) {
-                Button("Select all") { viewModel.selectAll() }
-                    .buttonStyle(ZenSecondaryButtonStyle())
-                Button("Clear") { viewModel.clearSelection() }
-                    .buttonStyle(ZenSecondaryButtonStyle())
-                    .disabled(viewModel.selection.isEmpty)
-
-                Spacer()
-
-                Button("Delete selected") {
-                    deleteRequest = .selected
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: ZenDesign.Spacing.xs) {
+                    selectionButtons
+                    Spacer()
+                    destructiveButtons
+                    exportButton
                 }
-                .buttonStyle(ZenDestructiveButtonStyle())
-                .disabled(viewModel.selection.isEmpty)
-                Button("Delete all") {
-                    deleteRequest = .all
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                    HStack(spacing: ZenDesign.Spacing.xs) {
+                        selectionButtons
+                    }
+                    HStack(spacing: ZenDesign.Spacing.xs) {
+                        destructiveButtons
+                        Spacer()
+                        exportButton
+                    }
                 }
-                .buttonStyle(ZenDestructiveButtonStyle())
-                Button(exportButtonTitle) { viewModel.export() }
-                    .buttonStyle(ZenPrimaryButtonStyle())
             }
+
 
             Toggle(
                 "Include transcripts in export",
@@ -319,6 +320,32 @@ struct AudioHistoryScreen: View {
             .foregroundStyle(ZenDesign.Semantic.textTertiary)
             .fixedSize(horizontal: false, vertical: true)
         }
+    }
+    @ViewBuilder
+    private var selectionButtons: some View {
+        Button("Select all") { viewModel.selectAll() }
+            .buttonStyle(ZenSecondaryButtonStyle())
+        Button("Clear") { viewModel.clearSelection() }
+            .buttonStyle(ZenSecondaryButtonStyle())
+            .disabled(viewModel.selection.isEmpty)
+    }
+
+    @ViewBuilder
+    private var destructiveButtons: some View {
+        Button("Delete selected") {
+            deleteRequest = .selected
+        }
+        .buttonStyle(ZenDestructiveButtonStyle())
+        .disabled(viewModel.selection.isEmpty)
+        Button("Delete all") {
+            deleteRequest = .all
+        }
+        .buttonStyle(ZenDestructiveButtonStyle())
+    }
+
+    private var exportButton: some View {
+        Button(exportButtonTitle) { viewModel.export() }
+            .buttonStyle(ZenPrimaryButtonStyle())
     }
 
     private var exportButtonTitle: String {

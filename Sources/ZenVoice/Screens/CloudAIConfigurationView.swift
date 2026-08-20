@@ -142,28 +142,29 @@ struct CloudAIConfigurationView: View {
                             .frame(width: 64, alignment: .leading)
 
                         if viewModel.configuration.provider.knownModels.isEmpty {
-                            TextField(
-                                "Model",
+                            ZenTextInput(
+                                placeholder: "Model",
                                 text: Binding(
                                     get: { viewModel.configuration.model },
                                     set: { viewModel.setModel($0) }
-                                )
+                                ),
+                                icon: "cpu",
+                                minWidth: 220
                             )
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: .infinity)
                         } else {
                             modelPicker
                         }
                     }
 
-                    TextField(
-                        "Base URL",
+                    ZenTextInput(
+                        placeholder: "Base URL",
                         text: Binding(
                             get: { viewModel.configuration.baseURL },
                             set: { viewModel.setBaseURL($0) }
-                        )
+                        ),
+                        icon: "link",
+                        minWidth: 280
                     )
-                    .textFieldStyle(.roundedBorder)
                     .padding(.top, ZenDesign.Spacing.xs)
 
                     Text(
@@ -182,39 +183,29 @@ struct CloudAIConfigurationView: View {
     }
 
     private var providerPicker: some View {
-        Picker(
-            "Provider",
+        ZenMenuPicker(
+            label: "Provider",
+            options: CloudAIProvider.allCases,
             selection: Binding(
                 get: { viewModel.configuration.provider },
                 set: { viewModel.setProvider($0) }
-            )
-        ) {
-            ForEach(CloudAIProvider.allCases, id: \.self) { item in
-                Text(item.displayName).tag(item)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, ZenDesign.Spacing.xs)
+            ),
+            minWidth: 220,
+            title: \.displayName
+        )
     }
 
     private var modelPicker: some View {
-        Picker(
-            "Model",
+        ZenMenuPicker(
+            label: "Model",
+            options: modelOptions,
             selection: Binding(
                 get: { viewModel.configuration.model },
                 set: { viewModel.setModel($0) }
-            )
-        ) {
-            ForEach(modelOptions, id: \.self) { model in
-                Text(model).tag(model)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.trailing, ZenDesign.Spacing.xs)
+            ),
+            minWidth: 260,
+            title: { $0 }
+        )
     }
 
     private var keySection: some View {

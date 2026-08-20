@@ -27,9 +27,11 @@ struct DictationScreen: View {
                 "The shortcut you press, the microphone it listens to, and "
                 + "what you see while you speak."
         ) {
-            ShortcutsScreen(viewModel: viewModel)
-            AudioScreen(viewModel: viewModel)
-            OverlayScreen(viewModel: viewModel)
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+                ShortcutsScreen(viewModel: viewModel)
+                AudioScreen(viewModel: viewModel)
+                OverlayScreen(viewModel: viewModel)
+            }
         }
     }
 }

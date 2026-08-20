@@ -54,20 +54,20 @@ struct LanguagesScreen: View {
                     title: "Primary language",
                     subtitle: "The language ZenVoice expects when dictation begins"
                 ) {
-                    Picker(
-                        "Primary language",
+                    ZenMenuPicker(
+                        label: "Primary language",
+                        options:
+                            [LanguageProfile.automaticCode]
+                            + LanguageCatalog.languages.map(\.code),
                         selection: Binding(
-                            get: { viewModel.languageProfile.inputLanguageCode },
+                            get: {
+                                viewModel.languageProfile.inputLanguageCode
+                            },
                             set: viewModel.setInputLanguage
-                        )
-                    ) {
-                        Text("Automatic").tag(LanguageProfile.automaticCode)
-                        ForEach(LanguageCatalog.languages) { language in
-                            Text(language.displayName).tag(language.code)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 230)
+                        ),
+                        minWidth: 230,
+                        title: languageTitle
+                    )
                 }
 
                 ZenPanelDivider()
@@ -99,19 +99,16 @@ struct LanguagesScreen: View {
                     title: "Output mode",
                     subtitle: "Choose the script used for the final transcript"
                 ) {
-                    Picker(
-                        "Output mode",
+                    ZenMenuPicker(
+                        label: "Output mode",
+                        options: TranscriptionOutputMode.allCases,
                         selection: Binding(
                             get: { viewModel.languageProfile.outputMode },
                             set: viewModel.setOutputMode
-                        )
-                    ) {
-                        ForEach(TranscriptionOutputMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 230)
+                        ),
+                        minWidth: 230,
+                        title: \.displayName
+                    )
                 }
 
                 ZenPanelDivider()
@@ -143,6 +140,13 @@ struct LanguagesScreen: View {
                 )
             }
         }
+    }
+
+    private func languageTitle(_ code: String) -> String {
+        guard code != LanguageProfile.automaticCode else {
+            return "Automatic"
+        }
+        return LanguageCatalog.language(code: code)?.displayName ?? code
     }
 
     private func languageButton(_ language: SupportedLanguage) -> some View {

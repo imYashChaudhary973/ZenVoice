@@ -39,17 +39,25 @@ struct HistoryScreen: View {
                         selection: $viewModel.scope
                     )
 
-                    HStack(spacing: ZenDesign.Spacing.sm) {
-                        ZenSearchField(
-                            placeholder: "Search transcripts or apps…",
-                            text: $viewModel.searchText
-                        )
-                        .frame(maxWidth: .infinity)
-                        Button("Delete All") {
-                            confirmsDeleteAll = true
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .center, spacing: ZenDesign.Spacing.sm) {
+                            ZenSearchField(
+                                placeholder: "Search transcripts or apps…",
+                                text: $viewModel.searchText
+                            )
+                            .frame(maxWidth: .infinity)
+                            deleteAllButton
                         }
-                        .buttonStyle(ZenDestructiveButtonStyle())
-                        .disabled(viewModel.scopedRecords.isEmpty)
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                            ZenSearchField(
+                                placeholder: "Search transcripts or apps…",
+                                text: $viewModel.searchText
+                            )
+                            HStack {
+                                Spacer()
+                                deleteAllButton
+                            }
+                        }
                     }
 
                     if let error = viewModel.errorMessage {
@@ -134,14 +142,8 @@ struct HistoryScreen: View {
     private var recordGroups: some View {
         ForEach(groupedRecords, id: \.title) { group in
             ZenSection(title: group.title) {
-                ZenPanel {
-                    ForEach(
-                        Array(group.records.enumerated()),
-                        id: \.element.id
-                    ) { index, record in
-                        if index > 0 {
-                            ZenPanelDivider()
-                        }
+                LazyVStack(spacing: ZenDesign.Spacing.xs) {
+                    ForEach(group.records) { record in
                         HistoryRecordRow(
                             record: record,
                             copy: { viewModel.copy(record) },
@@ -162,6 +164,20 @@ struct HistoryScreen: View {
                 }
             }
         }
+    }
+
+    private var deleteAllButton: some View {
+        Button("Delete All") {
+            confirmsDeleteAll = true
+        }
+        .buttonStyle(
+            ZenDestructiveButtonStyle(
+                minWidth: 100,
+                height: ZenDesign.Layout.hitTarget
+            )
+        )
+        .disabled(viewModel.scopedRecords.isEmpty)
+        .frame(minHeight: ZenDesign.Layout.hitTarget)
     }
 
     private var consentCard: some View {
@@ -481,13 +497,13 @@ private struct HistoryRecordRow: View {
                 }
 
                 Text(transcript)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ZenDesign.Typography.body)
                     .foregroundStyle(
                         record.status == .failed
                             ? ZenDesign.Semantic.textSecondary
                             : ZenDesign.Semantic.textPrimary
                     )
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if record.finalTranscript != nil {
@@ -511,7 +527,9 @@ private struct HistoryRecordRow: View {
 
                 if record.finalTranscript != nil {
                     Button("Copy", action: copy)
-                        .buttonStyle(ZenSecondaryButtonStyle())
+                        .buttonStyle(
+                            ZenSecondaryButtonStyle(minWidth: 72)
+                        )
                 }
 
                 Menu {
@@ -552,6 +570,20 @@ private struct HistoryRecordRow: View {
             }
         }
         .padding(ZenDesign.Spacing.md)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+            .fill(ZenDesign.Semantic.surface)
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.medium,
+                    style: .continuous
+                )
+                .strokeBorder(ZenDesign.Semantic.border)
+            }
+        }
     }
 
     private var transcript: String {

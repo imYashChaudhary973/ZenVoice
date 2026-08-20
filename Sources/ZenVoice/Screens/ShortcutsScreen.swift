@@ -20,10 +20,9 @@ struct ShortcutsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
             dictationSection
             zenBarSection
-
             ZenBanner(
                 kind: .info,
                 icon: "lightbulb",
@@ -43,24 +42,19 @@ struct ShortcutsScreen: View {
                     title: "Start / stop dictation",
                     subtitle: "Press once to start, again to transcribe and insert"
                 ) {
-                    ShortcutCaptureButton(
-                        displayName:
-                            viewModel.currentShortcut.displayName,
+                    shortcutControls(
+                        displayName: viewModel.currentShortcut.displayName,
                         isCapturing: viewModel.isCapturingShortcut,
-                        action: {
+                        resetLabel: "Reset dictation shortcut",
+                        capture: {
                             if viewModel.isCapturingShortcut {
                                 viewModel.cancelShortcutCapture()
                             } else {
                                 viewModel.beginShortcutCapture()
                             }
-                        }
+                        },
+                        reset: viewModel.resetShortcut
                     )
-                    ZenIconButton(
-                        systemImage: "arrow.counterclockwise",
-                        label: "Reset dictation shortcut"
-                    ) {
-                        viewModel.resetShortcut()
-                    }
                 }
                 ZenPanelDivider()
                 ZenRow(
@@ -68,28 +62,22 @@ struct ShortcutsScreen: View {
                     title: "Private dictation",
                     subtitle: "Dictate without saving history, insights, or recovery audio"
                 ) {
-                    ShortcutCaptureButton(
-                        displayName:
-                            viewModel.privateModeShortcut.displayName,
+                    shortcutControls(
+                        displayName: viewModel.privateModeShortcut.displayName,
                         isCapturing:
                             viewModel.isCapturingPrivateModeShortcut,
-                        action: {
-                            if viewModel
-                                .isCapturingPrivateModeShortcut {
+                        resetLabel: "Reset private dictation shortcut",
+                        capture: {
+                            if viewModel.isCapturingPrivateModeShortcut {
                                 viewModel.cancelShortcutCapture()
                             } else {
                                 viewModel.beginShortcutCapture(
                                     for: .privateMode
                                 )
                             }
-                        }
+                        },
+                        reset: viewModel.resetPrivateModeShortcut
                     )
-                    ZenIconButton(
-                        systemImage: "arrow.counterclockwise",
-                        label: "Reset private dictation shortcut"
-                    ) {
-                        viewModel.resetPrivateModeShortcut()
-                    }
                 }
                 ZenPanelDivider()
                 ZenRow(
@@ -97,28 +85,22 @@ struct ShortcutsScreen: View {
                     title: "Paste latest dictation",
                     subtitle: "Re-insert the most recent transcript anywhere"
                 ) {
-                    ShortcutCaptureButton(
-                        displayName:
-                            viewModel.pasteLastShortcut.displayName,
+                    shortcutControls(
+                        displayName: viewModel.pasteLastShortcut.displayName,
                         isCapturing:
                             viewModel.isCapturingPasteLastShortcut,
-                        action: {
-                            if viewModel
-                                .isCapturingPasteLastShortcut {
+                        resetLabel: "Reset paste shortcut",
+                        capture: {
+                            if viewModel.isCapturingPasteLastShortcut {
                                 viewModel.cancelShortcutCapture()
                             } else {
                                 viewModel.beginShortcutCapture(
                                     for: .pasteLast
                                 )
                             }
-                        }
+                        },
+                        reset: viewModel.resetPasteLastShortcut
                     )
-                    ZenIconButton(
-                        systemImage: "arrow.counterclockwise",
-                        label: "Reset paste shortcut"
-                    ) {
-                        viewModel.resetPasteLastShortcut()
-                    }
                 }
                 ZenPanelDivider()
                 ZenRow(
@@ -141,29 +123,24 @@ struct ShortcutsScreen: View {
                 if viewModel.holdToDictateEnabled {
                     ZenPanelDivider()
                     ZenRow(
+                        icon: "keyboard.badge.ellipsis",
                         title: "Hold key",
                         subtitle:
                             "Select Change, then press the modifier you want to hold"
                     ) {
-                        ShortcutCaptureButton(
-                            displayName:
-                                viewModel.holdKey.displayName,
-                            isCapturing:
-                                viewModel.isCapturingHoldKey,
-                            action: {
+                        shortcutControls(
+                            displayName: viewModel.holdKey.displayName,
+                            isCapturing: viewModel.isCapturingHoldKey,
+                            resetLabel: "Reset hold key",
+                            capture: {
                                 if viewModel.isCapturingHoldKey {
                                     viewModel.cancelShortcutCapture()
                                 } else {
                                     viewModel.beginHoldKeyCapture()
                                 }
-                            }
+                            },
+                            reset: viewModel.resetHoldKey
                         )
-                        ZenIconButton(
-                            systemImage: "arrow.counterclockwise",
-                            label: "Reset hold key"
-                        ) {
-                            viewModel.resetHoldKey()
-                        }
                     }
                 }
             }
@@ -221,6 +198,28 @@ struct ShortcutsScreen: View {
             }
         }
     }
+    private func shortcutControls(
+        displayName: String,
+        isCapturing: Bool,
+        resetLabel: String,
+        capture: @escaping () -> Void,
+        reset: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 4) {
+            ShortcutCaptureButton(
+                displayName: displayName,
+                isCapturing: isCapturing,
+                action: capture
+            )
+            ZenIconButton(
+                systemImage: "arrow.counterclockwise",
+                label: resetLabel,
+                action: reset
+            )
+        }
+        .frame(width: 232, alignment: .trailing)
+    }
+
 }
 
 struct ShortcutCaptureButton: View {
@@ -247,9 +246,10 @@ struct ShortcutCaptureButton: View {
                     Divider()
                         .frame(height: 16)
                     Text("Change")
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textSecondary
-                        )
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
             }
             .font(ZenDesign.Typography.button)
@@ -258,8 +258,8 @@ struct ShortcutCaptureButton: View {
                     ? ZenDesign.Semantic.textOnAccent
                     : ZenDesign.Semantic.textPrimary
             )
-            .padding(.horizontal, 15)
-            .frame(minWidth: 174, minHeight: 44)
+            .padding(.horizontal, 12)
+            .frame(minWidth: 180, minHeight: ZenDesign.Layout.hitTarget)
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,

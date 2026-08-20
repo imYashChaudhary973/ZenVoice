@@ -23,6 +23,7 @@ struct PrivacyScreen: View {
         VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel:
         ModelManagerViewModel
+    let openModels: () -> Void
     var embedded = false
     @State private var confirmsDeleteRecoveryAudio = false
     @State private var confirmsDeleteTranscripts = false
@@ -87,18 +88,19 @@ struct PrivacyScreen: View {
         }
     }
 
-    @ViewBuilder
     private var privacyContent: some View {
-        dictationPrivacy
-        inventory
-        permissions
-        ZenBanner(
-            kind: .success,
-            icon: "network.slash",
-            text:
-                "Model downloads use pinned revisions and SHA-256 verification. "
-                + "Audio, text, rules, and insights stay on this Mac."
-        )
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+            dictationPrivacy
+            inventory
+            permissions
+            ZenBanner(
+                kind: .success,
+                icon: "network.slash",
+                text:
+                    "Model downloads use pinned revisions and SHA-256 verification. "
+                    + "Audio, text, rules, and insights stay on this Mac."
+            )
+        }
     }
 
     // MARK: dictation privacy
@@ -178,14 +180,10 @@ struct PrivacyScreen: View {
                     Button("Delete") {
                         confirmsDeleteTranscripts = true
                     }
-                    .buttonStyle(ZenPressButtonStyle())
-                    .font(ZenDesign.Typography.captionStrong)
-                    .foregroundStyle(ZenDesign.Semantic.danger)
-                    .disabled(historyViewModel.savedTranscriptCount == 0)
-                    .opacity(
-                        historyViewModel.savedTranscriptCount == 0
-                            ? 0.4 : 1
+                    .buttonStyle(
+                        ZenDestructiveButtonStyle(minWidth: 84)
                     )
+                    .disabled(historyViewModel.savedTranscriptCount == 0)
                 }
                 ZenPanelDivider()
                 ZenRow(
@@ -197,14 +195,10 @@ struct PrivacyScreen: View {
                     Button("Delete") {
                         confirmsDeleteRecoveryAudio = true
                     }
-                    .buttonStyle(ZenPressButtonStyle())
-                    .font(ZenDesign.Typography.captionStrong)
-                    .foregroundStyle(ZenDesign.Semantic.danger)
-                    .disabled(historyViewModel.recoveryAudioCount == 0)
-                    .opacity(
-                        historyViewModel.recoveryAudioCount == 0
-                            ? 0.4 : 1
+                    .buttonStyle(
+                        ZenDestructiveButtonStyle(minWidth: 84)
                     )
+                    .disabled(historyViewModel.recoveryAudioCount == 0)
                 }
                 ZenPanelDivider()
                 ZenRow(
@@ -216,16 +210,12 @@ struct PrivacyScreen: View {
                     Button("Delete") {
                         confirmsDeleteRules = true
                     }
-                    .buttonStyle(ZenPressButtonStyle())
-                    .font(ZenDesign.Typography.captionStrong)
-                    .foregroundStyle(ZenDesign.Semantic.danger)
+                    .buttonStyle(
+                        ZenDestructiveButtonStyle(minWidth: 84)
+                    )
                     .disabled(
                         voiceProfileViewModel.snapshot
                             .correctionRules.isEmpty
-                    )
-                    .opacity(
-                        voiceProfileViewModel.snapshot
-                            .correctionRules.isEmpty ? 0.4 : 1
                     )
                 }
                 ZenPanelDivider()
@@ -233,8 +223,13 @@ struct PrivacyScreen: View {
                     icon: "cpu",
                     title: "Local models",
                     subtitle:
-                        "\(modelManagerViewModel.installedModelIDs.count) speech — verified weights, removable in Models"
-                )
+                        "\(modelManagerViewModel.installedModelIDs.count) speech — verified weights"
+                ) {
+                    Button("Manage", action: openModels)
+                        .buttonStyle(
+                            ZenPrimaryButtonStyle(minWidth: 84)
+                        )
+                }
             }
         }
     }

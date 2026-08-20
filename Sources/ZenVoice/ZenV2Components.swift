@@ -363,7 +363,7 @@ struct ZenRow<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: ZenDesign.Spacing.sm) {
+        HStack(alignment: .center, spacing: ZenDesign.Spacing.sm) {
             if let icon {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .medium))
@@ -714,24 +714,63 @@ struct ZenTabStrip<Tab: Hashable>: View {
     @Binding var selection: Tab
 
     var body: some View {
-        HStack {
-            Picker("View", selection: $selection) {
-                ForEach(items, id: \.tab) { item in
-                    Text(
-                        item.badge > 0
-                            ? "\(item.title)  \(item.badge)"
-                            : item.title
+        HStack(spacing: 4) {
+            ForEach(items, id: \.tab) { item in
+                Button {
+                    selection = item.tab
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(item.title)
+                        if item.badge > 0 {
+                            Text("\(item.badge)")
+                                .font(ZenDesign.Typography.badge)
+                                .padding(.horizontal, 6)
+                                .frame(minHeight: 18)
+                                .background {
+                                    Capsule().fill(
+                                        item.tab == selection
+                                            ? ZenDesign.Semantic.accent.opacity(0.22)
+                                            : ZenDesign.Semantic.surfaceRaised
+                                    )
+                                }
+                        }
+                    }
+                    .font(ZenDesign.Typography.button)
+                    .foregroundStyle(
+                        item.tab == selection
+                            ? ZenDesign.Semantic.textPrimary
+                            : ZenDesign.Semantic.textSecondary
                     )
-                    .tag(item.tab)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 36)
+                    .background {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.small,
+                            style: .continuous
+                        )
+                        .fill(
+                            item.tab == selection
+                                ? ZenDesign.Semantic.accentMuted
+                                : Color.clear
+                        )
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(
+                    ZenPressButtonStyle(
+                        cornerRadius: ZenDesign.Radius.small
+                    )
+                )
+                .accessibilityAddTraits(
+                    item.tab == selection ? .isSelected : []
+                )
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .controlSize(.regular)
-            .fixedSize(horizontal: true, vertical: false)
-
-            Spacer(minLength: 0)
         }
+        .padding(4)
+        .zenGlassSurface(
+            cornerRadius: ZenDesign.Radius.medium,
+            interactive: true
+        )
         .frame(minHeight: ZenDesign.Layout.hitTarget)
         .accessibilityElement(children: .contain)
     }
@@ -788,6 +827,103 @@ struct ZenSearchField: View {
                 .strokeBorder(ZenDesign.Semantic.border)
             }
         }
+    }
+}
+
+struct ZenTextInput: View {
+    let placeholder: String
+    @Binding var text: String
+    var icon: String?
+    var minWidth: CGFloat = 170
+
+    var body: some View {
+        HStack(spacing: ZenDesign.Spacing.xs) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .accessibilityHidden(true)
+            }
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(ZenDesign.Typography.body)
+        }
+        .padding(.horizontal, ZenDesign.Spacing.sm)
+        .frame(minWidth: minWidth, minHeight: ZenDesign.Layout.hitTarget)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+            .fill(ZenDesign.Semantic.surfaceRaised)
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .strokeBorder(ZenDesign.Semantic.borderStrong)
+            }
+        }
+        .zenFocusRing()
+    }
+}
+
+/// Menu picker with the same 44-point geometry and surface vocabulary as the
+/// rest of ZenVoice. The native menu remains responsible for keyboard and
+/// VoiceOver behavior.
+struct ZenMenuPicker<Option: Hashable>: View {
+    let label: String
+    let options: [Option]
+    @Binding var selection: Option
+    var minWidth: CGFloat = 190
+    let title: (Option) -> String
+
+    var body: some View {
+        Menu {
+            ForEach(options, id: \.self) { option in
+                Button {
+                    selection = option
+                } label: {
+                    if option == selection {
+                        Label(title(option), systemImage: "checkmark")
+                    } else {
+                        Text(title(option))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: ZenDesign.Spacing.sm) {
+                Text(title(selection))
+                    .font(ZenDesign.Typography.bodyStrong)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: ZenDesign.Spacing.sm)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            }
+            .padding(.horizontal, ZenDesign.Spacing.sm)
+            .frame(minWidth: minWidth, minHeight: ZenDesign.Layout.hitTarget)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(ZenDesign.Semantic.surfaceRaised)
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .strokeBorder(ZenDesign.Semantic.borderStrong)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityLabel(label)
+        .accessibilityValue(title(selection))
     }
 }
 

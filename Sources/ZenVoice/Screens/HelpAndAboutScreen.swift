@@ -23,6 +23,7 @@ struct HelpAndAboutScreen: View {
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
+    let openModels: () -> Void
     let openShortcuts: () -> Void
 
     var body: some View {
@@ -31,20 +32,22 @@ struct HelpAndAboutScreen: View {
             title: "Settings",
             subtitle: "Privacy, permissions, updates, and support."
         ) {
-            PrivacyScreen(
-                viewModel: viewModel,
-                historyViewModel: historyViewModel,
-                voiceProfileViewModel: voiceProfileViewModel,
-                modelManagerViewModel: modelManagerViewModel,
-                embedded: true
-            )
-            ZenPanelDivider()
-            HelpScreen(
-                viewModel: viewModel,
-                onboardingViewModel: onboardingViewModel,
-                openShortcuts: openShortcuts
-            )
-            UpdatesScreen(viewModel: updatesViewModel)
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+                PrivacyScreen(
+                    viewModel: viewModel,
+                    historyViewModel: historyViewModel,
+                    voiceProfileViewModel: voiceProfileViewModel,
+                    modelManagerViewModel: modelManagerViewModel,
+                    openModels: openModels,
+                    embedded: true
+                )
+                HelpScreen(
+                    viewModel: viewModel,
+                    onboardingViewModel: onboardingViewModel,
+                    openShortcuts: openShortcuts
+                )
+                UpdatesScreen(viewModel: updatesViewModel)
+            }
         }
     }
 }

@@ -119,11 +119,20 @@ struct VoiceProfileScreen: View {
                             .padding(.horizontal, ZenDesign.Spacing.sm)
                             .frame(minHeight: 40)
                             .background {
-                                Capsule()
-                                    .fill(ZenDesign.Semantic.surfaceRaised)
-                                    .overlay {
-                                        Capsule().strokeBorder(ZenDesign.Semantic.borderStrong)
-                                    }
+                                RoundedRectangle(
+                                    cornerRadius: ZenDesign.Radius.small,
+                                    style: .continuous
+                                )
+                                .fill(ZenDesign.Semantic.surfaceRaised)
+                                .overlay {
+                                    RoundedRectangle(
+                                        cornerRadius: ZenDesign.Radius.small,
+                                        style: .continuous
+                                    )
+                                    .strokeBorder(
+                                        ZenDesign.Semantic.borderStrong
+                                    )
+                                }
                             }
                         }
                     }
@@ -207,35 +216,24 @@ struct VoiceProfileScreen: View {
         _ placeholder: String,
         text: Binding<String>
     ) -> some View {
-        TextField(placeholder, text: text)
-            .textFieldStyle(.plain)
-            .font(ZenDesign.Typography.body)
-            .padding(.horizontal, ZenDesign.Spacing.sm)
-            .frame(minWidth: 190, minHeight: ZenDesign.Layout.hitTarget)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
-                    style: .continuous
-                )
-                .fill(ZenDesign.Semantic.surfaceRaised)
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.small,
-                        style: .continuous
-                    )
-                    .strokeBorder(ZenDesign.Semantic.borderStrong)
-                }
-            }
+        ZenTextInput(
+            placeholder: placeholder,
+            text: text,
+            icon: placeholder.contains("heard")
+                ? "waveform"
+                : "text.cursor",
+            minWidth: 190
+        )
     }
 
     private var scopePicker: some View {
-        Picker("Language", selection: $correctionScope) {
-            ForEach(CorrectionLanguageScope.allCases) { scope in
-                Text(scope.displayName).tag(scope)
-            }
-        }
-        .labelsHidden()
-        .frame(width: 140)
+        ZenMenuPicker(
+            label: "Vocabulary language",
+            options: CorrectionLanguageScope.allCases,
+            selection: $correctionScope,
+            minWidth: 150,
+            title: \.displayName
+        )
     }
 
     private var addButton: some View {

@@ -98,4 +98,27 @@ public enum OverlayKind: String, Codable, CaseIterable, Sendable {
             return CGSize(width: 640, height: 160)
         }
     }
+
+    /// Adapts floating overlays to the active display. Large displays gain
+    /// breathing room; compact and split-screen displays never let the panel
+    /// exceed their visible frame.
+    public func size(fitting available: CGSize) -> CGSize {
+        let maximumWidth = max(280, available.width - 32)
+        let maximumHeight = max(44, available.height * 0.30)
+        let width: CGFloat
+        switch self {
+        case .zenBar:
+            width = min(defaultSize.width, maximumWidth)
+        case .livePreviewPill:
+            width = min(defaultSize.width, maximumWidth)
+        case .livePreviewMedium:
+            width = min(maximumWidth, max(380, min(680, available.width * 0.46)))
+        case .livePreviewLarge:
+            width = min(maximumWidth, max(440, min(760, available.width * 0.58)))
+        }
+        return CGSize(
+            width: width,
+            height: min(defaultSize.height, maximumHeight)
+        )
+    }
 }
