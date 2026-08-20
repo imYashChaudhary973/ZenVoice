@@ -29,6 +29,22 @@ All notable ZenVoice changes are recorded here.
 ### Changed
 
 
+- Removed a one-second settings poll that SHA-256 hashed the selected model on
+  the main actor. Model verification now stays on the load/download boundary,
+  engine discovery runs off the main actor, and short deterministic dictation
+  has a 1.5-second stop-to-complete gate.
+- Serialized Whisper warm-up, preview, final decode, and release; obsolete
+  preview work is cancellation-aware so final insertion is not queued behind
+  it. Local text is inserted before optional cloud enhancement.
+- Unified engine and Whisper-model selection. The Home screen reports the
+  resolved engine, legacy model selections migrate to Whisper, and all verified
+  engines are visible without an “Advanced” disclosure.
+- Reworked the app shell into six destinations, restored system light/dark
+  appearance and 900-point window support, and added versioned Liquid Glass to
+  toolbar and floating dictation controls on macOS 26 and newer.
+- Fixed fast process-exit status races and Link transport handshake, replay
+  ordering, timeout, and subscriber teardown failures. Core, Link, runtime, UI,
+  and deterministic app checks now form the behavioral release gate.
 - Re-licensed ZenVoice under the Apache License, Version 2.0.
 - Removed the closed-source FluidAudio dependency and the Parakeet Unified
   CoreML runtime. NVIDIA engines now run on open `parakeet.cpp` v0.5.0.

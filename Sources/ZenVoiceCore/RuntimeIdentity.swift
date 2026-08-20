@@ -131,13 +131,19 @@ public enum RuntimeIdentity {
 
     /// Returns a `UserDefaults` instance tied to the resolved identity.
     ///
-    /// This uses a suite name derived from the policy so that foreign or test
-    /// processes cannot write into the production defaults namespace.
+    /// The production app already owns the standard defaults domain for its
+    /// bundle identifier. Re-opening that same identifier as a suite is
+    /// rejected by Foundation and falls back unpredictably. QA identities use
+    /// an explicit suite so their preferences remain isolated.
     public static func userDefaults(
         for policy: BundleIdentifierPolicy
     ) -> UserDefaults {
-        let suite = defaultsSuiteName(policy: policy)
-        return UserDefaults(suiteName: suite) ?? .standard
+        switch policy.kind {
+        case .production:
+            return .standard
+        case .qa(let identifier):
+            return UserDefaults(suiteName: identifier) ?? .standard
+        }
     }
 
     /// Convenience accessor that resolves the policy for the current process.

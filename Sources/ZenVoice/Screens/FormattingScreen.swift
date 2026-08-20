@@ -14,89 +14,250 @@
 
 import SwiftUI
 import ZenVoiceCore
+import ZenVoiceStorage
 
-/// Phase 6 single formatting surface.
-///
-/// Replaces the overlapping Instant Refine and ZenIntelligence screens with
-/// one ladder: Off → Clean → Smart → Cloud. Cloud provider configuration is
-/// included here rather than as a separate navigation entry.
 struct FormattingScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var cloudAIViewModel: CloudAIViewModel
+    @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
 
     @AppStorage(TranscriptFormattingPreferences.preferenceKey)
     private var modeRawValue = TranscriptFormattingMode.clean.rawValue
+    @State private var heardPhrase = ""
+    @State private var replacementPhrase = ""
+    @State private var correctionScope = CorrectionLanguageScope.all
 
     private var mode: TranscriptFormattingMode {
         TranscriptFormattingMode(rawValue: modeRawValue) ?? .clean
     }
 
     var body: some View {
-        ZenScreen(
-            icon: "wand.and.stars",
-            title: "Formatting",
-            subtitle: "How ZenVoice shapes your words after it hears them."
-        ) {
-            ZenSection(title: "Formatting ladder") {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: ZenDesign.Spacing.sm),
-                        GridItem(.flexible(), spacing: ZenDesign.Spacing.sm)
-                    ],
-                    spacing: ZenDesign.Spacing.sm
+        formattingContent
+            .onAppear(perform: voiceProfileViewModel.refresh)
+    }
+
+    @ViewBuilder
+    private var formattingContent: some View {
+        textFormatting
+        textReplacement
+
+        if mode == .cloud {
+            if !cloudAIViewModel.isReady {
+                ZenBanner(
+                    kind: .warn,
+                    icon: "exclamationmark.triangle",
+                    text:
+                        "Cloud formatting is selected but not ready. "
+                        + "Finish the provider setup below."
+                )
+            }
+            CloudAIConfigurationView(viewModel: cloudAIViewModel)
+        } else {
+            ZenBanner(
+                kind: .info,
+                icon: "hand.raised",
+                text:
+                    "Formatting and replacements run on this Mac. Only Cloud "
+                    + "mode sends finished text to your configured provider."
+            )
+        }
+    }
+
+    private var textFormatting: some View {
+        ZenSection(title: "Text Formatting") {
+            ZenPanel {
+                ZenRow(
+                    icon: "wand.and.stars",
+                    title: "Formatting level",
+                    subtitle: mode.detail
                 ) {
-                    ForEach(TranscriptFormattingMode.allCases) { mode in
-                        ZenChoiceCard(
-                            title: mode.displayName,
-                            detail: mode.detail,
-                            selected: self.mode == mode,
-                            titleIcon: icon(for: mode)
-                        ) {
-                            modeRawValue = mode.rawValue
+                    Picker("Formatting level", selection: $modeRawValue) {
+                        ForEach(TranscriptFormattingMode.allCases) { option in
+                            Text(option.displayName).tag(option.rawValue)
                         }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
                 }
-            }
 
-            if mode == .cloud {
-                if !cloudAIViewModel.isReady {
-                    // Selecting Cloud and leaving it unconfigured used to fail
-                    // silently at dictation time — the transcript was formatted
-                    // locally and nothing said so.
-                    ZenBanner(
-                        kind: .warn,
-                        icon: "exclamationmark.triangle",
-                        text:
-                            "Cloud is selected but not ready, so dictations are "
-                            + "being formatted locally. Finish the setup below."
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "captions.bubble",
+                    title: "Live transcript",
+                    subtitle: "Show words while you speak"
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: { viewModel.livePreviewEnabled },
+                            set: viewModel.setLivePreviewEnabled
+                        ),
+                        label: "Live transcript"
                     )
                 }
-                CloudAIConfigurationView(viewModel: cloudAIViewModel)
-            }
 
-            if mode != .cloud {
-                ZenBanner(
-                    kind: .info,
-                    icon: "hand.raised",
-                    text:
-                        "All formatting rungs below Cloud keep your transcript "
-                        + "on this Mac. No text is sent to a server."
-                )
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "pause.circle",
+                    title: "Commit on pause",
+                    subtitle: "Insert stable phrases during longer dictations"
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: { viewModel.commitOnPauseEnabled },
+                            set: viewModel.setCommitOnPauseEnabled
+                        ),
+                        label: "Commit on pause"
+                    )
+                }
+
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: "Apply text replacements",
+                    subtitle: "Use your saved phrase corrections automatically"
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: { voiceProfileViewModel.appliesCorrectionRules },
+                            set: voiceProfileViewModel.setAppliesCorrectionRules
+                        ),
+                        label: "Apply text replacements"
+                    )
+                }
             }
         }
     }
 
-    private func icon(for mode: TranscriptFormattingMode) -> String {
-        switch mode {
-        case .off:
-            return "power"
-        case .clean:
-            return "wand.and.stars"
-        case .smart:
-            return "sparkles"
-        case .cloud:
-            return "cloud"
+    private var textReplacement: some View {
+        ZenSection(title: "Text Replacement") {
+            ZenPanel {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: ZenDesign.Spacing.sm) {
+                            replacementField("Heard phrase", text: $heardPhrase)
+                            Image(systemName: "arrow.right")
+                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            replacementField("Replacement", text: $replacementPhrase)
+                            scopePicker
+                            addReplacementButton
+                        }
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                            replacementField("Heard phrase", text: $heardPhrase)
+                            replacementField("Replacement", text: $replacementPhrase)
+                            HStack {
+                                scopePicker
+                                Spacer()
+                                addReplacementButton
+                            }
+                        }
+                    }
+
+                    if let error = voiceProfileViewModel.errorMessage {
+                        Text(error)
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.danger)
+                    }
+
+                    if voiceProfileViewModel.snapshot.correctionRules.isEmpty {
+                        Text("No replacements yet. Add the phrases ZenVoice should rewrite every time.")
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            .padding(.vertical, ZenDesign.Spacing.sm)
+                    } else {
+                        ZenPanelDivider()
+                        ForEach(voiceProfileViewModel.snapshot.correctionRules) { rule in
+                            HStack(spacing: ZenDesign.Spacing.sm) {
+                                ZenIconChip(
+                                    systemImage: "wand.and.stars",
+                                    size: 30,
+                                    tint: ZenDesign.Semantic.textSecondary
+                                )
+                                Text("\"\(rule.source)\"")
+                                Image(systemName: "arrow.right")
+                                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                                Text("\"\(rule.replacement)\"")
+                                Spacer()
+                                ZenBadge(
+                                    text: rule.languageScope.displayName,
+                                    kind: .neutral
+                                )
+                                ZenIconButton(
+                                    systemImage: "trash",
+                                    label: "Delete replacement",
+                                    isDanger: true
+                                ) {
+                                    voiceProfileViewModel.deleteRule(rule)
+                                }
+                            }
+                            .font(ZenDesign.Typography.body)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            .padding(.vertical, ZenDesign.Spacing.xs)
+                        }
+                    }
+                }
+                .padding(ZenDesign.Spacing.lg)
+            }
         }
+    }
+
+    private func replacementField(
+        _ placeholder: String,
+        text: Binding<String>
+    ) -> some View {
+        TextField(placeholder, text: text)
+            .textFieldStyle(.plain)
+            .font(ZenDesign.Typography.body)
+            .padding(.horizontal, ZenDesign.Spacing.sm)
+            .frame(minWidth: 170, minHeight: ZenDesign.Layout.hitTarget)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .fill(ZenDesign.Semantic.surfaceRaised)
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.small,
+                        style: .continuous
+                    )
+                    .strokeBorder(ZenDesign.Semantic.borderStrong)
+                }
+            }
+    }
+
+    private var scopePicker: some View {
+        Picker("Language", selection: $correctionScope) {
+            ForEach(CorrectionLanguageScope.allCases) { scope in
+                Text(scope.displayName).tag(scope)
+            }
+        }
+        .labelsHidden()
+        .frame(width: 140)
+    }
+
+    private var addReplacementButton: some View {
+        Button("Add Replacement") {
+            Task { @MainActor in
+                let saved = await voiceProfileViewModel.addRule(
+                    source: heardPhrase,
+                    replacement: replacementPhrase,
+                    languageScope: correctionScope
+                )
+                if saved {
+                    heardPhrase = ""
+                    replacementPhrase = ""
+                }
+            }
+        }
+        .buttonStyle(ZenPrimaryButtonStyle())
+        .disabled(
+            heardPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || replacementPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        )
     }
 }
 

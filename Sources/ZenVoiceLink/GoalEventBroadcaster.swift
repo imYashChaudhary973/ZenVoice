@@ -40,10 +40,17 @@ public actor GoalEventBroadcaster {
         }
     }
 
+    private struct Subscription {
+        let goalID: UUID?
+        let deliver: Subscriber
+        var active = false
+        var pending: [GoalStatusEvent] = []
+    }
+
     private var rings: [UUID: Ring] = [:]
     private var goals: [UUID: LinkGoalSummary] = [:]
     private var activeGoalID: UUID?
-    private var subscribers: [UUID: (goalID: UUID?, deliver: Subscriber)] = [:]
+    private var subscribers: [UUID: Subscription] = [:]
 
     public init() {}
 
@@ -82,9 +89,19 @@ public actor GoalEventBroadcaster {
             )
             goals[event.goalID] = summary
         }
-        for (_, subscriber) in subscribers
-        where subscriber.goalID == nil || subscriber.goalID == event.goalID {
-            await subscriber.deliver([event])
+        let matchingTokens = subscribers.compactMap { token, subscriber in
+            subscriber.goalID == nil || subscriber.goalID == event.goalID
+                ? token
+                : nil
+        }
+        for token in matchingTokens {
+            guard var subscriber = subscribers[token] else { continue }
+            if subscriber.active {
+                await subscriber.deliver([event])
+            } else {
+                subscriber.pending.append(event)
+                subscribers[token] = subscriber
+            }
         }
     }
 
@@ -96,14 +113,46 @@ public actor GoalEventBroadcaster {
         return events.filter { $0.sequence > sequence }
     }
 
-    @discardableResult
+    /// Registers a subscriber and captures its replay tail atomically. If
+    /// registration and replay are separate actor calls, events published in
+    /// between can arrive live and then again in the replay, out of order.
     public func subscribe(
         goalID: UUID?,
+        after sequence: Int?,
         deliver: @escaping Subscriber
-    ) -> UUID {
+    ) -> (token: UUID, replay: [GoalStatusEvent]) {
         let token = UUID()
-        subscribers[token] = (goalID: goalID, deliver: deliver)
-        return token
+        let replayGoalID = goalID ?? activeGoalID
+        let replay: [GoalStatusEvent]
+        if let replayGoalID {
+            let events = rings[replayGoalID]?.events ?? []
+            replay = sequence.map { sequence in
+                events.filter { $0.sequence > sequence }
+            } ?? events
+        } else {
+            replay = []
+        }
+        subscribers[token] = Subscription(
+            goalID: goalID,
+            deliver: deliver
+        )
+        return (token, replay)
+    }
+
+    /// Delivers anything published while the caller sent its replay, then
+    /// switches the subscriber to live delivery without an ordering gap.
+    public func activate(_ token: UUID) async {
+        while var subscriber = subscribers[token] {
+            guard !subscriber.pending.isEmpty else {
+                subscriber.active = true
+                subscribers[token] = subscriber
+                return
+            }
+            let pending = subscriber.pending
+            subscriber.pending.removeAll()
+            subscribers[token] = subscriber
+            await subscriber.deliver(pending)
+        }
     }
 
     public func unsubscribe(_ token: UUID) {

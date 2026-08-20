@@ -59,11 +59,9 @@ struct ZenBrandMark: View {
 /// container owns the scaffold — so a page never grows a second title, a
 /// second rule, or a nested scroll view.
 ///
-/// The heading is a `ZenCardHeader`, the same block that heads every card, so
-/// a page reads as the outermost card in its own stack rather than as a
-/// different kind of object. The horizontal rule that used to sit under the
-/// title is gone: cards already carry their own edges, and the rule drew a
-/// second, competing boundary a few points above the first one.
+/// The window toolbar owns page identity. Screen content starts directly with
+/// the controls shown in the supplied redesign instead of repeating a second
+/// title block inside every scroll view.
 struct ZenScreen<Content: View, Tabs: View>: View {
     let icon: String
     let title: String
@@ -73,41 +71,28 @@ struct ZenScreen<Content: View, Tabs: View>: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ZenCardHeader(
-                    systemImage: icon,
-                    title: title,
-                    subtitle: subtitle,
-                    iconSize: 40
-                )
-                .frame(
-                    maxWidth: ZenDesign.Layout.proseColumn,
-                    alignment: .leading
-                )
-
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if Tabs.self != EmptyView.self {
-                    // The tab strip sits *below* the page title: the title
-                    // names the section, the tabs are views within it.
                     tabs
-                        .padding(.top, ZenDesign.Spacing.lg)
                 }
 
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
                     content
                 }
-                .padding(.top, ZenDesign.Spacing.xl)
+                .padding(
+                    .top,
+                    Tabs.self == EmptyView.self
+                        ? 0 : ZenDesign.Spacing.lg
+                )
             }
-            // Cards fill the window. They used to be capped at a fixed column
-            // width and centred, which is invisible in a small window and
-            // obvious in full screen: the content floated in the middle of the
-            // pane with a margin on each side that matched neither the sidebar
-            // nor the top bar. Long *prose* still needs a measure, so the
-            // heading caps its own subtitle rather than the page capping
-            // everything.
+            .frame(
+                maxWidth: ZenDesign.Layout.contentMaxWidth,
+                alignment: .leading
+            )
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, ZenDesign.Spacing.xl)
-            .padding(.top, ZenDesign.Spacing.xs)
-            .padding(.bottom, ZenDesign.Spacing.xxl)
+            .padding(.top, ZenDesign.Spacing.xl)
+            .padding(.bottom, 40)
         }
         .scrollIndicators(.automatic)
         .background(ZenDesign.Semantic.canvas)
@@ -131,12 +116,10 @@ extension ZenScreen where Tabs == EmptyView {
     }
 }
 
-/// Draws a visible ring while the control it wraps holds keyboard focus.
+/// Draws a visible ring while a non-button control holds keyboard focus.
 ///
-/// Custom `.buttonStyle(.plain)` controls and plain text fields lose the
-/// system focus ring, which left keyboard navigation through this window with
-/// no visible indication of where you were. `ZenDesign.Component.focusRing`
-/// existed for this and was used in exactly one place.
+/// `ZenPressButtonStyle` handles buttons centrally. This modifier covers plain
+/// text fields and other focusable controls that do not receive a native ring.
 struct ZenFocusRing: ViewModifier {
     var cornerRadius: CGFloat = ZenDesign.Radius.small
     @FocusState private var isFocused: Bool
@@ -171,6 +154,53 @@ extension View {
     }
 }
 
+/// Immediate press feedback and keyboard focus for custom controls that cannot
+/// use a native bordered button style. Feedback begins on pointer-down through
+/// `configuration.isPressed`, remains interruptible, and never bounces.
+struct ZenPressButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = ZenDesign.Radius.small
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(
+                configuration.isPressed && isEnabled && !reduceMotion
+                    ? 0.98
+                    : 1
+            )
+            .opacity(
+                isEnabled
+                    ? (configuration.isPressed ? 0.86 : 1)
+                    : 0.45
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: cornerRadius,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    isFocused && isEnabled
+                        ? ZenDesign.Component.focusRing
+                        : Color.clear,
+                    lineWidth: 2
+                )
+                .padding(-2)
+                .allowsHitTesting(false)
+            }
+            .animation(
+                ZenDesign.Motion.fast(reduceMotion),
+                value: configuration.isPressed
+            )
+            .animation(
+                ZenDesign.Motion.fast(reduceMotion),
+                value: isFocused
+            )
+    }
+}
+
 /// Section label above a group of cards.
 ///
 /// Sentence case at body weight, not tracked-out uppercase. Uppercase tracking
@@ -186,7 +216,7 @@ struct ZenSection<Content: View>: View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
             HStack(alignment: .firstTextBaseline, spacing: ZenDesign.Spacing.sm) {
                 Text(title)
-                    .font(ZenDesign.Typography.bodyStrong)
+                    .font(.headline)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 Spacer(minLength: 0)
                 if let caption {
@@ -206,6 +236,7 @@ struct ZenSection<Content: View>: View {
 struct ZenPanel<Content: View>: View {
     var padding: CGFloat = 0
     @ViewBuilder let content: Content
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -225,7 +256,12 @@ struct ZenPanel<Content: View>: View {
                 cornerRadius: ZenDesign.Radius.large,
                 style: .continuous
             )
-            .strokeBorder(ZenDesign.Semantic.border, lineWidth: 1)
+            .strokeBorder(
+                contrast == .increased
+                    ? ZenDesign.Semantic.borderStrong
+                    : ZenDesign.Semantic.border.opacity(0.72),
+                lineWidth: contrast == .increased ? 1.5 : 1
+            )
         }
     }
 }
@@ -303,7 +339,7 @@ struct ZenInsetRow<Content: View>: View {
                     .strokeBorder(
                         tinted
                             ? ZenDesign.Semantic.accent.opacity(0.35)
-                            : ZenDesign.Semantic.border,
+                            : Color.clear,
                         lineWidth: 1
                     )
                 }
@@ -666,7 +702,7 @@ struct ZenMeterRow: View {
     }
 }
 
-/// Underline tab strip (prototype `.tabs`).
+/// Native macOS segmented control for views within one preference pane.
 struct ZenTabStrip<Tab: Hashable>: View {
     struct Item {
         let tab: Tab
@@ -678,65 +714,26 @@ struct ZenTabStrip<Tab: Hashable>: View {
     @Binding var selection: Tab
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: ZenDesign.Spacing.xl) {
+        HStack {
+            Picker("View", selection: $selection) {
                 ForEach(items, id: \.tab) { item in
-                    Button {
-                        selection = item.tab
-                    } label: {
-                        VStack(spacing: ZenDesign.Spacing.xs) {
-                            HStack(spacing: 6) {
-                                Text(item.title)
-                                    .font(ZenDesign.Typography.bodyStrong)
-                                if item.badge > 0 {
-                                    Text("\(item.badge)")
-                                        .font(ZenDesign.Typography.badge)
-                                        .foregroundStyle(
-                                            ZenDesign.Semantic.warn
-                                        )
-                                        .padding(.horizontal, 6)
-                                        .frame(height: 16)
-                                        .background {
-                                            Capsule().fill(
-                                                ZenDesign.Semantic.warnMuted
-                                            )
-                                        }
-                                }
-                            }
-                            .foregroundStyle(
-                                selection == item.tab
-                                    ? ZenDesign.Semantic.textPrimary
-                                    : ZenDesign.Semantic.textTertiary
-                            )
-                            RoundedRectangle(
-                                cornerRadius: 1.5,
-                                style: .continuous
-                            )
-                            .fill(
-                                selection == item.tab
-                                    ? ZenDesign.Semantic.accent
-                                    : Color.clear
-                            )
-                            .frame(height: 2.5)
-                        }
-                        // Hugs its label. Without this the underline claims an
-                        // equal share of the strip's width, so three tabs each
-                        // grew a rule a third of the window wide and the
-                        // selected one was impossible to pick out.
-                        .fixedSize(horizontal: true, vertical: false)
-                        .frame(minHeight: ZenDesign.Layout.hitTarget)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(item.title)
-                    .accessibilityAddTraits(
-                        selection == item.tab ? .isSelected : []
+                    Text(
+                        item.badge > 0
+                            ? "\(item.title)  \(item.badge)"
+                            : item.title
                     )
+                    .tag(item.tab)
                 }
-                Spacer()
             }
-            Divider().overlay(ZenDesign.Semantic.border)
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.regular)
+            .fixedSize(horizontal: true, vertical: false)
+
+            Spacer(minLength: 0)
         }
+        .frame(minHeight: ZenDesign.Layout.hitTarget)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -761,13 +758,22 @@ struct ZenSearchField: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .frame(
+                            width: ZenDesign.Layout.hitTarget,
+                            height: ZenDesign.Layout.hitTarget
+                        )
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(
+                    ZenPressButtonStyle(
+                        cornerRadius: ZenDesign.Radius.medium
+                    )
+                )
                 .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, ZenDesign.Spacing.sm)
-        .frame(height: ZenDesign.Layout.control + 6)
+        .frame(height: ZenDesign.Layout.hitTarget)
         .background {
             RoundedRectangle(
                 cornerRadius: ZenDesign.Radius.medium,
@@ -794,6 +800,8 @@ struct ZenChoiceCard: View {
     let selected: Bool
     var titleIcon: String?
     let action: () -> Void
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -850,7 +858,9 @@ struct ZenChoiceCard: View {
                 .fill(
                     selected
                         ? ZenDesign.Semantic.accentMuted
-                        : ZenDesign.Semantic.surface
+                        : hovering
+                            ? ZenDesign.Semantic.surfaceRaised
+                            : ZenDesign.Semantic.surface
                 )
             }
             .overlay {
@@ -861,14 +871,22 @@ struct ZenChoiceCard: View {
                 .strokeBorder(
                     selected
                         ? ZenDesign.Semantic.accent
-                        : ZenDesign.Semantic.border,
+                        : hovering
+                            ? ZenDesign.Semantic.borderStrong
+                            : ZenDesign.Semantic.border,
                     lineWidth: selected ? 1.5 : 1
                 )
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .zenFocusRing(cornerRadius: ZenDesign.Radius.large)
+        .buttonStyle(
+            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.large)
+        )
+        .onHover { hovering = $0 }
+        .animation(
+            ZenDesign.Motion.fast(reduceMotion),
+            value: hovering
+        )
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -884,7 +902,7 @@ struct ZenSwitch: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .controlSize(.small)
-            .tint(ZenDesign.Semantic.accent)
+            .tint(ZenDesign.Semantic.accentFill)
             .accessibilityLabel(label)
     }
 }
@@ -948,7 +966,9 @@ struct ZenIconButton: View {
                 )
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(
+            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.small)
+        )
         .onHover { hovering = $0 }
         .accessibilityLabel(label)
         .help(label)

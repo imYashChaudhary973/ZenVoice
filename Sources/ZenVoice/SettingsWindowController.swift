@@ -58,7 +58,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             applicationProfileViewModel
         self.onboardingViewModel = onboardingViewModel
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1_200, height: 800),
+            contentRect: NSRect(x: 0, y: 0, width: 1_080, height: 720),
             styleMask: [
                 .titled,
                 .closable,
@@ -73,15 +73,18 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         window.title = "ZenVoice"
         window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
+        // Keep the unified toolbar's native material visible. A transparent
+        // titlebar let scrolling labels show through status and Dictate,
+        // destroying legibility exactly where floating chrome needs separation.
+        window.titlebarAppearsTransparent = false
         window.toolbarStyle = .unified
-        // The sidebar's vibrancy material is what fills the top-left corner,
-        // so the window must not paint a `windowBackgroundColor` title bar
-        // over it. `.clear` lets each column own its own surface; the content
-        // column paints the canvas itself.
+        window.titlebarSeparatorStyle = .none
+        // NavigationSplitView and the unified toolbar own the window chrome.
+        // A clear window background lets the native sidebar material reach the
+        // rounded titlebar corners while the detail column paints graphite.
         window.backgroundColor = .clear
         window.isMovableByWindowBackground = true
-        window.minSize = NSSize(width: 940, height: 660)
+        window.minSize = NSSize(width: 900, height: 640)
         // Menu-bar apps don't get full screen for free: the green zoom
         // button only offers it when the window opts in explicitly.
         window.collectionBehavior.insert(.fullScreenPrimary)
@@ -107,14 +110,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        viewModel.refreshSystemStatus()
         // Permissions are granted in System Settings, so the window has to
         // watch for the change rather than sampling once on open.
         viewModel.beginWatchingPermissions()
         historyViewModel.refresh()
         insightsViewModel.refresh()
         voiceProfileViewModel.refresh()
-        modelManagerViewModel.refresh()
         applicationProfileViewModel.refresh()
         // Accessory apps can't enter native full screen; become a regular
         // app while the window is open so the green button works.

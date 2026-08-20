@@ -61,7 +61,7 @@ struct ZenCommandPalette: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.black.opacity(0.28)
+            Color.black.opacity(0.45)
                 .ignoresSafeArea()
                 .onTapGesture(perform: dismiss)
                 .accessibilityHidden(true)
@@ -86,7 +86,13 @@ struct ZenCommandPalette: View {
             footer
         }
         .frame(width: 560)
-        .background(ZenDesign.Semantic.surface)
+        .background {
+            ZenMaterialSurface(
+                material: .popover,
+                tint: ZenDesign.Semantic.surface.opacity(0.90),
+                fallback: ZenDesign.Semantic.surface
+            )
+        }
         .clipShape(
             RoundedRectangle(
                 cornerRadius: ZenDesign.Radius.large,
@@ -199,7 +205,7 @@ struct ZenCommandPalette: View {
                 }
             }
             .padding(.horizontal, ZenDesign.Spacing.sm)
-            .frame(height: 36)
+            .frame(minHeight: ZenDesign.Layout.hitTarget)
             .background {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.small,
@@ -213,7 +219,7 @@ struct ZenCommandPalette: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ZenPressButtonStyle())
         .onHover { hovering in
             if hovering {
                 highlighted = index

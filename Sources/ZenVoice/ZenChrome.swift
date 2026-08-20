@@ -16,27 +16,20 @@ import AppKit
 import SwiftUI
 
 // MARK: - Window chrome
-// The shell around every screen: the translucent sidebar material, the top
-// bar's action cluster, and the icon chip that heads each card.
+// The shell around every screen: functional material, native toolbar chrome,
+// and the icon chip that heads each preference group.
 
-/// Vibrancy material, for the sidebar.
-///
-/// `behindWindow` blending samples the desktop, which is what gives the
-/// sidebar its depth. It only works while nothing opaque is painted behind it,
-/// so the root view paints its canvas on the *content column* rather than on
-/// the whole window — a full-window background silently flattens this back to
-/// a plain grey panel.
+/// AppKit material hosted inside SwiftUI.
 struct ZenVisualEffect: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .sidebar
-    var blending: NSVisualEffectView.BlendingMode = .behindWindow
+    var blending: NSVisualEffectView.BlendingMode = .withinWindow
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blending
-        // `.active` rather than `.followsWindowActiveState`: the sidebar keeps
-        // its material when the window loses key, which it does constantly —
-        // dictation is aimed at whatever app is in front.
+        // ZenVoice frequently loses key status while dictating into another
+        // app. Keeping the material active avoids a distracting value jump.
         view.state = .active
         return view
     }
@@ -44,6 +37,122 @@ struct ZenVisualEffect: NSViewRepresentable {
     func updateNSView(_ view: NSVisualEffectView, context: Context) {
         view.material = material
         view.blendingMode = blending
+    }
+}
+
+/// A functional material layer with a solid accessibility fallback.
+///
+/// Materials communicate hierarchy in the sidebar and floating chrome. They
+/// are not used as decoration on every card. Reduce Transparency swaps the
+/// effect for the same graphite fallback, preserving both legibility and the
+/// requested palette.
+struct ZenMaterialSurface: View {
+    var material: NSVisualEffectView.Material = .sidebar
+    var tint: Color = ZenDesign.Semantic.sidebar.opacity(0.88)
+    var fallback: Color = ZenDesign.Semantic.sidebar
+
+    @Environment(\.accessibilityReduceTransparency)
+    private var reduceTransparency
+    @Environment(\.colorSchemeContrast)
+    private var contrast
+
+    var body: some View {
+        ZStack {
+            if reduceTransparency || contrast == .increased {
+                fallback
+            } else {
+                ZenVisualEffect(material: material)
+                tint
+            }
+        }
+    }
+}
+
+/// Liquid Glass for floating controls on macOS 26 and newer, with the existing
+/// material and solid accessibility fallback on older systems.
+private struct ZenGlassSurfaceModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let tint: Color?
+    let interactive: Bool
+
+    @Environment(\.accessibilityReduceTransparency)
+    private var reduceTransparency
+    @Environment(\.colorSchemeContrast)
+    private var contrast
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if reduceTransparency || contrast == .increased {
+            content
+                .background(tint?.opacity(0.18) ?? ZenDesign.Semantic.surface)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: cornerRadius,
+                        style: .continuous
+                    )
+                )
+        } else if #available(macOS 26.0, *) {
+            if let tint {
+                content.glassEffect(
+                    interactive
+                        ? .regular.tint(tint).interactive()
+                        : .regular.tint(tint),
+                    in: .rect(cornerRadius: cornerRadius)
+                )
+            } else {
+                content.glassEffect(
+                    interactive ? .regular.interactive() : .regular,
+                    in: .rect(cornerRadius: cornerRadius)
+                )
+            }
+        } else {
+            content
+                .background {
+                    ZenMaterialSurface(
+                        material: .popover,
+                        tint: tint?.opacity(0.16)
+                            ?? ZenDesign.Semantic.surface.opacity(0.82),
+                        fallback: ZenDesign.Semantic.surface
+                    )
+                }
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: cornerRadius,
+                        style: .continuous
+                    )
+                )
+        }
+    }
+}
+
+extension View {
+    func zenGlassSurface(
+        cornerRadius: CGFloat,
+        tint: Color? = nil,
+        interactive: Bool = false
+    ) -> some View {
+        modifier(
+            ZenGlassSurfaceModifier(
+                cornerRadius: cornerRadius,
+                tint: tint,
+                interactive: interactive
+            )
+        )
+    }
+}
+
+struct ZenGlassContainer<Content: View>: View {
+    let spacing: CGFloat
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) {
+                content
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -57,6 +166,7 @@ struct ZenIconChip: View {
     var body: some View {
         Image(systemName: systemImage)
             .font(.system(size: size * 0.44, weight: .medium))
+            .symbolRenderingMode(.hierarchical)
             .foregroundStyle(tint)
             .frame(width: size, height: size)
             .background {
@@ -66,91 +176,6 @@ struct ZenIconChip: View {
                 )
                 .fill(background ?? tint.opacity(0.14))
             }
-            .accessibilityHidden(true)
-    }
-}
-
-/// The capsule cluster in the top-right of the window.
-///
-/// Segments are separated by hairlines rather than gaps, so the group reads as
-/// one control instead of three floating buttons.
-struct ZenToolbarCluster<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        HStack(spacing: 0) {
-            content
-        }
-        // The capsule is pinned to `control` height rather than left to size
-        // itself to the stack. Each segment carries a 44pt hit frame, so the
-        // stack is 44pt tall — and an unpinned background inherited that,
-        // painting a capsule 12pt taller than the Dictate button beside it.
-        // The hit targets are unaffected; only the paint is constrained.
-        .background(alignment: .center) {
-            Capsule(style: .continuous)
-                .fill(ZenDesign.Semantic.surfaceRaised)
-                .overlay {
-                    Capsule(style: .continuous)
-                        .strokeBorder(ZenDesign.Semantic.border, lineWidth: 1)
-                }
-                .frame(height: ZenDesign.Layout.control)
-        }
-    }
-}
-
-/// One segment of a `ZenToolbarCluster`.
-struct ZenToolbarButton: View {
-    let systemImage: String
-    var title: String?
-    let label: String
-    var tint: Color?
-    let action: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .medium))
-                if let title {
-                    Text(title)
-                        .font(ZenDesign.Typography.captionStrong)
-                }
-            }
-            .foregroundStyle(
-                tint
-                    ?? (hovering
-                        ? ZenDesign.Semantic.textPrimary
-                        : ZenDesign.Semantic.textSecondary)
-            )
-            .padding(.horizontal, title == nil ? 10 : 13)
-            .frame(height: ZenDesign.Layout.control)
-            .background {
-                Capsule(style: .continuous)
-                    .fill(
-                        hovering
-                            ? ZenDesign.Semantic.surfaceSunken.opacity(0.6)
-                            : Color.clear
-                    )
-                    .padding(2)
-            }
-            .frame(minHeight: ZenDesign.Layout.hitTarget)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityLabel(label)
-        .help(label)
-    }
-}
-
-/// Hairline between two `ZenToolbarCluster` segments.
-struct ZenToolbarDivider: View {
-    var body: some View {
-        Rectangle()
-            .fill(ZenDesign.Semantic.border)
-            .frame(width: 1, height: 18)
             .accessibilityHidden(true)
     }
 }
@@ -181,7 +206,6 @@ struct ZenCardHeader<Trailing: View>: View {
                 HStack(alignment: .center, spacing: ZenDesign.Spacing.sm) {
                     Text(title)
                         .font(titleFont)
-                        .tracking(-0.2)
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: ZenDesign.Spacing.md)

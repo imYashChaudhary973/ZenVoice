@@ -123,7 +123,7 @@ struct AudioScreen: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ZenPressButtonStyle())
         .disabled(!enabled)
         .accessibilityLabel(name)
         .accessibilityAddTraits(selected ? .isSelected : [])

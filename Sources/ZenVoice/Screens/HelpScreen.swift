@@ -190,7 +190,7 @@ struct HelpScreen: View {
                     Button("Open Shortcuts") {
                         openShortcuts()
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ZenPressButtonStyle())
                     .font(ZenDesign.Typography.captionStrong)
                     .foregroundStyle(ZenDesign.Semantic.accent)
                 }
@@ -278,7 +278,7 @@ struct HelpScreen: View {
                 .frame(minHeight: 40)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ZenPressButtonStyle())
             .accessibilityLabel(faq.question)
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 

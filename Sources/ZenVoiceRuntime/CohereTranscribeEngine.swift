@@ -174,6 +174,11 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
     ///   both funnel here so there is one loading path rather than two that
     ///   can drift.
     private func loadSessionsOnQueue() throws {
+        if encoderSession != nil,
+           decoderSession != nil,
+           tokenizer != nil {
+            return
+        }
         self.environment = try ORTEnv(
             loggingLevel: ORTLoggingLevel.warning
         )

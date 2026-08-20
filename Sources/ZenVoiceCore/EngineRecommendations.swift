@@ -54,7 +54,7 @@ public enum EngineRecommendationEngine {
     ) -> EngineRecommendation? {
         let active = registry.engines.filter {
             registry.isCompatible(engine: $0, profile: profile)
-                && $0.isAvailable
+                && $0.isAvailable(for: profile)
                 && !EngineIdentifiers.isPreviewOnly($0.descriptor.id)
         }
         guard !active.isEmpty else {

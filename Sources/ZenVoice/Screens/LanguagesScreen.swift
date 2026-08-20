@@ -14,19 +14,17 @@
 
 import SwiftUI
 import ZenVoiceCore
-import ZenVoiceStorage
 
 struct LanguagesScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @State private var searchText = ""
+    @State private var showsAllLanguages = false
 
     private var visibleLanguages: [SupportedLanguage] {
         let query = searchText
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
-        guard !query.isEmpty else {
-            return LanguageCatalog.languages
-        }
+        guard !query.isEmpty else { return LanguageCatalog.languages }
         return LanguageCatalog.languages.filter {
             $0.displayName.lowercased().contains(query)
                 || $0.nativeName.lowercased().contains(query)
@@ -40,209 +38,153 @@ struct LanguagesScreen: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
-            if let error = viewModel.languageError {
-                ZenBanner(
-                    kind: .danger,
-                    icon: "exclamationmark.triangle",
-                    text: error
-                )
-            }
+        ZenSection(title: "Languages") {
+            ZenPanel {
+                if let error = viewModel.languageError {
+                    ZenBanner(
+                        kind: .danger,
+                        icon: "exclamationmark.triangle",
+                        text: error
+                    )
+                    .padding(ZenDesign.Spacing.md)
+                }
 
-            profileSection
-            outputSection
-            allLanguagesSection
+                ZenRow(
+                    icon: "globe",
+                    title: "Primary language",
+                    subtitle: "The language ZenVoice expects when dictation begins"
+                ) {
+                    Picker(
+                        "Primary language",
+                        selection: Binding(
+                            get: { viewModel.languageProfile.inputLanguageCode },
+                            set: viewModel.setInputLanguage
+                        )
+                    ) {
+                        Text("Automatic").tag(LanguageProfile.automaticCode)
+                        ForEach(LanguageCatalog.languages) { language in
+                            Text(language.displayName).tag(language.code)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 230)
+                }
+
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "waveform.badge.magnifyingglass",
+                    title: "Automatic language detection",
+                    subtitle: "Detect the spoken language for each dictation"
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: { isAutomatic },
+                            set: { enabled in
+                                if enabled {
+                                    viewModel.useAutomaticProfile()
+                                } else {
+                                    viewModel.useEnglishProfile()
+                                }
+                            }
+                        ),
+                        label: "Automatic language detection"
+                    )
+                }
+
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "character.cursor.ibeam",
+                    title: "Output mode",
+                    subtitle: "Choose the script used for the final transcript"
+                ) {
+                    Picker(
+                        "Output mode",
+                        selection: Binding(
+                            get: { viewModel.languageProfile.outputMode },
+                            set: viewModel.setOutputMode
+                        )
+                    ) {
+                        ForEach(TranscriptionOutputMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 230)
+                }
+
+                ZenPanelDivider()
+
+                DisclosureGroup(
+                    "Browse all \(LanguageCatalog.languages.count) languages",
+                    isExpanded: $showsAllLanguages
+                ) {
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                        ZenSearchField(
+                            placeholder: "Search languages…",
+                            text: $searchText
+                        )
+                        ForEach(visibleLanguages) { language in
+                            languageButton(language)
+                        }
+                    }
+                    .padding(.top, ZenDesign.Spacing.sm)
+                }
+                .font(ZenDesign.Typography.bodyStrong)
+                .padding(ZenDesign.Spacing.md)
+            }
 
             if viewModel.languageProfile.requiresMultilingualModel {
                 ZenBanner(
                     kind: .warn,
                     icon: "cpu",
-                    text:
-                        "This profile requires the Multilingual model — download it in Models. Language quality varies by model and language."
-                )
-            } else {
-                ZenBanner(
-                    kind: .info,
-                    icon: "checkmark.shield",
-                    text:
-                        "English-only and Multilingual models are both compatible with this profile. Language quality varies by model and language."
+                    text: "This language requires a compatible multilingual model. Choose one below."
                 )
             }
         }
     }
 
-    // MARK: quick profiles
-
-    private var profileSection: some View {
-        ZenSection(title: "English · Multilingual · Auto-Detect") {
-            HStack(spacing: ZenDesign.Spacing.sm) {
-                ZenChoiceCard(
-                    title: "English",
-                    detail: "English-safe: never outputs another language",
-                    selected: viewModel.languageProfile == .english,
-                    action: viewModel.useEnglishProfile
-                )
-                ZenChoiceCard(
-                    title: "Hinglish",
-                    badge: "Multilingual",
-                    detail: "Hindi–English the way you actually speak it",
-                    selected: viewModel.languageProfile == .hinglish,
-                    action: viewModel.useHinglishProfile
-                )
-                ZenChoiceCard(
-                    title: "Auto-Detect",
-                    badge: "Multilingual model",
-                    detail: "Detects the spoken language per dictation",
-                    selected: isAutomatic,
-                    action: viewModel.useAutomaticProfile
-                )
-            }
-        }
-    }
-
-    // MARK: output mode
-
-    private var outputSection: some View {
-        ZenSection(
-            title: "Output mode",
-            caption: viewModel.languageProfile.displayName
-        ) {
-            HStack(spacing: ZenDesign.Spacing.sm) {
-                ForEach(TranscriptionOutputMode.allCases) { mode in
-                    ZenChoiceCard(
-                        title: mode.displayName,
-                        detail: mode.detail,
-                        selected:
-                            viewModel.languageProfile.outputMode == mode,
-                        action: {
-                            viewModel.setOutputMode(mode)
-                        }
-                    )
-                }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Transcription output mode")
-        }
-    }
-
-    // MARK: all languages
-
-    private var allLanguagesSection: some View {
-        ZenSection(
-            title: "All languages",
-            caption: "\(LanguageCatalog.languages.count) supported"
-        ) {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                ZenSearchField(
-                    placeholder: "Search languages…",
-                    text: $searchText
-                )
-
-                ZenPanel {
-                    Button {
-                        viewModel.useAutomaticProfile()
-                    } label: {
-                        ZenRow(
-                            icon: "wand.and.rays",
-                            title: "Automatic detection",
-                            subtitle:
-                                "Useful for unknown input; less reliable for short phrases"
-                        ) {
-                            if isAutomatic {
-                                ZenBadge(
-                                    text: "Selected", kind: .accent,
-                                    systemImage: "checkmark"
-                                )
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(
-                        isAutomatic ? .isSelected : []
-                    )
-
-                    if visibleLanguages.isEmpty {
-                        ZenPanelDivider()
-                        VStack(spacing: 4) {
-                            Text("No language matches “\(searchText)”")
-                                .font(ZenDesign.Typography.bodyStrong)
-                                .foregroundStyle(
-                                    ZenDesign.Semantic.textPrimary
-                                )
-                            Text("Search covers English names, native names, and codes.")
-                                .font(ZenDesign.Typography.caption)
-                                .foregroundStyle(
-                                    ZenDesign.Semantic.textTertiary
-                                )
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, ZenDesign.Spacing.lg)
-                    } else {
-                        LazyVStack(spacing: 0) {
-                            ForEach(visibleLanguages) { language in
-                                ZenPanelDivider()
-                                languageButton(language)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func languageButton(
-        _ language: SupportedLanguage
-    ) -> some View {
+    private func languageButton(_ language: SupportedLanguage) -> some View {
         let selected = viewModel.languageProfile.inputLanguageCode
             == language.code
         return Button {
             viewModel.setInputLanguage(language.code)
         } label: {
             HStack(spacing: ZenDesign.Spacing.sm) {
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(language.displayName)
-                        .font(
-                            selected
-                                ? ZenDesign.Typography.bodyStrong
-                                : ZenDesign.Typography.body
-                        )
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        .font(ZenDesign.Typography.bodyStrong)
                     Text(language.nativeName)
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                        .lineLimit(1)
                 }
                 Spacer()
                 Text(language.code)
                     .font(ZenDesign.Typography.monoSmall)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                ZenBadge(
-                    text: language.supportLevel.displayName,
-                    kind: .neutral
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(ZenDesign.Semantic.accent)
+                }
+            }
+            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            .padding(.horizontal, ZenDesign.Spacing.sm)
+            .frame(minHeight: ZenDesign.Layout.hitTarget)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
                 )
-                Image(
-                    systemName: selected
-                        ? "checkmark.circle.fill" : "circle"
-                )
-                .font(.system(size: 13))
-                .foregroundStyle(
+                .fill(
                     selected
-                        ? ZenDesign.Semantic.accent
-                        : ZenDesign.Semantic.borderStrong
+                        ? ZenDesign.Semantic.accentMuted
+                        : ZenDesign.Semantic.surfaceRaised
                 )
             }
-            .padding(.horizontal, ZenDesign.Spacing.md)
-            .frame(minHeight: 44)
-            .background(
-                selected
-                    ? ZenDesign.Semantic.accentMuted
-                    : Color.clear
-            )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(language.displayName)
+        .buttonStyle(ZenPressButtonStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

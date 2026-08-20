@@ -157,6 +157,7 @@ final class SettingsViewModel: ObservableObject {
     private let applyLanguageProfile:
         (LanguageProfile) -> Result<Void, Error>
     private let canRunAudioDoctor: () -> Bool
+    private let isSpeechEngineReady: () -> Bool
     private let audioDoctorRecorder = AudioRecorder()
     private var audioDoctorTask: Task<Void, Never>?
     private var microphoneObserverTokens: [NSObjectProtocol] = []
@@ -199,7 +200,8 @@ final class SettingsViewModel: ObservableObject {
         applyZenBarPreference: @escaping (Bool) -> Void,
         applyLanguageProfile: @escaping
             (LanguageProfile) -> Result<Void, Error>,
-        canRunAudioDoctor: @escaping () -> Bool
+        canRunAudioDoctor: @escaping () -> Bool,
+        isSpeechEngineReady: @escaping () -> Bool
     ) {
         self.currentShortcut = currentShortcut
         self.pasteLastShortcut = pasteLastShortcut
@@ -214,6 +216,7 @@ final class SettingsViewModel: ObservableObject {
         self.applyZenBarPreference = applyZenBarPreference
         self.applyLanguageProfile = applyLanguageProfile
         self.canRunAudioDoctor = canRunAudioDoctor
+        self.isSpeechEngineReady = isSpeechEngineReady
         _ = TranscriptFormattingPreferences.load()
         languageProfile = LanguagePreferences.load()
         livePreviewEnabled =
@@ -302,7 +305,7 @@ final class SettingsViewModel: ObservableObject {
             shortcutError = nil
             applyHoldToDictate(true, holdKey)
         }
-        isLocalModelReady = (try? ZenVoiceConfiguration.discover()) != nil
+        isLocalModelReady = isSpeechEngineReady()
     }
 
     /// Watches for permission changes made outside the app.

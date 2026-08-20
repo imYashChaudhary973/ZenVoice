@@ -23,33 +23,38 @@ import ZenVoiceStorage
 /// shared the word "Profile". They now live under one clearly named screen.
 struct PersonalScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var applicationProfileViewModel: ApplicationProfileViewModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case yourWords, perAppRules
+        case formatting, vocabulary, appRules, commands
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
-            case .yourWords:
-                return "Your Words"
-            case .perAppRules:
-                return "Per-App Rules"
+            case .formatting:
+                return "Formatting"
+            case .vocabulary:
+                return "Vocabulary"
+            case .appRules:
+                return "App Rules"
+            case .commands:
+                return "Commands"
             }
         }
     }
 
-    @State private var selection: Tab = .yourWords
+    @State private var selection: Tab = .formatting
 
     var body: some View {
         ZenScreen(
-            icon: "character.book.closed.fill",
-            title: "Personal",
+            icon: "text.badge.star",
+            title: "Personalization",
             subtitle:
-                "The words ZenVoice remembers for you, and the rules that "
-                + "change per app.",
+                "Control formatting, remembered words, per-app behavior, "
+                + "and voice commands.",
             tabs: {
                 ZenTabStrip(
                     items: Tab.allCases.map { tab in
@@ -60,13 +65,21 @@ struct PersonalScreen: View {
             }
         ) {
             switch selection {
-            case .yourWords:
+            case .formatting:
+                FormattingScreen(
+                    viewModel: viewModel,
+                    cloudAIViewModel: cloudAIViewModel,
+                    voiceProfileViewModel: voiceProfileViewModel
+                )
+            case .vocabulary:
                 VoiceProfileScreen(viewModel: voiceProfileViewModel)
-            case .perAppRules:
+            case .appRules:
                 AppProfilesScreen(
                     viewModel: viewModel,
                     applicationProfileViewModel: applicationProfileViewModel
                 )
+            case .commands:
+                CommandsScreen(viewModel: viewModel)
             }
         }
     }

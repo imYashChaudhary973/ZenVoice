@@ -78,6 +78,23 @@ do {
                 ]
             )
         }
+        // prepare() is fired on every recording start. Reloading the GGUF
+        // there is what made short dictations wait several seconds for a
+        // model that was already resident.
+        let repeatStarted = Date()
+        try await engine.prepare()
+        let repeatSeconds = Date().timeIntervalSince(repeatStarted)
+        guard repeatSeconds < 0.5 else {
+            throw NSError(
+                domain: "ZenVoiceRuntimeChecks",
+                code: 16,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Parakeet \(configuration.displayName) reloaded on "
+                        + "a second prepare() (\(String(format: "%.2f", repeatSeconds))s)."
+                ]
+            )
+        }
         let audioURL =
             try environment["ZENVOICE_PARAKEET_AUDIO"].map {
                 URL(fileURLWithPath: $0)
@@ -314,6 +331,40 @@ do {
             reclaimedMB
         )
     )
+    transcriber.unload()
+    let cancellableEngine = WhisperSpeechEngine(configuration: configuration)
+    try await cancellableEngine.prepare()
+    let cancelledPreview = Task {
+        try await cancellableEngine.enqueuePreview(
+            samples: Array(repeating: 0, count: 16_000 * 30),
+            languageProfile: languageProfile
+        )
+    }
+    cancelledPreview.cancel()
+    do {
+        _ = try await cancelledPreview.value
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 17,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "A cancelled preview decode unexpectedly completed."
+            ]
+        )
+    } catch is CancellationError {
+        // Expected: obsolete preview work releases the final-decode queue.
+    }
+    do {
+        _ = try await cancellableEngine.enqueuePreview(
+            samples: Array(repeating: 0, count: 16_000),
+            languageProfile: languageProfile
+        )
+    } catch WhisperTranscriber.TranscriptionError.noSpeech {
+        // The queue remains usable after cancellation.
+    }
+    await cancellableEngine.release()
+    print("  preview cancellation released the final-decode queue")
+
     print(
         "ZenVoice runtime checks passed (persistent model + live samples: "
             + "\(transcriber.modelID))."

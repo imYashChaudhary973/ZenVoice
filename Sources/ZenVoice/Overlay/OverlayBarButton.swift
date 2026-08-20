@@ -38,9 +38,12 @@ struct OverlayBarButton: View {
                             : Color.clear
                     )
                 }
+                .frame(minHeight: ZenDesign.Layout.hitTarget)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(
+            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.barControl)
+        )
         .accessibilityLabel(title)
     }
 }

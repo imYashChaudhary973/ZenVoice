@@ -1,8 +1,9 @@
 # Design
 
-The ZenVoice interface is one window: a translucent navigation rail on the
-left, a content column of cards on the right. Everything the app can do is
-reachable from that rail, and the window opens when the app launches.
+The ZenVoice interface is one native macOS window: a `NavigationSplitView`
+sidebar, a unified titlebar toolbar, and a scrolling preference pane. The
+graphite/violet identity stays intact, while navigation, toolbar placement,
+segmented controls, focus, and window behavior follow familiar Apple patterns.
 
 This document is the contract for the visual system. It describes what the
 tokens mean and when to reach for each component, not every pixel — the pixels
@@ -12,15 +13,15 @@ live in [`ZenDesignTokens.swift`](../Sources/ZenVoice/ZenDesignTokens.swift),
 
 ## Principles
 
-**Moss on ink.** A near-black canvas, layered surfaces, and one muted green
-accent. The accent is deliberately desaturated: a saturated green filling
-selected navigation and primary buttons on an almost-black canvas glows, and
-this is an app people leave open all day.
+**Graphite and violet.** The approved reference supplies the visual anchor:
+`#39393B` for the main surface, `#444348` for selected and raised rows,
+`#FEFEFF` for primary text, `#B9B9BB` for secondary text, and `#543EF5` for
+compact badges and filled actions. The content canvas extends the same neutral
+ramp at `#303033`.
 
-**Cards, not rules.** Content sits in large softly-rounded cards with a single
-hairline edge. Horizontal rules between sections are not used — a card already
-has an edge, and adding a rule above it draws two boundaries a few points
-apart.
+**Familiarity before invention.** Navigation uses `NavigationSplitView`, tabs
+use a native segmented `Picker`, controls use SwiftUI/AppKit components, and
+the toolbar belongs to the window rather than being painted inside content.
 
 **Depth by nesting.** A card holds inset rows on a lighter surface. Radius
 tightens as you nest (16 → 12 → 8) so the stack reads as depth rather than as
@@ -29,41 +30,53 @@ one blurry shape.
 **Native controls stay native.** Switches, pop-up buttons, and text fields are
 the system's, tinted once at the window root. There is no hand-drawn switch.
 
+**Behavior over animation.** Interactive transitions use critically damped,
+interruptible springs. Feedback begins on press, never locks input, and follows
+the same path in both directions. Bounce is reserved for waveform motion that
+actually carries momentum.
+
+**Materials are structural.** Translucency separates the sidebar and floating
+chrome; content groups remain solid graphite. Reduce Transparency replaces the
+material with the same solid palette, and Increased Contrast strengthens
+boundaries without changing layout.
+
 ## Colour
 
 ### The two accent weights
 
-The accent exists twice because one green cannot do both jobs:
+The accent exists twice because the sampled violet cannot do both jobs:
 
 | Token | Use | Contrast |
 | --- | --- | --- |
 | `Semantic.accent` | Accent *text*, icons, meters, hairlines drawn on the canvas | ≥ 4.5:1 on ink |
-| `Semantic.accentFill` | Selected navigation, primary buttons — anything carrying a white label | white on it ≥ 4.5:1 |
+| `Semantic.accentFill` | Primary buttons, segmented selection, focus and count badges | white on it ≥ 4.5:1 |
 
-Using one mid-green for both is the specific mistake this split prevents: a
-single mid-green lands near 3.8:1 in each direction, so accent text on the
-canvas and white text on the button are *simultaneously* too faint. Nothing in
-the window should use a raw green — pick the weight that matches the job.
+Using the sampled violet for both is the specific mistake this split prevents:
+`#543EF5` carries white at 6.16:1, but does not clear the body-text floor as a
+small foreground on graphite. Nothing should use a raw violet without first
+choosing the foreground or fill role.
 
-`accentStrong` is the pressed state for a filled control. It always moves away
-from the label colour: darker in light mode, brighter in dark.
+`accentStrong` is the pressed state for a filled control. ZenVoice follows the
+system appearance instead of forcing Dark Aqua. Semantic AppKit colours provide
+the canvas, surfaces, labels, and separators; violet remains the single product
+tint in both light and dark appearances.
 
-In light mode both weights resolve to the same deep moss. On a white canvas a
-light green cannot clear 4.5:1 as text, and does not need lightening to carry
-white as a fill.
+### Surfaces and Liquid Glass
 
-### Surfaces
+`canvas` → `surface` → `surfaceRaised` → `surfaceSunken` still communicates
+content depth. These are semantic system colours, so increased contrast and
+appearance changes do not require a second hard-coded palette.
 
-`canvas` → `surface` (cards) → `surfaceRaised` (inset rows) → `surfaceSunken`
-(tracks and wells). The sidebar is not in this family: it is an
-`NSVisualEffectView` with `behindWindow` blending, with `Semantic.sidebar`
-painted over it at low alpha to settle navigation text against a bright
-wallpaper.
+On macOS 26 and newer, `ZenGlassSurfaceModifier` applies Liquid Glass only to
+functional floating layers: toolbar controls, ZenBar, and live preview. Nearby
+toolbar controls share `ZenGlassContainer` for one render group. Content cards
+remain normal surfaces; applying glass to every card would obscure hierarchy
+and waste render time.
 
-The root view deliberately paints **no** window-wide background. An opaque fill
-there sits behind the sidebar's material and flattens it to a plain grey panel.
-Each column paints its own surface instead, and the window's
-`backgroundColor` is `.clear` for the same reason.
+macOS 14 and 15 use `ZenMaterialSurface`. Reduce Transparency and Increased
+Contrast replace either material with a solid semantic surface. The unified
+titlebar remains native, and scrolling content never draws readable labels
+through toolbar controls.
 
 ## Type
 
@@ -90,10 +103,10 @@ weight.
 
 | Token | Value | Note |
 | --- | --- | --- |
-| `Layout.sidebarWidth` | 240 | One named value. The title bar used to hand-copy it and the two drifted apart. |
-| `Layout.titleBar` | 52 | Clears the traffic lights, which the window draws over the sidebar. |
-| `Layout.navRow` | 40 | Painted height of a navigation row. |
-| `Layout.navIcon` | 26 | Icon slot in a navigation row, so labels share a baseline. |
+| `Layout.sidebarWidth` | 248 | Ideal native split-view width; users can resize it from 220–300pt. |
+| `Layout.titleBar` | 48 | Reference value for overlays; the main window uses the native unified titlebar. |
+| `Layout.navRow` | 44 | Minimum accessible target for custom navigation controls. |
+| `Layout.navIcon` | 24 | Stable icon slot outside native `Label` rows. |
 | `Layout.hitTarget` | 44 | Clickable frame of anything interactive. |
 | `Layout.control` | 32 | Painted height of a compact control inside a row that already meets the hit target. |
 | `Layout.proseColumn` | 720 | Measure for running prose. Cards are **not** capped — see below. |
@@ -118,52 +131,32 @@ every assistive technology that targets by frame.
 ## The window shell
 
 ```
-┌─────────────┬──────────────────────────────────────┐
-│             │  ZenVoice        ( status ⌘ ☾ ) Dictate│  ← top bar, 52pt
-│  ● Home     ├──────────────────────────────────────┤
-│             │                                      │
-│  Configure  │   [chip]  Page title                 │
-│    Dictation│           Page subtitle              │
-│    …        │                                      │
-│             │   ┌────────────────────────────────┐ │
-│  Use        │   │ card                           │ │
-│  Activity   │   └────────────────────────────────┘ │
-│  Help       │                                      │
-└─────────────┴──────────────────────────────────────┘
-   vibrancy                     canvas
+┌──────────────── unified macOS toolbar ─────────────┐
+│ ◫                ● Ready      ⌘      Dictate       │
+├──────────────┬─────────────────────────────────────┤
+│ ZenVoice     │ [chip]  Preference title            │
+│ Overview     │         Supporting context           │
+│ Configure    │  [native segmented control]         │
+│  Dictation   │  ┌───────────────────────────────┐  │
+│  …           │  │ grouped preference content    │  │
+│ Activity     │  └───────────────────────────────┘  │
+└──────────────┴─────────────────────────────────────┘
+  sidebar material              graphite canvas
 ```
 
-The sidebar runs the **full height** of the window, under the traffic lights,
-and the content column carries its own top bar. A single title bar spanning
-both would cut the sidebar material off below the window's rounded top
-corners.
+`NavigationSplitView` owns collapse, resize, restoration, and the standard
+toolbar sidebar button. The detail pane expands from its live width, so the
+motion is interruptible and spatially symmetric.
 
-Navigation is four labelled groups plus an unlabelled Home: what you set up
-(Configure), what you use (Use), what it recorded (Activity), and where to get
-help (Help). Every entry previously had its own one-item heading, so the
-headings carried no information — each label was just the row beneath it,
-restated.
+The sidebar has six top-level destinations: Home, Dictation, Language & Models,
+Personalization, History, and Settings. Formatting, vocabulary, app rules, and
+commands are peer views inside Personalization; transcripts, recordings, and
+insights are peer views inside History. This keeps every capability while
+removing one sidebar row per implementation detail.
 
-The selected row is a filled `accentFill` pill with a white label: the
-strongest single mark in the window, and the only place the fill weight appears
-at rest. Unselected icons are accent-tinted, because grey icons on a
-translucent panel disappear against a busy wallpaper.
-
-**The rail is scanned by its icons, not read.** Glyphs are drawn at 19pt in a
-26pt slot, larger than the 15pt label beside them. At 13pt they were *smaller*
-than their own label and read as decoration. Group headings sit at 12pt in
-`textSecondary` — tertiary vanished against a light wallpaper showing through
-the material.
-
-The painted pill is 40pt against a 44pt clickable frame, so consecutive rows
-nearly touch. The approved design packs them tighter still, at roughly 36pt
-pitch; ZenVoice does not follow it that far, because a 36pt row cannot hold a
-44pt hit target and the rail is the most-clicked surface in the app.
-
-Appearance cycles System → Light → Dark from one toolbar button that names both
-its current value and its next one. A three-way segmented control used to sit
-in the sidebar footer, spending a permanent 44pt of navigation space on a
-setting most people touch once.
+Sidebar rows use native `List` spacing and SF Symbols. Selection is a quiet
+semantic raised row with a violet icon. The standard toolbar sidebar control
+remains visible and exposes “Hide Sidebar” / “Show Sidebar” to accessibility.
 
 ## Components
 
@@ -181,9 +174,10 @@ than hand-rolling it locally.
 | `ZenStatTile` | Uppercase eyebrow, then the number, then one line of context. |
 | `ZenBadge` | Sentence-case capsule pill. Not uppercase — these carry proper nouns. |
 | `ZenBanner` | Coloured glyph, body-contrast text, tinted background. |
-| `ZenTabStrip` | Views *within* a section. Its underline hugs its label. |
-| `ZenSegmentedControl` | A choice between ranges or modes, on a sunken track. |
-| `ZenToolbarCluster` | The capsule of global actions in the top bar. |
+| `ZenTabStrip` | Native segmented `Picker` for views within a section. |
+| `ZenMaterialSurface` | Structural AppKit material with a solid accessibility fallback. |
+| `ZenGlassSurfaceModifier` / `ZenGlassContainer` | Versioned Liquid Glass for functional floating controls, with material and solid fallbacks. |
+| `ZenPressButtonStyle` | Immediate, interruptible press feedback plus visible keyboard focus and disabled-state contrast for custom controls. |
 | `ZenChoiceCard` | Mutually exclusive picker cards. |
 
 ### One scaffold per section
@@ -236,21 +230,25 @@ and that shortcut still reaches the app.
 
 ## Motion
 
-Quick `easeOut` fades and slides everywhere: 0.15s for state flips, 0.22s for
-anything that moves. The single spring is reserved for the ZenBar waveform, the
-one living element in the app. Every helper in `ZenDesign.Motion` returns `nil`
-when Reduce Motion is on, so call sites pass
-`@Environment(\.accessibilityReduceMotion)` straight through.
+Small interactive state changes use a critically damped spring with response
+`0.28`; larger retargetable changes use response `0.35`, also critically
+damped. The ZenBar waveform alone uses damping `0.8` because it represents
+physical speech energy. Reduce Motion replaces spatial springs with 0.12–0.16s
+opacity/color feedback rather than removing feedback entirely.
 
 ## Checking the work
 
 ```sh
 swift build
+swift run ZenVoiceCoreChecks
+swift run ZenVoiceStorageChecks
+swift run ZenVoiceLinkChecks
+ZENVOICE_MODEL_PATH=/path/to/model swift run ZenVoiceRuntimeChecks
 ./Scripts/check-ui-invariants.sh
+ZENVOICE_MODEL_PATH=/path/to/model ./Scripts/check-dictation-e2e.sh
 ```
 
-The invariant script encodes decisions the compiler cannot see, each of which
-was a real defect at some point: a tab child growing its own scaffold, the
-sidebar width drifting between two files, the cloud preview stealing focus from
-the app a transcript was about to be inserted into, and type below the 11pt
-floor.
+The gates cover scaffold ownership, compact width, Liquid Glass availability,
+permission polling, model/engine selection consistency, process execution,
+link ordering and teardown, preview cancellation, and real short-utterance
+stop-to-complete latency.

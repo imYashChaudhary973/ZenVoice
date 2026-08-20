@@ -15,57 +15,21 @@
 import SwiftUI
 import ZenVoiceCore
 
-/// Phase 6 consolidated Dictation surface.
-///
-/// Shortcut, audio, and overlay were three separate navigation entries that all
-/// configure the same act: pressing the key and speaking. They now share one
-/// screen with tabs.
+/// One continuous dictation setup flow: trigger, input, and live behavior.
 struct DictationScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
-    private enum Tab: String, CaseIterable, Identifiable {
-        case shortcut, audio, overlay
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .shortcut:
-                return "Shortcut"
-            case .audio:
-                return "Audio"
-            case .overlay:
-                return "Overlay"
-            }
-        }
-    }
-
-    @State private var selection: Tab = .shortcut
-
     var body: some View {
         ZenScreen(
-            icon: "waveform",
+            icon: "mic",
             title: "Dictation",
             subtitle:
                 "The shortcut you press, the microphone it listens to, and "
-                + "what you see while you speak.",
-            tabs: {
-                ZenTabStrip(
-                    items: Tab.allCases.map { tab in
-                        .init(tab: tab, title: tab.title)
-                    },
-                    selection: $selection
-                )
-            }
+                + "what you see while you speak."
         ) {
-            switch selection {
-            case .shortcut:
-                ShortcutsScreen(viewModel: viewModel)
-            case .audio:
-                AudioScreen(viewModel: viewModel)
-            case .overlay:
-                OverlayScreen(viewModel: viewModel)
-            }
+            ShortcutsScreen(viewModel: viewModel)
+            AudioScreen(viewModel: viewModel)
+            OverlayScreen(viewModel: viewModel)
         }
     }
 }

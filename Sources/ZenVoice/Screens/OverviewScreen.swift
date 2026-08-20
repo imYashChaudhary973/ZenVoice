@@ -29,22 +29,17 @@ struct OverviewScreen: View {
     var body: some View {
         ZenScreen(
             icon: "house.fill",
-            title: "Home",
+            title: "Overview",
             subtitle:
                 "Everything runs on this Mac. Nothing to sign into, nothing to sync."
         ) {
             homeGrid
         }
-        .onAppear {
-            viewModel.refreshSystemStatus()
-            historyViewModel.refresh()
-            insightsViewModel.refresh()
-        }
     }
 
     private var homeGrid: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
-            todayHeroCard
+            todayMetrics
             statusOverview
             // Two columns while both fit, one when they do not.
             //
@@ -75,108 +70,79 @@ struct OverviewScreen: View {
         VStack(spacing: ZenDesign.Spacing.lg) {
             quickActionsPanel
             permissionsPanel
+            frequentAppsPanel
         }
     }
 
     // MARK: - Today
 
-    /// The one hero on the page: today's numbers, read left to right, with the
-    /// streak as the only coloured mark.
-    ///
-    /// This was four equal metric columns divided by hairlines, which gave
-    /// "top app" the same visual weight as the word count and left the page
-    /// with no entry point. A hero states the day; the detail lives below.
-    private var todayHeroCard: some View {
+    /// Usage stays quiet until there is something useful to report. Once the
+    /// user has dictated, one compact summary replaces four empty hero cards.
+    @ViewBuilder
+    private var todayMetrics: some View {
         let today = insightsViewModel.snapshot.today
-        let streak = insightsViewModel.snapshot.currentStreakDays
-        return ZenPanel(padding: ZenDesign.Spacing.xl) {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Today")
-                            .font(ZenDesign.Typography.display)
-                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        Text(
-                            today.hasActivity
-                                ? "\(today.pillSummary). Keep it going."
-                                : "Nothing yet — say a few words."
+        if today.dictationCount > 0 {
+            ZenPanel(padding: ZenDesign.Spacing.md) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: ZenDesign.Spacing.xl) {
+                        metric(
+                            today.wordCount.formatted(),
+                            label: "words",
+                            icon: "textformat"
                         )
-                        .font(ZenDesign.Typography.body)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        metric(
+                            formattedDuration(today.durationSeconds),
+                            label: "speaking",
+                            icon: "clock"
+                        )
+                        metric(
+                            today.dictationCount.formatted(),
+                            label: "sessions",
+                            icon: "mic"
+                        )
+                        if let app = today.topApplicationName {
+                            metric(app, label: "top app", icon: "macwindow")
+                        }
                     }
-                    Spacer(minLength: ZenDesign.Spacing.md)
-                    if streak > 0 {
-                        ZenBadge(
-                            text: "\(streak) day\(streak == 1 ? "" : "s")",
-                            kind: .accent,
-                            systemImage: "flame.fill"
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                        metric(
+                            today.wordCount.formatted(),
+                            label: "words today",
+                            icon: "textformat"
+                        )
+                        metric(
+                            formattedDuration(today.durationSeconds),
+                            label: "speaking time",
+                            icon: "clock"
+                        )
+                        metric(
+                            today.dictationCount.formatted(),
+                            label: "sessions",
+                            icon: "mic"
                         )
                     }
-                }
-
-                HStack(spacing: 0) {
-                    heroStat(
-                        "text.alignleft",
-                        value: String(today.wordCount),
-                        label: "words"
-                    )
-                    heroDivider
-                    heroStat(
-                        "clock",
-                        value: formattedDuration(today.durationSeconds),
-                        label: "spoken"
-                    )
-                    heroDivider
-                    heroStat(
-                        "waveform",
-                        value: String(today.dictationCount),
-                        label: today.dictationCount == 1
-                            ? "session" : "sessions"
-                    )
-                    heroDivider
-                    heroStat(
-                        "app.badge",
-                        value: today.topApplicationName ?? "—",
-                        label: today.hasActivity ? "top app" : "no activity"
-                    )
                 }
             }
+            .accessibilityElement(children: .contain)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Today's usage. \(today.pillSummary)."))
     }
 
-    private var heroDivider: some View {
-        Rectangle()
-            .fill(ZenDesign.Semantic.border)
-            .frame(width: 1, height: 34)
-            .padding(.horizontal, ZenDesign.Spacing.md)
-            .accessibilityHidden(true)
-    }
-
-    private func heroStat(
-        _ icon: String,
-        value: String,
-        label: String
+    private func metric(
+        _ value: String,
+        label: String,
+        icon: String
     ) -> some View {
-        HStack(spacing: ZenDesign.Spacing.sm) {
+        HStack(spacing: ZenDesign.Spacing.xs) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(ZenDesign.Semantic.accent)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(label)
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                    .lineLimit(1)
-            }
+            Text(value)
+                .font(ZenDesign.Typography.bodyStrong)
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            Text(label)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func formattedDuration(_ seconds: TimeInterval) -> String {
@@ -458,7 +424,7 @@ struct OverviewScreen: View {
             title: "Recent activity",
             trailing: {
                 Button("See all") { navigate(.history) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ZenPressButtonStyle())
                     .font(ZenDesign.Typography.captionStrong)
                     .foregroundStyle(ZenDesign.Semantic.accent)
             },
@@ -525,12 +491,45 @@ struct OverviewScreen: View {
                                 }
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(ZenPressButtonStyle())
                         }
                     }
                 }
             }
         )
+    }
+
+    private var frequentAppsPanel: some View {
+        let applications = Array(
+            insightsViewModel.snapshot.topApplications.prefix(4)
+        )
+        return ZenCard(
+            icon: "macwindow",
+            title: "Frequently Used Apps",
+            subtitle: "Where your dictation time goes."
+        ) {
+            if applications.isEmpty {
+                ZenInsetRow {
+                    Text("App usage appears after your first saved dictation.")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(applications) { application in
+                        ZenMeterRow(
+                            label: application.displayName,
+                            percent: appShare(application.wordCount)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func appShare(_ wordCount: Int) -> Int {
+        let total = max(1, insightsViewModel.snapshot.totalWordCount)
+        return Int((Double(wordCount) / Double(total) * 100).rounded())
     }
 
     private func tintedIconChip(
@@ -557,7 +556,7 @@ struct OverviewScreen: View {
             Button("Review") {
                 navigate(.history)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ZenPressButtonStyle())
             .font(ZenDesign.Typography.captionStrong)
             .foregroundStyle(ZenDesign.Semantic.warn)
         }
@@ -584,14 +583,6 @@ struct OverviewScreen: View {
     }
 
     private var modelDisplayName: String {
-        guard let selectedModelID = modelManagerViewModel.selectedModelID,
-              let model = modelManagerViewModel.models.first(
-                where: { $0.id == selectedModelID }
-              ) else {
-            return viewModel.isLocalModelReady
-                ? "Verified local model"
-                : "Not installed"
-        }
-        return model.displayName
+        modelManagerViewModel.activeEngineDisplayName
     }
 }

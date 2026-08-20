@@ -15,55 +15,18 @@
 import SwiftUI
 import ZenVoiceCore
 
-/// Phase 6 consolidated Commands surface.
-///
-/// Voice commands and assisted writing are both ways the user controls other
-/// apps by voice. They share one screen with tabs.
+/// Voice, agentic, and writing commands share one continuous control surface.
 struct CommandsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
-    private enum Tab: String, CaseIterable, Identifiable {
-        case commandMode, agenticMode, writeMode
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .commandMode:
-                return "Command Mode"
-            case .agenticMode:
-                return "Agentic Mode"
-            case .writeMode:
-                return "Write Mode"
-            }
-        }
+    var body: some View {
+        commandContent
     }
 
-    @State private var selection: Tab = .commandMode
-
-    var body: some View {
-        ZenScreen(
-            icon: "terminal.fill",
-            title: "Commands",
-            subtitle:
-                "Control your Mac and rewrite existing text, by voice.",
-            tabs: {
-                ZenTabStrip(
-                    items: Tab.allCases.map { tab in
-                        .init(tab: tab, title: tab.title)
-                    },
-                    selection: $selection
-                )
-            }
-        ) {
-            switch selection {
-            case .commandMode:
-                CommandModeScreen(viewModel: viewModel)
-            case .agenticMode:
-                AgenticModeScreen(viewModel: viewModel)
-            case .writeMode:
-                WriteModeScreen(viewModel: viewModel)
-            }
-        }
+    @ViewBuilder
+    private var commandContent: some View {
+        CommandModeScreen(viewModel: viewModel)
+        AgenticModeScreen(viewModel: viewModel)
+        WriteModeScreen(viewModel: viewModel)
     }
 }

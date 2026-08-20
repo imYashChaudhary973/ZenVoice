@@ -36,7 +36,7 @@ struct ShortcutsScreen: View {
     // MARK: dictation shortcuts
 
     private var dictationSection: some View {
-        ZenSection(title: "Dictation") {
+        ZenSection(title: "Trigger") {
             ZenPanel {
                 ZenRow(
                     icon: "mic",
@@ -197,7 +197,7 @@ struct ShortcutsScreen: View {
     // MARK: ZenBar behavior
 
     private var zenBarSection: some View {
-        ZenSection(title: "While dictating") {
+        ZenSection(title: "Behavior") {
             ZenPanel {
                 ZenRow(
                     icon: "rectangle.bottomthird.inset.filled",
@@ -284,7 +284,7 @@ struct ShortcutCaptureButton: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ZenPressButtonStyle())
         .accessibilityLabel(
             isCapturing
                 ? "Cancel shortcut capture"

@@ -56,4 +56,20 @@ public enum SelectedEnginePreferences {
         dictionary.removeValue(forKey: profile.id)
         defaults.set(dictionary, forKey: preferenceKey)
     }
+
+    /// Migrates installs that selected a Whisper model before ZenVoice stored
+    /// an engine preference. Without this, the new recommendation order can
+    /// silently route an explicitly chosen Whisper model through Parakeet.
+    @discardableResult
+    public static func migrateLegacyWhisperSelectionIfNeeded(
+        for profile: LanguageProfile,
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
+    ) -> Bool {
+        guard load(for: profile, defaults: defaults) == nil,
+              ModelSelectionPreferences.load(defaults: defaults) != nil else {
+            return false
+        }
+        save(EngineIdentifiers.whisper, for: profile, defaults: defaults)
+        return true
+    }
 }

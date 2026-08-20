@@ -118,7 +118,7 @@ struct OnboardingScreen: View {
                 Button("Skip setup") {
                     finish()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ZenPressButtonStyle())
                 .foregroundStyle(
                     ZenDesign.Semantic.textSecondary
                 )
@@ -358,7 +358,7 @@ struct OnboardingScreen: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ZenPressButtonStyle())
         .accessibilityLabel(title)
         .accessibilityAddTraits(
             selected ? .isSelected : []

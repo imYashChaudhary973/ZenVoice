@@ -1,182 +1,168 @@
 <p align="center">
-  <img src="Resources/Brand/ZenLogo.png" width="120" alt="ZenVoice logo">
+  <img src="Resources/Brand/ZenLogo.png" width="96" alt="ZenVoice logo">
 </p>
 
 <h1 align="center">ZenVoice</h1>
 
 <p align="center">
-  Private, local-first voice dictation for macOS.
-  Speak naturally, transcribe on-device, and paste into any app.
+  Private, local-first voice dictation for macOS.<br>
+  Speak into whichever window has focus. The transcript is typed there.
 </p>
 
 <p align="center">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-111111">
+  <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-111111">
   <img alt="Swift 5.10" src="https://img.shields.io/badge/Swift-5.10-F05138">
-  <img alt="Local-first" src="https://img.shields.io/badge/Privacy-Local--first-C5A36A">
-  <img alt="Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-1abc9c.svg">
+  <img alt="Local-first" src="https://img.shields.io/badge/Privacy-Local--first-0D855E">
+  <img alt="Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-0D855E">
 </p>
 
-ZenVoice is a native macOS app inspired by the speed of modern voice dictation
-tools while keeping transcription, temporary audio, and configuration on your
-Mac. Its ZenBar stays close at hand, while a dedicated settings window provides
-clear controls and live system status. There are no accounts, subscriptions,
-analytics, or cloud transcription services in the current application.
+ZenVoice is a native macOS menu-bar app that records on this Mac, decodes with a local speech engine, and pastes into the frontmost app. There is no account, no subscription, no analytics, and no cloud transcription. The one network path that can leave this machine — optional BYO-key Cloud formatting — is off until you turn it on and put your own key in the Keychain.
 
-> [!IMPORTANT]
-> ZenVoice is open-source software licensed under the Apache License, Version
-> 2.0 (see [LICENSE](LICENSE)). The project welcomes contributions; see
-> [Contributing](CONTRIBUTING.md). ZenVoice builds for macOS 14 or newer.
-> There is no account system, subscription, or cloud transcription service.
+| | |
+|---|---|
+| **Platform** | Native macOS 14+ · Apple Silicon |
+| **Stack** | Swift · SwiftUI · AppKit · AVFoundation · Accessibility |
+| **Data** | Local-first · AES-GCM transcripts · Keychain-held vault key |
+| **Status** | Daily personal use · public shipping deferred ([ADR 0004](docs/decisions/0004-internal-use-first-defer-shipping.md)) |
 
-## What works today
+## Why
 
-- A native settings window with Overview, Models, History, Insights,
-  Shortcuts, and Privacy screens.
-- A configurable global dictation shortcut, defaulting to
-  `Control + Option + Space`.
-- Encrypted local history by default, including usable partial transcriptions.
-- Private local insights for words, weighted WPM, streaks, apps, and work
-  categories.
-- A local language-usage profile with recurring phrases and encrypted explicit
-  correction rules.
-- Previewed, locally rendered highlight cards with explicit Save and macOS
-  Share actions.
-- Copy, retry, search, and delete controls for saved dictations.
-- A configurable `Control + Option + V` shortcut for pasting the latest
-  dictation.
-- Configurable Private Dictation (`Control + Option + P`) and hold-to-dictate
-  controls.
-- Verified English, multilingual, and Hinglish-specialist model downloads with
-  pinned revisions and SHA-256 validation.
-- Explicit English-safe language profiles with 64 selectable languages.
-- Hinglish Latin-script output plus native-script and local English-translation
-  modes for multilingual dictation.
-- Selectable microphones, safe disconnection handling, and a three-second
-  on-device Audio Doctor.
-- Stable local phrase preview in ZenBar and optional guarded commit-on-pause
-  insertion.
-- Hardware-aware Fast, Balanced, and High Accuracy recommendations backed by
-  private local timing samples.
-- Unified Formatting ladder: Off, deterministic Clean, guarded on-device Smart,
-  and explicit BYO-key Cloud.
-- Per-application language, refinement, and voice-command profiles.
-- A memory-only context box for names and topic hints that clears when the
-  next recording starts.
-- Local layout and punctuation commands with English controls plus Hindi,
-  Spanish, French, Mandarin, and Arabic aliases.
-- Optional Agentic Mode, off by default: a spoken multi-step goal becomes a
-  reviewable plan that runs only after you approve those exact steps, with
-  local planning, recomputed per-step risk, live ZenBar progress, and a Stop
-  control.
-- Explicit controls to pause personal rules or local pattern analysis and to
-  delete correction rules independently from History.
-- A Recovery Inbox for failed and usable partial dictations with Copy, Retry,
-  and Delete actions.
-- Upgrade-safe first-run onboarding with plain-language privacy, permission,
-  shortcut, language, and model guidance.
-- A live privacy inventory for encrypted transcripts, recovery audio,
-  correction rules, and installed local models.
-- Reduce Motion-aware ZenBar animation and clearer assistive-technology status
-  labels.
-- Meaning-preserving cleanup for fillers, repeated words, spoken restarts, and
-  explicit prompt layout commands.
-- Visible model-download percentage with reliable cancellation.
-- Local transcription through `whisper.cpp`.
-- Compact ZenBar feedback for ready, listening, processing, success, and error
-  states.
-- A live waveform driven by real microphone loudness.
-- Listening controls to cancel or finish dictation without the hotkey.
-- An optional “Dictating with ZenVoice” status message.
-- Automatic paste into the active app with clipboard fallback.
-- Temporary audio cleanup after each transcription attempt.
-- Native Zen branding in ZenBar, the menu bar, and the application icon.
+Dictation that leaves the machine is fast and someone else's problem. Dictation that stays here is only useful if it is as close as a keystroke, honest about what it stored, and quiet enough to leave open all day.
+
+ZenVoice is built for that second job: a capsule on the display you are working on, a settings window you open when something needs changing, and a privacy inventory that counts what is actually on disk.
 
 ## How it works
 
 ```text
 Hotkey
-  → local microphone recording
-  → app profile + optional one-shot context
-  → selected local whisper.cpp model
-  → conservative transcript cleanup
-  → deterministic local refinement
-  → macOS clipboard and active-app paste
+  → local microphone (16 kHz mono)
+  → app profile + optional in-memory context
+  → selected local engine
+  → conservative cleanup
+  → Formatting (Off / Clean / Smart / Cloud)
+  → personal correction rules
+  → clipboard + Accessibility paste
 ```
 
-The settings interface, ZenBar, and permission handling run natively with
-Swift, SwiftUI, AppKit, AVFoundation, and macOS Accessibility APIs. See
-[Architecture](docs/ARCHITECTURE.md) for the component-level design.
+Closing the settings window does not quit. The status item and the shortcut stay. **⌘W** closes the window; **⌘Q** quits.
+
+## What it does
+
+| Area | Behaviour |
+|---|---|
+| **Dictation** | `Control + Option + Space` by default. Hold-to-dictate, paste-last (`⌃⌥V`), and Private Dictation (`⌃⌥P`) are configurable. Live preview and commit-on-pause are optional. |
+| **ZenBar** | At rest: a 108×36 capsule (mark + flat meter) on the display of the focused app. Controls appear on hover. An error is the one state that stays open. |
+| **Engines** | Whisper (`whisper.cpp` v1.9.1), Apple Speech, Parakeet TDT v2/v3, Parakeet Flash, Nemotron 3.5, Cohere Transcribe (on-device ONNX). Flash and Nemotron Ultra Fast are live-preview only. |
+| **Languages** | English-safe default, 64 selectable languages, Hinglish Latin / native-script / local English-translation. |
+| **Formatting** | Off, deterministic Clean, guarded on-device Smart (macOS 26+), opt-in BYO-key Cloud. |
+| **History** | Encrypted by default. Search, copy, retry, delete, Recovery Inbox. Pause independently of Private Dictation. |
+| **Insights** | Words, weighted WPM, streaks, apps, categories — all derived locally. Highlight cards carry numbers only. |
+| **Voice profile** | Recurring phrases and explicit correction rules, encrypted. Not a biometric voiceprint. |
+| **Commands** | Local layout/punctuation phrases. Optional Agentic Mode: a spoken goal becomes a reviewable plan; nothing runs until you approve those exact steps. |
+| **Audio** | Pin a mic or follow System Default. Three-second on-device Audio Doctor. Optional Audio History is off and unencrypted — see [Privacy](docs/PRIVACY.md). |
+
+Do not re-add FluidAudio or Fluid Intelligence. NVIDIA engines run on open `parakeet.cpp`.
+
+## Design
+
+The visual system is the apple-design theme adopted on `main`: ink, one jade, real materials, springs. The contract lives in [`docs/DESIGN.md`](docs/DESIGN.md). Pixels live in `ZenDesignTokens`, `ZenChrome`, and `ZenV2Components`. All twenty-six screens compose from those three files.
+
+**Ink, one jade, real materials.** The accent does three jobs: the selected navigation row, the primary action, and live state. Everything else is monochrome. Nine jade glyphs is the same as zero.
+
+**Depth from light, not boxes.** A card is a surface with a shadow and a bright top edge. Hairlines are the fallback. Nested rows draw no border.
+
+**Type carries the hierarchy.** 11pt floor, 34pt metric. Tracking tightens as size grows. `Scripts/check-ui-invariants.sh` fails type below the floor.
+
+**Motion is a spring.** Critically damped by default; overshoot only when a gesture threw it. Controls scale on pointer-down. Reduce Motion returns `nil` from every helper.
+
+```
+┌─────────────┬──────────────────────────────────────┐
+│             │  ZenVoice        ( status ⌘ ☾ ) Dictate│
+│  ● Home     ├──────────────────────────────────────┤
+│  Configure  │           Page title                 │
+│    Dictation│           Page subtitle              │
+│  Use        │   ┌────────────────────────────────┐ │
+│  Activity   │   │ card                           │ │
+│  Help       │   └────────────────────────────────┘ │
+└─────────────┴──────────────────────────────────────┘
+   vibrancy                     canvas
+```
+
+The rail is full-height vibrancy under the traffic lights. Selected navigation is `accentMuted` plus an accent icon, not a filled pill. New UI uses the tokens. Do not hand-roll a second green.
+
+## Privacy
+
+Application code does not send audio, transcripts, clipboard contents, or usage analytics over the network.
+
+| What | Where it lives |
+|---|---|
+| Transcripts | AES-GCM in local SQLite; 256-bit key in the Keychain |
+| Recovery audio | Private Application Support, ≤ 24 hours, failed dictations only |
+| Audio History | Off. Unencrypted WAV archive if you turn it on. Never leaves the Mac unless you export it. |
+| Next-dictation context | Memory only, 500 characters, cleared when recording starts |
+| Cloud formatting | Off. Sends finished text + your prompt to *your* HTTPS endpoint, with *your* Keychain key. Never audio, never the target app. |
+| Agentic steps | Off. Approved `codex` / `claude` / `zsh` steps are those tools' own network, not ZenVoice's. |
+
+The Privacy screen counts encrypted transcripts, recovery audio, correction rules, and installed models in-process. Those counts are not telemetry.
+
+Full boundary: [Privacy](docs/PRIVACY.md).
 
 ## Requirements
 
-- macOS 14 or newer — the build target. Which versions are actually certified
-  for the private beta is recorded per release candidate; see
-  [Release Readiness](docs/RELEASE_READINESS.md).
-- Apple Silicon Mac
-- Swift 5.10 or newer
-- Internet access on the first build for the pinned `whisper.cpp` XCFramework
-- A verified, compatible model downloaded from ZenVoice's Models screen
+- macOS 14 or newer on Apple Silicon. Certified-for-release versions are recorded per candidate in [Release Readiness](docs/RELEASE_READINESS.md); macOS 14–26 have not been certified.
+- Xcode, not only Command Line Tools — SwiftUI macros ship with Xcode.
+- Internet on the first build, for the pinned `whisper.cpp` XCFramework.
+- A verified model from the **Models** screen before the first real dictation.
 
-## Install
-
-A signed, notarized release will be available from GitHub Releases once the
-release checklist is complete. After the first release you can install with:
+## Build
 
 ```bash
-brew install --cask zenvoice/tap/zenvoice
-```
-
-Or download the latest `ZenVoice-distribution.zip` from the
-[Releases](https://github.com/zenvoice/ZenVoice/releases) page, unzip it, and
-move `ZenVoice.app` to `/Applications`.
-
-## Build from source
-
-```bash
+git clone https://github.com/imYashChaudhary973/ZenVoice.git
+cd ZenVoice
 ./Scripts/build-app.sh
 open build/ZenVoice.app
 ```
 
-On first use, macOS requests:
+On first use macOS asks for **Microphone** (capture) and **Accessibility** (paste). Without Accessibility, the transcript still lands on the clipboard.
 
-- **Microphone**, to capture speech for local transcription.
-- **Accessibility**, to paste the result into the focused application.
+There is no signed public release yet. A Homebrew cask and a GitHub Release zip are prepared and inert.
 
-Without Accessibility permission, ZenVoice still copies the transcript to the
-clipboard.
+## Use
 
-Open **Models** to download a checksum-verified English, multilingual, or
-Hinglish-specialist `whisper.cpp` GGML model. The pinned `whisper.cpp`
-XCFramework is bundled in the app; Homebrew is not required.
+1. **Shortcuts** — keep `⌃⌥Space` or record your own.
+2. **Models** — download a checksum-pinned English, multilingual, or Hinglish model.
+3. **Languages** — English, Hinglish, auto-detect, or another spoken language.
+4. Put the caret in any editable field.
+5. Press the shortcut, speak, press it again.
 
-Open **Languages** to choose English, Hinglish, automatic detection, or another
-spoken language. Non-English profiles require a compatible multilingual or
-Hinglish-specialist model.
+Hold-to-dictate is in Shortcuts: hold the chosen modifier, speak, release.
 
-Open **Audio** to follow the macOS default input, pin a connected microphone,
-or run a local signal and format test.
+## Architecture
 
-Open **Formatting** to choose Off, Clean, Smart, or Cloud. Smart uses Apple's
-on-device system model on supported macOS 26+ systems and falls back locally;
-Cloud remains a separate opt-in BYO-key path. Stable live preview and guarded
-commit-on-pause insertion stay controlled from **Dictation**.
+```mermaid
+flowchart LR
+    Hotkey[GlobalHotKey] --> State[AppState]
+    State --> Bar[ZenBar]
+    State --> Rec[AudioRecorder]
+    Rec --> Runtime[ZenVoiceRuntime]
+    Runtime --> Clean[TranscriptCleaner]
+    Clean --> Refine[Formatting]
+    Refine --> Vault[DictationVault]
+    Refine --> Insert[TextInserter]
+    Vault --> SQLite[(SQLite + AES-GCM)]
+    Insert --> Paste[Clipboard / Accessibility]
+```
 
-## Use ZenVoice
+| Target | Responsibility |
+|---|---|
+| `ZenVoice` | App, ZenBar, settings window, design system |
+| `ZenVoiceCore` | Cleanup, formatting, hotkeys, catalogues, insertion policy |
+| `ZenVoiceRuntime` | Local engines: Whisper, Apple Speech, Parakeet, Nemotron, Cohere |
+| `ZenVoiceStorage` | Encrypted vault, insights, voice profile, audio archive |
+| `ZenVoice*Checks` | Deterministic checks the compiler cannot see |
 
-1. Open the **Shortcuts** screen to keep the default shortcut or record your
-   own.
-2. Open **Privacy** if you want to pause local history or enable Private
-   Dictation.
-3. Place the cursor in any editable text field.
-4. Press your shortcut.
-5. Speak while ZenBar displays the live waveform.
-6. Press the shortcut again to stop, transcribe, and insert.
-
-Alternatively, enable **Hold to dictate** in Shortcuts. Hold the selected
-modifier key, speak, and release it to stop and transcribe.
-
-Closing the settings window keeps ZenVoice running in the menu bar. Select
-**Open ZenVoice…** from the menu-bar menu whenever you want it back.
+A loaded model is 600–940 MB of GPU buffers. After five idle minutes the registry unloads; the next dictation warms again. With nothing resident the app sits near 50 MB. Measure `phys_footprint`, not RSS.
 
 ## Verify
 
@@ -185,73 +171,28 @@ swift run ZenVoiceCoreChecks
 swift run ZenVoiceStorageChecks
 swift run ZenVoiceRuntimeChecks
 swift build
+./Scripts/check-ui-invariants.sh
 ./Scripts/build-app.sh
 codesign --verify --deep --strict build/ZenVoice.app
 ```
 
-The complete development and manual QA procedure is in
-[Development](docs/DEVELOPMENT.md).
-
-Model provenance, licences, revisions, and checksums are documented in
-[Verified Model Catalogue](docs/MODEL_CATALOG.md).
-
-## Repository guide
-
-```text
-.
-├── Resources/           Brand assets and application metadata
-├── Scripts/             Repeatable packaging utilities
-  ├── Sources/
-  │   ├── ZenVoice/        macOS application and ZenBar
-  │   ├── ZenVoiceCore/    reusable local processing logic
-  │   ├── ZenVoiceRuntime/ persistent local whisper.cpp integration
-  │   ├── ZenVoiceStorage/ encrypted history and recovery storage
-│   ├── ZenVoiceRuntimeChecks/
-│   ├── ZenVoiceStorageChecks/
-│   └── ZenVoiceCoreChecks/
-├── docs/                architecture, privacy, development, and roadmap
-└── Package.swift        Swift Package Manager definition
-```
+Point a runtime check at a model with `ZENVOICE_MODEL_PATH`. `ZENVOICE_RUNTIME_REQUIRED=1` fails instead of skipping when none is visible. Real-speech decoding runs on the scheduled `speech-gate`, not on every PR.
 
 ## Documentation
 
-Start at the [documentation index](docs/README.md). Everything under `docs/`
-describes ZenVoice as it is now; finished delivery plans and superseded R&D are
-removed rather than archived, and the reasoning behind each decision lives in
-[`docs/decisions/`](docs/decisions/).
+Start at the [documentation index](docs/README.md). `docs/` describes the product as it is now. Finished plans are deleted, not archived. Decisions live in [`docs/decisions/`](docs/decisions/).
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Design](docs/DESIGN.md)
-- [Development](docs/DEVELOPMENT.md)
-- [Privacy](docs/PRIVACY.md)
-- [Verified Model Catalogue](docs/MODEL_CATALOG.md)
-- [Voice Profile and Corrections](docs/VOICE_PROFILE.md)
-- [Private Highlight Cards](docs/SHARING.md)
-- [Instant Refine](docs/INSTANT_REFINE.md)
-- [Language Profiles](docs/LANGUAGES.md)
-- [Microphones and Audio Doctor](docs/AUDIO.md)
-- [Live Dictation](docs/LIVE_DICTATION.md)
-- [Release Readiness](docs/RELEASE_READINESS.md)
-- [Phased Development Plan](docs/PHASED_PLAN.md)
-- [M9 Security Review](docs/SECURITY_REVIEW.md)
-- [Third-Party Notices](THIRD_PARTY_NOTICES.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security](SECURITY.md)
-- [Changelog](CHANGELOG.md)
+| Document | What it covers |
+|---|---|
+| [Design](docs/DESIGN.md) | Tokens, chrome, motion, the window shell |
+| [Architecture](docs/ARCHITECTURE.md) | Layers, memory, the dictation path |
+| [Privacy](docs/PRIVACY.md) | What never leaves, and the one path that can |
+| [Model catalogue](docs/MODEL_CATALOG.md) | Pinned revisions and hashes |
+| [Development](docs/DEVELOPMENT.md) | Toolchain, checks, manual QA |
+| [Roadmap](docs/ROADMAP.md) | Direction, not a release promise |
+| [Contributing](CONTRIBUTING.md) | Branch, commit, and PR rules |
+| [Changelog](CHANGELOG.md) | What changed |
 
-## Project direction
+## Status
 
-ZenVoice is being built first for our own daily use. The immediate goal is to
-make it the best possible personal dictation tool: reliable, low-latency,
-multilingual, and respectful of privacy.
-
-Public shipping is explicitly deferred. ZenVoice is open-source under the Apache
-License, Version 2.0, and the distribution path (Developer-ID-signed direct
-download via GitHub Releases, with an optional Homebrew cask) is already
-prepared. That path will only be activated once the product has matured through
-regular personal use and a deliberate future shipping decision is made.
-
-Until then, passing CI and completing the manual release gates are not
-claims of public availability. The current release checklist is retained in
-[Release Readiness](docs/RELEASE_READINESS.md) for when shipping is reconsidered.
+Working and in daily personal use. Apache-2.0. Public shipping is deferred until the product has matured through that use and a deliberate shipping decision is made. Passing CI is not a claim of public availability.

@@ -25,8 +25,6 @@ struct ZenBarView: View {
     static let barHeight: CGFloat = 44
     static let maximumBarWidth: CGFloat = 580
 
-    @AppStorage(ZenAppearance.storageKey)
-    private var appearance = ZenAppearance.system.rawValue
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
     @ObservedObject var state: AppState
@@ -45,9 +43,7 @@ struct ZenBarView: View {
                 alignment: .bottom
             )
             .padding(.bottom, Self.shadowInset)
-            .preferredColorScheme(
-                ZenAppearance.resolved(appearance).colorScheme
-            )
+            .preferredColorScheme(ZenAppearance.colorScheme)
     }
 
     private var bar: some View {
@@ -62,9 +58,13 @@ struct ZenBarView: View {
                 .transition(.opacity)
         }
         .frame(width: barWidth, height: Self.barHeight)
-        .background(barBackground)
+        .zenGlassSurface(
+            cornerRadius: ZenDesign.Radius.bar,
+            interactive: true
+        )
         .clipShape(barShape)
         .contentShape(barShape)
+        .shadow(color: Color.black.opacity(0.22), radius: 12, y: 6)
         .animation(ZenDesign.Motion.standard(reduceMotion), value: state.phase)
         .animation(ZenDesign.Motion.standard(reduceMotion), value: barWidth)
         .accessibilityElement(children: .contain)
@@ -118,29 +118,28 @@ struct ZenBarView: View {
                     "\(state.agenticGoalTitle ?? "Agentic goal"). \(event.message)"
                 )
             } else {
-                Button(action: toggleRecording) {
-                    HStack(spacing: 9) {
-                        BrandLogo(size: 22)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(state.mode.displayName)
-                                .font(.system(size: 12.5, weight: .medium))
-                                .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                            Text("Ready")
-                                .font(ZenDesign.Typography.caption)
-                                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        }
-                        Spacer()
-                        modeSwitcher
-                        OverlayBarButton(title: "Start", emphasized: true, action: toggleRecording)
-                        ZenKbdGroup(combo: HotKeyPreferences.load().displayName)
+                HStack(spacing: 9) {
+                    BrandLogo(size: 22)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(state.mode.displayName)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text("Ready")
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     }
-                    .padding(.horizontal, 14)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
+                    Spacer()
+                    modeSwitcher
+                    OverlayBarButton(
+                        title: "Start",
+                        emphasized: true,
+                        action: toggleRecording
+                    )
+                    ZenKbdGroup(combo: HotKeyPreferences.load().displayName)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Start ZenVoice \(state.mode.displayName)")
-                .accessibilityHint("Press \(HotKeyPreferences.load().displayName) or activate this button.")
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .contain)
             }
 
         case .listening:
@@ -312,9 +311,17 @@ struct ZenBarView: View {
                                     : Color.clear
                             )
                         }
+                        .frame(
+                            width: ZenDesign.Layout.hitTarget,
+                            height: ZenDesign.Layout.hitTarget
+                        )
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(
+                    ZenPressButtonStyle(
+                        cornerRadius: ZenDesign.Radius.barControl
+                    )
+                )
                 .accessibilityLabel(mode.displayName)
                 .accessibilityAddTraits(
                     isSelected ? .isSelected : []
@@ -326,7 +333,7 @@ struct ZenBarView: View {
     private var barWidth: CGFloat {
         switch state.phase {
         case .idle:
-            return state.agenticStatusEvent == nil ? 380 : 540
+            return state.agenticStatusEvent == nil ? 440 : 540
         case .listening:
             return state.liveTranscriptPreview.isEmpty ? 400 : 560
         case .transcribing, .inserting:
@@ -340,19 +347,6 @@ struct ZenBarView: View {
         }
     }
 
-    private var barBackground: some View {
-        barShape
-            .fill(ZenDesign.Semantic.surface.opacity(0.96))
-            .overlay {
-                barShape
-                    .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
-                    .overlay {
-                        barShape
-                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                    }
-            }
-            .shadow(color: Color.black.opacity(0.28), radius: 20, y: 9)
-    }
 
     private func terminalAgenticIcon(_ event: GoalStatusEvent) -> String {
         switch event.event {

@@ -13,6 +13,9 @@ Screenshot *.heic
 PrivateBenchmarks/
 __pycache__/
 *.pyc
+/.mimosa/
+/.opencode/
+/design-qa.md
 
 # Local evaluation corpora are fetched on demand and never belong in git.
 /Datasets/

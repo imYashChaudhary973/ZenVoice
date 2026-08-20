@@ -78,19 +78,30 @@ public actor ProcessGoalExecutor: GoalExecutor {
         let status: Int32
         do {
             status = try await withTaskCancellationHandler {
-                try process.run()
-                #if os(macOS)
-                _ = setpgid(process.processIdentifier, process.processIdentifier)
-                #endif
-                timeoutTask = Task { [weak self] in
-                    try? await Task.sleep(
-                        for: .seconds(step.timeoutSeconds)
-                    )
-                    await self?.timeoutActiveProcess()
-                }
-                return await withCheckedContinuation { continuation in
+                try await withCheckedThrowingContinuation { continuation in
                     process.terminationHandler = { terminated in
-                        continuation.resume(returning: terminated.terminationStatus)
+                        continuation.resume(
+                            returning: terminated.terminationStatus
+                        )
+                    }
+                    do {
+                        try Task.checkCancellation()
+                        try process.run()
+                        #if os(macOS)
+                        _ = setpgid(
+                            process.processIdentifier,
+                            process.processIdentifier
+                        )
+                        #endif
+                        timeoutTask = Task { [weak self] in
+                            try? await Task.sleep(
+                                for: .seconds(step.timeoutSeconds)
+                            )
+                            await self?.timeoutActiveProcess()
+                        }
+                    } catch {
+                        process.terminationHandler = nil
+                        continuation.resume(throwing: error)
                     }
                 }
             } onCancel: {

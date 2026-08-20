@@ -139,23 +139,35 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
                     return
                 }
                 do {
-                    if self.context == nil {
-                        self.context = try ParakeetContext(
-                            modelPath: self.modelURL.path
-                        )
-                    }
-                    guard let context = self.context else {
-                        continuation.resume(
-                            throwing: EngineError.noEngineAvailable
-                        )
-                        return
-                    }
-                    continuation.resume(returning: context)
+                    continuation.resume(returning: try self.loadContextIfNeeded())
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
         }
+    }
+
+    /// Must run on `queue`.
+    ///
+    /// `warmUpEngines()` calls `prepare()` on every route into a dictation,
+    /// including each recording start. Reloading a ~900 MB GGUF here sat on
+    /// the same serial queue as `transcribe`, so a short utterance waited
+    /// seconds for a model that was already resident. Whisper's `warmUp()`
+    /// already no-ops when warm; this is the matching contract.
+    private func loadContextIfNeeded() throws -> ParakeetContext {
+        if let context {
+            return context
+        }
+        let context = try ParakeetContext(modelPath: modelURL.path)
+        // First inference is where ggml-metal builds pipelines. Pay that
+        // on prepare — while the user is still talking, or at launch —
+        // rather than after they stop.
+        _ = try? context.transcribe(
+            samples: [Float](repeating: 0, count: 16_000),
+            languageCode: nil
+        )
+        self.context = context
+        return context
     }
 
     public func prepare() async throws {
@@ -167,9 +179,7 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
                     return
                 }
                 do {
-                    self.context = try ParakeetContext(
-                        modelPath: self.modelURL.path
-                    )
+                    _ = try self.loadContextIfNeeded()
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
