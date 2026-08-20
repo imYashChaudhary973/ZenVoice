@@ -79,10 +79,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.titlebarAppearsTransparent = false
         window.toolbarStyle = .unified
         window.titlebarSeparatorStyle = .none
-        // NavigationSplitView and the unified toolbar own the window chrome.
-        // A clear window background lets the native sidebar material reach the
-        // rounded titlebar corners while the detail column paints graphite.
-        window.backgroundColor = .clear
+        // Fill the split-view divider with the semantic window surface. A
+        // clear window exposed a black one-pixel strip below the toolbar where
+        // the sidebar and detail panes meet.
+        window.backgroundColor = .windowBackgroundColor
         window.isMovableByWindowBackground = true
         window.minSize = NSSize(width: 900, height: 640)
         // Menu-bar apps don't get full screen for free: the green zoom
