@@ -28,32 +28,22 @@ struct LivePreviewOverlayView: View {
     let cancelRecording: () -> Void
     let finishRecording: () -> Void
 
-    @AppStorage(ZenAppearance.storageKey)
-    private var appearance = ZenAppearance.system.rawValue
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     /// Motion is reduced when either the system or ZenVoice asks for it.
     private var motionReduced: Bool { reduceMotion || systemReduceMotion }
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: ZenDesign.Radius.bar, style: .continuous)
-                .fill(ZenDesign.Semantic.surface.opacity(0.96))
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.bar,
-                        style: .continuous
-                    )
-                    .strokeBorder(ZenDesign.Semantic.borderStrong, lineWidth: 1)
-                }
-                .shadow(color: Color.black.opacity(0.28), radius: 18, y: 6)
-
-            content
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-        }
-        .preferredColorScheme(ZenAppearance.resolved(appearance).colorScheme)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        content
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .zenGlassSurface(
+                cornerRadius: ZenDesign.Radius.bar,
+                interactive: true
+            )
+            .shadow(color: Color.black.opacity(0.22), radius: 12, y: 6)
+            .preferredColorScheme(ZenAppearance.colorScheme)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

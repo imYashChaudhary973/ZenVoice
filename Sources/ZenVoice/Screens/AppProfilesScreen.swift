@@ -16,30 +16,6 @@ import SwiftUI
 import ZenVoiceCore
 import ZenVoiceStorage
 
-private struct PrivacyToggleRow: View {
-    let title: String
-    let detail: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack(spacing: ZenDesign.Spacing.sm) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                Text(detail)
-                    .font(.system(size: 12))
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-            }
-            Spacer()
-            Toggle("", isOn: $isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(ZenDesign.Semantic.accent)
-        }
-    }
-}
-
 struct AppProfilesScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var applicationProfileViewModel:
@@ -47,6 +23,12 @@ struct AppProfilesScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+            ZenBanner(
+                kind: .info,
+                icon: "info.circle",
+                text: "Default behavior: new apps use your global language and formatting until you add a rule."
+            )
+            globalDefaults
             applicationProfilesCard
 
             ZenBanner(
@@ -61,20 +43,52 @@ struct AppProfilesScreen: View {
         }
     }
 
+    private var globalDefaults: some View {
+        ZenPanel {
+            ZenRow(
+                icon: "text.bubble",
+                title: "Local voice commands",
+                subtitle: "Interpret spoken layout and punctuation commands by default"
+            ) {
+                ZenSwitch(
+                    isOn: Binding(
+                        get: { viewModel.voiceCommandsEnabled },
+                        set: viewModel.setVoiceCommandsEnabled
+                    ),
+                    label: "Local voice commands"
+                )
+            }
+            ZenPanelDivider()
+            ZenRow(
+                icon: "command",
+                title: "Command Mode",
+                subtitle: "Allow built-in app launches, Shortcuts, and system actions"
+            ) {
+                ZenSwitch(
+                    isOn: Binding(
+                        get: { viewModel.commandModeEnabled },
+                        set: viewModel.setCommandModeEnabled
+                    ),
+                    label: "Command Mode"
+                )
+            }
+        }
+    }
+
     private var applicationProfilesCard: some View {
-        ZenPanel(padding: ZenDesign.Spacing.md) {
+        ZenPanel(padding: ZenDesign.Spacing.xl) {
             VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Application profiles")
-                            .font(.system(size: 12, weight: .bold))
+                        Text("Application Rules")
+                            .font(ZenDesign.Typography.sectionTitle)
                             .foregroundStyle(
                                 ZenDesign.Semantic.textPrimary
                             )
                         Text(
                             "Automatically choose language, formatting, and local voice commands for a target app."
                         )
-                        .font(.system(size: 12))
+                        .font(ZenDesign.Typography.body)
                         .foregroundStyle(
                             ZenDesign.Semantic.textSecondary
                         )
@@ -93,29 +107,6 @@ struct AppProfilesScreen: View {
                     applicationProfileViewModel.errorMessage {
                     ErrorBanner(message: error)
                 }
-
-                PrivacyToggleRow(
-                    title: "Enable local voice commands by default",
-                    detail:
-                        "Interpret spoken layout and punctuation commands locally. Each application profile can override this.",
-                    isOn: Binding(
-                        get: {
-                            viewModel.voiceCommandsEnabled
-                        },
-                        set:
-                            viewModel.setVoiceCommandsEnabled
-                    )
-                )
-
-                PrivacyToggleRow(
-                    title: "Enable Command Mode",
-                    detail:
-                        "Let spoken phrases run app launches, Shortcuts, and system actions. Built-in actions run without approval; scripts and URLs require explicit approval.",
-                    isOn: Binding(
-                        get: { viewModel.commandModeEnabled },
-                        set: viewModel.setCommandModeEnabled
-                    )
-                )
 
                 HStack(spacing: 9) {
                     Picker(
@@ -176,7 +167,7 @@ struct AppProfilesScreen: View {
                 Text(
                     "Voice commands: new line, new paragraph, comma, full stop, question mark, and exclamation mark. English commands work with every profile; Hindi, Spanish, French, Mandarin, and Arabic aliases are included."
                 )
-                .font(.system(size: 11))
+                .font(ZenDesign.Typography.caption)
                 .foregroundStyle(
                     ZenDesign.Semantic.textTertiary
                 )
@@ -190,9 +181,14 @@ struct AppProfilesScreen: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
+                ZenIconChip(
+                    systemImage: "macwindow",
+                    size: 34,
+                    tint: ZenDesign.Semantic.textSecondary
+                )
                 VStack(alignment: .leading, spacing: 2) {
                     Text(profile.applicationName)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(ZenDesign.Typography.bodyStrong)
                         .foregroundStyle(
                             ZenDesign.Semantic.textPrimary
                         )
@@ -203,10 +199,13 @@ struct AppProfilesScreen: View {
                         )
                 }
                 Spacer()
-                Button("Remove") {
+                ZenIconButton(
+                    systemImage: "trash",
+                    label: "Remove \(profile.applicationName)",
+                    isDanger: true
+                ) {
                     applicationProfileViewModel.remove(profile)
                 }
-                .buttonStyle(ZenSecondaryButtonStyle())
             }
 
             HStack(spacing: 10) {
@@ -272,123 +271,95 @@ struct AppProfilesScreen: View {
                 .tint(ZenDesign.Semantic.accent)
             }
 
-            HStack(spacing: 10) {
-                Picker(
-                    "Engine",
-                    selection: Binding(
-                        get: {
-                            profile.preferredEngineID
-                        },
-                        set: {
-                            applicationProfileViewModel
-                                .setPreferredEngineID(
-                                    $0,
-                                    for: profile
-                                )
-                        }
-                    )
-                ) {
-                    ForEach(engineOptions, id: \.id) { option in
-                        Text(option.name)
-                            .tag(option.id as String?)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
-                Picker(
-                    "Output mode",
-                    selection: Binding(
-                        get: {
-                            profile.preferredOutputMode
-                        },
-                        set: {
-                            applicationProfileViewModel
-                                .setPreferredOutputMode(
-                                    $0,
-                                    for: profile
-                                )
-                        }
-                    )
-                ) {
-                    ForEach(outputModeOptions, id: \.id) { option in
-                        Text(option.name)
-                            .tag(option.id)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-
-            HStack(spacing: 10) {
-                Picker(
-                    "Command set",
-                    selection: Binding(
-                        get: { profile.commandSetID },
-                        set: {
-                            applicationProfileViewModel
-                                .setCommandSetID(
-                                    $0,
-                                    for: profile
-                                )
-                        }
-                    )
-                ) {
-                    ForEach(commandSetOptions, id: \.id) { option in
-                        Text(option.name)
-                            .tag(option.id as String?)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
-                Picker(
-                    "Write mode",
-                    selection: Binding(
-                        get: { profile.writeModeDefault },
-                        set: {
-                            applicationProfileViewModel
-                                .setWriteModeDefault(
-                                    $0,
-                                    for: profile
-                                )
-                        }
-                    )
-                ) {
-                    ForEach(writeModeOptions, id: \.id) { option in
-                        Text(option.name)
-                            .tag(option.id as WriteModeSubMode?)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-
-            HStack(spacing: 10) {
-                TextField(
-                    "Custom prompt hints (comma separated)",
-                    text: Binding(
-                        get: {
-                            profile.customPromptHints.joined(
-                                separator: ", "
-                            )
-                        },
-                        set: { value in
-                            let hints = value
-                                .split(separator: ",")
-                                .map {
-                                    $0.trimmingCharacters(
-                                        in: .whitespaces
-                                    )
+            DisclosureGroup("More settings") {
+                VStack(spacing: ZenDesign.Spacing.sm) {
+                    HStack(spacing: 10) {
+                        Picker(
+                            "Engine",
+                            selection: Binding(
+                                get: { profile.preferredEngineID },
+                                set: {
+                                    applicationProfileViewModel
+                                        .setPreferredEngineID($0, for: profile)
                                 }
-                                .filter { !$0.isEmpty }
-                            applicationProfileViewModel
-                                .setCustomPromptHints(
-                                    hints,
-                                    for: profile
-                                )
+                            )
+                        ) {
+                            ForEach(engineOptions, id: \.id) { option in
+                                Text(option.name).tag(option.id as String?)
+                            }
                         }
+                        .frame(maxWidth: .infinity)
+
+                        Picker(
+                            "Output mode",
+                            selection: Binding(
+                                get: { profile.preferredOutputMode },
+                                set: {
+                                    applicationProfileViewModel
+                                        .setPreferredOutputMode($0, for: profile)
+                                }
+                            )
+                        ) {
+                            ForEach(outputModeOptions, id: \.id) { option in
+                                Text(option.name).tag(option.id)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    HStack(spacing: 10) {
+                        Picker(
+                            "Command set",
+                            selection: Binding(
+                                get: { profile.commandSetID },
+                                set: {
+                                    applicationProfileViewModel
+                                        .setCommandSetID($0, for: profile)
+                                }
+                            )
+                        ) {
+                            ForEach(commandSetOptions, id: \.id) { option in
+                                Text(option.name).tag(option.id as String?)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        Picker(
+                            "Write mode",
+                            selection: Binding(
+                                get: { profile.writeModeDefault },
+                                set: {
+                                    applicationProfileViewModel
+                                        .setWriteModeDefault($0, for: profile)
+                                }
+                            )
+                        ) {
+                            ForEach(writeModeOptions, id: \.id) { option in
+                                Text(option.name).tag(option.id as WriteModeSubMode?)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    TextField(
+                        "Custom prompt hints (comma separated)",
+                        text: Binding(
+                            get: { profile.customPromptHints.joined(separator: ", ") },
+                            set: { value in
+                                let hints = value.split(separator: ",").map {
+                                    $0.trimmingCharacters(in: .whitespaces)
+                                }.filter { !$0.isEmpty }
+                                applicationProfileViewModel
+                                    .setCustomPromptHints(hints, for: profile)
+                            }
+                        )
                     )
-                )
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12))
+                    .textFieldStyle(.roundedBorder)
+                    .font(ZenDesign.Typography.body)
+                }
+                .padding(.top, ZenDesign.Spacing.xs)
             }
+            .font(ZenDesign.Typography.captionStrong)
         }
     }
 

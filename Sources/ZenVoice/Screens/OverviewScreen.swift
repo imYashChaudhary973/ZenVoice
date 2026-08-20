@@ -16,18 +16,6 @@ import SwiftUI
 import ZenVoiceCore
 import ZenVoiceStorage
 
-/// Home.
-///
-/// The page is organised around one question: *can I dictate right now, and
-/// how?* Everything else on it is secondary and is laid out to look secondary.
-///
-/// This is the change from the previous revision, which opened with a display-
-/// size **Today** heading over four usage statistics. That gave the loudest
-/// object on the app's first screen to a word count — a number that is pleasant
-/// to see and that nobody opens a dictation app to read — while the thing the
-/// user actually came for, the shortcut and the state of the microphone, sat
-/// below it in a quieter box. Purpose sets the hierarchy: the hero is now the
-/// instrument, and the statistics are a single quiet strip underneath it.
 struct OverviewScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var appState: AppState
@@ -38,287 +26,123 @@ struct OverviewScreen: View {
     let replaySetup: () -> Void
     let navigate: (OverviewDestination) -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         ZenScreen(
             icon: "house.fill",
-            title: "Home",
+            title: "Overview",
             subtitle:
                 "Everything runs on this Mac. Nothing to sign into, nothing to sync."
         ) {
-            dictationHero
-            todayStrip
+            homeGrid
+        }
+    }
 
+    private var homeGrid: some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+            todayMetrics
+            statusOverview
+            // Two columns while both fit, one when they do not.
+            //
+            // This was a plain `HStack` with a fixed 320pt side column and a
+            // `minWidth: 300` main column. A minimum width is a request, not a
+            // constraint: the Actions card cannot shrink below the two buttons
+            // it holds, so at the narrowest window the row needed about 690pt
+            // in a 652pt pane and SwiftUI let it overflow — the card spilled
+            // roughly 20pt past its column on each side and ran under the
+            // Recent activity card beside it. `ViewThatFits` measures the
+            // side-by-side arrangement against the space actually available
+            // and stacks instead of overflowing.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: ZenDesign.Spacing.lg) {
-                    setupColumn
-                    recentActivityPanel
-                        .frame(width: 340)
+                    homeMainColumn
+                    homeSideColumn
+                        .frame(width: 320)
                 }
                 VStack(spacing: ZenDesign.Spacing.lg) {
-                    setupColumn
-                    recentActivityPanel
-                }
-            }
-        }
-        .onAppear {
-            viewModel.refreshSystemStatus()
-            historyViewModel.refresh()
-            insightsViewModel.refresh()
-        }
-    }
-
-    // MARK: - Hero
-
-    /// The instrument. State, the shortcut that operates it, and the button
-    /// that does the same thing for anyone who would rather click.
-    private var dictationHero: some View {
-        ZenPanel(padding: ZenDesign.Spacing.xl) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top, spacing: ZenDesign.Spacing.xl) {
-                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
-                        // Live state, in words, at a size that can be read from
-                        // across the desk. The dot is the only coloured mark in
-                        // the block — and because it is the only one, its
-                        // colour is worth reading.
-                        HStack(spacing: 9) {
-                            statusIndicator
-                            Text(statusTitle)
-                                .zenType(
-                                    ZenDesign.Typography.pageTitle,
-                                    tracking: ZenDesign.Tracking.pageTitle
-                                )
-                                .foregroundStyle(
-                                    ZenDesign.Semantic.textPrimary
-                                )
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        // While listening, the level meter replaces the
-                        // shortcut hint: the shortcut has already been used, so
-                        // repeating it is noise, and what the user needs
-                        // instead is proof the microphone is hearing them.
-                        if appState.phase == .listening {
-                            WaveformView(model: appState.audioLevel)
-                                .transition(.opacity)
-                        } else {
-                            HStack(spacing: ZenDesign.Spacing.xs) {
-                                Text("Press")
-                                    .zenType(
-                                        ZenDesign.Typography.body,
-                                        tracking: ZenDesign.Tracking.body
-                                    )
-                                    .foregroundStyle(
-                                        ZenDesign.Semantic.textSecondary
-                                    )
-                                ZenKbdGroup(
-                                    combo: viewModel.currentShortcut.displayName
-                                )
-                                Text("in any app.")
-                                    .zenType(
-                                        ZenDesign.Typography.body,
-                                        tracking: ZenDesign.Tracking.body
-                                    )
-                                    .foregroundStyle(
-                                        ZenDesign.Semantic.textSecondary
-                                    )
-                            }
-                            .transition(.opacity)
-                        }
-                    }
-
-                    Spacer(minLength: ZenDesign.Spacing.md)
-
-                    VStack(alignment: .trailing, spacing: ZenDesign.Spacing.xs) {
-                        Button(action: startDictation) {
-                            Label(
-                                appState.phase == .listening
-                                    ? "Stop" : "Start dictating",
-                                systemImage: appState.phase == .listening
-                                    ? "stop.fill" : "mic.fill"
-                            )
-                        }
-                        .buttonStyle(ZenPrimaryButtonStyle())
-
-                        ZenBadge(
-                            text: "Local · encrypted · on-device",
-                            kind: .neutral,
-                            systemImage: "lock.fill"
-                        )
-                    }
-                }
-                .animation(
-                    ZenDesign.Motion.standard(reduceMotion),
-                    value: appState.phase
-                )
-
-                // A hairline *inside* one card, separating the instrument from
-                // its settings. This is the honest use of a rule: two regions
-                // of one object. The previous revision instead put these facts
-                // in four separately-bordered boxes, which claimed they were
-                // four objects when they are one status line.
-                Rectangle()
-                    .fill(ZenDesign.Semantic.border)
-                    .frame(height: 1)
-                    .padding(.vertical, ZenDesign.Spacing.lg)
-
-                HStack(spacing: 0) {
-                    heroFact(
-                        "Microphone",
-                        value: viewModel.selectedMicrophoneName,
-                        destination: .audio
-                    )
-                    heroFactDivider
-                    heroFact(
-                        "Language",
-                        value: appState.languageProfile.displayName,
-                        destination: .languages
-                    )
-                    heroFactDivider
-                    heroFact(
-                        "Model",
-                        value: modelDisplayName,
-                        destination: .models
-                    )
+                    homeMainColumn
+                    homeSideColumn
                 }
             }
         }
     }
 
-    /// The status dot, with a halo while something is actually happening.
-    private var statusIndicator: some View {
-        ZStack {
-            Circle()
-                .fill(statusTint.opacity(0.25))
-                .frame(width: 22, height: 22)
-                .opacity(isLive ? 1 : 0)
-            Circle()
-                .fill(statusTint)
-                .frame(width: 10, height: 10)
+    private var homeMainColumn: some View {
+        VStack(spacing: ZenDesign.Spacing.lg) {
+            quickActionsPanel
+            permissionsPanel
+            frequentAppsPanel
         }
-        .frame(width: 22, height: 22)
-        .animation(ZenDesign.Motion.standard(reduceMotion), value: statusTint)
-        .accessibilityHidden(true)
-    }
-
-    private var isLive: Bool {
-        switch appState.phase {
-        case .listening, .transcribing, .inserting, .awaitingCloudReview:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private var heroFactDivider: some View {
-        Rectangle()
-            .fill(ZenDesign.Semantic.border)
-            .frame(width: 1, height: 26)
-            .padding(.horizontal, ZenDesign.Spacing.md)
-            .accessibilityHidden(true)
-    }
-
-    /// One fact about how dictation is currently configured, and a way to go
-    /// and change it.
-    ///
-    /// These are buttons rather than labels because every one of them names a
-    /// setting that lives on another screen — a control placed next to what it
-    /// affects beats making the user go and find it.
-    private func heroFact(
-        _ label: String,
-        value: String,
-        destination: OverviewDestination
-    ) -> some View {
-        Button {
-            navigate(destination)
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(label)
-                    .zenType(
-                        ZenDesign.Typography.caption,
-                        tracking: ZenDesign.Tracking.caption
-                    )
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                    .lineLimit(1)
-                Text(value)
-                    .zenType(
-                        ZenDesign.Typography.bodyStrong,
-                        tracking: ZenDesign.Tracking.body
-                    )
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(ZenPressableStyle())
-        .accessibilityLabel("\(label): \(value). Open settings.")
     }
 
     // MARK: - Today
 
-    /// Today's usage as one quiet strip.
-    ///
-    /// Four numbers, no icons, no accent, no borders between them. They used to
-    /// be the hero of this page at 22pt bold with a jade glyph beside each; a
-    /// fact you glance at once a day does not need to be the largest thing on
-    /// the screen, and four coloured icons in a row is the exact pattern that
-    /// made the old window read as an analytics dashboard.
-    private var todayStrip: some View {
+    /// Usage stays quiet until there is something useful to report. Once the
+    /// user has dictated, one compact summary replaces four empty hero cards.
+    @ViewBuilder
+    private var todayMetrics: some View {
         let today = insightsViewModel.snapshot.today
-        let streak = insightsViewModel.snapshot.currentStreakDays
-
-        return ZenPanel(padding: ZenDesign.Spacing.lg) {
-            HStack(alignment: .center, spacing: 0) {
-                todayFigure(
-                    String(today.wordCount),
-                    label: "words today"
-                )
-                todayFigure(
-                    formattedDuration(today.durationSeconds),
-                    label: "spoken"
-                )
-                todayFigure(
-                    String(today.dictationCount),
-                    label: today.dictationCount == 1 ? "session" : "sessions"
-                )
-                todayFigure(
-                    today.topApplicationName ?? "—",
-                    label: today.hasActivity ? "top app" : "no activity"
-                )
-
-                if streak > 0 {
-                    ZenBadge(
-                        text: "\(streak) day\(streak == 1 ? "" : "s")",
-                        kind: .neutral,
-                        systemImage: "flame.fill"
-                    )
+        if today.dictationCount > 0 {
+            ZenPanel(padding: ZenDesign.Spacing.md) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: ZenDesign.Spacing.xl) {
+                        metric(
+                            today.wordCount.formatted(),
+                            label: "words",
+                            icon: "textformat"
+                        )
+                        metric(
+                            formattedDuration(today.durationSeconds),
+                            label: "speaking",
+                            icon: "clock"
+                        )
+                        metric(
+                            today.dictationCount.formatted(),
+                            label: "sessions",
+                            icon: "mic"
+                        )
+                        if let app = today.topApplicationName {
+                            metric(app, label: "top app", icon: "macwindow")
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                        metric(
+                            today.wordCount.formatted(),
+                            label: "words today",
+                            icon: "textformat"
+                        )
+                        metric(
+                            formattedDuration(today.durationSeconds),
+                            label: "speaking time",
+                            icon: "clock"
+                        )
+                        metric(
+                            today.dictationCount.formatted(),
+                            label: "sessions",
+                            icon: "mic"
+                        )
+                    }
                 }
             }
+            .accessibilityElement(children: .contain)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Today's usage. \(today.pillSummary)."))
     }
 
-    private func todayFigure(_ value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+    private func metric(
+        _ value: String,
+        label: String,
+        icon: String
+    ) -> some View {
+        HStack(spacing: ZenDesign.Spacing.xs) {
+            Image(systemName: icon)
+                .foregroundStyle(ZenDesign.Semantic.accent)
+                .accessibilityHidden(true)
             Text(value)
-                .font(.system(size: 19, weight: .semibold).monospacedDigit())
-                .tracking(-0.3)
+                .font(ZenDesign.Typography.bodyStrong)
                 .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
             Text(label)
-                .zenType(
-                    ZenDesign.Typography.caption,
-                    tracking: ZenDesign.Tracking.caption
-                )
-                .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                .lineLimit(1)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func formattedDuration(_ seconds: TimeInterval) -> String {
@@ -333,14 +157,50 @@ struct OverviewScreen: View {
         return "\(minutes / 60)h \(minutes % 60)m"
     }
 
-    // MARK: - Status text
+    // MARK: - Status
+
+    private var statusOverview: some View {
+        ZenPanel(padding: ZenDesign.Spacing.lg) {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+                HStack(spacing: ZenDesign.Spacing.sm) {
+                    statusDot
+                    Text(statusTitle)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Spacer(minLength: ZenDesign.Spacing.md)
+                    ZenBadge(
+                        text: "Local · encrypted · on-device",
+                        kind: .neutral,
+                        systemImage: "lock.fill"
+                    )
+                }
+
+                HStack(spacing: ZenDesign.Spacing.xs) {
+                    statusItem(
+                        "Shortcut",
+                        value: viewModel.currentShortcut.displayName,
+                        isKeycap: true
+                    )
+                    statusItem(
+                        "Microphone",
+                        value: microphoneDisplayName
+                    )
+                    statusItem(
+                        "Language",
+                        value: appState.languageProfile.displayName
+                    )
+                    statusItem("Model", value: modelDisplayName)
+                }
+            }
+        }
+    }
 
     /// Whether ZenVoice can actually do the thing this screen promises.
     ///
-    /// Without Microphone there is nothing to transcribe; without Accessibility
-    /// the text cannot be typed into the app the user is in and silently goes
-    /// to the clipboard instead. Claiming "Ready to dictate" in either case is
-    /// a promise the app cannot keep.
+    /// Without Microphone there is nothing to transcribe; without
+    /// Accessibility the text cannot be typed into the app the user is in and
+    /// silently goes to the clipboard instead. Claiming "Ready to dictate" in
+    /// either case is a promise the app cannot keep.
     private var isFullyReady: Bool {
         viewModel.microphoneStatus.isAllowed
             && viewModel.accessibilityStatus.isAllowed
@@ -353,7 +213,7 @@ struct OverviewScreen: View {
                 return "Microphone access needed"
             }
             if !viewModel.accessibilityStatus.isAllowed {
-                return "Ready — text goes to the clipboard"
+                return "Ready — text will go to the clipboard"
             }
             return "Ready to dictate"
         case .listening:
@@ -369,6 +229,12 @@ struct OverviewScreen: View {
         case .error(let message):
             return message
         }
+    }
+
+    private var statusDot: some View {
+        Circle()
+            .fill(statusTint)
+            .frame(width: 9, height: 9)
     }
 
     private var statusTint: Color {
@@ -393,45 +259,115 @@ struct OverviewScreen: View {
         }
     }
 
-    // MARK: - Setup
+    /// Height of the value line in a status tile.
+    ///
+    /// Pinned so a keycap tile and a text tile are the same height. A `ZenKbd`
+    /// chip is 24pt and a line of `bodyStrong` is about 16, so with the row
+    /// left to size itself the Shortcut tile stood 8pt taller than its three
+    /// neighbours and pushed its own label off their baseline.
+    private static let statusValueHeight: CGFloat = 24
 
-    private var setupColumn: some View {
+    private func statusItem(
+        _ label: String,
+        value: String,
+        isKeycap: Bool = false
+    ) -> some View {
+        ZenInsetRow {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .lineLimit(1)
+                Group {
+                    if isKeycap {
+                        ZenKbdGroup(combo: value)
+                    } else {
+                        Text(value)
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
+                .frame(
+                    height: Self.statusValueHeight,
+                    alignment: .leading
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: - Side column
+
+    private var homeSideColumn: some View {
         VStack(spacing: ZenDesign.Spacing.lg) {
-            permissionsPanel
+            recentActivityPanel
             if historyViewModel.recoveryCount > 0 {
                 recoveryNote
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var quickActionsPanel: some View {
+        ZenCard(
+            icon: "bolt.fill",
+            title: "Actions",
+            subtitle: "Start talking, or walk through setup again."
+        ) {
+            // Button labels never wrap, so a row of them has a hard minimum
+            // width. Side by side while that fits, stacked when it does not —
+            // otherwise the card is forced wider than its column.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: ZenDesign.Spacing.sm) {
+                    startDictatingButton
+                    replaySetupButton
+                    Spacer(minLength: 0)
+                }
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                    startDictatingButton
+                    replaySetupButton
+                }
             }
         }
     }
 
+    private var startDictatingButton: some View {
+        Button(action: startDictation) {
+            Label("Start dictating", systemImage: "mic.fill")
+        }
+        .buttonStyle(ZenPrimaryButtonStyle())
+    }
+
+    private var replaySetupButton: some View {
+        Button("Replay setup guide", action: replaySetup)
+            .buttonStyle(ZenSecondaryButtonStyle())
+    }
+
     private var permissionsPanel: some View {
         ZenCard(
-            icon: "checkmark.shield",
+            icon: "checkmark.shield.fill",
             title: "Permissions",
-            subtitle: "What macOS has to allow before ZenVoice can type.",
-            trailing: {
-                Button("Replay setup", action: replaySetup)
-                    .buttonStyle(ZenSecondaryButtonStyle())
-            },
-            content: {
-                VStack(spacing: ZenDesign.Spacing.xs) {
-                    permissionRow(
-                        icon: "mic",
-                        title: "Microphone",
-                        detail: "So ZenVoice can hear you.",
-                        status: viewModel.microphoneStatus,
-                        action: viewModel.requestMicrophoneAccess
-                    )
-                    permissionRow(
-                        icon: "accessibility",
-                        title: "Accessibility",
-                        detail: "So ZenVoice can type into other apps.",
-                        status: viewModel.accessibilityStatus,
-                        action: viewModel.requestAccessibilityAccess
-                    )
-                }
+            subtitle: "What macOS has to allow before ZenVoice can type."
+        ) {
+            VStack(spacing: ZenDesign.Spacing.xs) {
+                permissionRow(
+                    icon: "mic.fill",
+                    title: "Microphone",
+                    detail: "So ZenVoice can hear you.",
+                    status: viewModel.microphoneStatus,
+                    action: viewModel.requestMicrophoneAccess
+                )
+                permissionRow(
+                    icon: "accessibility",
+                    title: "Accessibility",
+                    detail: "So ZenVoice can type into other apps.",
+                    status: viewModel.accessibilityStatus,
+                    action: viewModel.requestAccessibilityAccess
+                )
             }
-        )
+        }
     }
 
     /// Shows the state *and* offers the fix.
@@ -447,30 +383,18 @@ struct OverviewScreen: View {
     ) -> some View {
         ZenInsetRow {
             HStack(spacing: ZenDesign.Spacing.sm) {
-                // Colour here is genuine state, not decoration: green means
-                // granted, amber means this is why dictation will not work.
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(
-                        status.isAllowed
-                            ? ZenDesign.Semantic.success
-                            : ZenDesign.Semantic.warn
-                    )
-                    .frame(width: 20)
-                    .accessibilityHidden(true)
-
+                tintedIconChip(
+                    icon,
+                    tint: status.isAllowed
+                        ? ZenDesign.Semantic.success
+                        : ZenDesign.Semantic.warn
+                )
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .zenType(
-                            ZenDesign.Typography.bodyStrong,
-                            tracking: ZenDesign.Tracking.body
-                        )
+                        .font(ZenDesign.Typography.bodyStrong)
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     Text(detail)
-                        .zenType(
-                            ZenDesign.Typography.caption,
-                            tracking: ZenDesign.Tracking.caption
-                        )
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                         .lineLimit(1)
                 }
@@ -482,64 +406,92 @@ struct OverviewScreen: View {
                             "\(actionTitle) \(title) permission"
                         )
                 } else {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(ZenDesign.Semantic.success)
-                        .accessibilityLabel(status.title)
+                    ZenBadge(
+                        text: status.title,
+                        kind: status.isAllowed ? .success : .warn,
+                        systemImage: status.isAllowed ? "checkmark" : nil
+                    )
                 }
             }
-            .frame(minHeight: 36)
+            .frame(minHeight: 38)
         }
     }
 
-    // MARK: - Recent activity
-
     private var recentActivityPanel: some View {
-        let recent = Array(historyViewModel.records.prefix(5))
+        let recent = Array(historyViewModel.records.prefix(4))
         return ZenCard(
-            icon: "clock",
-            title: "Recent",
+            icon: "clock.fill",
+            title: "Recent activity",
             trailing: {
                 Button("See all") { navigate(.history) }
-                    .buttonStyle(.plain)
-                    .zenType(
-                        ZenDesign.Typography.captionStrong,
-                        tracking: ZenDesign.Tracking.caption
-                    )
+                    .buttonStyle(ZenPressButtonStyle())
+                    .font(ZenDesign.Typography.captionStrong)
                     .foregroundStyle(ZenDesign.Semantic.accent)
             },
             content: {
-                if recent.isEmpty {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("No dictations yet")
-                            .zenType(
-                                ZenDesign.Typography.bodyStrong,
-                                tracking: ZenDesign.Tracking.body
-                            )
-                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        Text("Your latest will appear here.")
-                            .zenType(
-                                ZenDesign.Typography.caption,
-                                tracking: ZenDesign.Tracking.caption
-                            )
-                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, ZenDesign.Spacing.sm)
-                } else {
-                    // A plain list separated by inset hairlines — the macOS
-                    // idiom — rather than five individually-bordered chips
-                    // stacked with gaps. Five boxes in a column read as five
-                    // unrelated objects; five rows read as one list.
-                    VStack(spacing: 0) {
-                        ForEach(Array(recent.enumerated()), id: \.element.id) {
-                            index, record in
-                            if index > 0 {
-                                Rectangle()
-                                    .fill(ZenDesign.Semantic.border)
-                                    .frame(height: 1)
+                VStack(spacing: ZenDesign.Spacing.xs) {
+                    if recent.isEmpty {
+                        ZenInsetRow {
+                            HStack(spacing: ZenDesign.Spacing.sm) {
+                                tintedIconChip(
+                                    "text.bubble",
+                                    tint: ZenDesign.Semantic.textTertiary
+                                )
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("No dictations yet")
+                                        .font(
+                                            ZenDesign.Typography.bodyStrong
+                                        )
+                                        .foregroundStyle(
+                                            ZenDesign.Semantic.textPrimary
+                                        )
+                                    Text("Your latest will appear here.")
+                                        .font(ZenDesign.Typography.caption)
+                                        .foregroundStyle(
+                                            ZenDesign.Semantic.textTertiary
+                                        )
+                                }
+                                Spacer(minLength: 0)
                             }
-                            recentRow(record)
+                            .frame(minHeight: 38)
+                        }
+                    } else {
+                        ForEach(recent) { record in
+                            Button {
+                                navigate(.history)
+                            } label: {
+                                ZenInsetRow {
+                                    HStack(spacing: ZenDesign.Spacing.sm) {
+                                        tintedIconChip(
+                                            "text.bubble.fill",
+                                            tint: ZenDesign.Semantic.accent
+                                        )
+                                        Text(
+                                            record.targetAppName
+                                                ?? "Unknown app"
+                                        )
+                                        .font(ZenDesign.Typography.body)
+                                        .foregroundStyle(
+                                            ZenDesign.Semantic.textPrimary
+                                        )
+                                        .lineLimit(1)
+                                        Spacer(minLength: ZenDesign.Spacing.xs)
+                                        Text(
+                                            record.startedAt.formatted(
+                                                .relative(presentation: .named)
+                                            )
+                                        )
+                                        .font(ZenDesign.Typography.caption)
+                                        .foregroundStyle(
+                                            ZenDesign.Semantic.textTertiary
+                                        )
+                                        .lineLimit(1)
+                                    }
+                                    .frame(minHeight: 30)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(ZenPressButtonStyle())
                         }
                     }
                 }
@@ -547,57 +499,90 @@ struct OverviewScreen: View {
         )
     }
 
-    private func recentRow(_ record: DictationRecord) -> some View {
-        Button {
-            navigate(.history)
-        } label: {
-            HStack(spacing: ZenDesign.Spacing.sm) {
-                Text(record.targetAppName ?? "Unknown app")
-                    .zenType(
-                        ZenDesign.Typography.body,
-                        tracking: ZenDesign.Tracking.body
-                    )
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .lineLimit(1)
-                Spacer(minLength: ZenDesign.Spacing.xs)
-                Text(
-                    record.startedAt.formatted(
-                        .relative(presentation: .named)
-                    )
-                )
-                .zenType(
-                    ZenDesign.Typography.caption,
-                    tracking: ZenDesign.Tracking.caption
-                )
-                .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                .lineLimit(1)
+    private var frequentAppsPanel: some View {
+        let applications = Array(
+            insightsViewModel.snapshot.topApplications.prefix(4)
+        )
+        return ZenCard(
+            icon: "macwindow",
+            title: "Frequently Used Apps",
+            subtitle: "Where your dictation time goes."
+        ) {
+            if applications.isEmpty {
+                ZenInsetRow {
+                    Text("App usage appears after your first saved dictation.")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(applications) { application in
+                        ZenMeterRow(
+                            label: application.displayName,
+                            percent: appShare(application.wordCount)
+                        )
+                    }
+                }
             }
-            .frame(minHeight: 34)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(ZenPressableStyle())
+    }
+
+    private func appShare(_ wordCount: Int) -> Int {
+        let total = max(1, insightsViewModel.snapshot.totalWordCount)
+        return Int((Double(wordCount) / Double(total) * 100).rounded())
+    }
+
+    private func tintedIconChip(
+        _ systemImage: String,
+        tint: Color
+    ) -> some View {
+        ZenIconChip(systemImage: systemImage, size: 30, tint: tint)
     }
 
     private var recoveryNote: some View {
-        ZenBanner(
-            kind: .warn,
-            icon: "exclamationmark.triangle.fill",
-            text: "\(historyViewModel.recoveryCount) item"
-                + (historyViewModel.recoveryCount == 1 ? "" : "s")
-                + " waiting in Recovery."
-        )
-        .onTapGesture { navigate(.history) }
+        HStack(spacing: ZenDesign.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ZenDesign.Semantic.warn)
+            Text(
+                "\(historyViewModel.recoveryCount) item"
+                    + (historyViewModel.recoveryCount == 1 ? "" : "s")
+                    + " waiting in Recovery"
+            )
+            .font(ZenDesign.Typography.captionStrong)
+            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            .lineLimit(1)
+            Spacer(minLength: ZenDesign.Spacing.xs)
+            Button("Review") {
+                navigate(.history)
+            }
+            .buttonStyle(ZenPressButtonStyle())
+            .font(ZenDesign.Typography.captionStrong)
+            .foregroundStyle(ZenDesign.Semantic.warn)
+        }
+        .padding(.horizontal, ZenDesign.Spacing.md)
+        .frame(height: 46)
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+            .fill(ZenDesign.Semantic.warnMuted)
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.medium,
+                    style: .continuous
+                )
+                .strokeBorder(ZenDesign.Semantic.warn.opacity(0.3))
+            }
+        }
+    }
+
+    private var microphoneDisplayName: String {
+        viewModel.selectedMicrophoneName
     }
 
     private var modelDisplayName: String {
-        guard let selectedModelID = modelManagerViewModel.selectedModelID,
-              let model = modelManagerViewModel.models.first(
-                where: { $0.id == selectedModelID }
-              ) else {
-            return viewModel.isLocalModelReady
-                ? "Verified local model"
-                : "Not installed"
-        }
-        return model.displayName
+        modelManagerViewModel.activeEngineDisplayName
     }
 }

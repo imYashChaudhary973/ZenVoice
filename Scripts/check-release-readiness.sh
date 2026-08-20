@@ -59,6 +59,51 @@ else
     block "possible secret pattern found in tracked file(s): ${secret_files//$'\n'/, }"
 fi
 
+# Behavioral gates run before artifact inspection. A signed bundle is not
+# releasable when its core, storage, transport, UI, or real model path is
+# broken.
+if (cd "$project_dir" && swift build); then
+    pass "Swift package builds"
+else
+    block "Swift package does not build"
+fi
+
+for check in ZenVoiceCoreChecks ZenVoiceStorageChecks ZenVoiceLinkChecks; do
+    if (cd "$project_dir" && swift run "$check"); then
+        pass "$check passed"
+    else
+        block "$check failed"
+    fi
+done
+
+if "$project_dir/Scripts/check-ui-invariants.sh"; then
+    pass "UI invariants passed"
+else
+    block "UI invariants failed"
+fi
+
+release_model=${ZENVOICE_RELEASE_MODEL_PATH:-}
+if [[ -z "$release_model" || ! -f "$release_model" ]]; then
+    block "ZENVOICE_RELEASE_MODEL_PATH must name a verified model artifact"
+elif (
+    cd "$project_dir" &&
+        ZENVOICE_MODEL_PATH="$release_model" \
+        ZENVOICE_RUNTIME_REQUIRED=1 \
+        swift run ZenVoiceRuntimeChecks
+); then
+    pass "real model runtime checks passed"
+else
+    block "real model runtime checks failed"
+fi
+
+if [[ -n "$release_model" && -f "$release_model" ]] \
+    && ZENVOICE_MODEL_PATH="$release_model" \
+        "$project_dir/Scripts/check-dictation-e2e.sh"; then
+    pass "deterministic app dictation passed"
+else
+    block "deterministic app dictation failed"
+fi
+
 if [[ ! -d "$app_path" ]]; then
     block "packaged app is missing at $app_path"
 else

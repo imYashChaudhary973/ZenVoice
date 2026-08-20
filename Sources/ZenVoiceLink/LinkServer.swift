@@ -110,7 +110,7 @@ public actor LinkServer {
         port requestedPort: UInt16 = ZenVoiceLink.defaultPort,
         advertises: Bool = true
     ) async throws {
-        stop()
+        await stop()
         let parameters = LinkParameters.make(key: key)
         let listener: NWListener
         do {
@@ -138,38 +138,61 @@ public actor LinkServer {
         self.listener = listener
 
         let resumer = LinkOnceResumer()
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    resumer.succeed(continuation)
-                case .failed(let error):
-                    resumer.fail(
-                        continuation,
-                        with: LinkTransportError.connectionFailed(
-                            error.localizedDescription
-                        )
-                    )
-                default:
-                    break
+        let startQueue = queue
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation {
+                    (continuation: CheckedContinuation<Void, Error>) in
+                    listener.stateUpdateHandler = { state in
+                        switch state {
+                        case .ready:
+                            resumer.succeed(continuation)
+                        case .failed(let error):
+                            resumer.fail(
+                                continuation,
+                                with: LinkTransportError.connectionFailed(
+                                    error.localizedDescription
+                                )
+                            )
+                        case .cancelled:
+                            resumer.fail(
+                                continuation,
+                                with: LinkTransportError.timedOut
+                            )
+                        default:
+                            break
+                        }
+                    }
+                    listener.start(queue: startQueue)
                 }
             }
-            listener.start(queue: queue)
+            group.addTask {
+                try await Task.sleep(for: .seconds(10))
+                listener.cancel()
+                throw LinkTransportError.timedOut
+            }
+            defer { group.cancelAll() }
+            try await group.next()
         }
         self.port = listener.port?.rawValue
     }
 
-    public func stop() {
-        for session in sessions.values {
+    public func stop() async {
+        let activeSessions = Array(sessions.values)
+        sessions.removeAll()
+        for session in activeSessions {
+            if let token = session.broadcastToken {
+                await broadcaster.unsubscribe(token)
+            }
+            session.connection.stateUpdateHandler = nil
             session.connection.cancel()
         }
-        sessions.removeAll()
         listener?.stateUpdateHandler = nil
         listener?.newConnectionHandler = nil
         listener?.cancel()
         listener = nil
         port = nil
+        await handlers.connectionsChanged([])
     }
 
     /// Pushes the current plan view to every device watching this goal.
@@ -278,22 +301,21 @@ public actor LinkServer {
             if let token = session.broadcastToken {
                 await broadcaster.unsubscribe(token)
             }
-            session.broadcastToken = await broadcaster.subscribe(
-                goalID: subscription.goalID
+            let registration = await broadcaster.subscribe(
+                goalID: subscription.goalID,
+                after: subscription.afterSequence
             ) { [weak self] events in
                 guard let self else { return }
                 await self.deliver(events, sessionID: session.id)
             }
+            session.broadcastToken = registration.token
+            if !registration.replay.isEmpty {
+                await send(.events(registration.replay), on: session)
+            }
+            await broadcaster.activate(registration.token)
             guard let resolved else { return }
             if let summary = await broadcaster.goal(resolved) {
                 await send(.goal(summary), on: session)
-            }
-            let tail = await broadcaster.replay(
-                goalID: resolved,
-                after: subscription.afterSequence
-            )
-            if !tail.isEmpty {
-                await send(.events(tail), on: session)
             }
 
         case .decision(let decision):
@@ -331,10 +353,10 @@ public actor LinkServer {
         // watching. Both must agree, so a device cannot decide a goal it never
         // subscribed to by guessing a plan id.
         let watched: LinkGoalSummary?
-        if let goalID = session.subscribedGoalID {
-            watched = await broadcaster.goal(goalID)
-        } else if session.subscribesToActiveGoal {
+        if session.subscribesToActiveGoal {
             watched = await broadcaster.activeGoal()
+        } else if let goalID = session.subscribedGoalID {
+            watched = await broadcaster.goal(goalID)
         } else {
             await send(.error(LinkError(refusal: .notSubscribed)), on: session)
             return
@@ -377,10 +399,14 @@ public actor LinkServer {
 
     private func send(_ frame: LinkFrame, on session: Session) async {
         guard let data = try? LinkCodec.encode(frame) else { return }
-        session.connection.send(
-            content: data,
-            completion: .contentProcessed { _ in }
-        )
+        await withCheckedContinuation { continuation in
+            session.connection.send(
+                content: data,
+                completion: .contentProcessed { _ in
+                    continuation.resume()
+                }
+            )
+        }
     }
 
     private func close(sessionID: UUID) async {

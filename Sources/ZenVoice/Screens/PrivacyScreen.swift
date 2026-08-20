@@ -23,32 +23,29 @@ struct PrivacyScreen: View {
         VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel:
         ModelManagerViewModel
+    var embedded = false
     @State private var confirmsDeleteRecoveryAudio = false
     @State private var confirmsDeleteTranscripts = false
     @State private var confirmsDeleteRules = false
 
     var body: some View {
-        ZenScreen(
-            icon: "lock.shield.fill",
-            title: "Privacy & Data",
-            subtitle: "What ZenVoice keeps, and where."
-        ) {
-            dictationPrivacy
-            inventory
-            permissions
-
-            ZenBanner(
-                kind: .success,
-                icon: "network.slash",
-                text:
-                    "Network access is used for one thing: model downloads you explicitly start — each pinned to a revision and SHA-256 verified. Audio, text, rules, and insights never leave this Mac. One-shot context is memory-only and never counted here."
-            )
+        Group {
+            if embedded {
+                privacyContent
+            } else {
+                ZenScreen(
+                    icon: "lock.shield.fill",
+                    title: "Privacy & Data",
+                    subtitle: "What ZenVoice keeps, and where."
+                ) {
+                    privacyContent
+                }
+            }
         }
         .onAppear {
             historyViewModel.refresh()
             voiceProfileViewModel.refresh()
-            modelManagerViewModel.refresh()
-            }
+        }
         .alert(
             "Delete all retained recovery audio?",
             isPresented: $confirmsDeleteRecoveryAudio
@@ -88,6 +85,20 @@ struct PrivacyScreen: View {
                 "This permanently removes every encrypted personal replacement rule."
             )
         }
+    }
+
+    @ViewBuilder
+    private var privacyContent: some View {
+        dictationPrivacy
+        inventory
+        permissions
+        ZenBanner(
+            kind: .success,
+            icon: "network.slash",
+            text:
+                "Model downloads use pinned revisions and SHA-256 verification. "
+                + "Audio, text, rules, and insights stay on this Mac."
+        )
     }
 
     // MARK: dictation privacy
@@ -167,7 +178,7 @@ struct PrivacyScreen: View {
                     Button("Delete") {
                         confirmsDeleteTranscripts = true
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ZenPressButtonStyle())
                     .font(ZenDesign.Typography.captionStrong)
                     .foregroundStyle(ZenDesign.Semantic.danger)
                     .disabled(historyViewModel.savedTranscriptCount == 0)
@@ -186,7 +197,7 @@ struct PrivacyScreen: View {
                     Button("Delete") {
                         confirmsDeleteRecoveryAudio = true
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ZenPressButtonStyle())
                     .font(ZenDesign.Typography.captionStrong)
                     .foregroundStyle(ZenDesign.Semantic.danger)
                     .disabled(historyViewModel.recoveryAudioCount == 0)
@@ -205,7 +216,7 @@ struct PrivacyScreen: View {
                     Button("Delete") {
                         confirmsDeleteRules = true
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ZenPressButtonStyle())
                     .font(ZenDesign.Typography.captionStrong)
                     .foregroundStyle(ZenDesign.Semantic.danger)
                     .disabled(

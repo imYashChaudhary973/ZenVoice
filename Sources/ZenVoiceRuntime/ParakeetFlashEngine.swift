@@ -111,23 +111,23 @@ public final class ParakeetFlashEngine: @unchecked Sendable, SpeechEngine {
                     return
                 }
                 do {
-                    if self.context == nil {
-                        self.context = try ParakeetContext(
-                            modelPath: self.modelURL.path
-                        )
-                    }
-                    guard let context = self.context else {
-                        continuation.resume(
-                            throwing: EngineError.noEngineAvailable
-                        )
-                        return
-                    }
-                    continuation.resume(returning: context)
+                    continuation.resume(returning: try self.loadContextIfNeeded())
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
         }
+    }
+
+    /// Must run on `queue`. See `ParakeetTDTEngine` — `prepare()` is called
+    /// on every recording start and must not reload a resident model.
+    private func loadContextIfNeeded() throws -> ParakeetContext {
+        if let context {
+            return context
+        }
+        let context = try ParakeetContext(modelPath: modelURL.path)
+        self.context = context
+        return context
     }
 
     public func prepare() async throws {
@@ -139,9 +139,7 @@ public final class ParakeetFlashEngine: @unchecked Sendable, SpeechEngine {
                     return
                 }
                 do {
-                    self.context = try ParakeetContext(
-                        modelPath: self.modelURL.path
-                    )
+                    _ = try self.loadContextIfNeeded()
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)

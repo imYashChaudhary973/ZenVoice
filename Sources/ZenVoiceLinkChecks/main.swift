@@ -304,7 +304,10 @@ await waitFor("live events to arrive") {
     await phone.currentSnapshot().events.count >= 3
 }
 let delivered = await phone.currentSnapshot().events.map(\.sequence)
-require(delivered == delivered.sorted(), "events arrived out of order")
+require(
+    delivered == delivered.sorted(),
+    "events arrived out of order: \(delivered)"
+)
 
 let approval = ApprovalDecision(
     planID: lowPlan.id,

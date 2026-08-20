@@ -53,7 +53,7 @@ public struct EngineRegistry: Sendable {
         }
         guard let engine = engines.first(where: { $0.descriptor.id == selectedID }),
               isCompatible(engine: engine, profile: profile),
-              engine.isAvailable else {
+              engine.isAvailable(for: profile) else {
             return nil
         }
         return engine
@@ -77,7 +77,7 @@ public struct EngineRegistry: Sendable {
         for id in fallbackOrder where !EngineIdentifiers.isPreviewOnly(id) {
             guard let engine = engines.first(where: { $0.descriptor.id == id }),
                   isCompatible(engine: engine, profile: profile),
-                  engine.isAvailable else {
+                  engine.isAvailable(for: profile) else {
                 continue
             }
             return engine
@@ -86,7 +86,7 @@ public struct EngineRegistry: Sendable {
         return engines.first {
             !EngineIdentifiers.isPreviewOnly($0.descriptor.id)
                 && isCompatible(engine: $0, profile: profile)
-                && $0.isAvailable
+                && $0.isAvailable(for: profile)
         }
     }
 
@@ -115,7 +115,7 @@ public struct EngineRegistry: Sendable {
         order.append(EngineIdentifiers.whisper)
         for id in order {
             guard let engine = engines.first(where: { $0.descriptor.id == id }),
-                  engine.isAvailable,
+                  engine.isAvailable(for: profile),
                   isCompatible(engine: engine, profile: profile) else {
                 continue
             }
@@ -245,7 +245,7 @@ public struct EngineRegistry: Sendable {
                 reason: .unsupportedLanguage(profile.inputDisplayName)
             )
         }
-        if !engine.isAvailable {
+        if !engine.isAvailable(for: profile) {
             return EngineAvailability(
                 engine: engine.descriptor,
                 isAvailable: false,
@@ -275,7 +275,7 @@ public struct EngineRegistry: Sendable {
             guard !EngineIdentifiers.isPreviewOnly(engine.descriptor.id),
                   !seen.contains(engine.descriptor.id),
                   isCompatible(engine: engine, profile: profile),
-                  engine.isAvailable else {
+                  engine.isAvailable(for: profile) else {
                 return
             }
             seen.insert(engine.descriptor.id)

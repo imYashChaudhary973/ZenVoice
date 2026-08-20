@@ -15,52 +15,20 @@
 import SwiftUI
 import ZenVoiceCore
 
-/// Phase 6 consolidated Languages & Models surface.
-///
-/// Languages you speak and the engines that understand them are configured
-/// together, because engine choice depends on the active language profile.
+/// Language and model choices live in one scrollable setup page.
 struct LanguagesAndModelsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
-
-    private enum Tab: String, CaseIterable, Identifiable {
-        case languages, models
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .languages:
-                return "Languages"
-            case .models:
-                return "Models"
-            }
-        }
-    }
-
-    @State private var selection: Tab = .languages
 
     var body: some View {
         ZenScreen(
             icon: "globe",
             title: "Languages & Models",
             subtitle:
-                "What you speak, and the on-device engines that understand it.",
-            tabs: {
-                ZenTabStrip(
-                    items: Tab.allCases.map { tab in
-                        .init(tab: tab, title: tab.title)
-                    },
-                    selection: $selection
-                )
-            }
+                "What you speak, and the on-device engines that understand it."
         ) {
-            switch selection {
-            case .languages:
-                LanguagesScreen(viewModel: viewModel)
-            case .models:
-                ModelsScreen(viewModel: modelManagerViewModel)
-            }
+            LanguagesScreen(viewModel: viewModel)
+            ModelsScreen(viewModel: modelManagerViewModel)
         }
     }
 }

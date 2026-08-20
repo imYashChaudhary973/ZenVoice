@@ -2,13 +2,15 @@
 set -euo pipefail
 
 project_dir=${0:A:h:h}
-app_dir="$project_dir/build/ZenVoice.app"
+build_configuration=${ZENVOICE_BUILD_CONFIGURATION:-release}
+app_dir=${ZENVOICE_APP_DIR:-"$project_dir/build/ZenVoice.app"}
 contents_dir="$app_dir/Contents"
 frameworks_dir="$contents_dir/Frameworks"
 brand_dir="$project_dir/Resources/Brand"
 icon_path="$project_dir/build/ZenVoice.icns"
 entitlements_path="$project_dir/Resources/ZenVoice.entitlements"
 signing_identity=${ZENVOICE_SIGNING_IDENTITY:-}
+build_dir="$project_dir/.build/$build_configuration"
 
 cd "$project_dir"
 
@@ -140,7 +142,7 @@ if [[ "$developer_id_signing" == true ]]; then
     verify_release_dependencies
 fi
 
-swift build -c release
+swift build -c "$build_configuration"
 verify_release_source_unchanged
 verify_release_dependencies
 
@@ -150,12 +152,12 @@ verify_release_dependencies
 
 rm -rf "$app_dir"
 mkdir -p "$contents_dir/MacOS" "$contents_dir/Resources" "$frameworks_dir"
-cp "$project_dir/.build/release/ZenVoice" "$contents_dir/MacOS/ZenVoice"
-cp -R "$project_dir/.build/release/whisper.framework" "$frameworks_dir/"
+cp "$build_dir/ZenVoice" "$contents_dir/MacOS/ZenVoice"
+cp -R "$build_dir/whisper.framework" "$frameworks_dir/"
 # The Parakeet engines link @rpath/libparakeet.dylib. Without this copy the
 # bundle builds and signs cleanly but dyld refuses to start it, so the failure
 # only shows up when the installed app is launched.
-cp "$project_dir/.build/release/libparakeet.dylib" "$frameworks_dir/"
+cp "$build_dir/libparakeet.dylib" "$frameworks_dir/"
 install_name_tool \
     -add_rpath "@executable_path/../Frameworks" \
     "$contents_dir/MacOS/ZenVoice"

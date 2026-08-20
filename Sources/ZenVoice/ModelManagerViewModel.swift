@@ -415,8 +415,25 @@ final class ModelManagerViewModel: ObservableObject {
         } else {
             selectedEngineID = SelectedEnginePreferences.load(for: profile)
         }
-        engineAvailabilities =
+        let active =
             engineRegistryProvider()?.availability(for: profile) ?? []
+        var merged = active
+        let activeIDs = Set(active.map(\.engine.id))
+        merged.append(
+            contentsOf: engines.compactMap { engine in
+                guard !activeIDs.contains(engine.descriptor.id) else {
+                    return nil
+                }
+                return EngineAvailability(
+                    engine: engine.descriptor,
+                    isAvailable: false,
+                    reason: engine.descriptor.requiresDownload
+                        ? .requiresDownload
+                        : .runtimeNotReady(engine.descriptor.id)
+                )
+            }
+        )
+        engineAvailabilities = merged
         nemotronMode = NemotronPreferences.load()
     }
 
@@ -475,8 +492,31 @@ final class ModelManagerViewModel: ObservableObject {
         }
     }
 
+    var activeEngineID: String? {
+        let profile = LanguagePreferences.load()
+        return engineRegistryProvider()?.resolve(
+            for: profile,
+            selectedID: SelectedEnginePreferences.load(for: profile)
+        )?.descriptor.id
+    }
+
+    var activeEngineDisplayName: String {
+        let profile = LanguagePreferences.load()
+        guard let engine = engineRegistryProvider()?.resolve(
+            for: profile,
+            selectedID: SelectedEnginePreferences.load(for: profile)
+        ) else {
+            return "Not installed"
+        }
+        if engine.descriptor.id == EngineIdentifiers.whisper,
+           let model = ModelSelectionPreferences.load() {
+            return model.displayName
+        }
+        return engine.descriptor.displayName
+    }
+
     func isSelectedEngine(_ engineID: String) -> Bool {
-        selectedEngineID == engineID
+        activeEngineID == engineID
     }
 
     private func unavailabilityLabel(for availability: EngineAvailability)
@@ -594,7 +634,11 @@ final class ModelManagerViewModel: ObservableObject {
                 )
             return
         }
-        apply(model: model, profile: targetProfile)
+        guard case .success = apply(model: model, profile: targetProfile) else {
+            return
+        }
+        refreshEngineSelection()
+        selectEngine(EngineIdentifiers.whisper)
     }
 
     @discardableResult

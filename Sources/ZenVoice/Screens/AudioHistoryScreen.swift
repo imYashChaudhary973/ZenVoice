@@ -17,6 +17,13 @@ import ZenVoiceStorage
 
 struct AudioHistoryScreen: View {
     @ObservedObject var viewModel: AudioHistoryViewModel
+    private enum DeleteRequest {
+        case recording(AudioArchiveRecord)
+        case selected
+        case all
+    }
+
+    @State private var deleteRequest: DeleteRequest?
 
     /// Offered archive caps, in bytes.
     private static let sizeOptions: [Int64] = [
@@ -31,15 +38,34 @@ struct AudioHistoryScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+            ZenBanner(
+                kind: .info,
+                icon: "info.circle",
+                text: "Stored only on this Mac. Recordings never leave your device and are removed by the limits below."
+            )
             enableSection
             if viewModel.isEnabled {
-                budgetSection
                 recordingsSection
+                budgetSection
             }
             messageSection
         }
         .onAppear { viewModel.refresh() }
         .onDisappear { viewModel.stopPlayback() }
+        .alert(
+            deleteTitle,
+            isPresented: Binding(
+                get: { deleteRequest != nil },
+                set: { if !$0 { deleteRequest = nil } }
+            )
+        ) {
+            Button("Delete", role: .destructive, action: confirmDelete)
+            Button("Cancel", role: .cancel) {
+                deleteRequest = nil
+            }
+        } message: {
+            Text(deleteMessage)
+        }
     }
 
     // MARK: - Enable
@@ -195,29 +221,16 @@ struct AudioHistoryScreen: View {
             .labelsHidden()
             .accessibilityLabel(Text("Select recording"))
 
-            Button {
+            ZenIconButton(
+                systemImage: viewModel.playingRecordID == record.id
+                    ? "stop.fill"
+                    : "play.fill",
+                label: viewModel.playingRecordID == record.id
+                    ? "Stop playback"
+                    : "Play recording"
+            ) {
                 viewModel.togglePlayback(record)
-            } label: {
-                Image(
-                    systemName: viewModel.playingRecordID == record.id
-                        ? "stop.fill"
-                        : "play.fill"
-                )
-                .font(.system(size: 11))
-                .frame(width: 26, height: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: ZenDesign.Radius.small)
-                        .fill(ZenDesign.Semantic.surfaceRaised)
-                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                Text(
-                    viewModel.playingRecordID == record.id
-                        ? "Stop playback"
-                        : "Play recording"
-                )
-            )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(record.targetAppName ?? "Unknown app")
@@ -250,15 +263,13 @@ struct AudioHistoryScreen: View {
             .foregroundStyle(ZenDesign.Semantic.textTertiary)
             .frame(width: 70, alignment: .trailing)
 
-            Button {
-                viewModel.delete(record)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
+            ZenIconButton(
+                systemImage: "trash",
+                label: "Delete recording",
+                isDanger: true
+            ) {
+                deleteRequest = .recording(record)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(ZenDesign.Semantic.textTertiary)
-            .accessibilityLabel(Text("Delete recording"))
         }
         .padding(.horizontal, ZenDesign.Spacing.md)
         .padding(.vertical, ZenDesign.Spacing.xs)
@@ -280,11 +291,15 @@ struct AudioHistoryScreen: View {
 
                 Spacer()
 
-                Button("Delete selected") { viewModel.deleteSelected() }
-                    .buttonStyle(ZenDestructiveButtonStyle())
-                    .disabled(viewModel.selection.isEmpty)
-                Button("Delete all") { viewModel.deleteAll() }
-                    .buttonStyle(ZenDestructiveButtonStyle())
+                Button("Delete selected") {
+                    deleteRequest = .selected
+                }
+                .buttonStyle(ZenDestructiveButtonStyle())
+                .disabled(viewModel.selection.isEmpty)
+                Button("Delete all") {
+                    deleteRequest = .all
+                }
+                .buttonStyle(ZenDestructiveButtonStyle())
                 Button(exportButtonTitle) { viewModel.export() }
                     .buttonStyle(ZenPrimaryButtonStyle())
             }
@@ -310,6 +325,46 @@ struct AudioHistoryScreen: View {
         viewModel.selection.isEmpty
             ? "Export all…"
             : "Export \(viewModel.selection.count)…"
+    }
+
+    private var deleteTitle: String {
+        switch deleteRequest {
+        case .recording:
+            return "Delete this recording?"
+        case .selected:
+            return "Delete selected recordings?"
+        case .all:
+            return "Delete every recording?"
+        case nil:
+            return "Delete recordings?"
+        }
+    }
+
+    private var deleteMessage: String {
+        switch deleteRequest {
+        case .recording:
+            return "The audio file will be permanently removed."
+        case .selected:
+            return "\(viewModel.selection.count) selected audio files will be permanently removed."
+        case .all:
+            return "All \(viewModel.records.count) audio files will be permanently removed."
+        case nil:
+            return ""
+        }
+    }
+
+    private func confirmDelete() {
+        switch deleteRequest {
+        case .recording(let record):
+            viewModel.delete(record)
+        case .selected:
+            viewModel.deleteSelected()
+        case .all:
+            viewModel.deleteAll()
+        case nil:
+            return
+        }
+        deleteRequest = nil
     }
 
     // MARK: - Messages

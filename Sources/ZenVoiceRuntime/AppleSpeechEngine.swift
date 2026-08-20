@@ -122,13 +122,45 @@ private final class AppleSpeechRecognitionOperation: @unchecked Sendable {
 public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
     public static let engineID = EngineIdentifiers.appleSpeech
 
+    private final class OnDeviceAvailabilityCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [String: Bool] = [:]
+
+        func supports(_ locale: Locale) -> Bool {
+            let key = locale.identifier
+            lock.lock()
+            if let cached = values[key] {
+                lock.unlock()
+                return cached
+            }
+            lock.unlock()
+
+            let available = SFSpeechRecognizer(locale: locale).map {
+                $0.isAvailable && $0.supportsOnDeviceRecognition
+            } ?? false
+            lock.lock()
+            values[key] = available
+            lock.unlock()
+            return available
+        }
+    }
+
+    private static let onDeviceAvailability =
+        OnDeviceAvailabilityCache()
+
     public var descriptor: EngineDescriptor {
-        let locales = Self.supportedLocales()
-        let languages = locales.compactMap { locale in
-            LanguageCatalog.language(code: Self.languageCode(for: locale))
+        Self.cachedDescriptor
+    }
+
+    private static let cachedDescriptor: EngineDescriptor = {
+        let languages = AppleSpeechEngine.supportedLocales().compactMap {
+            locale in
+            LanguageCatalog.language(
+                code: AppleSpeechEngine.languageCode(for: locale)
+            )
         }
         return EngineDescriptor(
-            id: Self.engineID,
+            id: AppleSpeechEngine.engineID,
             displayName: "Apple Speech",
             family: .appleSpeech,
             supportedLanguages: languages,
@@ -145,7 +177,7 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
             privacyNote:
                 "Audio is processed on this Mac. Nothing is sent to Apple."
         )
-    }
+    }()
 
     public var isAvailable: Bool {
         guard !descriptor.supportedLanguages.isEmpty else {
@@ -156,6 +188,13 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
             return false
         }
         return true
+    }
+
+    public func isAvailable(for languageProfile: LanguageProfile) -> Bool {
+        isAvailable
+            && Self.onDeviceAvailability.supports(
+                Self.locale(for: languageProfile)
+            )
     }
 
     public var languageCapability: ModelLanguageCapability {
@@ -250,19 +289,21 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
         }
     }
 
-    private static func supportedLocales() -> [Locale] {
+    private static let cachedSupportedLocales: [Locale] =
         Array(SFSpeechRecognizer.supportedLocales())
-            .filter { locale in
-                guard let recognizer = SFSpeechRecognizer(locale: locale) else {
-                    return false
-                }
-                return recognizer.isAvailable && recognizer.supportsOnDeviceRecognition
-            }
+
+    private static func supportedLocales() -> [Locale] {
+        cachedSupportedLocales
     }
 
     private static func locale(for profile: LanguageProfile) -> Locale {
         let code = profile.inputLanguageCode
         let supported = supportedLocales()
+        if code == LanguageProfile.automaticCode {
+            return supported.first(where: { $0.identifier == "en-US" })
+                ?? supported.first(where: { languageCode(for: $0) == "en" })
+                ?? Locale(identifier: "en-US")
+        }
         if let exact = supported.first(where: {
             languageCode(for: $0) == code
         }) {

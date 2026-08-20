@@ -101,19 +101,28 @@ public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
         languageProfile: LanguageProfile,
         initialPrompt: String?
     ) async throws -> TranscriptionResult {
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.async { [transcriber] in
-                do {
-                    let result = try transcriber.transcribe(
-                        audioURL: audioURL,
-                        languageProfile: languageProfile,
-                        initialPrompt: initialPrompt
-                    )
-                    continuation.resume(returning: result)
-                } catch {
-                    continuation.resume(throwing: error)
+        let cancellation = WhisperCancellationToken()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                queue.async { [transcriber] in
+                    do {
+                        guard !cancellation.isCancelled else {
+                            throw CancellationError()
+                        }
+                        let result = try transcriber.transcribe(
+                            audioURL: audioURL,
+                            languageProfile: languageProfile,
+                            initialPrompt: initialPrompt,
+                            cancellation: cancellation
+                        )
+                        continuation.resume(returning: result)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 
@@ -127,19 +136,28 @@ public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
         languageProfile: LanguageProfile,
         initialPrompt: String? = nil
     ) async throws -> TranscriptionResult {
-        try await withCheckedThrowingContinuation { continuation in
-            queue.async { [transcriber] in
-                do {
-                    let result = try transcriber.transcribe(
-                        samples: samples,
-                        languageProfile: languageProfile,
-                        initialPrompt: initialPrompt
-                    )
-                    continuation.resume(returning: result)
-                } catch {
-                    continuation.resume(throwing: error)
+        let cancellation = WhisperCancellationToken()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                queue.async { [transcriber] in
+                    do {
+                        guard !cancellation.isCancelled else {
+                            throw CancellationError()
+                        }
+                        let result = try transcriber.transcribe(
+                            samples: samples,
+                            languageProfile: languageProfile,
+                            initialPrompt: initialPrompt,
+                            cancellation: cancellation
+                        )
+                        continuation.resume(returning: result)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 

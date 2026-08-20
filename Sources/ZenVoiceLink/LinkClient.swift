@@ -57,6 +57,8 @@ public actor LinkClient {
     private var observers: [UUID: SnapshotHandler] = [:]
     private var welcomeContinuation: CheckedContinuation<LinkWelcome, Error>?
     private var ackContinuations: [CheckedContinuation<LinkAck, Error>] = []
+    private var pendingWelcome: Result<LinkWelcome, Error>?
+    private var pendingAcks: [Result<LinkAck, Error>] = []
     private var lastSeenSequence: Int?
 
     public init(device: LinkDeviceIdentity) {
@@ -100,6 +102,7 @@ public actor LinkClient {
             }
             group.addTask {
                 try await Task.sleep(for: .seconds(timeoutSeconds))
+                connection.cancel()
                 throw LinkTransportError.timedOut
             }
             try await group.next()
@@ -112,8 +115,9 @@ public actor LinkClient {
                 guard let self else { throw LinkTransportError.notConnected }
                 return try await self.sendHelloAndAwaitWelcome()
             }
-            group.addTask {
+            group.addTask { [weak self] in
                 try await Task.sleep(for: .seconds(timeoutSeconds))
+                await self?.timeoutWelcome()
                 throw LinkTransportError.timedOut
             }
             guard let welcome = try await group.next() else {
@@ -129,6 +133,8 @@ public actor LinkClient {
         connection?.cancel()
         connection = nil
         buffer.removeAll()
+        pendingWelcome = nil
+        pendingAcks.removeAll()
         if let continuation = welcomeContinuation {
             welcomeContinuation = nil
             continuation.resume(throwing: LinkTransportError.notConnected)
@@ -185,8 +191,9 @@ public actor LinkClient {
                 guard let self else { throw LinkTransportError.notConnected }
                 return try await self.awaitAck()
             }
-            group.addTask {
+            group.addTask { [weak self] in
                 try await Task.sleep(for: .seconds(timeoutSeconds))
+                await self?.timeoutAcks()
                 throw LinkTransportError.timedOut
             }
             guard let ack = try await group.next() else {
@@ -198,15 +205,38 @@ public actor LinkClient {
     }
 
     private func awaitAck() async throws -> LinkAck {
-        try await withCheckedThrowingContinuation { continuation in
+        if !pendingAcks.isEmpty {
+            return try pendingAcks.removeFirst().get()
+        }
+        return try await withCheckedThrowingContinuation { continuation in
             ackContinuations.append(continuation)
         }
     }
 
     private func sendHelloAndAwaitWelcome() async throws -> LinkWelcome {
         try await send(.hello(LinkHello(device: device)))
+        if let pendingWelcome {
+            self.pendingWelcome = nil
+            return try pendingWelcome.get()
+        }
         return try await withCheckedThrowingContinuation { continuation in
             welcomeContinuation = continuation
+        }
+    }
+
+    private func timeoutWelcome() {
+        if let continuation = welcomeContinuation {
+            welcomeContinuation = nil
+            continuation.resume(throwing: LinkTransportError.timedOut)
+        }
+        connection?.cancel()
+    }
+
+    private func timeoutAcks() {
+        let pending = ackContinuations
+        ackContinuations.removeAll()
+        for continuation in pending {
+            continuation.resume(throwing: LinkTransportError.timedOut)
         }
     }
 
@@ -299,6 +329,8 @@ public actor LinkClient {
             if let continuation = welcomeContinuation {
                 welcomeContinuation = nil
                 continuation.resume(returning: welcome)
+            } else {
+                pendingWelcome = .success(welcome)
             }
         case .goal(let summary):
             snapshot.goal = summary
@@ -315,23 +347,30 @@ public actor LinkClient {
         case .ack(let ack):
             let pending = ackContinuations
             ackContinuations.removeAll()
-            for continuation in pending {
-                continuation.resume(returning: ack)
+            if pending.isEmpty {
+                pendingAcks.append(.success(ack))
+            } else {
+                for continuation in pending {
+                    continuation.resume(returning: ack)
+                }
             }
         case .error(let error):
             snapshot.lastRefusal = error.refusal
+            let refusal = LinkTransportError.refused(error.refusal)
             let pending = ackContinuations
             ackContinuations.removeAll()
-            for continuation in pending {
-                continuation.resume(
-                    throwing: LinkTransportError.refused(error.refusal)
-                )
+            if pending.isEmpty {
+                pendingAcks.append(.failure(refusal))
+            } else {
+                for continuation in pending {
+                    continuation.resume(throwing: refusal)
+                }
             }
             if let continuation = welcomeContinuation {
                 welcomeContinuation = nil
-                continuation.resume(
-                    throwing: LinkTransportError.refused(error.refusal)
-                )
+                continuation.resume(throwing: refusal)
+            } else if snapshot.hostName == nil {
+                pendingWelcome = .failure(refusal)
             }
         case .hello, .subscribe, .decision, .cancel:
             break

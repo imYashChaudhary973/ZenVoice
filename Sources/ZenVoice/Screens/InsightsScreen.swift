@@ -16,6 +16,12 @@ import SwiftUI
 import ZenVoiceCore
 import ZenVoiceStorage
 
+private struct DisplayActivityDay: Identifiable {
+    var id: Date { date }
+    let date: Date
+    let wordCount: Int
+}
+
 struct InsightsScreen: View {
     @ObservedObject var viewModel: InsightsViewModel
     @State private var showsShareCard = false
@@ -30,34 +36,30 @@ struct InsightsScreen: View {
                 )
             }
 
-            if viewModel.snapshot.dictationCount == 0 {
-                emptyState
-            } else {
-                metrics
-                activitySection
+            metrics
+            activitySection
 
-                HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
-                    appsSection
-                    categoriesSection
-                }
+            HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
+                appsSection
+                categoriesSection
+            }
 
-                HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
-                    ZenBanner(
-                        kind: .info,
-                        icon: "lock",
-                        text:
-                            "Insights are calculated locally. ZenVoice stores app identity — never window titles, URLs, recipients, or surrounding text."
+            HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
+                ZenBanner(
+                    kind: .info,
+                    icon: "lock",
+                    text:
+                        "Insights are calculated locally. ZenVoice stores app identity — never window titles, URLs, recipients, or surrounding text."
+                )
+                Button {
+                    showsShareCard = true
+                } label: {
+                    Label(
+                        "Share highlights",
+                        systemImage: "square.and.arrow.up"
                     )
-                    Button {
-                        showsShareCard = true
-                    } label: {
-                        Label(
-                            "Share highlights",
-                            systemImage: "square.and.arrow.up"
-                        )
-                    }
-                    .buttonStyle(ZenSecondaryButtonStyle(height: 60))
                 }
+                .buttonStyle(ZenSecondaryButtonStyle(height: 60))
             }
         }
         .onAppear(perform: viewModel.refresh)
@@ -102,7 +104,7 @@ struct InsightsScreen: View {
         ) {
             ZenPanel {
                 HStack(alignment: .bottom, spacing: 10) {
-                    ForEach(viewModel.snapshot.recentActivity) { day in
+                    ForEach(displayedActivity) { day in
                         VStack(spacing: 6) {
                             RoundedRectangle(
                                 cornerRadius: 4, style: .continuous
@@ -187,13 +189,21 @@ struct InsightsScreen: View {
         ZenSection(title: "What kind of work") {
             ZenPanel {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(viewModel.snapshot.categories) { insight in
-                        ZenMeterRow(
-                            label: insight.category.displayName,
-                            percent: percentOfWords(insight.wordCount)
+                    if viewModel.snapshot.categories.isEmpty {
+                        ZenRow(
+                            icon: "square.grid.2x2",
+                            title: "No categories yet",
+                            subtitle: "Work categories appear after saved dictations."
                         )
+                    } else {
+                        ForEach(viewModel.snapshot.categories) { insight in
+                            ZenMeterRow(
+                                label: insight.category.displayName,
+                                percent: percentOfWords(insight.wordCount)
+                            )
+                        }
+                        .padding(.horizontal, ZenDesign.Spacing.md)
                     }
-                    .padding(.horizontal, ZenDesign.Spacing.md)
                 }
                 .padding(.vertical, ZenDesign.Spacing.xs)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,30 +218,6 @@ struct InsightsScreen: View {
         )
     }
 
-    // MARK: empty
-
-    private var emptyState: some View {
-        ZenPanel {
-            VStack(spacing: ZenDesign.Spacing.xs) {
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                Text("Your local insights will appear here")
-                    .font(ZenDesign.Typography.sectionTitle)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                Text(
-                    "Save a completed dictation to begin tracking words, speed, streaks, apps, and categories."
-                )
-                .font(ZenDesign.Typography.caption)
-                .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, ZenDesign.Spacing.xxl)
-        }
-    }
-
     private var shareSummary: ShareCardSummary {
         ShareCardSummary(
             totalWordCount: viewModel.snapshot.totalWordCount,
@@ -244,7 +230,27 @@ struct InsightsScreen: View {
     }
 
     private var maxActivityWords: Int {
-        viewModel.snapshot.recentActivity.map(\.wordCount).max() ?? 0
+        displayedActivity.map(\.wordCount).max() ?? 0
+    }
+
+    private var displayedActivity: [DisplayActivityDay] {
+        guard viewModel.snapshot.recentActivity.isEmpty else {
+            return viewModel.snapshot.recentActivity.map {
+                DisplayActivityDay(date: $0.date, wordCount: $0.wordCount)
+            }
+        }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date())
+        return (0..<7).reversed().compactMap { offset in
+            guard let date = calendar.date(
+                byAdding: .day,
+                value: -offset,
+                to: start
+            ) else {
+                return nil
+            }
+            return DisplayActivityDay(date: date, wordCount: 0)
+        }
     }
 
     private func activityHeight(for wordCount: Int) -> CGFloat {

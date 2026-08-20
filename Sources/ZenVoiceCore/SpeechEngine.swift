@@ -36,11 +36,20 @@ public protocol SpeechEngine: Sendable {
     /// should cache the result and refresh it in `prepare()`.
     var isAvailable: Bool { get }
 
+    /// Whether the engine can serve this specific language profile now.
+    /// Engines with locale-specific system assets override this without making
+    /// every generic descriptor lookup probe every installed locale.
+    func isAvailable(for languageProfile: LanguageProfile) -> Bool
+
     /// Pays any one-off setup cost before the user needs it.
     ///
     /// Loading is otherwise lazy — it happens inside the first `transcribe`,
     /// after the user has already stopped talking. Prepare is called at app
-    /// launch and whenever the active engine changes, on a background queue.
+    /// launch, whenever the active engine changes, and on every route into a
+    /// dictation (including each recording start). Repeat calls must be cheap
+    /// once the model is resident: a reload of hundreds of megabytes shares
+    /// the engine's serial queue with `transcribe`, so a short utterance
+    /// waits for a model that was already loaded.
     func prepare() async throws
 
     /// Transcribes the audio file at `url` for the given language profile.
@@ -74,6 +83,10 @@ public protocol SpeechEngine: Sendable {
 
 public extension SpeechEngine {
     /// Engines whose `prepare()` is cheap have nothing to give back.
+    func isAvailable(for languageProfile: LanguageProfile) -> Bool {
+        isAvailable
+    }
+
     func release() async {}
 }
 

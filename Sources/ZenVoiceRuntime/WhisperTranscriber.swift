@@ -18,6 +18,41 @@ import Metal
 import ZenVoiceCore
 import whisper
 
+final class WhisperCancellationToken: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
+    }
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+}
+
+private final class WhisperAbortState {
+    let deadline: TimeInterval
+    let cancellation: WhisperCancellationToken?
+
+    init(
+        deadline: TimeInterval,
+        cancellation: WhisperCancellationToken?
+    ) {
+        self.deadline = deadline
+        self.cancellation = cancellation
+    }
+
+    var shouldAbort: Bool {
+        cancellation?.isCancelled == true
+            || Date().timeIntervalSinceReferenceDate > deadline
+    }
+}
+
 public final class WhisperTranscriber: @unchecked Sendable {
     public enum TranscriptionError: LocalizedError {
         case invalidAudio
@@ -155,11 +190,26 @@ public final class WhisperTranscriber: @unchecked Sendable {
         languageProfile: LanguageProfile? = nil,
         initialPrompt: String? = nil
     ) throws -> TranscriptionResult {
+        try transcribe(
+            audioURL: audioURL,
+            languageProfile: languageProfile,
+            initialPrompt: initialPrompt,
+            cancellation: nil
+        )
+    }
+
+    func transcribe(
+        audioURL: URL,
+        languageProfile: LanguageProfile?,
+        initialPrompt: String?,
+        cancellation: WhisperCancellationToken?
+    ) throws -> TranscriptionResult {
         let samples = try loadSamples(from: audioURL)
         return try transcribe(
             samples: samples,
             languageProfile: languageProfile,
-            initialPrompt: initialPrompt
+            initialPrompt: initialPrompt,
+            cancellation: cancellation
         )
     }
 
@@ -167,6 +217,20 @@ public final class WhisperTranscriber: @unchecked Sendable {
         samples: [Float],
         languageProfile: LanguageProfile? = nil,
         initialPrompt: String? = nil
+    ) throws -> TranscriptionResult {
+        try transcribe(
+            samples: samples,
+            languageProfile: languageProfile,
+            initialPrompt: initialPrompt,
+            cancellation: nil
+        )
+    }
+
+    func transcribe(
+        samples: [Float],
+        languageProfile: LanguageProfile?,
+        initialPrompt: String?,
+        cancellation: WhisperCancellationToken?
     ) throws -> TranscriptionResult {
         guard !samples.isEmpty else {
             throw TranscriptionError.invalidAudio
@@ -214,24 +278,26 @@ public final class WhisperTranscriber: @unchecked Sendable {
         parameters.print_timestamps = false
         parameters.translate = activeProfile.shouldTranslateToEnglish
 
-        // A deadline, because a stuck decode is otherwise indistinguishable
-        // from a slow one and the app simply appears frozen. ggml calls this
-        // before each computation; returning true unwinds the decode.
-        //
-        // The C callback cannot capture, so the deadline travels through
-        // user_data as a raw pointer.
-        let deadline = UnsafeMutablePointer<Double>.allocate(capacity: 1)
-        defer { deadline.deallocate() }
-        deadline.pointee = Date().timeIntervalSinceReferenceDate
-            + WhisperDecoding.decodeDeadline(
-                audioSeconds: Double(samples.count) / 16_000
-            )
+        // A deadline and task-cancellation flag, because a stale preview must
+        // release the serial engine queue before the final decode can begin.
+        // The C callback cannot capture, so an unretained state object travels
+        // through `user_data` and remains strongly held for `whisper_full`.
+        let abortState = WhisperAbortState(
+            deadline: Date().timeIntervalSinceReferenceDate
+                + WhisperDecoding.decodeDeadline(
+                    audioSeconds: Double(samples.count) / 16_000
+                ),
+            cancellation: cancellation
+        )
         parameters.abort_callback = { data in
             guard let data else { return false }
-            return Date().timeIntervalSinceReferenceDate
-                > data.assumingMemoryBound(to: Double.self).pointee
+            return Unmanaged<WhisperAbortState>
+                .fromOpaque(data)
+                .takeUnretainedValue()
+                .shouldAbort
         }
-        parameters.abort_callback_user_data = UnsafeMutableRawPointer(deadline)
+        parameters.abort_callback_user_data =
+            Unmanaged.passUnretained(abortState).toOpaque()
 
         let status = activeProfile.whisperLanguageArgument(
             for: languageCapability
@@ -252,9 +318,10 @@ public final class WhisperTranscriber: @unchecked Sendable {
             }
         }
         guard status == 0 else {
-            // An aborted decode and a genuine failure both return non-zero,
-            // so the deadline is what distinguishes them.
-            throw Date().timeIntervalSinceReferenceDate > deadline.pointee
+            if cancellation?.isCancelled == true {
+                throw CancellationError()
+            }
+            throw Date().timeIntervalSinceReferenceDate > abortState.deadline
                 ? TranscriptionError.timedOut
                 : TranscriptionError.runtimeFailed
         }

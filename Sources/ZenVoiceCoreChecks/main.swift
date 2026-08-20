@@ -2491,6 +2491,39 @@ do {
     failEngineCheck("fallback path hid CancellationError: \(error)")
 }
 
+let migrationSuite = "ZenVoiceCoreChecks.engine-migration.\(UUID().uuidString)"
+guard let migrationDefaults = UserDefaults(suiteName: migrationSuite),
+      let migrationModel = VerifiedModelCatalog.models.first else {
+    failEngineCheck("could not create engine-migration fixtures")
+}
+defer {
+    migrationDefaults.removePersistentDomain(forName: migrationSuite)
+}
+ModelSelectionPreferences.save(migrationModel, defaults: migrationDefaults)
+guard SelectedEnginePreferences.migrateLegacyWhisperSelectionIfNeeded(
+    for: englishProfile,
+    defaults: migrationDefaults
+), SelectedEnginePreferences.load(
+    for: englishProfile,
+    defaults: migrationDefaults
+) == EngineIdentifiers.whisper else {
+    failEngineCheck("legacy Whisper selection was not migrated")
+}
+SelectedEnginePreferences.save(
+    EngineIdentifiers.appleSpeech,
+    for: englishProfile,
+    defaults: migrationDefaults
+)
+guard !SelectedEnginePreferences.migrateLegacyWhisperSelectionIfNeeded(
+    for: englishProfile,
+    defaults: migrationDefaults
+), SelectedEnginePreferences.load(
+    for: englishProfile,
+    defaults: migrationDefaults
+) == EngineIdentifiers.appleSpeech else {
+    failEngineCheck("engine migration overwrote an explicit preference")
+}
+
 print("ZenVoiceCoreChecks: engine registry passed")
 
 // MARK: - Engine recommendation checks

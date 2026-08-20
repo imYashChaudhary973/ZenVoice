@@ -16,6 +16,7 @@ import AppKit
 import AVFoundation
 import Combine
 import Foundation
+import os
 import ZenVoiceCore
 import ZenVoiceRuntime
 import ZenVoiceStorage
@@ -116,6 +117,7 @@ private struct ActiveDictationBehavior: Sendable {
     let formattingMode: TranscriptFormattingMode
     let voiceCommandsEnabled: Bool
     let context: String
+    let modelID: String
 
     static var global: ActiveDictationBehavior {
         let languageProfile = LanguagePreferences.load()
@@ -124,7 +126,8 @@ private struct ActiveDictationBehavior: Sendable {
             correctionScope: languageProfile.correctionScope,
             formattingMode: TranscriptFormattingPreferences.load(),
             voiceCommandsEnabled: false,
-            context: ""
+            context: "",
+            modelID: "unknown"
         )
     }
 }
@@ -138,6 +141,10 @@ private extension LanguageProfile {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let state = AppState()
+    private static let dictationPerformanceLog = OSLog(
+        subsystem: RuntimeIdentity.productionBundleID,
+        category: "DictationPerformance"
+    )
     private let recorder = AudioRecorder()
     private let inserter = TextInserter()
     private lazy var commandExecutor: CommandModeExecutorImpl = {
@@ -148,10 +155,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }()
     private lazy var writeReader = WriteModeTextReaderImpl()
-    private let transcriptionQueue = DispatchQueue(
-        label: "dev.yashchaudhary.ZenVoice.transcription",
-        qos: .userInitiated
-    )
 
     private var statusItem: NSStatusItem!
     private var startStopMenuItem: NSMenuItem!
@@ -169,6 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var holdToDictateController: HoldToDictateController?
     private var engineRegistry: EngineRegistry?
     private var whisperEngine: WhisperSpeechEngine?
+    private var engineConfigurationTask: Task<Void, Never>?
     private var resetWorkItem: DispatchWorkItem?
     private var stateObservers: Set<AnyCancellable> = []
     private var currentHotKeyConfiguration = HotKeyPreferences.load()
@@ -200,10 +204,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let didApply: Bool
     }
 
+    /// Inserts the locally formatted result before an optional cloud request.
+    /// The cloud result may replace this exact text later, but never blocks the
+    /// first useful output and never targets a different application.
+    private func insertLocalBeforeCloud(
+        _ processed: ProcessedTranscription,
+        formattingMode: TranscriptFormattingMode,
+        targetProcessIdentifier: pid_t?
+    ) async -> String {
+        guard formattingMode == .cloud,
+              let targetProcessIdentifier,
+              AXIsProcessTrusted(),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier
+                == targetProcessIdentifier else {
+            return ""
+        }
+        let text = await enhanceForMode(
+            processed.result.finalTranscript,
+            formattingMode: formattingMode
+        )
+        guard !text.isEmpty else {
+            return ""
+        }
+        let candidate = text + " "
+        guard case .pasted = inserter.insert(candidate) else {
+            return ""
+        }
+        state.phase = .inserting
+        os_signpost(
+            .event,
+            log: Self.dictationPerformanceLog,
+            name: "LocalTextInserted"
+        )
+        return candidate
+    }
+
     private func processCloudEnhancement(
         localProcessed: ProcessedTranscription,
         formattingMode: TranscriptFormattingMode
     ) async -> CloudEnhancementOutcome {
+
         guard formattingMode == .cloud else {
             return CloudEnhancementOutcome(
                 processed: localProcessed,
@@ -398,6 +438,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var liveSessionID = UUID()
     private var liveCommittedSampleIndex = 0
     private var livePreviewInFlight = false
+    private var livePreviewTask: Task<Void, Never>?
     private var liveStableRawTranscript = ""
     private var liveStableFinalTranscript = ""
     private var livePendingStableTranscript = ""
@@ -408,11 +449,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var liveStreamingInsertionBlocked = false
     private var liveTargetProcessIdentifier: pid_t?
     private var liveSamplesEnabledForRecording = false
+    private var dictationTargetProcessIdentifier: pid_t?
     private var activeDictationBehavior =
         ActiveDictationBehavior.global
     private var anticipatoryEventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The approved graphite/violet reference is ZenVoice's one appearance
+        // for now. Set it at the application boundary so settings, approval
+        // windows, cloud review panels, menus, and native controls agree.
+        NSApp.appearance = ZenAppearance.appKitAppearance
         NSApp.setActivationPolicy(.accessory)
         validateRuntimeIdentity()
         configureEngines()
@@ -431,6 +477,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // activation policy back to `.accessory`, so it still gets out of the
         // way once you are dictating.
         settingsWindowController.show()
+#if DEBUG
+        runDeterministicE2EIfRequested()
+#endif
 
         NotificationCenter.default.addObserver(
             self,
@@ -507,8 +556,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func configureEngines() {
+        guard engineConfigurationTask == nil else {
+            return
+        }
+        engineConfigurationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.configureEnginesNow()
+            self.engineConfigurationTask = nil
+        }
+    }
+
+    private func waitForEngineConfiguration() async {
+        configureEngines()
+        await engineConfigurationTask?.value
+    }
+
+    private func configureEnginesNow() async {
+        let profile = LanguagePreferences.load()
+        SelectedEnginePreferences.migrateLegacyWhisperSelectionIfNeeded(
+            for: profile
+        )
         do {
-            let configuration = try ZenVoiceConfiguration.discover()
+            let configuration = try await Task.detached(
+                priority: .userInitiated
+            ) {
+                try ZenVoiceConfiguration.discover()
+            }.value
             let whisper = WhisperSpeechEngine(configuration: configuration)
             whisperEngine = whisper
             engineRegistry = makeEngineRegistry(whisper: whisper)
@@ -527,6 +600,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             state.phase = .error(error.localizedDescription)
         }
+        modelManagerViewModel?.refreshEngineSelection()
+        settingsViewModel?.refreshSystemStatus()
     }
 
     private func makeEngineRegistry(whisper: WhisperSpeechEngine) -> EngineRegistry {
@@ -629,59 +704,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return factory(modelURL)
     }
 
-    /// Builds the model before the user asks for it.
-    ///
-    /// Runs on `transcriptionQueue` because that is the serial queue every
-    /// Whisper decode uses. Repeat calls are cheap — the transcriber warms
-    /// once — so this is safe to fire on every route into a dictation, and it
-    /// is also what reloads the model after an idle unload.
+    /// Prepares the engines a dictation can reach before the user stops
+    /// speaking. Every preparation goes through the engine API, which owns the
+    /// same serial queue as decode and release; directly touching a transcriber
+    /// from a second queue can run two `whisper_full` calls concurrently.
     private func warmUpEngines() {
-        guard let whisperEngine else {
+        guard let registry = engineRegistry else {
             return
         }
         let profile = LanguagePreferences.load()
         let selectedID = SelectedEnginePreferences.load(for: profile)
-        // Whisper is warmed only when something is actually going to use it.
-        //
-        // This used to fire unconditionally, alongside preparing whichever
-        // engine the user had selected — so a Mac set to Nemotron or Parakeet
-        // loaded *two* models at launch and held both. Whisper's context is
-        // around 600 MB, spent on a decode that was never going to happen.
-        if shouldWarmWhisper(profile: profile, selectedID: selectedID) {
-            transcriptionQueue.async {
-                whisperEngine.transcriber.warmUp()
-            }
-        }
         Task {
-            try? await engineRegistry?.prepare(
+            if LiveDictationPreferences.isPreviewEnabled(),
+               let preview = registry.resolvePreview(for: profile) {
+                try? await preview.prepare()
+            }
+            try? await registry.prepare(
                 for: profile,
                 selectedID: selectedID
             )
         }
         noteDictationActivity()
-    }
-
-    /// Whether a dictation in the current configuration will reach Whisper.
-    ///
-    /// Two routes do: Whisper being the resolved engine, and live preview,
-    /// which decodes its partial segments with Whisper regardless of which
-    /// engine produces the final transcript.
-    private func shouldWarmWhisper(
-        profile: LanguageProfile,
-        selectedID: String?
-    ) -> Bool {
-        if LiveDictationPreferences.isPreviewEnabled() {
-            return true
-        }
-        guard let resolved = engineRegistry?.resolve(
-            for: profile,
-            selectedID: selectedID
-        ) else {
-            // No registry yet, or nothing resolvable — Whisper is the
-            // fallback, so warm it.
-            return true
-        }
-        return resolved.descriptor.id == WhisperSpeechEngine.engineID
     }
 
     // MARK: - Idle model unloading
@@ -1266,8 +1309,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             selectionInvalidated: { [weak self] in
                 self?.configureEngines()
-                self?.modelManagerViewModel?.refreshEngineSelection()
-                self?.settingsViewModel?.refreshSystemStatus()
             },
             engineRegistryProvider: { [weak self] in
                 self?.engineRegistry
@@ -1332,6 +1373,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return false
                 }
                 return !self.recorder.isRecording && !self.state.isBusy
+            },
+            isSpeechEngineReady: { [weak self] in
+                let profile = LanguagePreferences.load()
+                let selectedID = SelectedEnginePreferences.load(for: profile)
+                return self?.engineRegistry?.resolve(
+                    for: profile,
+                    selectedID: selectedID
+                ) != nil
             }
         )
         historyViewModel = HistoryViewModel(
@@ -1672,10 +1721,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         if whisperEngine == nil {
-            configureEngines()
-            guard whisperEngine != nil else {
-                return
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.waitForEngineConfiguration()
+                guard self.whisperEngine != nil else { return }
+                self.beginRecording(startedByHold: startedByHold)
             }
+            return
         }
         // Earliest useful moment: the model finishes building while the user is
         // still talking, rather than after they stop. A no-op once warm.
@@ -1728,7 +1780,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         state.resetAudioSamples()
         var historyDraft: DictationDraft?
         let capturesLiveSamples =
-            LiveDictationPreferences.isPreviewEnabled()
+            !isDeterministicE2E
+            && LiveDictationPreferences.isPreviewEnabled()
         let targetApplication =
             NSWorkspace.shared.frontmostApplication
         guard let dictationBehavior = await resolvedDictationBehavior(
@@ -1740,7 +1793,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activeDictationBehavior = dictationBehavior
         state.languageProfile = dictationBehavior.languageProfile
 
-        if historyPreferences.isHistoryEnabled,
+        if !isDeterministicE2E,
+           historyPreferences.isHistoryEnabled,
            !historyPreferences.isPrivateModeEnabled {
             do {
                 let vault = try await resolvedVault()
@@ -1754,7 +1808,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     language:
                         dictationBehavior.languageProfile
                             .inputLanguageCode,
-                    modelID: whisperEngine?.modelID ?? "unknown",
+                    modelID: dictationBehavior.modelID,
                     targetBundleID: targetApplication?.bundleIdentifier,
                     targetAppName: targetApplication?.localizedName,
                     category: category,
@@ -1769,6 +1823,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
+        dictationTargetProcessIdentifier = targetApplication?.processIdentifier
         do {
             try recorder.start(
                 recordingURL: historyDraft?.recoveryAudioURL,
@@ -1786,6 +1841,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updateStartStopMenuTitle()
         } catch {
             liveSamplesEnabledForRecording = false
+            dictationTargetProcessIdentifier = nil
             if let historyID = historyDraft?.id {
                 try? await dictationVault?.discard(id: historyID)
                 activeHistoryID = nil
@@ -1849,8 +1905,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             languageProfile: languageProfile,
             correctionScope: correctionScope,
             formattingMode:
-                profileFormattingMode
-                ?? TranscriptFormattingPreferences.load(),
+                isDeterministicE2E
+                    ? .clean
+                    : profileFormattingMode
+                        ?? TranscriptFormattingPreferences.load(),
             voiceCommandsEnabled:
                 profile?.voiceCommandsEnabled
                 ?? LocalVoiceCommandPreferences.isEnabled(),
@@ -1859,7 +1917,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     context:
                         settingsViewModel.sanitizedNextDictationContext,
                     preferredVocabulary: preferredVocabulary
-                )
+                ),
+            modelID:
+                (resolvedEngine as? WhisperSpeechEngine)?.modelID
+                ?? resolvedEngine.descriptor.id
         )
     }
 
@@ -1874,6 +1935,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stopLivePreviewScheduling(invalidatePending: true)
         let recordedAudio = recorder.stop(
             preserveLiveSamples: usesLivePreview
+        )
+        os_signpost(
+            .event,
+            log: Self.dictationPerformanceLog,
+            name: "RecordingStopped"
         )
 
         // Live preview text is exactly that — a preview. Whisper is markedly
@@ -2011,7 +2077,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             processingDurationSeconds: liveStableProcessingDuration,
             correctionUsages: liveCorrectionUsages
         )
-        let previewTargetProcess = liveTargetProcessIdentifier
+        let insertionTargetProcess =
+            liveTargetProcessIdentifier ?? dictationTargetProcessIdentifier
         resetLivePreviewSession()
         state.liveTranscriptPreview = ""
 
@@ -2024,7 +2091,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !previewFallback.finalTranscript.isEmpty,
            AXIsProcessTrusted(),
            NSWorkspace.shared.frontmostApplication?.processIdentifier
-            == previewTargetProcess {
+            == insertionTargetProcess {
             let candidate = previewFallback.finalTranscript + " "
             if case .pasted = inserter.insert(candidate) {
                 insertedPreview = candidate
@@ -2046,11 +2113,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
             do {
+                os_signpost(
+                    .event,
+                    log: Self.dictationPerformanceLog,
+                    name: "DecodeStarted"
+                )
                 let result = try await registry.transcribe(
                     audioURL: recordedAudio.url,
                     profile: behavior.languageProfile,
                     defaults: RuntimeIdentity.userDefaults(),
                     initialPrompt: behavior.context
+                )
+                os_signpost(
+                    .event,
+                    log: Self.dictationPerformanceLog,
+                    name: "DecodeFinished"
                 )
                 let refinement =
                     TranscriptRefinement.refine(
@@ -2073,6 +2150,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             )
                             : nil
                 )
+                let insertedBeforeCloud: String
+                if insertedPreview.isEmpty {
+                    insertedBeforeCloud = await Task {
+                        @MainActor [weak self] in
+                        guard let self else { return "" }
+                        return await self.insertLocalBeforeCloud(
+                            processed,
+                            formattingMode: behavior.formattingMode,
+                            targetProcessIdentifier: insertionTargetProcess
+                        )
+                    }.value
+                } else {
+                    insertedBeforeCloud = insertedPreview
+                }
+                os_signpost(
+                    .event,
+                    log: Self.dictationPerformanceLog,
+                    name: "CloudEnhancementStarted"
+                )
                 let cloudOutcome = await Task { @MainActor [weak self] in
                     guard let self else {
                         return CloudEnhancementOutcome(
@@ -2085,10 +2181,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         formattingMode: behavior.formattingMode
                     )
                 }.value
+                os_signpost(
+                    .event,
+                    log: Self.dictationPerformanceLog,
+                    name: "CloudEnhancementFinished"
+                )
                 let cloudProcessed = cloudOutcome.processed
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    guard !insertedPreview.isEmpty else {
+                    guard !insertedBeforeCloud.isEmpty else {
                         self.complete(
                             processed: cloudProcessed,
                             recordedAudio: recordedAudio,
@@ -2104,9 +2205,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     // meantime this would overwrite whatever happens to sit
                     // before *that* caret.
                     if NSWorkspace.shared.frontmostApplication?
-                        .processIdentifier == previewTargetProcess {
+                        .processIdentifier == insertionTargetProcess {
                         _ = self.inserter.replaceTextBeforeCaret(
-                            insertedPreview,
+                            insertedBeforeCloud,
                             with: cloudProcessed.result.finalTranscript + " "
                         )
                     }
@@ -2432,7 +2533,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appliesCorrectionRules =
             learningPreferences.appliesCorrectionRules
         let whisper = whisperEngine
-        Task { [weak self] in
+        livePreviewTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let result = try await self.transcribePreview(
@@ -2460,6 +2561,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         refinement: refinement,
                         correctionApplication: correctionApplication
                     )
+                    self.livePreviewTask = nil
                     self.acceptStablePhrase(
                         processed,
                         endSampleIndex: segment.endSampleIndex,
@@ -2469,12 +2571,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch WhisperTranscriber.TranscriptionError.noSpeech {
                 await MainActor.run {
                     guard self.liveSessionID == sessionID else { return }
+                    self.livePreviewTask = nil
                     self.livePreviewInFlight = false
                     self.stopLivePreviewScheduling(invalidatePending: false)
                 }
             } catch {
                 await MainActor.run {
                     guard self.liveSessionID == sessionID else { return }
+                    self.livePreviewTask = nil
                     self.livePreviewInFlight = false
                     self.stopLivePreviewScheduling(invalidatePending: false)
                 }
@@ -2605,6 +2709,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     ) {
         livePreviewTimer?.invalidate()
         livePreviewTimer = nil
+        if invalidatePending {
+            livePreviewTask?.cancel()
+            livePreviewTask = nil
+        }
         if invalidatePending {
             liveSessionID = UUID()
             livePreviewInFlight = false
@@ -2892,10 +3000,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
+        if isDeterministicE2E {
+            state.phase = .success
+            return
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             guard let self else { return }
+            os_signpost(
+                .event,
+                log: Self.dictationPerformanceLog,
+                name: "InsertionStarted"
+            )
             switch self.inserter.insert(textToInsert) {
             case .pasted:
+                os_signpost(
+                    .event,
+                    log: Self.dictationPerformanceLog,
+                    name: "TextInserted"
+                )
                 if let historyID, shouldPersist, historySaveError == nil {
                     Task {
                         try? await self.resolvedVault().markInsertion(
@@ -3008,6 +3130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func resetActiveDictationBehavior() {
         activeDictationBehavior = .global
         state.languageProfile = LanguagePreferences.load()
+        dictationTargetProcessIdentifier = nil
     }
 
     private func activeZenIntelligenceMode() -> ZenIntelligenceMode {
@@ -3260,6 +3383,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         state.phase = .idle
         updateStartStopMenuTitle()
     }
+
+    private var isDeterministicE2E: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.environment["ZENVOICE_E2E_AUTORUN"] == "1"
+#else
+        false
+#endif
+    }
+
+#if DEBUG
+    private func runDeterministicE2EIfRequested() {
+        guard isDeterministicE2E,
+              ProcessInfo.processInfo.environment[
+                "ZENVOICE_E2E_AUDIO_FILE"
+              ] != nil else {
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.waitForEngineConfiguration()
+            let profile = LanguagePreferences.load()
+            let selectedID = SelectedEnginePreferences.load(for: profile)
+            try? await self.engineRegistry?.prepare(
+                for: profile,
+                selectedID: selectedID
+            )
+            await self.startRecorder()
+            guard self.recorder.isRecording else {
+                print("ZENVOICE_E2E_RESULT failure recorder-not-started")
+                await self.finishDeterministicE2E()
+                return
+            }
+            let started = Date()
+            await self.finishRecordingNow()
+            let deadline = Date().addingTimeInterval(20)
+            while Date() < deadline {
+                switch self.state.phase {
+                case .success:
+                    let elapsed = Date().timeIntervalSince(started)
+                    print(
+                        String(
+                            format: "ZENVOICE_E2E_RESULT success %.3f",
+                            elapsed
+                        )
+                    )
+                    await self.finishDeterministicE2E()
+                    return
+                case .error(let message):
+                    print("ZENVOICE_E2E_RESULT failure \(message)")
+                    await self.finishDeterministicE2E()
+                    return
+                default:
+                    try? await Task.sleep(for: .milliseconds(20))
+                }
+            }
+            print("ZENVOICE_E2E_RESULT failure timeout")
+            await self.finishDeterministicE2E()
+        }
+    }
+
+    private func finishDeterministicE2E() async {
+        await engineRegistry?.releaseAll()
+        FileHandle.standardOutput.synchronizeFile()
+        exit(EXIT_SUCCESS)
+    }
+#endif
 
     /// Refuses to run if the bundle identifier is missing, empty, or foreign.
     ///

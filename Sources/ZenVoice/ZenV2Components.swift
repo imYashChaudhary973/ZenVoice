@@ -14,19 +14,9 @@
 
 import SwiftUI
 
-// MARK: - ZenVoice component vocabulary
-//
-// Every screen is composed from these, so the rules live here once rather than
-// in twenty-six places. Two of them account for most of the visual change from
-// the previous revision:
-//
-//   * `ZenInsetRow` no longer draws a border. A bordered row inside a bordered
-//     card inside a bordered panel is three rectangles deep and reads as none
-//     of them; grouping is now carried by a soft fill and by proximity, which
-//     is what actually communicates "these belong together".
-//
-//   * Nothing draws an accent-tinted glyph unless the colour means something.
-//     The accent is spent on selection, the primary action, and live state.
+// MARK: - ZenVoice v2 component vocabulary
+// Every redesigned screen is composed from these shared native components so
+// the interface vocabulary stays consistent across the app.
 
 struct ZenBrandMark: View {
     let size: CGFloat
@@ -41,18 +31,18 @@ struct ZenBrandMark: View {
                 .background(Color.black)
                 .clipShape(
                     RoundedRectangle(
-                        cornerRadius: min(6, size * 0.22),
+                        cornerRadius: min(4, size * 0.16),
                         style: .continuous
                     )
                 )
         } else {
             Image(systemName: "waveform")
-                .font(.system(size: size * 0.6, weight: .semibold))
+                .font(.system(size: size * 0.65, weight: .semibold))
                 .foregroundStyle(ZenDesign.Semantic.accent)
                 .frame(width: size, height: size)
                 .background {
                     RoundedRectangle(
-                        cornerRadius: min(6, size * 0.22),
+                        cornerRadius: min(4, size * 0.16),
                         style: .continuous
                     )
                     .fill(ZenDesign.Semantic.accentMuted)
@@ -61,14 +51,17 @@ struct ZenBrandMark: View {
     }
 }
 
-/// The one page scaffold: title, subtitle, optional tab strip, content.
+/// The one page scaffold: icon chip, title, subtitle, optional tab strip,
+/// content.
 ///
-/// The heading is now the largest type in the window and carries no icon. It
-/// used to be a `ZenCardHeader` with a 40pt tinted chip, drawn at the same
-/// 21pt as a card title — so the page's own name had no more presence than the
-/// third card down, and the chip duplicated the sidebar glyph that was already
-/// on screen. A page should announce itself once, clearly, and then get out of
-/// the way.
+/// Every section of the settings window renders exactly one of these. Screens
+/// that are shown as tabs of a larger section supply only their content — the
+/// container owns the scaffold — so a page never grows a second title, a
+/// second rule, or a nested scroll view.
+///
+/// The window toolbar owns page identity. Screen content starts directly with
+/// the controls shown in the supplied redesign instead of repeating a second
+/// title block inside every scroll view.
 struct ZenScreen<Content: View, Tabs: View>: View {
     let icon: String
     let title: String
@@ -78,54 +71,31 @@ struct ZenScreen<Content: View, Tabs: View>: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .zenType(
-                            ZenDesign.Typography.display,
-                            tracking: ZenDesign.Tracking.display
-                        )
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-
-                    Text(subtitle)
-                        .zenType(
-                            ZenDesign.Typography.body,
-                            tracking: ZenDesign.Tracking.body
-                        )
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(
-                            maxWidth: ZenDesign.Layout.proseColumn,
-                            alignment: .leading
-                        )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if Tabs.self != EmptyView.self {
-                    // The tab strip sits *below* the page title: the title
-                    // names the section, the tabs are views within it.
                     tabs
-                        .padding(.top, ZenDesign.Spacing.lg)
                 }
 
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
                     content
                 }
-                .padding(.top, ZenDesign.Spacing.xl)
+                .padding(
+                    .top,
+                    Tabs.self == EmptyView.self
+                        ? 0 : ZenDesign.Spacing.lg
+                )
             }
-            // Cards fill the window. Long *prose* still needs a measure, so the
-            // heading caps its own subtitle rather than the page capping
-            // everything — otherwise full screen leaves the content floating in
-            // a centred column matching neither the sidebar nor the top bar.
+            .frame(
+                maxWidth: ZenDesign.Layout.contentMaxWidth,
+                alignment: .leading
+            )
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, ZenDesign.Spacing.xl)
-            .padding(.top, ZenDesign.Spacing.sm)
-            .padding(.bottom, ZenDesign.Spacing.xxl)
+            .padding(.top, ZenDesign.Spacing.xl)
+            .padding(.bottom, 40)
         }
         .scrollIndicators(.automatic)
-        // Content is continuous under the top bar; it is obscured, not clipped.
-        // A gradient says that, a 1px rule lies about it.
-        .overlay(alignment: .top) { ZenScrollEdge() }
+        .background(ZenDesign.Semantic.canvas)
     }
 }
 
@@ -146,11 +116,10 @@ extension ZenScreen where Tabs == EmptyView {
     }
 }
 
-/// Draws a visible ring while the control it wraps holds keyboard focus.
+/// Draws a visible ring while a non-button control holds keyboard focus.
 ///
-/// Custom `.buttonStyle(.plain)` controls and plain text fields lose the system
-/// focus ring, which left keyboard navigation through this window with no
-/// visible indication of where you were.
+/// `ZenPressButtonStyle` handles buttons centrally. This modifier covers plain
+/// text fields and other focusable controls that do not receive a native ring.
 struct ZenFocusRing: ViewModifier {
     var cornerRadius: CGFloat = ZenDesign.Radius.small
     @FocusState private var isFocused: Bool
@@ -168,7 +137,7 @@ struct ZenFocusRing: ViewModifier {
                     isFocused
                         ? ZenDesign.Component.focusRing
                         : Color.clear,
-                    lineWidth: 2.5
+                    lineWidth: 2
                 )
                 .padding(-2)
                 .allowsHitTesting(false)
@@ -185,7 +154,59 @@ extension View {
     }
 }
 
+/// Immediate press feedback and keyboard focus for custom controls that cannot
+/// use a native bordered button style. Feedback begins on pointer-down through
+/// `configuration.isPressed`, remains interruptible, and never bounces.
+struct ZenPressButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = ZenDesign.Radius.small
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(
+                configuration.isPressed && isEnabled && !reduceMotion
+                    ? 0.98
+                    : 1
+            )
+            .opacity(
+                isEnabled
+                    ? (configuration.isPressed ? 0.86 : 1)
+                    : 0.45
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: cornerRadius,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    isFocused && isEnabled
+                        ? ZenDesign.Component.focusRing
+                        : Color.clear,
+                    lineWidth: 2
+                )
+                .padding(-2)
+                .allowsHitTesting(false)
+            }
+            .animation(
+                ZenDesign.Motion.fast(reduceMotion),
+                value: configuration.isPressed
+            )
+            .animation(
+                ZenDesign.Motion.fast(reduceMotion),
+                value: isFocused
+            )
+    }
+}
+
 /// Section label above a group of cards.
+///
+/// Sentence case at body weight, not tracked-out uppercase. Uppercase tracking
+/// belongs on the eyebrow *inside* a stat tile, where it labels a number; used
+/// as a section heading it reads as a system message rather than as a title,
+/// and every heading in the window looked like a warning.
 struct ZenSection<Content: View>: View {
     let title: String
     var caption: String?
@@ -195,18 +216,12 @@ struct ZenSection<Content: View>: View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
             HStack(alignment: .firstTextBaseline, spacing: ZenDesign.Spacing.sm) {
                 Text(title)
-                    .zenType(
-                        ZenDesign.Typography.bodyStrong,
-                        tracking: ZenDesign.Tracking.body
-                    )
+                    .font(.headline)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 Spacer(minLength: 0)
                 if let caption {
                     Text(caption)
-                        .zenType(
-                            ZenDesign.Typography.caption,
-                            tracking: ZenDesign.Tracking.caption
-                        )
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
             }
@@ -216,10 +231,12 @@ struct ZenSection<Content: View>: View {
     }
 }
 
-/// The card. One lit surface — the single container every screen is built from.
+/// The card. One surface, one hairline, one large radius — the single
+/// container every screen is built from.
 struct ZenPanel<Content: View>: View {
     var padding: CGFloat = 0
     @ViewBuilder let content: Content
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -227,11 +244,31 @@ struct ZenPanel<Content: View>: View {
         }
         .padding(padding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .zenSurface()
+        .background(ZenDesign.Semantic.surface)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.large,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.large,
+                style: .continuous
+            )
+            .strokeBorder(
+                contrast == .increased
+                    ? ZenDesign.Semantic.borderStrong
+                    : ZenDesign.Semantic.border.opacity(0.72),
+                lineWidth: contrast == .increased ? 1.5 : 1
+            )
+        }
     }
 }
 
-/// A card that heads itself: title, optional subtitle, then content.
+/// A card that heads itself: icon chip, title, optional subtitle, then
+/// content. `ZenPanel` remains available for cards that supply their own
+/// heading, or none.
 struct ZenCard<Content: View, Trailing: View>: View {
     let icon: String
     let title: String
@@ -246,8 +283,8 @@ struct ZenCard<Content: View, Trailing: View>: View {
                     systemImage: icon,
                     title: title,
                     subtitle: subtitle,
-                    titleFont: ZenDesign.Typography.sectionTitle,
-                    titleTracking: ZenDesign.Tracking.sectionTitle,
+                    titleFont: .system(size: 16, weight: .semibold),
+                    iconSize: 32,
                     trailing: { trailing }
                 )
                 content
@@ -273,23 +310,16 @@ extension ZenCard where Trailing == EmptyView {
     }
 }
 
-/// A row nested inside a card.
-///
-/// **No border.** This is the change that unwinds the box-in-a-box-in-a-box
-/// look: the row is grouped by a soft fill and by sitting next to its siblings,
-/// not by being outlined. The previous version drew a 1px stroke around every
-/// one of these, inside a card that also had a stroke, inside a panel that had
-/// one too — three concentric rectangles competing to be the thing that
-/// contains you.
+/// A row nested inside a card: its own inset surface rather than a band
+/// between two dividers. Use for list items that carry their own controls.
 struct ZenInsetRow<Content: View>: View {
     var tinted = false
-
     @ViewBuilder let content: Content
 
     var body: some View {
         content
             .padding(.horizontal, ZenDesign.Spacing.sm)
-            .padding(.vertical, ZenDesign.Spacing.xs + 2)
+            .padding(.vertical, ZenDesign.Spacing.sm - 2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(
@@ -299,56 +329,65 @@ struct ZenInsetRow<Content: View>: View {
                 .fill(
                     tinted
                         ? ZenDesign.Semantic.accentMuted
-                        : ZenDesign.Semantic.textPrimary.opacity(0.04)
+                        : ZenDesign.Semantic.surfaceRaised
                 )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.medium,
+                        style: .continuous
+                    )
+                    .strokeBorder(
+                        tinted
+                            ? ZenDesign.Semantic.accent.opacity(0.35)
+                            : Color.clear,
+                        lineWidth: 1
+                    )
+                }
             }
     }
 }
 
 struct ZenPanelDivider: View {
     var body: some View {
-        Rectangle()
-            .fill(ZenDesign.Semantic.border)
-            .frame(height: 1)
+        Divider().overlay(ZenDesign.Semantic.border)
     }
 }
 
-/// List row: glyph · title/sub · trailing control.
+/// List row: icon chip · title/sub · trailing control (prototype `.row`).
 struct ZenRow<Trailing: View>: View {
     var icon: String?
     var iconTint: Color?
-    /// Retained for source compatibility. A filled container behind a row glyph
-    /// is the decoration this revision removed; passing one no longer draws it.
     var iconBackground: Color?
     let title: String
     var subtitle: String?
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(alignment: .center, spacing: ZenDesign.Spacing.sm) {
+        HStack(alignment: .firstTextBaseline, spacing: ZenDesign.Spacing.sm) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(
-                        iconTint ?? ZenDesign.Semantic.textTertiary
+                        iconTint ?? ZenDesign.Semantic.textSecondary
                     )
-                    .frame(width: 20)
+                    .frame(width: 30, height: 30)
+                    .background {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(
+                                iconBackground
+                                    ?? ZenDesign.Semantic.surfaceRaised
+                            )
+                    }
                     .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .zenType(
-                        ZenDesign.Typography.bodyStrong,
-                        tracking: ZenDesign.Tracking.body
-                    )
+                    .font(ZenDesign.Typography.bodyStrong)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 if let subtitle {
                     Text(subtitle)
-                        .zenType(
-                            ZenDesign.Typography.caption,
-                            tracking: ZenDesign.Tracking.caption
-                        )
+                        .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -384,23 +423,26 @@ extension ZenRow where Trailing == EmptyView {
     }
 }
 
-/// Keyboard-key chip.
-///
-/// Drawn as an actual key: a raised cap with a lit top edge and a hint of
-/// shadow under it. A shortcut is the one thing in this window the user has to
-/// reproduce on hardware, so it should look like the hardware.
+/// Keyboard-key chip (prototype `.kbd`).
 struct ZenKbd: View {
     let text: String
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .font(.system(size: 11.5, weight: .medium, design: .monospaced))
             .foregroundStyle(ZenDesign.Semantic.textSecondary)
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 7)
-            .frame(minWidth: 23, minHeight: 22)
-            .zenControlSurface(cornerRadius: 6)
+            .frame(minWidth: 24, minHeight: 24)
+            .background {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(ZenDesign.Semantic.surfaceRaised)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(ZenDesign.Semantic.borderStrong)
+                    }
+            }
     }
 }
 
@@ -437,7 +479,7 @@ struct ZenKbdGroup: View {
     }
 }
 
-/// Quiet capsule with optional dot/icon.
+/// Badge (prototype `.badge`): quiet capsule with optional dot/icon.
 struct ZenBadge: View {
     enum Kind {
         case neutral, success, accent, danger, warn
@@ -451,13 +493,12 @@ struct ZenBadge: View {
     var body: some View {
         HStack(spacing: 5) {
             if showsDot {
-                Circle().fill(foreground).frame(width: 5, height: 5)
+                Circle().fill(foreground).frame(width: 6, height: 6)
             }
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ZenDesign.Typography.badge)
             }
-
             // Sentence case, not uppercase. These pills carry model names and
             // capability labels — "Apple Silicon", "AI enhanced" — and
             // uppercasing turned proper nouns into shouting.
@@ -476,7 +517,7 @@ struct ZenBadge: View {
 
     private var foreground: Color {
         switch kind {
-        case .neutral: return ZenDesign.Semantic.textTertiary
+        case .neutral: return ZenDesign.Semantic.textSecondary
         case .success: return ZenDesign.Semantic.success
         case .accent: return ZenDesign.Semantic.accent
         case .danger: return ZenDesign.Semantic.danger
@@ -486,7 +527,7 @@ struct ZenBadge: View {
 
     private var background: Color {
         switch kind {
-        case .neutral: return ZenDesign.Semantic.textPrimary.opacity(0.06)
+        case .neutral: return ZenDesign.Semantic.surfaceRaised
         case .success: return ZenDesign.Semantic.successMuted
         case .accent: return ZenDesign.Semantic.accentMuted
         case .danger: return ZenDesign.Semantic.dangerMuted
@@ -495,7 +536,7 @@ struct ZenBadge: View {
     }
 }
 
-/// Inline banner.
+/// Inline banner (prototype `.banner`).
 struct ZenBanner: View {
     enum Kind {
         case info, warn, danger, success
@@ -512,10 +553,7 @@ struct ZenBanner: View {
                 .foregroundStyle(foreground)
                 .padding(.top, 1)
             Text(text)
-                .zenType(
-                    ZenDesign.Typography.body,
-                    tracking: ZenDesign.Tracking.body
-                )
+                .font(ZenDesign.Typography.body)
                 .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -528,20 +566,13 @@ struct ZenBanner: View {
             )
             .fill(background)
         }
-        // A leading accent bar rather than a full outline. It marks the banner
-        // as a distinct kind of object without drawing a fourth rectangle
-        // around content that already sits in two.
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(foreground)
-                .frame(width: 3)
-        }
-        .clipShape(
+        .overlay {
             RoundedRectangle(
                 cornerRadius: ZenDesign.Radius.medium,
                 style: .continuous
             )
-        )
+            .strokeBorder(border)
+        }
     }
 
     /// The icon carries the kind's colour; the text stays at reading contrast.
@@ -564,16 +595,17 @@ struct ZenBanner: View {
         case .success: return ZenDesign.Semantic.successMuted
         }
     }
+
+    private var border: Color {
+        foreground.opacity(0.3)
+    }
 }
 
-/// Stat tile: label, then the number at display size, then one line of context.
+/// Stat tile: uppercase eyebrow with an icon, then the number at display
+/// size, then one line of context.
 ///
 /// The label sits *above* the value, which is the order the eye wants — you
-/// read what the number is before you read the number. The uppercase tracked
-/// eyebrow and the accent glyph beside it are both gone: a number is already
-/// the most salient thing you can put on a page, and dressing it up in a second
-/// colour and a third type treatment made a page of four of them read as an
-/// analytics dashboard rather than as a quiet fact about your day.
+/// read what the number is before you read the number.
 struct ZenStatTile: View {
     let value: String
     let label: String
@@ -582,63 +614,72 @@ struct ZenStatTile: View {
     var valueTint: Color?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .zenType(
-                    ZenDesign.Typography.caption,
-                    tracking: ZenDesign.Tracking.caption
-                )
-                .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                .lineLimit(1)
-
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                Text(label.uppercased())
+                    .font(ZenDesign.Typography.eyebrow)
+                    .tracking(1.0)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .lineLimit(1)
+            }
             Text(value)
-                .zenType(
-                    ZenDesign.Typography.metric,
-                    tracking: ZenDesign.Tracking.metric
+                .font(ZenDesign.Typography.metric)
+                .foregroundStyle(
+                    valueTint ?? ZenDesign.Semantic.textPrimary
                 )
-                .foregroundStyle(valueTint ?? ZenDesign.Semantic.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.5)
-
+                .minimumScaleFactor(0.6)
             if let detail {
                 Text(detail)
-                    .zenType(
-                        ZenDesign.Typography.caption,
-                        tracking: ZenDesign.Tracking.caption
-                    )
+                    .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     .lineLimit(1)
-                    .padding(.top, 2)
             }
         }
         .padding(ZenDesign.Spacing.lg)
         .frame(
             maxWidth: .infinity,
-            minHeight: 128,
+            minHeight: 132,
             alignment: .topLeading
         )
-        .zenSurface()
+        .background(ZenDesign.Semantic.surface)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.large,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.large,
+                style: .continuous
+            )
+            .strokeBorder(ZenDesign.Semantic.border)
+        }
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Label · percent · thin bar.
+/// Label · percent · thin bar (prototype `.meter-row`).
 struct ZenMeterRow: View {
     let label: String
     let percent: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
-                    .zenType(
-                        ZenDesign.Typography.body,
-                        tracking: ZenDesign.Tracking.body
-                    )
+                    .font(ZenDesign.Typography.body)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                 Spacer()
                 Text("\(percent)%")
-                    .font(ZenDesign.Typography.metricCaption.monospacedDigit())
+                    .font(ZenDesign.Typography.metricCaption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
             }
             GeometryReader { proxy in
@@ -653,7 +694,7 @@ struct ZenMeterRow: View {
                         )
                 }
             }
-            .frame(height: 5)
+            .frame(height: 4)
         }
         .padding(.vertical, ZenDesign.Spacing.xs)
         .accessibilityElement(children: .ignore)
@@ -661,13 +702,7 @@ struct ZenMeterRow: View {
     }
 }
 
-/// Underline tab strip.
-///
-/// The selected underline slides between tabs on a shared `matchedGeometry`
-/// namespace instead of appearing and disappearing. The eye tracks a moving
-/// object without effort and has to re-find a teleporting one — and because the
-/// motion is a spring, clicking a third tab mid-slide redirects the underline
-/// from wherever it currently is rather than restarting it.
+/// Native macOS segmented control for views within one preference pane.
 struct ZenTabStrip<Tab: Hashable>: View {
     struct Item {
         let tab: Tab
@@ -678,84 +713,31 @@ struct ZenTabStrip<Tab: Hashable>: View {
     let items: [Item]
     @Binding var selection: Tab
 
-    @Namespace private var underline
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: ZenDesign.Spacing.xl) {
+        HStack {
+            Picker("View", selection: $selection) {
                 ForEach(items, id: \.tab) { item in
-                    Button {
-                        selection = item.tab
-                    } label: {
-                        VStack(spacing: ZenDesign.Spacing.xs) {
-                            HStack(spacing: 6) {
-                                Text(item.title)
-                                    .zenType(
-                                        ZenDesign.Typography.bodyStrong,
-                                        tracking: ZenDesign.Tracking.body
-                                    )
-                                if item.badge > 0 {
-                                    Text("\(item.badge)")
-                                        .font(ZenDesign.Typography.badge)
-                                        .foregroundStyle(
-                                            ZenDesign.Semantic.warn
-                                        )
-                                        .padding(.horizontal, 6)
-                                        .frame(height: 16)
-                                        .background {
-                                            Capsule().fill(
-                                                ZenDesign.Semantic.warnMuted
-                                            )
-                                        }
-                                }
-                            }
-                            .foregroundStyle(
-                                selection == item.tab
-                                    ? ZenDesign.Semantic.textPrimary
-                                    : ZenDesign.Semantic.textTertiary
-                            )
-
-                            Group {
-                                if selection == item.tab {
-                                    Capsule()
-                                        .fill(ZenDesign.Semantic.accent)
-                                        .matchedGeometryEffect(
-                                            id: "underline",
-                                            in: underline
-                                        )
-                                } else {
-                                    Capsule().fill(Color.clear)
-                                }
-                            }
-                            .frame(height: 2)
-                        }
-                        // Hugs its label. Without this the underline claims an
-                        // equal share of the strip's width, so three tabs each
-                        // grew a rule a third of the window wide and the
-                        // selected one was impossible to pick out.
-                        .fixedSize(horizontal: true, vertical: false)
-                        .frame(minHeight: ZenDesign.Layout.hitTarget)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(ZenPressableStyle())
-                    .accessibilityLabel(item.title)
-                    .accessibilityAddTraits(
-                        selection == item.tab ? .isSelected : []
+                    Text(
+                        item.badge > 0
+                            ? "\(item.title)  \(item.badge)"
+                            : item.title
                     )
+                    .tag(item.tab)
                 }
-                Spacer()
             }
-            .animation(ZenDesign.Motion.standard(reduceMotion), value: selection)
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.regular)
+            .fixedSize(horizontal: true, vertical: false)
 
-            Rectangle()
-                .fill(ZenDesign.Semantic.border)
-                .frame(height: 1)
+            Spacer(minLength: 0)
         }
+        .frame(minHeight: ZenDesign.Layout.hitTarget)
+        .accessibilityElement(children: .contain)
     }
 }
 
-/// Search field.
+/// Search field (prototype `.search-wrap`).
 struct ZenSearchField: View {
     let placeholder: String
     @Binding var text: String
@@ -763,14 +745,11 @@ struct ZenSearchField: View {
     var body: some View {
         HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12))
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
-                .zenType(
-                    ZenDesign.Typography.body,
-                    tracking: ZenDesign.Tracking.body
-                )
+                .font(ZenDesign.Typography.body)
                 .zenFocusRing()
             if !text.isEmpty {
                 Button {
@@ -779,24 +758,41 @@ struct ZenSearchField: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .frame(
+                            width: ZenDesign.Layout.hitTarget,
+                            height: ZenDesign.Layout.hitTarget
+                        )
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(ZenPressableStyle())
+                .buttonStyle(
+                    ZenPressButtonStyle(
+                        cornerRadius: ZenDesign.Radius.medium
+                    )
+                )
                 .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, ZenDesign.Spacing.sm)
-        .frame(height: ZenDesign.Layout.control + 6)
+        .frame(height: ZenDesign.Layout.hitTarget)
         .background {
             RoundedRectangle(
                 cornerRadius: ZenDesign.Radius.medium,
                 style: .continuous
             )
-            .fill(ZenDesign.Semantic.textPrimary.opacity(0.05))
+            .fill(ZenDesign.Semantic.surfaceRaised)
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.medium,
+                    style: .continuous
+                )
+                .strokeBorder(ZenDesign.Semantic.border)
+            }
         }
     }
 }
 
-/// Selectable card for mode/priority pickers.
+/// Selectable card for mode/priority pickers (prototype `.reco button`,
+/// `.lang-chip`).
 struct ZenChoiceCard: View {
     let title: String
     var badge: String?
@@ -804,13 +800,12 @@ struct ZenChoiceCard: View {
     let selected: Bool
     var titleIcon: String?
     let action: () -> Void
-
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if let titleIcon {
                         Image(systemName: titleIcon)
@@ -818,12 +813,16 @@ struct ZenChoiceCard: View {
                             .foregroundStyle(
                                 selected
                                     ? ZenDesign.Semantic.accent
-                                    : ZenDesign.Semantic.textTertiary
+                                    : ZenDesign.Semantic.textSecondary
                             )
                     }
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .tracking(-0.2)
+                        .font(
+                            .system(
+                                size: 14,
+                                weight: .semibold
+                            )
+                        )
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
@@ -832,18 +831,14 @@ struct ZenChoiceCard: View {
                         ZenBadge(text: badge, kind: .neutral)
                     }
                     Spacer(minLength: 0)
-                    // A filled check, not a bare tick: the selected card is one
-                    // of the three places the accent is allowed to be, and at
-                    // this size a hairline glyph does not survive being the
-                    // only mark carrying the state.
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(ZenDesign.Semantic.accent)
-                        .opacity(selected ? 1 : 0)
-                        .scaleEffect(selected ? 1 : 0.6)
+                    if selected {
+                        Image(systemName: "checkmark")
+                            .font(ZenDesign.Typography.badge)
+                            .foregroundStyle(ZenDesign.Semantic.accent)
+                    }
                 }
                 Text(detail)
-                    .font(.system(size: 11.5))
+                    .font(.system(size: 11))
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -852,7 +847,7 @@ struct ZenChoiceCard: View {
             .padding(ZenDesign.Spacing.md)
             .frame(
                 maxWidth: .infinity,
-                minHeight: 92,
+                minHeight: 96,
                 alignment: .topLeading
             )
             .background {
@@ -863,8 +858,9 @@ struct ZenChoiceCard: View {
                 .fill(
                     selected
                         ? ZenDesign.Semantic.accentMuted
-                        : ZenDesign.Semantic.textPrimary
-                            .opacity(hovering ? 0.07 : 0.04)
+                        : hovering
+                            ? ZenDesign.Semantic.surfaceRaised
+                            : ZenDesign.Semantic.surface
                 )
             }
             .overlay {
@@ -874,18 +870,23 @@ struct ZenChoiceCard: View {
                 )
                 .strokeBorder(
                     selected
-                        ? ZenDesign.Semantic.accent.opacity(0.85)
-                        : Color.clear,
-                    lineWidth: 1.5
+                        ? ZenDesign.Semantic.accent
+                        : hovering
+                            ? ZenDesign.Semantic.borderStrong
+                            : ZenDesign.Semantic.border,
+                    lineWidth: selected ? 1.5 : 1
                 )
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(ZenPressableStyle())
+        .buttonStyle(
+            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.large)
+        )
         .onHover { hovering = $0 }
-        .animation(ZenDesign.Motion.fast(reduceMotion), value: hovering)
-        .animation(ZenDesign.Motion.standard(reduceMotion), value: selected)
-        .zenFocusRing(cornerRadius: ZenDesign.Radius.large)
+        .animation(
+            ZenDesign.Motion.fast(reduceMotion),
+            value: hovering
+        )
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -901,12 +902,12 @@ struct ZenSwitch: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .controlSize(.small)
-            .tint(ZenDesign.Semantic.accent)
+            .tint(ZenDesign.Semantic.accentFill)
             .accessibilityLabel(label)
     }
 }
 
-/// Small ghost icon button.
+/// Small ghost icon button (prototype `.icon-btn`).
 struct ZenIconButton: View {
     let systemImage: String
     let label: String
@@ -914,7 +915,6 @@ struct ZenIconButton: View {
     let action: () -> Void
 
     @State private var hovering = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -925,17 +925,17 @@ struct ZenIconButton: View {
                         ? (isDanger
                             ? ZenDesign.Semantic.danger
                             : ZenDesign.Semantic.textPrimary)
-                        : ZenDesign.Semantic.textTertiary
+                        : ZenDesign.Semantic.textSecondary
                 )
                 .frame(
                     width: ZenDesign.Layout.control,
                     height: ZenDesign.Layout.control
                 )
                 .background {
-                    // A resting fill, not a hover-only one. These buttons carry
-                    // reset and delete actions; with no visible affordance they
-                    // were invisible to anyone who had not already swept the
-                    // pointer across them.
+                    // A resting fill and border, not a hover-only one. These
+                    // buttons carry reset and delete actions; with no visible
+                    // affordance they were invisible to anyone who had not
+                    // already swept the pointer across them.
                     RoundedRectangle(
                         cornerRadius: ZenDesign.Radius.small,
                         style: .continuous
@@ -944,9 +944,21 @@ struct ZenIconButton: View {
                         hovering
                             ? (isDanger
                                 ? ZenDesign.Semantic.dangerMuted
-                                : ZenDesign.Semantic.textPrimary.opacity(0.10))
-                            : ZenDesign.Semantic.textPrimary.opacity(0.05)
+                                : ZenDesign.Semantic.surfaceRaised)
+                            : ZenDesign.Semantic.surfaceRaised.opacity(0.6)
                     )
+                    .overlay {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.small,
+                            style: .continuous
+                        )
+                        .strokeBorder(
+                            hovering && isDanger
+                                ? ZenDesign.Semantic.danger.opacity(0.5)
+                                : ZenDesign.Semantic.border,
+                            lineWidth: 1
+                        )
+                    }
                 }
                 .frame(
                     minWidth: ZenDesign.Layout.hitTarget,
@@ -954,59 +966,43 @@ struct ZenIconButton: View {
                 )
                 .contentShape(Rectangle())
         }
-        .buttonStyle(ZenPressableStyle())
+        .buttonStyle(
+            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.small)
+        )
         .onHover { hovering = $0 }
-        .animation(ZenDesign.Motion.fast(reduceMotion), value: hovering)
         .accessibilityLabel(label)
         .help(label)
     }
 }
 
-/// Live status: dot + lowercase label, no container.
-///
-/// The dot breathes on a scale *and* an opacity curve rather than opacity
-/// alone. A dot that only dims reads as a rendering artefact at small sizes;
-/// one that also swells slightly reads as a pulse, which is the thing being
-/// communicated — something is happening right now.
+/// Terminal-style live status: dot + lowercase mono label, no container.
+/// For transient runtime states ("● listening", "● downloading 42%") —
+/// use `ZenBadge` for persistent states that describe an item.
 struct ZenStatusLabel: View {
     let text: String
     var tint: Color = ZenDesign.Semantic.textSecondary
     var pulses = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulsing = false
+    @State private var dimmed = false
 
     var body: some View {
         HStack(spacing: 6) {
-            ZStack {
-                // A soft halo, so the pulse is legible against both a card and
-                // the ZenBar's material without the dot itself having to grow
-                // large enough to become a blob.
-                Circle()
-                    .fill(tint.opacity(0.28))
-                    .frame(width: 14, height: 14)
-                    .scaleEffect(pulsing ? 1.15 : 0.6)
-                    .opacity(pulsing ? 0 : 0.9)
-                Circle()
-                    .fill(tint)
-                    .frame(width: 6, height: 6)
-            }
-            .frame(width: 14, height: 14)
-
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+                .opacity(dimmed ? 0.35 : 1)
             Text(text.lowercased())
-                .zenType(
-                    ZenDesign.Typography.captionStrong,
-                    tracking: ZenDesign.Tracking.caption
-                )
+                .font(ZenDesign.Typography.caption)
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
                 .lineLimit(1)
         }
         .onAppear {
             guard pulses, !reduceMotion else { return }
             withAnimation(
-                .easeOut(duration: 1.4).repeatForever(autoreverses: false)
+                .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
             ) {
-                pulsing = true
+                dimmed = true
             }
         }
         .accessibilityElement(children: .ignore)
@@ -1014,12 +1010,10 @@ struct ZenStatusLabel: View {
     }
 }
 
-/// Hairline progress bar for downloads and long-running work.
+/// Hairline 2pt progress bar for downloads and long-running work.
 struct ZenProgressBar: View {
     /// 0…1
     let value: Double
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { proxy in
@@ -1034,8 +1028,7 @@ struct ZenProgressBar: View {
                     )
             }
         }
-        .frame(height: 3)
-        .animation(ZenDesign.Motion.standard(reduceMotion), value: value)
+        .frame(height: 2)
         .accessibilityElement(children: .ignore)
         .accessibilityValue("\(Int(value * 100)) percent")
     }
