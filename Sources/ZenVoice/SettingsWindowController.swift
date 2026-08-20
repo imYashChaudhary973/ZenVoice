@@ -73,10 +73,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         window.title = "ZenVoice"
         window.titleVisibility = .hidden
-        // Keep the unified toolbar's native material visible. A transparent
-        // titlebar let scrolling labels show through status and Dictate,
-        // destroying legibility exactly where floating chrome needs separation.
-        window.titlebarAppearsTransparent = false
+        // Let the split view's sidebar material continue through the unified
+        // titlebar. An opaque titlebar calculated its sidebar edge separately
+        // from NSSplitView, producing a visible two-point step at the divider.
+        window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified
         window.titlebarSeparatorStyle = .none
         // Fill the split-view divider with the semantic window surface. A
