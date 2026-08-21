@@ -4,12 +4,15 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-21
+
+Public GitHub beta. Notarized Apple Silicon zip only. Homebrew, auto-updates,
+and the App Store stay off.
+
 ### Project direction
 
-- ZenVoice is now internal-use-first. Public shipping is deferred until the
-  product has matured through regular personal use and a deliberate future
-  shipping decision is made. The release checklist and signing pipeline remain
-  prepared but inactive.
+- First public download: GitHub Releases. File bugs there. This is a beta, not
+  a 1.0. Agentic Mode and Cloud formatting stay off unless you turn them on.
 
 ### Added
 

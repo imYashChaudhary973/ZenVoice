@@ -24,7 +24,7 @@ ZenVoice is a native macOS menu-bar app that records on this Mac, decodes with a
 | **Platform** | Native macOS 14+ · Apple Silicon |
 | **Stack** | Swift · SwiftUI · AppKit · AVFoundation · Accessibility |
 | **Data** | Local-first · AES-GCM transcripts · Keychain-held vault key |
-| **Status** | Daily personal use · public shipping deferred ([ADR 0004](docs/decisions/0004-internal-use-first-defer-shipping.md)) |
+| **Status** | Public GitHub beta |
 
 ## Why
 
@@ -110,12 +110,23 @@ Full boundary: [Privacy](docs/PRIVACY.md).
 
 ## Requirements
 
-- macOS 14 or newer on Apple Silicon. Certified-for-release versions are recorded per candidate in [Release Readiness](docs/RELEASE_READINESS.md); macOS 14–26 have not been certified.
-- Xcode, not only Command Line Tools — SwiftUI macros ship with Xcode.
-- Internet on the first build, for the pinned `whisper.cpp` XCFramework.
-- A verified model from the **Models** screen before the first real dictation.
+- Apple Silicon Mac. Tested on recent macOS. The build targets macOS 14+, but 14–26 are uncertified.
+- A model from the **Models** screen before the first real dictation.
 
-## Build
+## Install
+
+1. Download `ZenVoice-distribution.zip` from [Releases](https://github.com/imYashChaudhary973/ZenVoice/releases/latest).
+2. Unzip and drag `ZenVoice.app` to `/Applications`.
+3. Open it. Allow **Microphone** and **Accessibility**.
+4. Finish setup: language, recommended model, try a dictation.
+
+Without Accessibility, the transcript still lands on the clipboard.
+
+[File a bug](https://github.com/imYashChaudhary973/ZenVoice/issues/new?template=bug_report.md) if something breaks. Do not paste private transcripts.
+
+## Build from source
+
+Xcode required (SwiftUI macros). Internet on the first build, for the pinned `whisper.cpp` XCFramework.
 
 ```bash
 git clone https://github.com/imYashChaudhary973/ZenVoice.git
@@ -123,10 +134,6 @@ cd ZenVoice
 ./Scripts/build-app.sh
 open build/ZenVoice.app
 ```
-
-On first use macOS asks for **Microphone** (capture) and **Accessibility** (paste). Without Accessibility, the transcript still lands on the clipboard.
-
-There is no signed public release yet. A Homebrew cask and a GitHub Release zip are prepared and inert.
 
 ## Use
 
@@ -195,4 +202,4 @@ Start at the [documentation index](docs/README.md). `docs/` describes the produc
 
 ## Status
 
-Working and in daily personal use. Apache-2.0. Public shipping is deferred until the product has matured through that use and a deliberate shipping decision is made. Passing CI is not a claim of public availability.
+Public GitHub beta. Apache-2.0. Auto-updates and Homebrew are off. Passing CI is not a 1.0 claim.
