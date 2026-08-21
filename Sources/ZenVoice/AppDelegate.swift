@@ -793,9 +793,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let policy = try RuntimeIdentity.policy()
             let vault = try await DictationVault.live(policy: policy)
             dictationVault = vault
+            // 0.3.1: Command Mode / Agentic Mode is not ready for beta.
+            // Keep the types compiled but never activate them on launch.
+            CommandModePreferences.setEnabled(false)
+            AgenticModePreferences.setEnabled(false)
             let coordinator = AgenticModeCoordinator(state: state, vault: vault)
             agenticModeCoordinator = coordinator
-            coordinator.recoverAfterRelaunch()
             try await vault.recoverInterrupted(
                 retainAudio: historyPreferences.retainsFailedAudio
             )

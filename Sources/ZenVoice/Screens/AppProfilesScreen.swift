@@ -58,20 +58,6 @@ struct AppProfilesScreen: View {
                     label: "Local voice commands"
                 )
             }
-            ZenPanelDivider()
-            ZenRow(
-                icon: "command",
-                title: "Command Mode",
-                subtitle: "Allow built-in app launches, Shortcuts, and system actions"
-            ) {
-                ZenSwitch(
-                    isOn: Binding(
-                        get: { viewModel.commandModeEnabled },
-                        set: viewModel.setCommandModeEnabled
-                    ),
-                    label: "Command Mode"
-                )
-            }
         }
     }
 

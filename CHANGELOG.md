@@ -4,30 +4,17 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-08-21
+## [0.3.1] - 2026-08-21
 
-Public GitHub beta. Notarized Apple Silicon zip only. Homebrew, auto-updates,
-and the App Store stay off.
+Re-cut of the public GitHub beta with Command Mode / Agentic Mode removed from
+the shipped product surface. It remains compiled behind the scenes but is
+force-disabled on launch and not exposed in settings.
 
 ### Project direction
 
 - First public download: GitHub Releases. File bugs there. This is a beta, not
-  a 1.0. Agentic Mode and Cloud formatting stay off unless you turn them on.
-
-### Added
-
-- Agentic Command Mode (v2), off by default: a dictated multi-step goal becomes
-  a reviewable plan that runs only after you approve those exact steps. Planning
-  is local — deterministic phrase templates first, Apple's on-device model
-  second — and the validator re-derives each step's risk, rejects working
-  directories outside `~/Developer`, and refuses secret-shaped commands.
-  Approved steps run through `codex`, `claude`, `zsh`, `shortcuts`, or a local
-  notification; high-risk steps always need their own approval. Plans, decisions
-  and captured output are encrypted in the local vault (schema v7), output is
-  redacted before storage, ZenBar shows live progress with a Stop control that
-  kills the whole child process group, and relaunch never resumes an interrupted
-  command. Settings live in Commands → Agentic Mode
-  ([ADR 0013](docs/decisions/0013-agentic-command-mode.md)).
+  a 1.0. Agentic Mode, Command Mode, and Cloud formatting stay off unless you
+  turn them on; the first two are not reachable in this build.
 
 ### Changed
 

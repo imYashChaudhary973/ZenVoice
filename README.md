@@ -59,7 +59,6 @@ Closing the settings window does not quit. The status item and the shortcut stay
 | **History** | Encrypted by default. Search, copy, retry, delete, Recovery Inbox. Pause independently of Private Dictation. |
 | **Insights** | Words, weighted WPM, streaks, apps, categories — all derived locally. Highlight cards carry numbers only. |
 | **Voice profile** | Recurring phrases and explicit correction rules, encrypted. Not a biometric voiceprint. |
-| **Commands** | Local layout/punctuation phrases. Optional Agentic Mode: a spoken goal becomes a reviewable plan; nothing runs until you approve those exact steps. |
 | **Audio** | Pin a mic or follow System Default. Three-second on-device Audio Doctor. Optional Audio History is off and unencrypted — see [Privacy](docs/PRIVACY.md). |
 
 Do not re-add FluidAudio or Fluid Intelligence. NVIDIA engines run on open `parakeet.cpp`.
@@ -102,7 +101,6 @@ Application code does not send audio, transcripts, clipboard contents, or usage 
 | Audio History | Off. Unencrypted WAV archive if you turn it on. Never leaves the Mac unless you export it. |
 | Next-dictation context | Memory only, 500 characters, cleared when recording starts |
 | Cloud formatting | Off. Sends finished text + your prompt to *your* HTTPS endpoint, with *your* Keychain key. Never audio, never the target app. |
-| Agentic steps | Off. Approved `codex` / `claude` / `zsh` steps are those tools' own network, not ZenVoice's. |
 
 The Privacy screen counts encrypted transcripts, recovery audio, correction rules, and installed models in-process. Those counts are not telemetry.
 

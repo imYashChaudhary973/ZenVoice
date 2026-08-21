@@ -198,7 +198,7 @@ struct ZenVoiceSettingsView: View {
         case .models:
             return "model engine whisper parakeet nemotron cohere"
         case .personalisation:
-            return "formatting vocabulary app rules commands corrections cloud"
+            return "formatting vocabulary app rules corrections cloud"
         case .history:
             return "transcripts recordings insights audio search export"
         case .settings:

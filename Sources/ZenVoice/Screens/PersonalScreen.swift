@@ -28,7 +28,7 @@ struct PersonalScreen: View {
     @ObservedObject var applicationProfileViewModel: ApplicationProfileViewModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case formatting, vocabulary, appRules, commands
+        case formatting, vocabulary, appRules
 
         var id: String { rawValue }
 
@@ -40,8 +40,6 @@ struct PersonalScreen: View {
                 return "Vocabulary"
             case .appRules:
                 return "App Rules"
-            case .commands:
-                return "Commands"
             }
         }
     }
@@ -54,7 +52,7 @@ struct PersonalScreen: View {
             title: "Personalisation",
             subtitle:
                 "Control formatting, remembered words, per-app behavior, "
-                + "and voice commands.",
+                + "and local voice commands.",
             tabs: {
                 ZenTabStrip(
                     items: Tab.allCases.map { tab in
@@ -78,8 +76,6 @@ struct PersonalScreen: View {
                     viewModel: viewModel,
                     applicationProfileViewModel: applicationProfileViewModel
                 )
-            case .commands:
-                CommandsScreen(viewModel: viewModel)
             }
         }
     }
