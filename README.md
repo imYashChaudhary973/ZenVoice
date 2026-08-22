@@ -21,6 +21,10 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Engines-Parakeet%20TDT%20v3%20%7C%20v2%20%7C%20Flash%20%7C%20Nemotron%203.5%20%7C%20Whisper%20%7C%20Apple%20Speech%20%7C%20Cohere-543EF5?style=for-the-badge" alt="Supported engines">
+</p>
+
+<p align="center">
   <a href="https://github.com/imYashChaudhary973/ZenVoice/releases/latest">
     <img src="https://img.shields.io/badge/Download-GitHub%20Releases-543EF5?style=for-the-badge&logo=github&logoColor=white" alt="Download from GitHub Releases" />
   </a>
@@ -30,20 +34,104 @@
   <img src="docs/images/hero.jpg" width="920" alt="ZenVoice — Your voice, written. Private, local-first dictation for macOS.">
 </p>
 
----
-
-## What it does
-
 ZenVoice is a native macOS menu-bar app. Press a shortcut, speak, press it again. The transcript is typed into whichever app has focus.
 
-Recording, decoding, cleanup, and paste all happen on this Mac. There is no account, no subscription, no analytics, and no cloud transcription. The one network path that can leave the machine — optional BYO-key Cloud formatting — is off until you turn it on and put your own key in the Keychain.
+Recording, decoding, cleanup, and paste all happen on this Mac. There is no account, no subscription, no analytics, and no cloud transcription. Optional BYO-key Cloud formatting is off until you turn it on.
 
-| | |
+Public GitHub beta. Apache-2.0.
+
+---
+
+## Features
+
+- **Global shortcut** — `⌃⌥Space` by default. Hold-to-dictate, paste-last (`⌃⌥V`), and Private Dictation (`⌃⌥P`) are configurable.
+- **ZenBar** — a 108×36 capsule on the display you are working on. Controls appear on hover. An error is the one state that stays open.
+- **On-device engines** — Whisper, Apple Speech, Parakeet TDT v2/v3, Parakeet Flash, Nemotron 3.5, and Cohere Transcribe. Nothing is sent to a speech API.
+- **Live preview** — optional on-device preview while you speak. Flash and Nemotron Ultra Fast are preview-only; final insert stays on TDT v3 or Whisper.
+- **Formatting** — Off, deterministic Clean, guarded on-device Smart (macOS 26+), or opt-in BYO-key Cloud. Cloud never sends audio.
+- **Encrypted history** — AES-GCM transcripts, search, copy, retry, delete, Recovery Inbox. Pause independently of Private Dictation.
+- **Insights** — words, weighted WPM, streaks, apps, categories. All derived locally. Share cards carry numbers only.
+- **Voice profile** — recurring phrases and explicit correction rules, encrypted. Not a biometric voiceprint.
+- **Audio Doctor** — three-second local mic check. Pin a microphone or follow System Default.
+- **Per-app rules** — language, refinement, and local voice-command behaviour from the original target app.
+- **Menu bar + main menu** — status item stays after you close the window. **⌘W** closes; **⌘Q** quits.
+
+---
+
+## Supported models
+
+An **engine** is the runtime. A **model** is the file it loads. Whisper can pick among four files. Each NVIDIA engine is pinned to one checkpoint. Mixing families does not work.
+
+| Engine / model | Best for | Languages | Download | Hardware |
+|---|---|---|---|---|
+| **Parakeet TDT v3** | Default English / European insert | [25 languages](#parakeet-tdt-v3) | ~897 MB | Apple Silicon |
+| **Parakeet TDT v2** | English-only insert | English | ~862 MB | Apple Silicon |
+| **Parakeet Flash** | Live English preview only | English | ~168 MB | Apple Silicon |
+| **Nemotron 3.5 Ultra Fast** | Streaming preview only | ~40 locales | ~938 MB | Apple Silicon |
+| **Nemotron 3.5 Multilingual** | Offline multilingual insert | ~40 locales | same file as Ultra Fast | Apple Silicon |
+| **Whisper Turbo** | Auto-detect / 99-language fallback | [99 languages](#whisper) | ~547 MB | Apple Silicon |
+| **Whisper Medium** | High-accuracy multilingual Whisper | 99 languages | ~1.4 GB | Apple Silicon |
+| **Whisper Small** | Intel / low-memory compromise | 99 languages (European in practice) | ~465 MB | Apple Silicon + Intel |
+| **Hinglish Apex** | Hindi–English Latin output | Hinglish | ~834 MB | Apple Silicon |
+| **Cohere Transcribe** | Local high-accuracy multilingual | [14 languages](#cohere-transcribe) | ~3.1 GB | Apple Silicon |
+| **Apple Speech** | Zero-download fallback | System languages | None | Apple Silicon + Intel |
+
+Measured on the frozen Common Voice Spontaneous set (2026-08-18): **Parakeet TDT v3 is 6.9% WER at 73× real time**; Whisper Turbo is 8.2% at 11×. Full table: [REAL_SPEECH_CORPUS.md](docs/REAL_SPEECH_CORPUS.md).
+
+### Parakeet TDT v3
+
+Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish, Swedish, Ukrainian.
+
+### Parakeet TDT v2
+
+English.
+
+### Cohere Transcribe
+
+English, French, German, Italian, Spanish, Portuguese, Greek, Dutch, Polish, Mandarin, Japanese, Korean, Vietnamese, Arabic.
+
+### Apple Speech
+
+Whatever on-device languages macOS Speech has installed. Audio never leaves the Mac (`requiresOnDeviceRecognition`).
+
+### Whisper
+
+Up to 99 languages, depending on the file. Turbo is the multilingual default. Small is the Intel fallback, not a speed tier. Tiny and Base are retired.
+
+### What gets recommended
+
+| Condition | Final engine |
 |---|---|
-| **Platform** | Native macOS 14+ · Apple Silicon |
-| **Stack** | Swift · SwiftUI · AppKit · AVFoundation · Accessibility |
-| **Data** | Local-first · AES-GCM transcripts · Keychain-held vault key |
-| **Status** | Public GitHub beta |
+| English or European locale on Apple Silicon | Parakeet TDT v3 |
+| Auto-detect / non-European | Whisper Turbo |
+| Hinglish | Apex only |
+| No TDT v3 installed | Apple Speech |
+| Intel | Whisper Small |
+
+Pinned hashes and URLs: [Model catalogue](docs/MODEL_CATALOG.md).
+
+NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Intelligence.
+
+---
+
+## Quick start
+
+1. **Download** `ZenVoice-distribution.zip` from [Releases](https://github.com/imYashChaudhary973/ZenVoice/releases/latest). Unzip and drag `ZenVoice.app` to `/Applications`.
+2. **Allow Microphone and Accessibility.** Without Accessibility, text still lands on the clipboard.
+3. **Finish setup** — language, then the recommended engine/model, then a test dictation.
+4. **Put the caret** in any editable field. Press `⌃⌥Space`, speak, press it again.
+5. **(Optional)** Hold-to-dictate, Private Dictation, live preview, and Cloud formatting live in Shortcuts / Personalisation. All of them stay off until you turn them on.
+
+---
+
+## Requirements
+
+- Apple Silicon Mac for NVIDIA engines and the recommended path
+- Intel Macs: Whisper Small only
+- Build target is macOS 14+. Certified on recent macOS; 14–26 are uncertified
+- Disk: one engine file, typically 170 MB–1.4 GB (Cohere ~3.1 GB if you choose it)
+- Microphone access
+- Accessibility permission to type into other apps
 
 ---
 
@@ -60,31 +148,7 @@ Hotkey
   → clipboard + Accessibility paste
 ```
 
-1. Put the caret in any editable field.
-2. Press `Control + Option + Space` (or your shortcut).
-3. Speak. ZenBar shows you it is listening.
-4. Press the shortcut again. Text lands where you were typing.
-
-Closing the settings window does not quit. The status item and the shortcut stay. **⌘W** closes the window; **⌘Q** quits.
-
----
-
-## Features
-
-| Area | Behaviour |
-|---|---|
-| **Dictation** | `⌃⌥Space` by default. Hold-to-dictate, paste-last (`⌃⌥V`), and Private Dictation (`⌃⌥P`) are configurable. Live preview and commit-on-pause are optional. |
-| **ZenBar** | At rest: a 108×36 capsule on the display of the focused app. Controls appear on hover. An error is the one state that stays open. |
-| **Engines** | Whisper (`whisper.cpp` v1.9.1), Apple Speech, Parakeet TDT v2/v3, Parakeet Flash, Nemotron 3.5, Cohere Transcribe (on-device ONNX). Flash and Nemotron Ultra Fast are live-preview only. |
-| **Models** | The Models screen lists the checkpoint each engine loads. Only Whisper can pick among four files. A mismatched Use stays put. |
-| **Languages** | English-safe default, 64 selectable languages, Hinglish Latin / native-script / local English-translation. |
-| **Formatting** | Off, deterministic Clean, guarded on-device Smart (macOS 26+), opt-in BYO-key Cloud. |
-| **History** | Encrypted by default. Search, copy, retry, delete, Recovery Inbox. |
-| **Insights** | Words, weighted WPM, streaks, apps, categories — all derived locally. |
-| **Voice profile** | Recurring phrases and explicit correction rules, encrypted. Not a biometric voiceprint. |
-| **Audio** | Pin a mic or follow System Default. Three-second on-device Audio Doctor. |
-
-Do not re-add FluidAudio or Fluid Intelligence. NVIDIA engines run on open `parakeet.cpp`.
+Closing the settings window does not quit. **⌘W** closes the window; **⌘Q** quits.
 
 ---
 
@@ -100,29 +164,9 @@ Application code does not send audio, transcripts, clipboard contents, or usage 
 | Next-dictation context | Memory only, 500 characters, cleared when recording starts |
 | Cloud formatting | Off. Sends finished text + your prompt to *your* HTTPS endpoint, with *your* Keychain key. Never audio, never the target app. |
 
-The Privacy screen counts encrypted transcripts, recovery audio, correction rules, and installed models in-process. Those counts are not telemetry.
+The Privacy screen counts what is on disk. Those counts are not telemetry.
 
 Full boundary: [Privacy](docs/PRIVACY.md).
-
----
-
-## Requirements
-
-- Apple Silicon Mac. Tested on recent macOS. The build targets macOS 14+, but 14–26 are uncertified.
-- A model from the **Models** screen before the first real dictation.
-
----
-
-## Install
-
-1. Download `ZenVoice-distribution.zip` from [Releases](https://github.com/imYashChaudhary973/ZenVoice/releases/latest).
-2. Unzip and drag `ZenVoice.app` to `/Applications`.
-3. Open it. Allow **Microphone** and **Accessibility**.
-4. Finish setup: language, recommended model, try a dictation.
-
-Without Accessibility, the transcript still lands on the clipboard.
-
-[File a bug](https://github.com/imYashChaudhary973/ZenVoice/issues/new?template=bug_report.md) if something breaks. Do not paste private transcripts.
 
 ---
 
@@ -139,15 +183,19 @@ open build/ZenVoice.app
 
 ---
 
-## Use
+## Verify
 
-1. **Shortcuts** — keep `⌃⌥Space` or record your own.
-2. **Models** — pick the engine, then the file it can load. Whisper has four; each NVIDIA engine has one.
-3. **Languages** — English, Hinglish, auto-detect, or another spoken language.
-4. Put the caret in any editable field.
-5. Press the shortcut, speak, press it again.
+```bash
+swift run ZenVoiceCoreChecks
+swift run ZenVoiceStorageChecks
+swift run ZenVoiceRuntimeChecks
+swift build
+./Scripts/check-ui-invariants.sh
+./Scripts/build-app.sh
+codesign --verify --deep --strict build/ZenVoice.app
+```
 
-Hold-to-dictate is in Shortcuts: hold the chosen modifier, speak, release.
+Point a runtime check at a model with `ZENVOICE_MODEL_PATH`. `ZENVOICE_RUNTIME_REQUIRED=1` fails instead of skipping when none is visible.
 
 ---
 
@@ -175,29 +223,13 @@ flowchart LR
 | `ZenVoiceStorage` | Encrypted vault, insights, voice profile, audio archive |
 | `ZenVoice*Checks` | Deterministic checks the compiler cannot see |
 
-A loaded model is 600–940 MB of GPU buffers. After five idle minutes the registry unloads; the next dictation warms again. With nothing resident the app sits near 50 MB. Measure `phys_footprint`, not RSS.
-
----
-
-## Verify
-
-```bash
-swift run ZenVoiceCoreChecks
-swift run ZenVoiceStorageChecks
-swift run ZenVoiceRuntimeChecks
-swift build
-./Scripts/check-ui-invariants.sh
-./Scripts/build-app.sh
-codesign --verify --deep --strict build/ZenVoice.app
-```
-
-Point a runtime check at a model with `ZENVOICE_MODEL_PATH`. `ZENVOICE_RUNTIME_REQUIRED=1` fails instead of skipping when none is visible.
+A loaded model is 600–940 MB of GPU buffers. After five idle minutes the registry unloads. With nothing resident the app sits near 50 MB. Measure `phys_footprint`, not RSS.
 
 ---
 
 ## Documentation
 
-Start at the [documentation index](docs/README.md). `docs/` describes the product as it is now.
+Start at the [documentation index](docs/README.md).
 
 | Document | What it covers |
 |---|---|
@@ -215,6 +247,8 @@ Start at the [documentation index](docs/README.md). `docs/` describes the produc
 ## Status
 
 Public GitHub beta. Apache-2.0. Auto-updates and Homebrew are off. Passing CI is not a 1.0 claim.
+
+[File a bug](https://github.com/imYashChaudhary973/ZenVoice/issues/new?template=bug_report.md) if something breaks. Do not paste private transcripts.
 
 <p align="center">
   <em>Speak. It types. Nothing leaves your Mac.</em>
