@@ -749,7 +749,8 @@ final class ModelManagerViewModel: ObservableObject {
     }
 
     func isSelected(_ model: VerifiedModel) -> Bool {
-        selectedModelID == model.id
+        activeEngineID == EngineIdentifiers.whisper
+            && selectedModelID == model.id
     }
 
     func isLanguageCompatible(_ model: VerifiedModel) -> Bool {

@@ -2664,6 +2664,35 @@ guard previewRegistry.resolvePreview(for: .english)?.descriptor.id
     failEngineCheck("Flash should win live preview resolve")
 }
 
+let wrappedModels: [(String, String)] = [
+    (EngineIdentifiers.parakeetTDTv2, "nvidia/parakeet-tdt-0.6b-v2"),
+    (EngineIdentifiers.parakeetTDTv3, "nvidia/parakeet-tdt-0.6b-v3"),
+    (
+        EngineIdentifiers.parakeetFlash,
+        "nvidia/parakeet_realtime_eou_120m-v1"
+    ),
+    (
+        EngineIdentifiers.nemotronSpeechUltraFast,
+        "nvidia/nemotron-3.5-asr-streaming-0.6b"
+    ),
+    (
+        EngineIdentifiers.nemotronSpeechMultilingual,
+        "nvidia/nemotron-3.5-asr-streaming-0.6b"
+    )
+]
+for (engineID, expected) in wrappedModels {
+    guard VerifiedEngineCatalog.engine(id: engineID)?.wrappedModelID
+            == expected else {
+        failEngineCheck("\(engineID) does not wrap \(expected)")
+    }
+}
+guard VerifiedEngineCatalog.engine(
+        id: EngineIdentifiers.appleSpeech
+      )?.wrappedModelID == nil else {
+    failEngineCheck("Apple Speech should not wrap a downloadable model")
+}
+
+
 print("ZenVoiceCoreChecks: engine recommendation passed")
 
 // MARK: - Command mode checks

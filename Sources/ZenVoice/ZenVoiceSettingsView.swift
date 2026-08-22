@@ -80,6 +80,7 @@ struct ZenVoiceSettingsView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showsCommandPalette = false
     @State private var commandQuery = ""
+    @State private var modelMismatch: ModelMismatchAlert?
     @State private var hoveredSection: Section?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -435,7 +436,13 @@ struct ZenVoiceSettingsView: View {
                 title: "Models",
                 subtitle: "Choose the on-device engine used for transcription."
             ) {
-                ModelsScreen(viewModel: modelManagerViewModel)
+                ModelsScreen(
+                    viewModel: modelManagerViewModel,
+                    mismatchAlert: $modelMismatch
+                )
+            }
+            .overlay {
+                ModelMismatchToastOverlay(alert: $modelMismatch)
             }
         case .personalisation:
             PersonalScreen(

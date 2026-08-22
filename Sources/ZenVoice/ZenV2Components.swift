@@ -709,6 +709,66 @@ struct ZenBanner: View {
     }
 }
 
+/// Opensource UI system alert: glass card, two-line body, red 3D keycap.
+struct ZenSystemAlert: View {
+    let title: String
+    let description: String
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(ZenDesign.Semantic.textOnDanger)
+                .frame(width: 38, height: 38)
+                .background {
+                    ZenKeycap(kind: .danger, cornerRadius: 10)
+                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(ZenDesign.Typography.bodyStrong)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .lineLimit(1)
+                Text(description)
+                    .font(ZenDesign.Typography.body)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(
+                cornerRadius: 20,
+                style: .continuous
+            )
+            .fill(ZenDesign.Semantic.surface.opacity(0.92))
+            .shadow(color: Color.black.opacity(0.12), radius: 16, y: 8)
+        }
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 20,
+                style: .continuous
+            )
+            .strokeBorder(ZenDesign.Semantic.borderStrong)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+
+
 /// Stat tile: uppercase eyebrow with an icon, then the number at display
 /// size, then one line of context.
 ///

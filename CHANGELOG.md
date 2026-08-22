@@ -15,7 +15,10 @@ All notable ZenVoice changes are recorded here.
   Stored API keys expose Replace. Tab strips slide. Toolbar search is a
   field on the right. Dictation has a square reset control.
 - Row icons, shortcut chips, and history status marks use 3D keycaps.
-  History delete is a normal button beside search. Replay setup is gone
+- Models lists every engine-linked checkpoint. A mismatched Use stays put
+  and shows a red 3D system alert. Only Whisper can pick among four files.
+- Models names the official NVIDIA checkpoint each engine wraps.
+- History delete is a normal button beside search. Replay setup is gone
   after first launch.
 
 ## [0.3.1] - 2026-08-21

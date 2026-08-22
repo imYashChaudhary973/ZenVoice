@@ -46,6 +46,16 @@ public struct VerifiedEngine: Equatable, Sendable {
         self.sha256 = sha256
         self.fileSizeBytes = fileSizeBytes
     }
+
+    /// Hugging Face model this engine loads, e.g. `nvidia/parakeet-tdt-0.6b-v3`.
+    public var wrappedModelID: String? {
+        guard let sourceRepository,
+              let host = sourceRepository.range(of: "huggingface.co/")
+        else {
+            return nil
+        }
+        return String(sourceRepository[host.upperBound...])
+    }
 }
 
 /// Catalogue of every engine ZenVoice knows about, offered or reserved.

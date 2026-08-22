@@ -167,6 +167,16 @@ else
     pass "History uses copy and kebab; Privacy uses hold-to-delete"
 fi
 
+if ! grep -q "wrappedModelID" "$screens/ModelsScreen.swift" \
+    || ! grep -q "only loads" "$screens/ModelsScreen.swift" \
+    || ! grep -q 'Text("Models")' "$screens/ModelsScreen.swift" \
+    || ! grep -q "ZenSystemAlert" "$screens/ModelsScreen.swift" \
+    || ! grep -q "ModelMismatchToastOverlay" "$screens/ModelsScreen.swift"; then
+    fail "Models screen no longer lists engine-linked files or mismatch alerts"
+else
+    pass "Models screen lists engine files and blocks mismatches"
+fi
+
 # 4. The cloud preview must never activate the app.
 #    Comment lines are stripped first: the file explains *why* it does not call
 #    NSApp.activate, and matching that prose failed the check the prose exists

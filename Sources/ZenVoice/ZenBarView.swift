@@ -429,9 +429,6 @@ struct WaveformView: View {
                     )
             }
         }
-        // Capsules are centre-aligned in the row, so a bar of height h extends
-        // equally above and below the midline. That mirrored shape is what
-        // reads as a voice rather than as a graphic equaliser.
         .frame(width: Self.width, height: Self.maximumHeight)
         .animation(ZenDesign.Motion.waveform(reduceMotion), value: history)
         .onChange(of: model.level) { _, level in
@@ -443,8 +440,6 @@ struct WaveformView: View {
         .accessibilityHidden(true)
     }
 
-    /// Newest sample sits at the trailing edge; older ones are damped so the
-    /// trail falls away instead of ending on a cliff.
     private func taper(at index: Int) -> Double {
         let age = Double(index) / Double(max(1, Self.barCount - 1))
         return 0.4 + (0.6 * age)
@@ -462,6 +457,7 @@ struct WaveformView: View {
         history[index] > 0.035 ? 0.35 + (0.63 * taper(at: index)) : 0.25
     }
 }
+
 
 /// A hairline that keeps moving while work of unknown length is happening.
 ///

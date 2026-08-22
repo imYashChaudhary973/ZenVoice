@@ -19,6 +19,7 @@ import ZenVoiceCore
 struct LanguagesAndModelsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
+    @State private var modelMismatch: ModelMismatchAlert?
 
     var body: some View {
         ZenScreen(
@@ -28,7 +29,13 @@ struct LanguagesAndModelsScreen: View {
                 "What you speak, and the on-device engines that understand it."
         ) {
             LanguagesScreen(viewModel: viewModel)
-            ModelsScreen(viewModel: modelManagerViewModel)
+            ModelsScreen(
+                viewModel: modelManagerViewModel,
+                mismatchAlert: $modelMismatch
+            )
+        }
+        .overlay {
+            ModelMismatchToastOverlay(alert: $modelMismatch)
         }
     }
 }
