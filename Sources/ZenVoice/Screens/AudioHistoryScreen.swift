@@ -24,17 +24,28 @@ struct AudioHistoryScreen: View {
     }
 
     @State private var deleteRequest: DeleteRequest?
+    @State private var customSizeText = ""
+    @State private var showsCustomSize = false
 
-    /// Offered archive caps, in bytes.
-    private static let sizeOptions: [Int64] = [
+    private static let gigabyte: Int64 = 1_024 * 1_024 * 1_024
+    private static let customSizeSentinel: Int64 = -1
+    private static let presetSizes: [Int64] = [
         512 * 1_024 * 1_024,
-        1 * 1_024 * 1_024 * 1_024,
-        2 * 1_024 * 1_024 * 1_024,
-        5 * 1_024 * 1_024 * 1_024,
-        10 * 1_024 * 1_024 * 1_024
+        1 * gigabyte,
+        2 * gigabyte,
+        5 * gigabyte,
+        10 * gigabyte,
+        25 * gigabyte,
+        50 * gigabyte,
+        100 * gigabyte
     ]
+    private static let sizePickerOptions = presetSizes + [customSizeSentinel]
 
     private static let ageOptions = [7, 14, 30, 90, 365]
+
+    private var usesCustomSize: Bool {
+        !Self.presetSizes.contains(viewModel.maxSizeBytes)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
@@ -50,7 +61,13 @@ struct AudioHistoryScreen: View {
             }
             messageSection
         }
-        .onAppear { viewModel.refresh() }
+        .onAppear {
+            viewModel.refresh()
+            showsCustomSize = usesCustomSize
+            if usesCustomSize {
+                customSizeText = customSizeFieldText(viewModel.maxSizeBytes)
+            }
+        }
         .onDisappear { viewModel.stopPlayback() }
         .alert(
             deleteTitle,
@@ -107,39 +124,81 @@ struct AudioHistoryScreen: View {
                 + viewModel.maxSizeDisplayString
         ) {
             ZenPanel {
-                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                     ProgressView(value: viewModel.budgetFraction)
                         .progressViewStyle(.linear)
+                        .controlSize(.small)
                         .accessibilityLabel(Text("Archive space used"))
 
-                    Picker(
-                        "Maximum size",
-                        selection: Binding(
-                            get: { viewModel.maxSizeBytes },
-                            set: { viewModel.setMaxSizeBytes($0) }
+                    HStack {
+                        Text("Maximum size")
+                            .font(ZenDesign.Typography.body)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Spacer(minLength: ZenDesign.Spacing.sm)
+                        ZenMenuPicker(
+                            label: "Maximum size",
+                            options: Self.sizePickerOptions,
+                            selection: Binding(
+                                get: {
+                                    (showsCustomSize || usesCustomSize)
+                                        ? Self.customSizeSentinel
+                                        : viewModel.maxSizeBytes
+                                },
+                                set: { value in
+                                    if value == Self.customSizeSentinel {
+                                        showsCustomSize = true
+                                        customSizeText = customSizeFieldText(
+                                            viewModel.maxSizeBytes
+                                        )
+                                    } else {
+                                        showsCustomSize = false
+                                        viewModel.setMaxSizeBytes(value)
+                                    }
+                                }
+                            ),
+                            minWidth: 112,
+                            compact: true,
+                            title: sizeTitle
                         )
-                    ) {
-                        ForEach(Self.sizeOptions, id: \.self) { bytes in
-                            Text(
-                                ByteCountFormatter.string(
-                                    fromByteCount: bytes,
-                                    countStyle: .binary
-                                )
+                    }
+
+                    if showsCustomSize || usesCustomSize {
+                        HStack {
+                            Text("Custom size")
+                                .font(ZenDesign.Typography.body)
+                                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            Spacer(minLength: ZenDesign.Spacing.sm)
+                            ZenTextInput(
+                                placeholder: "GB",
+                                text: $customSizeText,
+                                icon: "internaldrive",
+                                minWidth: 88
                             )
-                            .tag(bytes)
+                            .onSubmit(applyCustomSize)
+                            Button("Set") {
+                                applyCustomSize()
+                            }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+                            .disabled(customSizeText.isEmpty)
                         }
                     }
 
-                    Picker(
-                        "Delete after",
-                        selection: Binding(
-                            get: { viewModel.maxAgeDays },
-                            set: { viewModel.setMaxAgeDays($0) }
+                    HStack {
+                        Text("Delete after")
+                            .font(ZenDesign.Typography.body)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Spacer(minLength: ZenDesign.Spacing.sm)
+                        ZenMenuPicker(
+                            label: "Delete after",
+                            options: Self.ageOptions,
+                            selection: Binding(
+                                get: { viewModel.maxAgeDays },
+                                set: { viewModel.setMaxAgeDays($0) }
+                            ),
+                            minWidth: 112,
+                            compact: true,
+                            title: dayLabel
                         )
-                    ) {
-                        ForEach(Self.ageOptions, id: \.self) { days in
-                            Text(dayLabel(days)).tag(days)
-                        }
                     }
 
                     Text(
@@ -171,6 +230,39 @@ struct AudioHistoryScreen: View {
         default:
             return "\(days) days"
         }
+    }
+
+    private func sizeTitle(_ bytes: Int64) -> String {
+        if bytes == Self.customSizeSentinel {
+            return "Custom"
+        }
+        return ByteCountFormatter.string(
+            fromByteCount: bytes,
+            countStyle: .binary
+        )
+    }
+
+    private func customSizeFieldText(_ bytes: Int64) -> String {
+        let gigabytes = Double(bytes) / Double(Self.gigabyte)
+        if gigabytes == gigabytes.rounded() {
+            return String(Int(gigabytes))
+        }
+        return String(format: "%.1f", gigabytes)
+    }
+
+    private func applyCustomSize() {
+        let trimmed = customSizeText
+            .lowercased()
+            .replacingOccurrences(of: "gb", with: "")
+            .replacingOccurrences(of: "g", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let gigabytes = Double(trimmed), gigabytes > 0 else {
+            return
+        }
+        let bytes = Int64((gigabytes * Double(Self.gigabyte)).rounded())
+        viewModel.setMaxSizeBytes(bytes)
+        showsCustomSize = !Self.presetSizes.contains(viewModel.maxSizeBytes)
+        customSizeText = customSizeFieldText(viewModel.maxSizeBytes)
     }
 
     // MARK: - Recordings
@@ -337,10 +429,10 @@ struct AudioHistoryScreen: View {
         }
         .buttonStyle(ZenDestructiveButtonStyle())
         .disabled(viewModel.selection.isEmpty)
-        Button("Delete all") {
-            deleteRequest = .all
+        ZenHoldToDeleteButton(label: "Hold to delete all") {
+            viewModel.deleteAll()
         }
-        .buttonStyle(ZenDestructiveButtonStyle())
+        .disabled(viewModel.records.isEmpty)
     }
 
     private var exportButton: some View {

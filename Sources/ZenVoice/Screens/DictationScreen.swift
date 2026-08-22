@@ -31,7 +31,21 @@ struct DictationScreen: View {
                 ShortcutsScreen(viewModel: viewModel)
                 AudioScreen(viewModel: viewModel)
                 OverlayScreen(viewModel: viewModel)
+                resetRow
             }
         }
+    }
+
+    private var resetRow: some View {
+        HStack {
+            Spacer(minLength: 0)
+            ZenIconButton(
+                systemImage: "arrow.counterclockwise",
+                label: "Reset dictation shortcuts"
+            ) {
+                viewModel.resetDictationDefaults()
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 }

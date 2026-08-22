@@ -22,7 +22,6 @@ struct ShortcutsScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
             dictationSection
-            zenBarSection
             ZenBanner(
                 kind: .info,
                 icon: "lightbulb",
@@ -60,7 +59,7 @@ struct ShortcutsScreen: View {
                 ZenRow(
                     icon: "eye.slash",
                     title: "Private dictation",
-                    subtitle: "Dictate without saving history, insights, or recovery audio"
+                    subtitle: "Dictate without saving history or recovery audio"
                 ) {
                     shortcutControls(
                         displayName: viewModel.privateModeShortcut.displayName,
@@ -104,6 +103,28 @@ struct ShortcutsScreen: View {
                 }
                 ZenPanelDivider()
                 ZenRow(
+                    icon: "keyboard.badge.ellipsis",
+                    title: "Hold key",
+                    subtitle:
+                        "Select Change, then press the modifier you want to hold"
+                ) {
+                    shortcutControls(
+                        displayName: viewModel.holdKey.displayName,
+                        isCapturing: viewModel.isCapturingHoldKey,
+                        resetLabel: "Reset hold key",
+                        capture: {
+                            if viewModel.isCapturingHoldKey {
+                                viewModel.cancelShortcutCapture()
+                            } else {
+                                viewModel.beginHoldKeyCapture()
+                            }
+                        },
+                        reset: viewModel.resetHoldKey
+                    )
+                    .disabled(!viewModel.holdToDictateEnabled)
+                }
+                ZenPanelDivider()
+                ZenRow(
                     icon: "hand.tap",
                     title: "Hold to dictate",
                     subtitle:
@@ -120,28 +141,20 @@ struct ShortcutsScreen: View {
                         label: "Hold to dictate"
                     )
                 }
-                if viewModel.holdToDictateEnabled {
-                    ZenPanelDivider()
-                    ZenRow(
-                        icon: "keyboard.badge.ellipsis",
-                        title: "Hold key",
-                        subtitle:
-                            "Select Change, then press the modifier you want to hold"
-                    ) {
-                        shortcutControls(
-                            displayName: viewModel.holdKey.displayName,
-                            isCapturing: viewModel.isCapturingHoldKey,
-                            resetLabel: "Reset hold key",
-                            capture: {
-                                if viewModel.isCapturingHoldKey {
-                                    viewModel.cancelShortcutCapture()
-                                } else {
-                                    viewModel.beginHoldKeyCapture()
-                                }
-                            },
-                            reset: viewModel.resetHoldKey
-                        )
-                    }
+                ZenPanelDivider()
+                ZenRow(
+                    icon: "rectangle.bottomthird.inset.filled",
+                    title: "Show ZenVoice at all times",
+                    subtitle:
+                        "When off, the bar appears when dictation starts and hides after your text is inserted"
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: { viewModel.showsZenVoiceAtAllTimes },
+                            set: viewModel.setShowsZenVoiceAtAllTimes
+                        ),
+                        label: "Show ZenVoice at all times"
+                    )
                 }
             }
 
@@ -171,33 +184,7 @@ struct ShortcutsScreen: View {
         }
     }
 
-    // MARK: ZenBar behavior
 
-    private var zenBarSection: some View {
-        ZenSection(title: "Behavior") {
-            ZenPanel {
-                ZenRow(
-                    icon: "rectangle.bottomthird.inset.filled",
-                    title: "Show ZenVoice at all times",
-                    subtitle: "When off, the bar appears when dictation starts and hides after your text is inserted"
-                ) {
-                    ZenSwitch(
-                        isOn: Binding(
-                            get: { viewModel.showsZenVoiceAtAllTimes },
-                            set: viewModel.setShowsZenVoiceAtAllTimes
-                        ),
-                        label: "Show ZenVoice at all times"
-                    )
-                }
-                ZenPanelDivider()
-                ZenRow(
-                    icon: "captions.bubble",
-                    title: "ZenBar controls",
-                    subtitle: "Cancel or finish a dictation from the bar itself — no shortcut needed. Live preview options live in Formatting."
-                )
-            }
-        }
-    }
     private func shortcutControls(
         displayName: String,
         isCapturing: Bool,
@@ -205,19 +192,29 @@ struct ShortcutsScreen: View {
         capture: @escaping () -> Void,
         reset: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             ShortcutCaptureButton(
                 displayName: displayName,
                 isCapturing: isCapturing,
                 action: capture
             )
-            ZenIconButton(
-                systemImage: "arrow.counterclockwise",
-                label: resetLabel,
-                action: reset
-            )
+            Button(action: reset) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .frame(
+                        width: ZenDesign.Layout.hitTarget,
+                        height: ZenDesign.Layout.hitTarget
+                    )
+                    .background {
+                        ZenKeycap(kind: .muted)
+                    }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(ZenPressButtonStyle())
+            .accessibilityLabel(resetLabel)
+            .help(resetLabel)
         }
-        .frame(width: 232, alignment: .trailing)
     }
 
 }
@@ -237,12 +234,14 @@ struct ShortcutCaptureButton: View {
                         .fill(ZenDesign.Semantic.textOnAccent)
                         .frame(width: 7, height: 7)
                     Text("Press keys…")
+                    Spacer(minLength: 0)
                     Text("Cancel")
                         .foregroundStyle(
                             ZenDesign.Semantic.textOnAccent.opacity(0.72)
                         )
                 } else {
                     ZenKbdGroup(combo: displayName)
+                    Spacer(minLength: 0)
                     Divider()
                         .frame(height: 16)
                     Text("Change")
@@ -258,29 +257,17 @@ struct ShortcutCaptureButton: View {
                     ? ZenDesign.Semantic.textOnAccent
                     : ZenDesign.Semantic.textPrimary
             )
-            .padding(.horizontal, 12)
-            .frame(minWidth: 180, minHeight: ZenDesign.Layout.hitTarget)
+            .padding(.horizontal, 14)
+            .frame(width: 268, height: ZenDesign.Layout.hitTarget)
             .background {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
-                    style: .continuous
-                )
-                .fill(
-                    isCapturing
-                        ? ZenDesign.Semantic.accent
-                        : ZenDesign.Component.shortcutBackground
-                )
-                .overlay {
+                if isCapturing {
                     RoundedRectangle(
                         cornerRadius: ZenDesign.Radius.small,
                         style: .continuous
                     )
-                    .strokeBorder(
-                        isCapturing
-                            ? ZenDesign.Component.focusRing
-                            : ZenDesign.Semantic.borderStrong,
-                        lineWidth: 1
-                    )
+                    .fill(ZenDesign.Semantic.accentFill)
+                } else {
+                    ZenKeycap(kind: .muted)
                 }
             }
         }

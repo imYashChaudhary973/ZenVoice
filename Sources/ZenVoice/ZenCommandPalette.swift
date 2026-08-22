@@ -28,10 +28,10 @@ struct ZenCommand: Identifiable {
 /// ⌘K command palette: type to filter, ↑↓ to move, ↩ to run, esc to close.
 struct ZenCommandPalette: View {
     let commands: [ZenCommand]
+    @Binding var query: String
     let dismiss: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var query = ""
     @State private var highlighted = 0
     @FocusState private var searchFocused: Bool
 

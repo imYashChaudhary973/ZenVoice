@@ -4,6 +4,20 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Painted buttons, icon buttons, and menu-picker triggers use Opensource UI
+  3D keycaps (lift + sheen, press sinks). Native menus, switches, and fields
+  stay native.
+- History, recordings, privacy, and vocabulary bulk deletes now use
+  hold-to-delete. Transcript rows use the copy-confirm button and a 3D kebab.
+- Personalisation copy is shorter. Cloud prompt uses the labelled textarea.
+  Stored API keys expose Replace. Tab strips slide. Toolbar search is a
+  field on the right. Dictation has a square reset control.
+- Row icons, shortcut chips, and history status marks use 3D keycaps.
+  History delete is a normal button beside search. Replay setup is gone
+  after first launch.
+
 ## [0.3.1] - 2026-08-21
 
 Re-cut of the public GitHub beta with Command Mode / Agentic Mode removed from

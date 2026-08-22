@@ -62,7 +62,7 @@ fi
 if grep -qE '\"Configure\"|\"Library\"|case languagesAndModels' "$settings_view"; then
     fail "sidebar restores category headings or a combined language/model route"
 else
-    pass "sidebar exposes seven flat destinations without subheadings"
+    pass "sidebar exposes flat destinations without subheadings"
 fi
 
 # 3b. The main shell must use native macOS navigation and toolbar chrome.
@@ -106,10 +106,16 @@ fi
 
 components="$project_dir/Sources/ZenVoice/ZenV2Components.swift"
 if ! grep -q "struct ZenTabStrip" "$components" \
-    || ! grep -q "zenGlassSurface" "$components"; then
-    fail "subsection navigation does not use the shared glass control"
+    || ! grep -q "matchedGeometryEffect" "$components"; then
+    fail "subsection navigation does not use the shared sliding toggle"
 else
-    pass "subsection navigation uses the shared glass control"
+    pass "subsection navigation uses the shared sliding toggle"
+fi
+
+if grep -q "contentMaxWidth" "$components"; then
+    fail "settings pages still cap content instead of filling the window"
+else
+    pass "settings pages fill the available window width"
 fi
 
 overlay_kind="$project_dir/Sources/ZenVoice/Overlay/OverlayKind.swift"
@@ -119,6 +125,13 @@ if ! grep -q "size(fitting" "$overlay_kind" \
     fail "dictation overlays do not adapt to the active display"
 else
     pass "dictation overlays adapt to compact and full-screen displays"
+fi
+
+if ! grep -q "fullScreenAuxiliary" "$overlay_panel" \
+    || grep -q "stationary" "$overlay_panel"; then
+    fail "dictation overlays cannot appear over fullscreen apps"
+else
+    pass "dictation overlays join fullscreen Spaces"
 fi
 
 shortcuts="$screens/ShortcutsScreen.swift"
@@ -136,6 +149,22 @@ if ! grep -q "ZenMenuPicker" "$languages" \
     fail "language or provider selectors bypass the shared menu control"
 else
     pass "language and provider selectors use the shared menu control"
+fi
+
+if ! grep -q "struct ZenKeycap" "$components" \
+    || ! grep -q "ZenKeycap(" "$settings_view"; then
+    fail "painted buttons no longer use the shared Opensource UI keycap"
+else
+    pass "painted buttons use the shared 3D keycap"
+fi
+
+if ! grep -q "struct ZenHoldToDeleteButton" "$components" \
+    || ! grep -q "ZenHoldToDeleteButton" "$screens/PrivacyScreen.swift" \
+    || ! grep -q "Copy transcript" "$screens/HistoryScreen.swift" \
+    || ! grep -q "ZenKebabMenu" "$screens/HistoryScreen.swift"; then
+    fail "History/Privacy no longer use the shared copy, kebab, or hold-delete controls"
+else
+    pass "History uses copy and kebab; Privacy uses hold-to-delete"
 fi
 
 # 4. The cloud preview must never activate the app.

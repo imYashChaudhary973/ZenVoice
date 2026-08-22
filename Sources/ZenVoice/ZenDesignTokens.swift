@@ -161,9 +161,6 @@ enum ZenDesign {
         /// room to keep their generous spacing without truncation.
         static let sidebarWidth: CGFloat = 236
 
-        /// Maximum readable width from the supplied UI kit.
-        static let contentMaxWidth: CGFloat = 1_240
-
         /// Measure for running prose — a page subtitle, a paragraph of
         /// explanation. Cards themselves are not capped: they fill the window,
         /// so full screen looks deliberate rather than centred in a column.

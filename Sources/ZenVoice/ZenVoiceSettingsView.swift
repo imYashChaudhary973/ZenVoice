@@ -34,6 +34,7 @@ struct ZenVoiceSettingsView: View {
         case models = "Models"
         case personalisation = "Personalisation"
         case history = "History"
+        case updates = "Updates"
         case settings = "Settings"
 
         var id: String { rawValue }
@@ -53,6 +54,8 @@ struct ZenVoiceSettingsView: View {
                 return "text.badge.star"
             case .history:
                 return "clock.arrow.circlepath"
+            case .updates:
+                return "arrow.triangle.2.circlepath"
             case .settings:
                 return "gearshape"
             }
@@ -76,6 +79,7 @@ struct ZenVoiceSettingsView: View {
     @State private var selection: Section = .home
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showsCommandPalette = false
+    @State private var commandQuery = ""
     @State private var hoveredSection: Section?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -99,6 +103,7 @@ struct ZenVoiceSettingsView: View {
                         .transition(.opacity)
                 }
                 .navigationSplitViewStyle(.balanced)
+                .toolbarBackground(.visible, for: .windowToolbar)
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
                         Text(selection.toolbarTitle)
@@ -106,22 +111,30 @@ struct ZenVoiceSettingsView: View {
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
-                            .layoutPriority(2)
                     }
-                    ToolbarItemGroup(placement: .primaryAction) {
+                    ToolbarItemGroup(placement: .automatic) {
                         ZenGlassContainer(spacing: 8) {
                             HStack(spacing: 8) {
-                                commandSearchButton
                                 toolbarStatus
                                 dictateToolbarButton
                             }
                         }
                     }
                 }
+                .background {
+                    ZenTitlebarTrailing {
+                        toolbarSearchField
+                            .padding(.trailing, 8)
+                    }
+                }
                 .overlay {
                     if showsCommandPalette {
-                        ZenCommandPalette(commands: paletteCommands) {
+                        ZenCommandPalette(
+                            commands: paletteCommands,
+                            query: $commandQuery
+                        ) {
                             showsCommandPalette = false
+                            commandQuery = ""
                         }
                     }
                 }
@@ -173,15 +186,7 @@ struct ZenVoiceSettingsView: View {
                 icon: "mic",
                 keywords: "record speak voice start",
                 action: toggleRecording
-            ),
-            ZenCommand(
-                id: "action-replay-setup",
-                title: "Replay setup guide",
-                subtitle: "Action",
-                icon: "arrow.counterclockwise",
-                keywords: "onboarding first run welcome",
-                action: onboardingViewModel.show
-            ),
+            )
         ]
         return sections + models + actions
     }
@@ -201,25 +206,26 @@ struct ZenVoiceSettingsView: View {
             return "formatting vocabulary app rules corrections cloud"
         case .history:
             return "transcripts recordings insights audio search export"
+        case .updates:
+            return "update check version release feed"
         case .settings:
-            return "privacy permissions data support updates about"
+            return "privacy permissions data support about"
         }
     }
 
-    private var commandSearchButton: some View {
-        Button {
-            showsCommandPalette = true
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(ZenDesign.Semantic.textSecondary)
-            .frame(width: 32, height: 32)
-            .zenGlassSurface(
-                cornerRadius: ZenDesign.Radius.small,
-                interactive: true
-            )
+    private var toolbarSearchField: some View {
+        ZenSearchField(
+            placeholder: "Search…",
+            text: $commandQuery,
+            compact: true,
+            onSubmit: { showsCommandPalette = true }
+        )
+        .frame(width: 200)
+        .onChange(of: commandQuery) { _, value in
+            if !value.isEmpty {
+                showsCommandPalette = true
+            }
         }
-        .buttonStyle(ZenPressButtonStyle())
         .keyboardShortcut("k", modifiers: .command)
         .accessibilityLabel("Search commands")
         .help("Search commands (⌘K)")
@@ -238,7 +244,7 @@ struct ZenVoiceSettingsView: View {
         .frame(minWidth: 104, minHeight: 32)
         .zenGlassSurface(
             cornerRadius: ZenDesign.Radius.pill,
-            tint: appState.phase.statusTint
+            interactive: false
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Status: \(appState.phase.label)")
@@ -252,18 +258,11 @@ struct ZenVoiceSettingsView: View {
                 Text(isListening ? "Stop" : "Dictate")
                     .font(ZenDesign.Typography.captionStrong)
             }
-            .foregroundStyle(
-                isListening
-                    ? ZenDesign.Semantic.textOnDanger
-                    : ZenDesign.Semantic.textOnAccent
-            )
+            .foregroundStyle(ZenDesign.Semantic.textPrimary)
             .padding(.horizontal, 12)
             .frame(minWidth: 104, minHeight: 32)
             .zenGlassSurface(
                 cornerRadius: ZenDesign.Radius.pill,
-                tint: isListening
-                    ? ZenDesign.Semantic.danger
-                    : ZenDesign.Semantic.accentFill,
                 interactive: true
             )
             .contentShape(Rectangle())
@@ -299,8 +298,12 @@ struct ZenVoiceSettingsView: View {
                         selection = section
                     } label: {
                         sidebarLabel(section)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(ZenPressButtonStyle())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                     .onHover { hovering in
                         if hovering {
                             hoveredSection = section
@@ -401,8 +404,6 @@ struct ZenVoiceSettingsView: View {
                 modelManagerViewModel: modelManagerViewModel,
                 historyViewModel: historyViewModel,
                 insightsViewModel: insightsViewModel,
-                startDictation: toggleRecording,
-                replaySetup: onboardingViewModel.show,
                 navigate: { destination in
                     switch destination {
                     case .audio, .shortcuts:
@@ -449,11 +450,17 @@ struct ZenVoiceSettingsView: View {
                 audioHistoryViewModel: audioHistoryViewModel,
                 insightsViewModel: insightsViewModel
             )
+        case .updates:
+            ZenScreen(
+                icon: "arrow.triangle.2.circlepath",
+                title: "Updates",
+                subtitle: "Check for new builds and how they are verified."
+            ) {
+                UpdatesScreen(viewModel: updatesViewModel)
+            }
         case .settings:
             HelpAndAboutScreen(
                 viewModel: viewModel,
-                updatesViewModel: updatesViewModel,
-                onboardingViewModel: onboardingViewModel,
                 historyViewModel: historyViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
@@ -531,6 +538,9 @@ struct ErrorBanner: View {
 /// actually hit is `Layout.hitTarget` tall. Drawing a 44pt box would make a
 /// dense settings window look like a touch UI; making the *target* 44pt costs
 /// nothing visually and is what the approved design asks for.
+///
+/// The face is an Opensource UI 3D keycap. Press sinks one point and inverts
+/// the inset; Reduce Motion keeps the shade swap and drops the travel.
 private struct ZenButtonShape<Background: View>: View {
     let label: AnyView
     let minWidth: CGFloat?
@@ -571,10 +581,10 @@ private struct ZenButtonShape<Background: View>: View {
                 .padding(-2)
                 .allowsHitTesting(false)
             }
-            .scaleEffect(
-                isPressed && isEnabled && !reduceMotion ? 0.98 : 1
+            .offset(
+                y: isPressed && isEnabled && !reduceMotion ? 1 : 0
             )
-            .opacity(isEnabled ? (isPressed ? 0.88 : 1) : 0.45)
+            .opacity(isEnabled ? 1 : 0.45)
             .animation(
                 ZenDesign.Motion.fast(reduceMotion),
                 value: isPressed
@@ -600,32 +610,17 @@ struct ZenSecondaryButtonStyle: ButtonStyle {
             height: height,
             isPressed: configuration.isPressed
         ) {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.small,
-                style: .continuous
+            ZenKeycap(
+                kind: .muted,
+                isPressed: configuration.isPressed
             )
-            .fill(
-                configuration.isPressed
-                    ? ZenDesign.Semantic.surfaceRaised
-                    : ZenDesign.Component.shortcutBackground
-            )
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
-                    style: .continuous
-                )
-                .strokeBorder(
-                    ZenDesign.Semantic.borderStrong,
-                    lineWidth: 1
-                )
-            }
         }
     }
 }
 
 struct ZenPrimaryButtonStyle: ButtonStyle {
     var minWidth: CGFloat? = nil
-
+    var height: CGFloat = ZenDesign.Layout.control
     func makeBody(configuration: Configuration) -> some View {
         ZenButtonShape(
             label: AnyView(
@@ -633,13 +628,9 @@ struct ZenPrimaryButtonStyle: ButtonStyle {
                     .foregroundStyle(ZenDesign.Semantic.textOnAccent)
             ),
             minWidth: minWidth,
-            height: ZenDesign.Layout.control,
+            height: height,
             isPressed: configuration.isPressed
         ) {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.small,
-                style: .continuous
-            )
             // `accentStrong` moves the right way in both appearances:
             // darker than `accent` in light, brighter in dark — always away
             // from the label colour, never toward it. The regression this
@@ -647,10 +638,9 @@ struct ZenPrimaryButtonStyle: ButtonStyle {
             // *lighter* than the resting accent in light mode, so pressing the
             // button lifted its background to roughly 2.4:1 against the label
             // and the text vanished at the moment of the click.
-            .fill(
-                configuration.isPressed
-                    ? ZenDesign.Semantic.accentStrong
-                    : ZenDesign.Semantic.accentFill
+            ZenKeycap(
+                kind: .solid,
+                isPressed: configuration.isPressed
             )
         }
     }
@@ -670,14 +660,9 @@ struct ZenDestructiveButtonStyle: ButtonStyle {
             height: height,
             isPressed: configuration.isPressed
         ) {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.small,
-                style: .continuous
-            )
-            .fill(
-                ZenDesign.Semantic.danger.opacity(
-                    configuration.isPressed ? 0.78 : 1
-                )
+            ZenKeycap(
+                kind: .danger,
+                isPressed: configuration.isPressed
             )
         }
     }

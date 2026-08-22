@@ -29,7 +29,6 @@ final class OverlayPanelController {
         NSWindow.CollectionBehavior = [
             .canJoinAllSpaces,
             .fullScreenAuxiliary,
-            .stationary,
             .ignoresCycle
         ]
 
@@ -131,8 +130,8 @@ final class OverlayPanelController {
             panel.orderFrontRegardless()
         } else {
             presentOnActiveSpace()
+            scheduleSpaceReassertions()
         }
-        scheduleSpaceReassertions()
     }
 
     func hide() {
@@ -198,7 +197,9 @@ final class OverlayPanelController {
     }
 
     private func presentOnActiveSpace() {
-        panel.orderOut(nil)
+        // Never orderOut to re-home. Hide/show is the flicker when the user
+        // switches windows or Spaces. `fullScreenAuxiliary` +
+        // `canJoinAllSpaces` is enough to join the active Space.
         panel.collectionBehavior = Self.overlayCollectionBehavior
         positionOverlay()
         panel.orderFrontRegardless()
@@ -292,6 +293,7 @@ final class OverlayPanelController {
             return number?.intValue == windowNumber
         }
     }
+
 
     /// Positions the overlay based on its kind.
     ///

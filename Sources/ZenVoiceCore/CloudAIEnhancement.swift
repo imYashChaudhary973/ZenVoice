@@ -47,27 +47,26 @@ public struct CloudTranscriptResolution: Equatable, Sendable {
 
 /// A hosted provider ZenVoice can send a transcript to, when the user opts in.
 ///
-/// OpenAI, Groq, and custom endpoints use the chat-completions shape.
-/// Anthropic uses the Messages API, which has a different path, headers,
-/// request body, and response shape. `custom` exists so a user can point at
-/// a self-hosted or local endpoint and keep the data on infrastructure they
-/// control.
+/// OpenAI-compatible providers use the chat-completions shape. Anthropic uses
+/// the Messages API. `custom` is any other OpenAI-compatible endpoint.
 public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
     case openAI
     case groq
     case anthropic
+    case openRouter
+    case ollamaCloud
+    case ollama
     case custom
 
     public var displayName: String {
         switch self {
-        case .openAI:
-            return "OpenAI"
-        case .groq:
-            return "Groq"
-        case .anthropic:
-            return "Anthropic"
-        case .custom:
-            return "Custom endpoint"
+        case .openAI: return "OpenAI"
+        case .groq: return "Groq"
+        case .anthropic: return "Anthropic"
+        case .openRouter: return "OpenRouter"
+        case .ollamaCloud: return "Ollama Cloud"
+        case .ollama: return "Ollama"
+        case .custom: return "Custom endpoint"
         }
     }
 
@@ -75,33 +74,31 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
     /// default on purpose — the user must state where their data is going.
     public var defaultBaseURL: String? {
         switch self {
-        case .openAI:
-            return "https://api.openai.com/v1"
-        case .groq:
-            return "https://api.groq.com/openai/v1"
-        case .anthropic:
-            return "https://api.anthropic.com/v1"
-        case .custom:
-            return nil
+        case .openAI: return "https://api.openai.com/v1"
+        case .groq: return "https://api.groq.com/openai/v1"
+        case .anthropic: return "https://api.anthropic.com/v1"
+        case .openRouter: return "https://openrouter.ai/api/v1"
+        case .ollamaCloud: return "https://ollama.com/v1"
+        case .ollama: return "http://127.0.0.1:11434/v1"
+        case .custom: return nil
         }
     }
 
     public var defaultModel: String? {
         switch self {
-        case .openAI:
+        case .openAI, .groq, .anthropic, .openRouter:
             return knownModels.first
-        case .groq:
-            return knownModels.first
-        case .anthropic:
-            return knownModels.first
+        case .ollamaCloud:
+            return "gpt-oss:120b"
+        case .ollama:
+            return "llama3.2"
         case .custom:
             return nil
         }
     }
 
-    /// Models ZenVoice knows how to address for this provider. Custom endpoints
-    /// leave the field open; everything else gets a picker so the user cannot
-    /// paste a model ID that the provider does not support.
+    /// Empty means the user types the model id — OpenRouter, Ollama, and
+    /// custom each have more models than we can honestly curate.
     public var knownModels: [String] {
         switch self {
         case .openAI:
@@ -113,10 +110,6 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
             ]
         case .groq:
             return [
-                // Verified live 2026-08-18 against api.groq.com with a real
-                // key. llama-3.3-70b-versatile (the previous default) was
-                // shut down by Groq on 2026-08-16; their deprecation notice
-                // names openai/gpt-oss-120b as the replacement.
                 "openai/gpt-oss-120b",
                 "openai/gpt-oss-20b",
                 "groq/compound",
@@ -130,20 +123,30 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
                 "claude-3-opus-20240229",
                 "claude-3-7-sonnet-20250219",
             ]
-        case .custom:
+        case .openRouter:
+            return [
+                "openai/gpt-4o-mini",
+                "openai/gpt-4o",
+                "anthropic/claude-sonnet-4",
+                "google/gemini-2.5-flash",
+                "meta-llama/llama-3.3-70b-instruct",
+            ]
+        case .ollamaCloud, .ollama, .custom:
             return []
         }
     }
 
-    // MARK: - Provider-specific request/response shapes
+    /// Local Ollama ignores the key. Everything else needs one.
+    public var requiresAPIKey: Bool {
+        self != .ollama
+    }
+
+    fileprivate var usesChatCompletions: Bool {
+        self != .anthropic
+    }
 
     fileprivate var endpointPath: String {
-        switch self {
-        case .openAI, .groq, .custom:
-            return "/chat/completions"
-        case .anthropic:
-            return "/messages"
-        }
+        usesChatCompletions ? "/chat/completions" : "/messages"
     }
 
     fileprivate func authHeader(apiKey: String) -> (
@@ -151,20 +154,20 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
         value: String
     ) {
         switch self {
-        case .openAI, .groq, .custom:
-            return ("Authorization", "Bearer \(apiKey)")
         case .anthropic:
             return ("x-api-key", apiKey)
+        default:
+            return ("Authorization", "Bearer \(apiKey)")
         }
     }
 
     fileprivate var extraHeaders: [(String, String)] {
         switch self {
         case .anthropic:
-            return [
-                ("anthropic-version", "2023-06-01")
-            ]
-        case .openAI, .groq, .custom:
+            return [("anthropic-version", "2023-06-01")]
+        case .openRouter:
+            return [("X-Title", "ZenVoice")]
+        default:
             return []
         }
     }
@@ -174,8 +177,7 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
         systemPrompt: String,
         userContent: String
     ) -> [String: Any] {
-        switch self {
-        case .openAI, .groq, .custom:
+        if usesChatCompletions {
             return [
                 "model": model,
                 "temperature": 0.2,
@@ -184,38 +186,35 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
                     ["role": "user", "content": userContent]
                 ]
             ]
-        case .anthropic:
-            return [
-                "model": model,
-                "max_tokens": 4096,
-                "temperature": 0.2,
-                "system": systemPrompt,
-                "messages": [
-                    ["role": "user", "content": userContent]
-                ]
-            ]
         }
+        return [
+            "model": model,
+            "max_tokens": 4096,
+            "temperature": 0.2,
+            "system": systemPrompt,
+            "messages": [
+                ["role": "user", "content": userContent]
+            ]
+        ]
     }
 
     fileprivate func extractContent(
         from object: [String: Any]
     ) -> String? {
-        switch self {
-        case .openAI, .groq, .custom:
+        if usesChatCompletions {
             guard let choices = object["choices"] as? [[String: Any]],
                   let message = choices.first?["message"] as? [String: Any],
                   let content = message["content"] as? String else {
                 return nil
             }
             return content
-        case .anthropic:
-            guard let contentArray = object["content"] as? [[String: Any]],
-                  let first = contentArray.first,
-                  let text = first["text"] as? String else {
-                return nil
-            }
-            return text
         }
+        guard let contentArray = object["content"] as? [[String: Any]],
+              let first = contentArray.first,
+              let text = first["text"] as? String else {
+            return nil
+        }
+        return text
     }
 }
 
@@ -338,8 +337,8 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
 
     /// Validates the configuration and returns the endpoint to POST to.
     ///
-    /// HTTPS is required here rather than at the call site so no caller can
-    /// skip it, including for `custom` providers.
+    /// HTTPS is required except for loopback, so a local Ollama install can
+    /// stay on `http://127.0.0.1` without opening the LAN.
     public func resolvedEndpoint() throws -> URL {
         let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -351,10 +350,14 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
         }
         guard let components = URLComponents(string: trimmed),
               let scheme = components.scheme,
-              components.host?.isEmpty == false else {
+              let host = components.host,
+              !host.isEmpty else {
             throw CloudAIEnhancementError.invalidBaseURL(trimmed)
         }
-        guard scheme.lowercased() == "https" else {
+        let isHTTPS = scheme.lowercased() == "https"
+        let isLoopbackHTTP = scheme.lowercased() == "http"
+            && Self.isLoopback(host)
+        guard isHTTPS || isLoopbackHTTP else {
             throw CloudAIEnhancementError.insecureBaseURL(trimmed)
         }
         let base = trimmed.hasSuffix("/")
@@ -365,6 +368,14 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
         }
         return url
     }
+
+    private static func isLoopback(_ host: String) -> Bool {
+        let lowered = host.lowercased()
+        return lowered == "localhost"
+            || lowered == "127.0.0.1"
+            || lowered == "::1"
+    }
+
 }
 
 // MARK: - Prompts
@@ -543,7 +554,11 @@ public struct CloudAIEnhancementEngine: Sendable {
         configuration: CloudAIConfiguration,
         apiKey: String
     ) async throws -> CloudAIEnhancementResult {
-        guard !apiKey.isEmpty else {
+        let resolvedKey =
+            apiKey.isEmpty && !configuration.provider.requiresAPIKey
+            ? "ollama"
+            : apiKey
+        guard !resolvedKey.isEmpty else {
             throw CloudAIEnhancementError.missingAPIKey
         }
         let request = try makeRequest(
@@ -555,7 +570,7 @@ public struct CloudAIEnhancementEngine: Sendable {
         let response: HTTPURLResponse
         do {
             (data, response) = try await transport.send(
-                request.urlRequest(apiKey: apiKey)
+                request.urlRequest(apiKey: resolvedKey)
             )
         } catch let error as CloudAIEnhancementError {
             throw error

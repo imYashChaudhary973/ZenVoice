@@ -389,6 +389,14 @@ final class SettingsViewModel: ObservableObject {
         setHoldKey(.default)
     }
 
+    func resetDictationDefaults() {
+        resetShortcut()
+        resetPasteLastShortcut()
+        resetPrivateModeShortcut()
+        resetHoldKey()
+        setHoldToDictateEnabled(false)
+    }
+
     func setHoldToDictateEnabled(_ enabled: Bool) {
         holdToDictateEnabled = enabled
         applyHoldToDictate(enabled, holdKey)

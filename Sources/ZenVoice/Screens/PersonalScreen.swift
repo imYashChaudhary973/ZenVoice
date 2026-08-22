@@ -50,9 +50,7 @@ struct PersonalScreen: View {
         ZenScreen(
             icon: "text.badge.star",
             title: "Personalisation",
-            subtitle:
-                "Control formatting, remembered words, per-app behavior, "
-                + "and local voice commands.",
+            subtitle: "Formatting, vocabulary, and per-app rules.",
             tabs: {
                 ZenTabStrip(
                     items: Tab.allCases.map { tab in

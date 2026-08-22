@@ -51,7 +51,7 @@ struct AudioScreen: View {
                     icon: "macbook",
                     name: "System default",
                     detail:
-                        "Follow the current macOS input automatically — switches when macOS does.",
+                        "Follows the current macOS input.\nSwitches when macOS does.",
                     selected: viewModel.selectedMicrophoneUID == nil,
                     isDefault: false,
                     enabled: !viewModel.isAudioDoctorActive

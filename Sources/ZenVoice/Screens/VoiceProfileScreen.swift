@@ -20,7 +20,7 @@ struct VoiceProfileScreen: View {
     @State private var heardPhrase = ""
     @State private var replacementPhrase = ""
     @State private var correctionScope = CorrectionLanguageScope.all
-    @State private var confirmsDeleteAll = false
+
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
@@ -28,17 +28,7 @@ struct VoiceProfileScreen: View {
             learnedAutomatically
         }
         .onAppear(perform: viewModel.refresh)
-        .alert(
-            "Delete all vocabulary rules?",
-            isPresented: $confirmsDeleteAll
-        ) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete All", role: .destructive) {
-                viewModel.deleteAllRules()
-            }
-        } message: {
-            Text("This permanently removes every saved correction rule from this Mac.")
-        }
+
     }
 
     private var personalVocabulary: some View {
@@ -139,10 +129,10 @@ struct VoiceProfileScreen: View {
 
                     HStack {
                         Spacer()
-                        Button("Delete All", role: .destructive) {
-                            confirmsDeleteAll = true
+                        ZenHoldToDeleteButton(label: "Hold to delete") {
+                            viewModel.deleteAllRules()
                         }
-                        .buttonStyle(ZenSecondaryButtonStyle())
+                        .disabled(viewModel.snapshot.correctionRules.isEmpty)
                     }
                 }
             }

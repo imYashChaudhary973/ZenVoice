@@ -437,6 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var livePreviewTimer: Timer?
     private var liveSessionID = UUID()
     private var liveCommittedSampleIndex = 0
+    private var liveTailPreviewedIndex = 0
     private var livePreviewInFlight = false
     private var livePreviewTask: Task<Void, Never>?
     private var liveStableRawTranscript = ""
@@ -2501,27 +2502,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         liveTargetProcessIdentifier =
             NSWorkspace.shared.frontmostApplication?.processIdentifier
         livePreviewTimer = Timer.scheduledTimer(
-            withTimeInterval: 0.35,
+            withTimeInterval: 0.20,
             repeats: true
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.processStablePause()
+                self?.refreshLivePreview()
             }
         }
     }
 
-    private func processStablePause() {
+    private func refreshLivePreview() {
         guard LiveDictationPreferences.isPreviewEnabled() else {
             stopLivePreviewScheduling(invalidatePending: true)
             return
         }
-        guard recorder.isRecording,
-              !livePreviewInFlight,
-              let segment = recorder.stableSegment(
-                after: liveCommittedSampleIndex
-              ) else {
+        guard recorder.isRecording, !livePreviewInFlight else {
             return
         }
+        if let segment = recorder.stableSegment(
+            after: liveCommittedSampleIndex
+        ) {
+            decodeLiveSegment(segment, commits: true)
+            return
+        }
+        previewUncommittedTail()
+    }
+
+    private func previewUncommittedTail() {
+        let tail = recorder.samples(after: liveCommittedSampleIndex)
+        let sampleRate = 16_000
+        let minimumSamples = sampleRate * 2 / 5
+        let strideSamples = sampleRate / 5
+        let windowSamples = sampleRate * 2
+        guard tail.count >= minimumSamples else {
+            return
+        }
+        let endIndex = liveCommittedSampleIndex + tail.count
+        guard endIndex - liveTailPreviewedIndex >= strideSamples else {
+            return
+        }
+        liveTailPreviewedIndex = endIndex
+        let window = Array(tail.suffix(windowSamples))
+        decodeLiveSegment(
+            AudioRecorder.StableAudioSegment(
+                samples: window,
+                endSampleIndex: endIndex
+            ),
+            commits: false
+        )
+    }
+
+    private func decodeLiveSegment(
+        _ segment: AudioRecorder.StableAudioSegment,
+        commits: Bool
+    ) {
         let previewEngine = engineRegistry?.resolvePreview(
             for: activeDictationBehavior.languageProfile
         )
@@ -2534,7 +2568,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let behavior = activeDictationBehavior
         let correctionVault = dictationVault
         let appliesCorrectionRules =
-            learningPreferences.appliesCorrectionRules
+            commits && learningPreferences.appliesCorrectionRules
         let whisper = whisperEngine
         livePreviewTask = Task { [weak self] in
             guard let self else { return }
@@ -2565,28 +2599,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         correctionApplication: correctionApplication
                     )
                     self.livePreviewTask = nil
-                    self.acceptStablePhrase(
-                        processed,
-                        endSampleIndex: segment.endSampleIndex,
-                        sessionID: sessionID
-                    )
+                    if commits {
+                        self.acceptStablePhrase(
+                            processed,
+                            endSampleIndex: segment.endSampleIndex,
+                            sessionID: sessionID
+                        )
+                    } else {
+                        self.acceptTailPreview(
+                            processed,
+                            sessionID: sessionID
+                        )
+                    }
                 }
             } catch WhisperTranscriber.TranscriptionError.noSpeech {
                 await MainActor.run {
                     guard self.liveSessionID == sessionID else { return }
                     self.livePreviewTask = nil
                     self.livePreviewInFlight = false
-                    self.stopLivePreviewScheduling(invalidatePending: false)
                 }
             } catch {
                 await MainActor.run {
                     guard self.liveSessionID == sessionID else { return }
                     self.livePreviewTask = nil
                     self.livePreviewInFlight = false
-                    self.stopLivePreviewScheduling(invalidatePending: false)
                 }
             }
         }
+    }
+
+    private func acceptTailPreview(
+        _ processed: ProcessedTranscription,
+        sessionID: UUID
+    ) {
+        guard liveSessionID == sessionID else { return }
+        livePreviewInFlight = false
+        guard recorder.isRecording else { return }
+        let phrase = processed.result.finalTranscript
+        guard !phrase.isEmpty else { return }
+        state.liveTranscriptPreview = StableTranscriptComposer.appending(
+            phrase,
+            to: liveStableFinalTranscript
+        )
     }
 
     private func transcribePreview(
@@ -2633,12 +2687,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         endSampleIndex: Int,
         sessionID: UUID
     ) {
-        guard liveSessionID == sessionID,
-              recorder.isRecording else {
-            return
-        }
+        guard liveSessionID == sessionID else { return }
         livePreviewInFlight = false
+        guard recorder.isRecording else { return }
         liveCommittedSampleIndex = endSampleIndex
+        liveTailPreviewedIndex = endSampleIndex
         liveStableRawTranscript = StableTranscriptComposer.appending(
             processed.result.rawTranscript,
             to: liveStableRawTranscript
@@ -2654,8 +2707,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         liveCorrectionUsages.append(
             contentsOf: processed.correctionUsages
         )
-        state.liveTranscriptPreview =
-            processed.result.finalTranscript
+        state.liveTranscriptPreview = liveStableFinalTranscript
 
         if let historyID = activeHistoryID,
            !nonPersistentHistoryIDs.contains(historyID),
@@ -2846,6 +2898,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func resetLivePreviewSession() {
         stopLivePreviewScheduling(invalidatePending: true)
         liveCommittedSampleIndex = 0
+        liveTailPreviewedIndex = 0
         liveStableRawTranscript = ""
         liveStableFinalTranscript = ""
         livePendingStableTranscript = ""

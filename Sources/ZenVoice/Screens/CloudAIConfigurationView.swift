@@ -22,6 +22,7 @@ import ZenVoiceCore
 /// `ZenScreen` scaffold.
 struct CloudAIConfigurationView: View {
     @ObservedObject var viewModel: CloudAIViewModel
+    @State private var isReplacingKey = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
@@ -83,12 +84,7 @@ struct CloudAIConfigurationView: View {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                     Text(
-                        "When this is on, the transcript text and your prompt "
-                        + "are sent to the provider you choose, using your own "
-                        + "API key. Audio, the app you dictated into, your "
-                        + "history, and your voice profile are never sent. "
-                        + "ZenVoice runs no server of its own, so your text "
-                        + "goes to that provider under their retention policy."
+                        "Sends finished text and this prompt to your provider. Audio stays on this Mac."
                     )
                     .font(ZenDesign.Typography.body)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -168,9 +164,9 @@ struct CloudAIConfigurationView: View {
                     .padding(.top, ZenDesign.Spacing.xs)
 
                     Text(
-                        "The endpoint must use HTTPS. Choose Custom endpoint to "
-                        + "point at a self-hosted or local model and keep the "
-                        + "text on your own infrastructure."
+                        viewModel.configuration.provider == .ollama
+                            ? "Local Ollama uses HTTP on this Mac. Other providers must use HTTPS."
+                            : "The endpoint must use HTTPS, except a local Ollama address on this Mac."
                     )
                     .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
@@ -215,35 +211,60 @@ struct CloudAIConfigurationView: View {
         ) {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                    HStack(spacing: ZenDesign.Spacing.xs) {
-                        SecureField(
-                            viewModel.hasStoredKey
-                                ? "Replace stored key"
-                                : "Paste your provider API key",
-                            text: $viewModel.apiKeyDraft
-                        )
-                        .textFieldStyle(.roundedBorder)
+                    if viewModel.hasStoredKey && !isReplacingKey {
+                        HStack(spacing: ZenDesign.Spacing.xs) {
+                            Text("A provider key is stored on this Mac.")
+                                .font(ZenDesign.Typography.body)
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            Spacer(minLength: 0)
+                            Button("Replace stored key") {
+                                isReplacingKey = true
+                            }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+                            Button("Remove") {
+                                viewModel.deleteKey()
+                            }
+                            .buttonStyle(ZenDestructiveButtonStyle())
+                        }
+                    } else {
+                        HStack(spacing: ZenDesign.Spacing.xs) {
+                            SecureField(
+                                viewModel.hasStoredKey
+                                    ? "Replace stored key"
+                                    : "Paste your provider API key",
+                                text: $viewModel.apiKeyDraft
+                            )
+                            .textFieldStyle(.roundedBorder)
 
-                        Button("Save") { viewModel.saveKey() }
+                            Button("Save") {
+                                viewModel.saveKey()
+                                isReplacingKey = false
+                            }
                             .buttonStyle(ZenPrimaryButtonStyle())
                             .disabled(viewModel.apiKeyDraft.isEmpty)
 
-                        Button("Remove") { viewModel.deleteKey() }
-                            .buttonStyle(ZenDestructiveButtonStyle())
-                            .disabled(!viewModel.hasStoredKey)
+                            if viewModel.hasStoredKey {
+                                Button("Cancel") {
+                                    viewModel.apiKeyDraft = ""
+                                    isReplacingKey = false
+                                }
+                                .buttonStyle(ZenSecondaryButtonStyle())
+                            } else {
+                                Button("Remove") {
+                                    viewModel.deleteKey()
+                                }
+                                .buttonStyle(ZenDestructiveButtonStyle())
+                                .disabled(!viewModel.hasStoredKey)
+                            }
+                        }
                     }
 
-                    // Says what the code does. This used to promise that
-                    // turning Cloud AI off deleted the key, which stopped
-                    // being true when the toggle was made non-destructive —
-                    // so anyone flipping it off to stop sending text believed
-                    // their provider credential had been destroyed while it
-                    // was still in the Keychain.
                     Text(
-                        "The key is stored in your macOS Keychain, never in "
-                        + "preferences and never in the transcript database. "
-                        + "Turning Cloud AI off stops anything being sent but "
-                        + "keeps the key — use Remove to delete it."
+                        viewModel.configuration.provider.requiresAPIKey
+                            ? "Kept in the Keychain. Turning Cloud AI off stops sending text but keeps the key."
+                            : "Local Ollama does not need a key. Leave this blank."
                     )
                     .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
@@ -275,19 +296,15 @@ struct CloudAIConfigurationView: View {
         ZenSection(title: "Prompt") {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                    TextEditor(
+                    ZenTextArea(
+                        label: "Prompt",
                         text: Binding(
                             get: { viewModel.configuration.prompt },
                             set: { viewModel.setPrompt($0) }
-                        )
+                        ),
+                        hint: "Sent with each enhancement.",
+                        maxLength: 2_000
                     )
-                    .font(ZenDesign.Typography.body)
-                    .frame(minHeight: 90)
-                    .padding(6)
-                    .background {
-                        RoundedRectangle(cornerRadius: ZenDesign.Radius.small)
-                            .fill(ZenDesign.Semantic.surfaceRaised)
-                    }
 
                     HStack(spacing: ZenDesign.Spacing.xs) {
                         ForEach(

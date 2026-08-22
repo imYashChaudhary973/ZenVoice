@@ -51,17 +51,20 @@ final class CloudAIViewModel: ObservableObject {
         hasStoredKey = ((try? keyStore.loadKey()) ?? nil) != nil
     }
 
-    /// Whether the feature is actually usable: enabled, keyed, and configured.
     var isReady: Bool {
         configuration.isEnabled
-            && hasStoredKey
+            && (hasStoredKey || !configuration.provider.requiresAPIKey)
             && (try? configuration.resolvedEndpoint()) != nil
     }
 
     var providerDetail: String {
-        configuration.isEnabled
-            ? "Transcript text is sent to \(configuration.provider.displayName)."
-            : "Nothing is sent. Everything stays on this Mac."
+        guard configuration.isEnabled else {
+            return "Nothing is sent. Everything stays on this Mac."
+        }
+        if configuration.provider == .ollama {
+            return "Transcript text is sent to Ollama on this Mac."
+        }
+        return "Transcript text is sent to \(configuration.provider.displayName)."
     }
 
     // MARK: - Configuration

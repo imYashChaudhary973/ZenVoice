@@ -70,32 +70,34 @@ struct ZenScreen<Content: View, Tabs: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if Tabs.self != EmptyView.self {
-                    tabs
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            if Tabs.self != EmptyView.self {
+                tabs
+                    .padding(.horizontal, ZenDesign.Spacing.xl)
+                    .padding(.top, ZenDesign.Spacing.lg)
+                    .padding(.bottom, ZenDesign.Spacing.sm)
+            }
 
+            ScrollView {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
                     content
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, ZenDesign.Spacing.xl)
                 .padding(
                     .top,
                     Tabs.self == EmptyView.self
-                        ? 0 : ZenDesign.Spacing.lg
+                        ? ZenDesign.Spacing.xl
+                        : ZenDesign.Spacing.md
                 )
+                .padding(.bottom, 40)
             }
-            .frame(
-                maxWidth: ZenDesign.Layout.contentMaxWidth,
-                alignment: .leading
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, ZenDesign.Spacing.xl)
-            .padding(.top, ZenDesign.Spacing.xl)
-            .padding(.bottom, 40)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .scrollIndicators(.automatic)
         }
-        .scrollIndicators(.automatic)
         .background(ZenDesign.Semantic.canvas)
+        .toolbarBackground(.visible, for: .windowToolbar)
     }
 }
 
@@ -154,9 +156,124 @@ extension View {
     }
 }
 
+/// Tactile 3D keycap face. Visual language from Opensource UI `ThreeDButton`.
+///
+/// Resting lift + top sheen + bottom recess. Press inverts the inset and
+/// flattens the lift so the key sinks. Callers own the 1-point travel.
+enum ZenKeycapKind {
+    /// Filled accent — primary actions.
+    case solid
+    /// Raised surface — secondary, menus, icon buttons.
+    case muted
+    /// Filled danger — destructive actions.
+    case danger
+}
+
+struct ZenKeycap: View {
+    var kind: ZenKeycapKind = .muted
+    var isPressed = false
+    var cornerRadius: CGFloat = ZenDesign.Radius.small
+    var isEnabled = true
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        let shape = RoundedRectangle(
+            cornerRadius: cornerRadius,
+            style: .continuous
+        )
+        let pressed = isPressed && isEnabled
+        let dark = colorScheme == .dark
+
+        shape
+            .fill(face(pressed: pressed))
+            .overlay {
+                shape
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(
+                                    pressed ? sheen.pressedTop : sheen.restTop
+                                ),
+                                Color.clear,
+                                Color.black.opacity(
+                                    pressed
+                                        ? sheen.pressedBottom
+                                        : sheen.restBottom
+                                ),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                shape.strokeBorder(
+                    edge,
+                    lineWidth: contrast == .increased ? 1.5 : 1
+                )
+            }
+            .shadow(
+                color: Color.black.opacity(
+                    pressed ? (dark ? 0.28 : 0.10) : (dark ? 0.36 : 0.14)
+                ),
+                radius: pressed ? 1 : 3,
+                x: 0,
+                y: pressed ? 1 : 2
+            )
+    }
+
+    private var sheen: (
+        restTop: Double,
+        restBottom: Double,
+        pressedTop: Double,
+        pressedBottom: Double
+    ) {
+        switch kind {
+        case .solid, .danger:
+            return (0.16, 0.28, 0.04, 0.42)
+        case .muted:
+            return colorScheme == .dark
+                ? (0.12, 0.32, 0.04, 0.40)
+                : (0.45, 0.10, 0.08, 0.16)
+        }
+    }
+
+    private func face(pressed: Bool) -> Color {
+        switch kind {
+        case .solid:
+            return pressed
+                ? ZenDesign.Semantic.accentStrong
+                : ZenDesign.Semantic.accentFill
+        case .muted:
+            return pressed
+                ? ZenDesign.Semantic.surfaceRaised
+                : ZenDesign.Component.shortcutBackground
+        case .danger:
+            return ZenDesign.Semantic.danger.opacity(pressed ? 0.78 : 1)
+        }
+    }
+
+    private var edge: Color {
+        switch kind {
+        case .solid:
+            return Color.black.opacity(colorScheme == .dark ? 0.35 : 0.18)
+        case .muted:
+            return ZenDesign.Semantic.borderStrong
+        case .danger:
+            return Color.black.opacity(0.22)
+        }
+    }
+}
+
 /// Immediate press feedback and keyboard focus for custom controls that cannot
 /// use a native bordered button style. Feedback begins on pointer-down through
 /// `configuration.isPressed`, remains interruptible, and never bounces.
+///
+/// Painted controls sink one point like an Opensource UI keycap. Reduce Motion
+/// keeps the focus ring and drops the travel.
 struct ZenPressButtonStyle: ButtonStyle {
     var cornerRadius: CGFloat = ZenDesign.Radius.small
 
@@ -166,16 +283,13 @@ struct ZenPressButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(
-                configuration.isPressed && isEnabled && !reduceMotion
-                    ? 0.98
-                    : 1
+            .contentShape(Rectangle())
+            .offset(
+                y: configuration.isPressed && isEnabled && !reduceMotion
+                    ? 1
+                    : 0
             )
-            .opacity(
-                isEnabled
-                    ? (configuration.isPressed ? 0.86 : 1)
-                    : 0.45
-            )
+            .opacity(isEnabled ? 1 : 0.45)
             .overlay {
                 RoundedRectangle(
                     cornerRadius: cornerRadius,
@@ -365,42 +479,34 @@ struct ZenRow<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .center, spacing: ZenDesign.Spacing.sm) {
             if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(
-                        iconTint ?? ZenDesign.Semantic.textSecondary
-                    )
-                    .frame(width: 30, height: 30)
-                    .background {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(
-                                iconBackground
-                                    ?? ZenDesign.Semantic.surfaceRaised
-                            )
-                    }
-                    .accessibilityHidden(true)
+                ZenIconChip(
+                    systemImage: icon,
+                    size: ZenDesign.Layout.hitTarget,
+                    tint: iconTint ?? ZenDesign.Semantic.textSecondary
+                )
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(ZenDesign.Typography.bodyStrong)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .lineLimit(2)
                 if let subtitle {
                     Text(subtitle)
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .frame(minWidth: 80, maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 0) {
-                trailing
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            trailing
+                .layoutPriority(1)
         }
         .padding(.horizontal, ZenDesign.Spacing.md)
         .padding(.vertical, ZenDesign.Spacing.sm)
-        .frame(minHeight: 48)
+        .frame(minHeight: ZenDesign.Layout.hitTarget + 16)
     }
 }
 
@@ -427,21 +533,24 @@ extension ZenRow where Trailing == EmptyView {
 struct ZenKbd: View {
     let text: String
 
+    private var isWord: Bool { text.count > 1 }
+
     var body: some View {
         Text(text)
             .font(.system(size: 11.5, weight: .medium, design: .monospaced))
-            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+            .foregroundStyle(ZenDesign.Semantic.textPrimary)
             .lineLimit(1)
             .fixedSize()
-            .padding(.horizontal, 7)
-            .frame(minWidth: 24, minHeight: 24)
+            .padding(.horizontal, isWord ? 12 : 7)
+            .frame(
+                minWidth: text.count > 8 ? 96 : isWord ? 48 : 26,
+                minHeight: 28
+            )
             .background {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(ZenDesign.Semantic.surfaceRaised)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .strokeBorder(ZenDesign.Semantic.borderStrong)
-                    }
+                ZenKeycap(
+                    kind: .muted,
+                    cornerRadius: 6
+                )
             }
     }
 }
@@ -451,7 +560,7 @@ struct ZenKbdGroup: View {
     let combo: String
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 6) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 ZenKbd(text: key)
             }
@@ -461,7 +570,6 @@ struct ZenKbdGroup: View {
     }
 
     private var keys: [String] {
-        // "⌃⌥Space" → ["⌃", "⌥", "Space"]; tolerate arbitrary display names.
         var result: [String] = []
         var current = ""
         for char in combo {
@@ -702,7 +810,8 @@ struct ZenMeterRow: View {
     }
 }
 
-/// Native macOS segmented control for views within one preference pane.
+/// Sliding segmented toggle. Visual language from Opensource UI
+/// `SegmentedToggleButton`: inset well, raised pill, eased travel.
 struct ZenTabStrip<Tab: Hashable>: View {
     struct Item {
         let tab: Tab
@@ -713,11 +822,17 @@ struct ZenTabStrip<Tab: Hashable>: View {
     let items: [Item]
     @Binding var selection: Tab
 
+    @Namespace private var pill
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             ForEach(items, id: \.tab) { item in
+                let selected = item.tab == selection
                 Button {
-                    selection = item.tab
+                    withAnimation(ZenDesign.Motion.standard(reduceMotion)) {
+                        selection = item.tab
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Text(item.title)
@@ -728,8 +843,9 @@ struct ZenTabStrip<Tab: Hashable>: View {
                                 .frame(minHeight: 18)
                                 .background {
                                     Capsule().fill(
-                                        item.tab == selection
-                                            ? ZenDesign.Semantic.accent.opacity(0.22)
+                                        selected
+                                            ? ZenDesign.Semantic.accent
+                                                .opacity(0.22)
                                             : ZenDesign.Semantic.surfaceRaised
                                     )
                                 }
@@ -737,49 +853,52 @@ struct ZenTabStrip<Tab: Hashable>: View {
                     }
                     .font(ZenDesign.Typography.button)
                     .foregroundStyle(
-                        item.tab == selection
+                        selected
                             ? ZenDesign.Semantic.textPrimary
                             : ZenDesign.Semantic.textSecondary
                     )
                     .padding(.horizontal, 14)
-                    .frame(minHeight: 36)
+                    .frame(minHeight: 32)
                     .background {
-                        RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.small,
-                            style: .continuous
-                        )
-                        .fill(
-                            item.tab == selection
-                                ? ZenDesign.Semantic.accentMuted
-                                : Color.clear
-                        )
+                        if selected {
+                            RoundedRectangle(
+                                cornerRadius: ZenDesign.Radius.small,
+                                style: .continuous
+                            )
+                            .fill(ZenDesign.Semantic.surfaceRaised)
+                            .shadow(
+                                color: Color.black.opacity(0.12),
+                                radius: 2,
+                                y: 1
+                            )
+                            .matchedGeometryEffect(id: "pill", in: pill)
+                        }
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(
-                    ZenPressButtonStyle(
-                        cornerRadius: ZenDesign.Radius.small
-                    )
-                )
-                .accessibilityAddTraits(
-                    item.tab == selection ? .isSelected : []
-                )
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
         .padding(4)
-        .zenGlassSurface(
-            cornerRadius: ZenDesign.Radius.medium,
-            interactive: true
-        )
+        .background {
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.medium,
+                style: .continuous
+            )
+            .fill(ZenDesign.Semantic.surfaceSunken)
+        }
         .frame(minHeight: ZenDesign.Layout.hitTarget)
         .accessibilityElement(children: .contain)
     }
 }
 
-/// Search field (prototype `.search-wrap`).
+/// Search field. Opensource UI `SearchInput`: leading glyph, clear, no ring.
 struct ZenSearchField: View {
     let placeholder: String
     @Binding var text: String
+    var compact = false
+    var onSubmit: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 7) {
@@ -789,7 +908,7 @@ struct ZenSearchField: View {
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
                 .font(ZenDesign.Typography.body)
-                .zenFocusRing()
+                .onSubmit { onSubmit?() }
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -798,8 +917,12 @@ struct ZenSearchField: View {
                         .font(.system(size: 11))
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                         .frame(
-                            width: ZenDesign.Layout.hitTarget,
-                            height: ZenDesign.Layout.hitTarget
+                            width: compact
+                                ? ZenDesign.Layout.control
+                                : ZenDesign.Layout.hitTarget,
+                            height: compact
+                                ? ZenDesign.Layout.control
+                                : ZenDesign.Layout.hitTarget
                         )
                         .contentShape(Rectangle())
                 }
@@ -812,20 +935,43 @@ struct ZenSearchField: View {
             }
         }
         .padding(.horizontal, ZenDesign.Spacing.sm)
-        .frame(height: ZenDesign.Layout.hitTarget)
+        .frame(
+            height: compact
+                ? ZenDesign.Layout.control
+                : ZenDesign.Layout.hitTarget
+        )
         .background {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.medium,
-                style: .continuous
-            )
-            .fill(ZenDesign.Semantic.surfaceRaised)
-            .overlay {
+            if !compact {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.medium,
                     style: .continuous
                 )
-                .strokeBorder(ZenDesign.Semantic.border)
+                .fill(ZenDesign.Semantic.surfaceRaised)
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.medium,
+                        style: .continuous
+                    )
+                    .strokeBorder(ZenDesign.Semantic.borderStrong)
+                }
             }
+        }
+        .modifier(CompactSearchGlass(enabled: compact))
+        .zenFocusRing()
+    }
+}
+
+private struct CompactSearchGlass: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.zenGlassSurface(
+                cornerRadius: ZenDesign.Radius.pill,
+                interactive: true
+            )
+        } else {
+            content
         }
     }
 }
@@ -868,28 +1014,81 @@ struct ZenTextInput: View {
     }
 }
 
-/// Menu picker with the same 44-point geometry and surface vocabulary as the
-/// rest of ZenVoice. The native menu remains responsible for keyboard and
-/// VoiceOver behavior.
+/// Labelled textarea with a count. Opensource UI `TextareaFieldInput`.
+struct ZenTextArea: View {
+    var label: String
+    @Binding var text: String
+    var hint: String?
+    var maxLength: Int = 2_000
+    var minHeight: CGFloat = 90
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label)
+                    .font(ZenDesign.Typography.bodyStrong)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                Spacer()
+                Text("\(text.count)/\(maxLength)")
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(
+                        text.count >= maxLength
+                            ? ZenDesign.Semantic.warn
+                            : ZenDesign.Semantic.textTertiary
+                    )
+                    .monospacedDigit()
+            }
+            TextEditor(text: $text)
+                .font(ZenDesign.Typography.body)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .frame(minHeight: minHeight)
+                .background {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.medium,
+                        style: .continuous
+                    )
+                    .fill(ZenDesign.Semantic.surfaceRaised)
+                    .overlay {
+                        RoundedRectangle(
+                            cornerRadius: ZenDesign.Radius.medium,
+                            style: .continuous
+                        )
+                        .strokeBorder(ZenDesign.Semantic.borderStrong)
+                    }
+                }
+                .onChange(of: text) { _, next in
+                    if next.count > maxLength {
+                        text = String(next.prefix(maxLength))
+                    }
+                }
+            if let hint {
+                Text(hint)
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// Select-style picker. Chevron rotates like Opensource UI `SelectFieldInput`;
+/// the menu panel uses a spring popover to match the dropdowns.
 struct ZenMenuPicker<Option: Hashable>: View {
     let label: String
     let options: [Option]
     @Binding var selection: Option
     var minWidth: CGFloat = 190
+    var compact = false
     let title: (Option) -> String
 
+    @State private var open = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        Menu {
-            ForEach(options, id: \.self) { option in
-                Button {
-                    selection = option
-                } label: {
-                    if option == selection {
-                        Label(title(option), systemImage: "checkmark")
-                    } else {
-                        Text(title(option))
-                    }
-                }
+        Button {
+            withAnimation(ZenDesign.Motion.fast(reduceMotion)) {
+                open.toggle()
             }
         } label: {
             HStack(spacing: ZenDesign.Spacing.sm) {
@@ -898,32 +1097,56 @@ struct ZenMenuPicker<Option: Hashable>: View {
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     .lineLimit(1)
                 Spacer(minLength: ZenDesign.Spacing.sm)
-                Image(systemName: "chevron.up.chevron.down")
+                Image(systemName: "chevron.down")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    .rotationEffect(.degrees(open ? 180 : 0))
             }
-            .padding(.horizontal, ZenDesign.Spacing.sm)
-            .frame(minWidth: minWidth, minHeight: ZenDesign.Layout.hitTarget)
+            .padding(.horizontal, compact ? 10 : ZenDesign.Spacing.sm)
+            .frame(
+                minWidth: minWidth,
+                minHeight: compact
+                    ? ZenDesign.Layout.control
+                    : ZenDesign.Layout.hitTarget
+            )
             .background {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
-                    style: .continuous
-                )
-                .fill(ZenDesign.Semantic.surfaceRaised)
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.small,
-                        style: .continuous
-                    )
-                    .strokeBorder(ZenDesign.Semantic.borderStrong)
-                }
+                ZenKeycap(kind: .muted, isPressed: open)
             }
             .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize(horizontal: true, vertical: false)
+        .buttonStyle(.plain)
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(options, id: \.self) { option in
+                    Button {
+                        selection = option
+                        open = false
+                    } label: {
+                        HStack {
+                            Text(title(option))
+                                .font(ZenDesign.Typography.body)
+                            Spacer()
+                            if option == selection {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                        }
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(4)
+            .frame(minWidth: minWidth)
+        }
+        .frame(width: compact ? minWidth : nil)
+        .fixedSize(horizontal: !compact, vertical: false)
         .accessibilityLabel(label)
         .accessibilityValue(title(selection))
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -1028,10 +1251,13 @@ struct ZenChoiceCard: View {
     }
 }
 
-/// Accent-tinted switch with standard macOS behavior.
+/// Native switch. Motion uses the same critically damped spring as the rest
+/// of ZenVoice — no glass wrapper around the control.
 struct ZenSwitch: View {
     @Binding var isOn: Bool
     let label: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Toggle(label, isOn: $isOn)
@@ -1039,11 +1265,12 @@ struct ZenSwitch: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .tint(ZenDesign.Semantic.accentFill)
+            .animation(ZenDesign.Motion.fast(reduceMotion), value: isOn)
             .accessibilityLabel(label)
     }
 }
 
-/// Small ghost icon button (prototype `.icon-btn`).
+/// Small 3D icon button (Opensource UI `ThreeDIconButton`).
 struct ZenIconButton: View {
     let systemImage: String
     let label: String
@@ -1055,59 +1282,81 @@ struct ZenIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(
-                    hovering
-                        ? (isDanger
-                            ? ZenDesign.Semantic.danger
-                            : ZenDesign.Semantic.textPrimary)
-                        : ZenDesign.Semantic.textSecondary
-                )
-                .frame(
-                    width: ZenDesign.Layout.control,
-                    height: ZenDesign.Layout.control
-                )
-                .background {
-                    // A resting fill and border, not a hover-only one. These
-                    // buttons carry reset and delete actions; with no visible
-                    // affordance they were invisible to anyone who had not
-                    // already swept the pointer across them.
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.small,
-                        style: .continuous
-                    )
-                    .fill(
-                        hovering
-                            ? (isDanger
-                                ? ZenDesign.Semantic.dangerMuted
-                                : ZenDesign.Semantic.surfaceRaised)
-                            : ZenDesign.Semantic.surfaceRaised.opacity(0.6)
-                    )
-                    .overlay {
-                        RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.small,
-                            style: .continuous
-                        )
-                        .strokeBorder(
-                            hovering && isDanger
-                                ? ZenDesign.Semantic.danger.opacity(0.5)
-                                : ZenDesign.Semantic.border,
-                            lineWidth: 1
-                        )
-                    }
-                }
-                .frame(
-                    minWidth: ZenDesign.Layout.hitTarget,
-                    minHeight: ZenDesign.Layout.hitTarget
-                )
-                .contentShape(Rectangle())
         }
         .buttonStyle(
-            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.small)
+            ZenIconKeycapStyle(isDanger: isDanger, hovering: hovering)
         )
         .onHover { hovering = $0 }
         .accessibilityLabel(label)
         .help(label)
+    }
+}
+
+private struct ZenIconKeycapStyle: ButtonStyle {
+    var isDanger: Bool
+    var hovering: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(iconColor(pressed: configuration.isPressed))
+            .frame(
+                width: ZenDesign.Layout.control,
+                height: ZenDesign.Layout.control
+            )
+            .background {
+                ZenKeycap(
+                    kind: .muted,
+                    isPressed: configuration.isPressed,
+                    isEnabled: isEnabled
+                )
+            }
+            .frame(
+                minWidth: ZenDesign.Layout.hitTarget,
+                minHeight: ZenDesign.Layout.hitTarget
+            )
+            .contentShape(Rectangle())
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.small,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    isFocused && isEnabled
+                        ? ZenDesign.Component.focusRing
+                        : Color.clear,
+                    lineWidth: 2
+                )
+                .padding(-2)
+                .allowsHitTesting(false)
+            }
+            .offset(
+                y: configuration.isPressed && isEnabled && !reduceMotion
+                    ? 1
+                    : 0
+            )
+            .opacity(isEnabled ? 1 : 0.45)
+            .animation(
+                ZenDesign.Motion.fast(reduceMotion),
+                value: configuration.isPressed
+            )
+            .animation(
+                ZenDesign.Motion.fast(reduceMotion),
+                value: isFocused
+            )
+    }
+
+    private func iconColor(pressed: Bool) -> Color {
+        if isDanger && (hovering || pressed) {
+            return ZenDesign.Semantic.danger
+        }
+        return hovering || pressed
+            ? ZenDesign.Semantic.textPrimary
+            : ZenDesign.Semantic.textSecondary
     }
 }
 
@@ -1180,5 +1429,259 @@ struct ZenModelMeta: View {
             .foregroundStyle(ZenDesign.Semantic.textTertiary)
             .lineLimit(1)
             .truncationMode(.middle)
+    }
+}
+
+/// Hold-to-confirm destructive control. Visual language from Opensource UI
+/// `HoldToDeleteButton`: the key sinks and a danger fill wipes across.
+/// Release early to cancel. VoiceOver gets an immediate Delete action.
+struct ZenHoldToDeleteButton: View {
+    var label = "Hold to delete"
+    var doneLabel = "Deleted"
+    var holdDuration: TimeInterval = 1.1
+    var minWidth: CGFloat? = 168
+    let action: () -> Void
+
+    @State private var progress: CGFloat = 0
+    @State private var holding = false
+    @State private var done = false
+    @State private var holdTask: Task<Void, Never>?
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        face
+            .overlay(alignment: .leading) { wipe }
+            .frame(minHeight: ZenDesign.Layout.hitTarget)
+            .contentShape(Rectangle())
+            .overlay { focusRing }
+            .offset(y: holding && isEnabled && !reduceMotion ? 1 : 0)
+            .opacity(isEnabled ? 1 : 0.45)
+            .animation(ZenDesign.Motion.fast(reduceMotion), value: holding)
+            .focusable()
+            .gesture(holdDrag)
+            .onKeyPress(
+                keys: [.space, .return],
+                phases: [.down, .up],
+                action: handleKey
+            )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(done ? doneLabel : label)
+            .accessibilityHint("Hold to confirm")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: "Delete", action)
+            .onChange(of: isEnabled, initial: false) { _, enabled in
+                if !enabled { reset() }
+            }
+    }
+
+    private var face: some View {
+        caption(color: ZenDesign.Semantic.danger)
+            .padding(.horizontal, 13)
+            .frame(minWidth: minWidth)
+            .frame(height: ZenDesign.Layout.control)
+            .background {
+                ZenKeycap(
+                    kind: .muted,
+                    isPressed: (holding || done) && isEnabled,
+                    isEnabled: isEnabled
+                )
+            }
+    }
+
+    private var wipe: some View {
+        GeometryReader { geo in
+            ZenDesign.Semantic.danger
+                .frame(width: geo.size.width * progress)
+                .overlay(alignment: .leading) {
+                    caption(color: ZenDesign.Semantic.textOnDanger)
+                        .padding(.horizontal, 13)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                }
+                .clipped()
+        }
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: ZenDesign.Radius.small,
+                style: .continuous
+            )
+        )
+    }
+
+    private var focusRing: some View {
+        RoundedRectangle(
+            cornerRadius: ZenDesign.Radius.small,
+            style: .continuous
+        )
+        .strokeBorder(
+            isFocused && isEnabled
+                ? ZenDesign.Component.focusRing
+                : Color.clear,
+            lineWidth: 2
+        )
+        .padding(-2)
+        .allowsHitTesting(false)
+    }
+
+    private var holdDrag: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let distance = hypot(
+                    value.translation.width,
+                    value.translation.height
+                )
+                if distance > 44 {
+                    cancelHold()
+                } else {
+                    startHold()
+                }
+            }
+            .onEnded { _ in cancelHold() }
+    }
+
+    private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        guard isEnabled, !done else { return .ignored }
+        if press.phase == .down {
+            startHold()
+            return .handled
+        }
+        if press.phase == .up {
+            cancelHold()
+            return .handled
+        }
+        return .ignored
+    }
+
+    private func caption(color: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: done ? "checkmark" : "trash")
+                .font(.system(size: 12, weight: .semibold))
+            Text(done ? doneLabel : label)
+                .font(ZenDesign.Typography.button)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .foregroundStyle(color)
+    }
+
+    private func startHold() {
+        guard isEnabled, !done, holdTask == nil else { return }
+        holding = true
+        if reduceMotion {
+            progress = 1
+        } else {
+            withAnimation(.linear(duration: holdDuration)) {
+                progress = 1
+            }
+        }
+        holdTask = Task { @MainActor in
+            let nanos = UInt64(holdDuration * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanos)
+            guard !Task.isCancelled else { return }
+            holdTask = nil
+            done = true
+            holding = false
+            progress = 1
+            action()
+            try? await Task.sleep(for: .milliseconds(1_600))
+            if !Task.isCancelled { reset() }
+        }
+    }
+
+    private func cancelHold() {
+        guard !done else { return }
+        holdTask?.cancel()
+        holdTask = nil
+        holding = false
+        withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.3)) {
+            progress = 0
+        }
+    }
+
+    private func reset() {
+        holdTask?.cancel()
+        holdTask = nil
+        done = false
+        holding = false
+        progress = 0
+    }
+}
+
+/// 3D copy control. Opensource UI `CopyButton`: keycap, icon swap, Copied.
+struct ZenCopyButton: View {
+    var label = "Copy"
+    var copiedLabel = "Copied"
+    var minWidth: CGFloat? = 88
+    let action: () -> Void
+
+    @State private var copied = false
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button {
+            action()
+            copied = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1_600))
+                copied = false
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(copied ? copiedLabel : label)
+                    .font(ZenDesign.Typography.button)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .foregroundStyle(
+                copied
+                    ? ZenDesign.Semantic.success
+                    : ZenDesign.Semantic.textPrimary
+            )
+            .padding(.horizontal, 13)
+            .frame(minWidth: minWidth)
+            .frame(height: ZenDesign.Layout.control)
+            .background {
+                ZenKeycap(kind: .muted, isEnabled: isEnabled)
+            }
+            .frame(minHeight: ZenDesign.Layout.hitTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(
+            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.small)
+        )
+        .animation(ZenDesign.Motion.fast(reduceMotion), value: copied)
+        .accessibilityLabel(copied ? copiedLabel : label)
+    }
+}
+
+/// Native menu behind a 3D ellipsis trigger. Opensource UI kebab, macOS menu.
+struct ZenKebabMenu<Content: View>: View {
+    var label = "More actions"
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        Menu {
+            content()
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                .frame(
+                    width: ZenDesign.Layout.hitTarget,
+                    height: ZenDesign.Layout.hitTarget
+                )
+                .background {
+                    ZenKeycap(kind: .muted)
+                }
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel(label)
     }
 }

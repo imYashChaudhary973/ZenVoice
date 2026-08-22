@@ -16,7 +16,7 @@
 
 | Capability | Status |
 |---|---|
-| Provider enum: OpenAI, Groq, Anthropic, custom endpoint | Done |
+| Provider enum: OpenAI, Groq, Anthropic, OpenRouter, Ollama Cloud, Ollama, custom | Done |
 | Per-provider request builders with distinct wire shapes | Done |
 | Per-provider model pickers (no free-text model IDs for known providers) | Done |
 | Keychain key storage (`CloudAIKeyStore`), never `UserDefaults` | Done |
@@ -58,20 +58,16 @@ Design rules the coding agent must preserve:
 
 ## 3. Provider matrix (Current)
 
-| | OpenAI | Groq | Anthropic | Custom |
-|---|---|---|---|---|
-| Default base URL | `https://api.openai.com/v1` | `https://api.groq.com/openai/v1` | `https://api.anthropic.com/v1` | none — user must set one |
-| Path | `/chat/completions` | `/chat/completions` | `/messages` | `/chat/completions` |
-| Wire shape | Chat Completions | Chat Completions (OpenAI-compatible) | Messages API | Chat Completions |
-| Auth header | `Authorization: Bearer <key>` | `Authorization: Bearer <key>` | `x-api-key: <key>` | Bearer |
-| Extra headers | — | — | `anthropic-version: 2023-06-01` | — |
-| Body extras | `temperature: 0.2` | `temperature: 0.2` | `temperature: 0.2`, `max_tokens: 4096`, top-level `system` | same as OpenAI |
-| Known models | `gpt-4o-mini`, `gpt-4o`, `gpt-4.1-mini`, `gpt-4.1` | `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `groq/compound`, `groq/compound-mini`, `qwen/qwen3.6-27b` | `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229`, `claude-3-7-sonnet-20250219` | open field |
+| | OpenAI | Groq | Anthropic | OpenRouter | Ollama Cloud | Ollama | Custom |
+|---|---|---|---|---|---|---|---|
+| Default base URL | `https://api.openai.com/v1` | `https://api.groq.com/openai/v1` | `https://api.anthropic.com/v1` | `https://openrouter.ai/api/v1` | `https://ollama.com/v1` | `http://127.0.0.1:11434/v1` | none — user must set one |
+| Path | `/chat/completions` | `/chat/completions` | `/messages` | `/chat/completions` | `/chat/completions` | `/chat/completions` | `/chat/completions` |
+| Wire shape | Chat Completions | Chat Completions | Messages API | Chat Completions | Chat Completions | Chat Completions | Chat Completions |
+| Auth | Bearer | Bearer | `x-api-key` | Bearer | Bearer | Bearer (`ollama` if empty) | Bearer |
+| Extra headers | — | — | `anthropic-version` | `X-Title: ZenVoice` | — | — | — |
+| Known models | curated picker | curated picker | curated picker | curated picker | typed | typed | typed |
 
-**Custom exists so data can stay on infrastructure the user controls** (for
-example a self-hosted OpenAI-compatible endpoint). It has no default URL on
-purpose: the user must state where their text is going. `resolvedEndpoint()`
-enforces HTTPS for every provider, including custom.
+HTTPS is required except loopback (`localhost`, `127.0.0.1`, `::1`) so local Ollama can stay on HTTP.
 
 ### 3.1 Request bodies
 

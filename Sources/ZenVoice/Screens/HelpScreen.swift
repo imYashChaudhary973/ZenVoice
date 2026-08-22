@@ -25,7 +25,6 @@ private struct ZenFAQ: Identifiable {
 
 struct HelpScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
-    @ObservedObject var onboardingViewModel: OnboardingViewModel
     let openShortcuts: () -> Void
 
     @State private var searchText = ""
@@ -118,45 +117,13 @@ struct HelpScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
-            quickActions
             cheatSheet
             faqCard
             aboutCard
         }
     }
 
-    private var quickActions: some View {
-        ZenPanel(padding: ZenDesign.Spacing.lg) {
-            HStack(spacing: ZenDesign.Spacing.sm) {
-                Image(systemName: "arrow.counterclockwise.circle")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .frame(width: 34, height: 34)
-                    .background {
-                        RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.small,
-                            style: .continuous
-                        )
-                        .fill(ZenDesign.Semantic.surfaceRaised)
-                    }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Replay the setup guide")
-                        .font(ZenDesign.Typography.bodyStrong)
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    Text(
-                        "The same steps you saw on first launch — permissions, shortcut, language, model."
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                }
-                Spacer()
-                Button("Replay") {
-                    onboardingViewModel.show()
-                }
-                .buttonStyle(ZenSecondaryButtonStyle())
-            }
-        }
-    }
+
 
     private var cheatSheet: some View {
         ZenPanel(padding: ZenDesign.Spacing.lg) {

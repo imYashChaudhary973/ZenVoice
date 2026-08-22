@@ -190,7 +190,8 @@ private func checkWrongKey(
 
 guard let providerName = environment["ZENVOICE_CLOUD_LIVE_PROVIDER"] else {
     fail(
-        "set ZENVOICE_CLOUD_LIVE_PROVIDER to openai, groq, anthropic, or custom"
+        "set ZENVOICE_CLOUD_LIVE_PROVIDER to openai, groq, anthropic, "
+            + "openrouter, ollama, ollamacloud, or custom"
     )
 }
 
@@ -202,12 +203,18 @@ case "groq":
     provider = .groq
 case "anthropic":
     provider = .anthropic
+case "openrouter":
+    provider = .openRouter
+case "ollama":
+    provider = .ollama
+case "ollamacloud":
+    provider = .ollamaCloud
 case "custom":
     provider = .custom
 default:
     fail(
         "unknown provider \"\(providerName)\" — use openai, groq, "
-            + "anthropic, or custom"
+            + "anthropic, openrouter, ollama, ollamacloud, or custom"
     )
 }
 

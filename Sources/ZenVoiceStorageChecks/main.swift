@@ -1558,6 +1558,12 @@ private func checkAudioHistoryPreferenceDefaults() async throws {
             == AudioHistoryPreferences.minimumMaxSizeBytes,
         "size cap was not clamped to the minimum"
     )
+    preferences.maxSizeBytes = AudioHistoryPreferences.maximumMaxSizeBytes * 2
+    try await require(
+        preferences.maxSizeBytes
+            == AudioHistoryPreferences.maximumMaxSizeBytes,
+        "size cap was not clamped to the maximum"
+    )
     preferences.maxAgeDays = 0
     try await require(preferences.maxAgeDays == 1, "age cap was not clamped")
 

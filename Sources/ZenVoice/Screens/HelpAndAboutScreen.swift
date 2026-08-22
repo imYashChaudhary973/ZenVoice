@@ -18,8 +18,6 @@ import ZenVoiceCore
 /// Help and product information share one continuous support page.
 struct HelpAndAboutScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
-    @ObservedObject var updatesViewModel: UpdatesViewModel
-    @ObservedObject var onboardingViewModel: OnboardingViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
@@ -30,7 +28,7 @@ struct HelpAndAboutScreen: View {
         ZenScreen(
             icon: "gearshape",
             title: "Settings",
-            subtitle: "Privacy, permissions, updates, and support."
+            subtitle: "Privacy, permissions, and support."
         ) {
             VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
                 PrivacyScreen(
@@ -43,10 +41,8 @@ struct HelpAndAboutScreen: View {
                 )
                 HelpScreen(
                     viewModel: viewModel,
-                    onboardingViewModel: onboardingViewModel,
                     openShortcuts: openShortcuts
                 )
-                UpdatesScreen(viewModel: updatesViewModel)
             }
         }
     }

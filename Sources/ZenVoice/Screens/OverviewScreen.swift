@@ -22,8 +22,6 @@ struct OverviewScreen: View {
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
-    let startDictation: () -> Void
-    let replaySetup: () -> Void
     let navigate: (OverviewDestination) -> Void
 
     var body: some View {
@@ -55,6 +53,7 @@ struct OverviewScreen: View {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: ZenDesign.Spacing.lg) {
                     homeMainColumn
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     homeSideColumn
                         .frame(width: 320)
                 }
@@ -68,7 +67,6 @@ struct OverviewScreen: View {
 
     private var homeMainColumn: some View {
         VStack(spacing: ZenDesign.Spacing.lg) {
-            quickActionsPanel
             permissionsPanel
             frequentAppsPanel
         }
@@ -310,40 +308,7 @@ struct OverviewScreen: View {
         }
     }
 
-    private var quickActionsPanel: some View {
-        ZenCard(
-            icon: "bolt.fill",
-            title: "Actions",
-            subtitle: "Start talking, or walk through setup again."
-        ) {
-            // Button labels never wrap, so a row of them has a hard minimum
-            // width. Side by side while that fits, stacked when it does not —
-            // otherwise the card is forced wider than its column.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: ZenDesign.Spacing.sm) {
-                    startDictatingButton
-                    replaySetupButton
-                    Spacer(minLength: 0)
-                }
-                VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
-                    startDictatingButton
-                    replaySetupButton
-                }
-            }
-        }
-    }
 
-    private var startDictatingButton: some View {
-        Button(action: startDictation) {
-            Label("Start dictating", systemImage: "mic.fill")
-        }
-        .buttonStyle(ZenPrimaryButtonStyle())
-    }
-
-    private var replaySetupButton: some View {
-        Button("Replay setup guide", action: replaySetup)
-            .buttonStyle(ZenSecondaryButtonStyle())
-    }
 
     private var permissionsPanel: some View {
         ZenCard(

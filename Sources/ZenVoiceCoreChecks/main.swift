@@ -3081,6 +3081,23 @@ do {
     // Expected.
 }
 
+// Loopback HTTP is allowed so local Ollama can run without TLS.
+cloudConfiguration.provider = .ollama
+cloudConfiguration.baseURL = "http://127.0.0.1:11434/v1"
+cloudConfiguration.model = "llama3.2"
+guard let ollamaEndpoint = try? cloudConfiguration.resolvedEndpoint(),
+      ollamaEndpoint.absoluteString
+        == "http://127.0.0.1:11434/v1/chat/completions" else {
+    failEngineCheck("a local Ollama endpoint was rejected")
+}
+guard CloudAIProvider.ollama.requiresAPIKey == false,
+      CloudAIProvider.openRouter.displayName == "OpenRouter",
+      CloudAIProvider.ollamaCloud.defaultBaseURL
+        == "https://ollama.com/v1" else {
+    failEngineCheck("new cloud providers are misconfigured")
+}
+cloudConfiguration.provider = .custom
+
 cloudConfiguration.baseURL = "https://api.openai.com/v1/"
 cloudConfiguration.model = "gpt-4o-mini"
 guard let endpoint = try? cloudConfiguration.resolvedEndpoint(),

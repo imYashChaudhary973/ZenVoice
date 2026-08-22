@@ -27,8 +27,11 @@ the toolbar belongs to the window rather than being painted inside content.
 tightens as you nest (16 → 12 → 8) so the stack reads as depth rather than as
 one blurry shape.
 
-**Native controls stay native.** Switches, pop-up buttons, and text fields are
+**Native controls stay native.** Switches, pop-up menus, and text fields are
 the system's, tinted once at the window root. There is no hand-drawn switch.
+Painted buttons are the exception: they use the Opensource UI 3D keycap
+(`ZenKeycap`) so primary, secondary, destructive, icon, and menu-picker
+triggers share one tactile press.
 
 **Behavior over animation.** Interactive transitions use critically damped,
 interruptible springs. Feedback begins on press, never locks input, and follows
@@ -148,10 +151,11 @@ every assistive technology that targets by frame.
 toolbar sidebar button. The detail pane expands from its live width, so the
 motion is interruptible and spatially symmetric.
 
-The sidebar has seven flat destinations with no category headings: Home,
-Dictation, Language, Models, Personalisation, History, and Settings. Formatting,
-vocabulary, app rules, and commands are peer views inside Personalisation;
-transcripts, recordings, and insights are peer views inside History.
+The sidebar has eight flat destinations with no category headings: Home,
+Dictation, Language, Models, Personalisation, History, Updates, and Settings.
+Formatting, vocabulary, app rules, and commands are peer views inside
+Personalisation; transcripts, recordings, and insights are peer views inside
+History.
 
 Sidebar rows use native `List` spacing and SF Symbols. Selection is a quiet
 semantic raised row with a violet icon. The standard toolbar sidebar control
@@ -170,15 +174,17 @@ than hand-rolling it locally.
 | `ZenInsetRow` | A row nested inside a card, on its own inset surface. |
 | `ZenRow` | A flat row in a divided list. |
 | `ZenCardHeader` / `ZenIconChip` | The heading block and its tinted glyph container. |
-| `ZenStatTile` | Uppercase eyebrow, then the number, then one line of context. |
-| `ZenBadge` | Sentence-case capsule pill. Not uppercase — these carry proper nouns. |
-| `ZenBanner` | Coloured glyph, body-contrast text, tinted background. |
-| `ZenTabStrip` | Native segmented `Picker` for views within a section. |
+| `ZenTabStrip` | Sliding segmented toggle for views within a section. |
 | `ZenMaterialSurface` | Structural AppKit material with a solid accessibility fallback. |
 | `ZenGlassSurfaceModifier` / `ZenGlassContainer` | Versioned Liquid Glass for functional floating controls, with material and solid fallbacks. |
-| `ZenMenuPicker` | Shared 44-point menu selector for languages, providers, models, and scopes. |
+| `ZenMenuPicker` | Select trigger with rotating chevron and popover menu. |
 | `ZenTextInput` | Shared icon-led text field for replacement, vocabulary, model, and endpoint inputs. |
-| `ZenPressButtonStyle` | Immediate, interruptible press feedback plus visible keyboard focus and disabled-state contrast for custom controls. |
+| `ZenTextArea` | Labelled textarea with a character count. |
+| `ZenPressButtonStyle` | Immediate 1-point keycap sink, visible keyboard focus, and disabled-state contrast for custom controls. |
+| `ZenKeycap` | Shared 3D button face (solid / muted / danger). Lift + sheen at rest; press inverts the inset. |
+| `ZenHoldToDeleteButton` | Hold-to-confirm bulk delete. Wipe fill; VoiceOver gets an immediate Delete action. |
+| `ZenCopyButton` | Copy that flips to Copied. |
+| `ZenKebabMenu` | Native menu behind a 3D ellipsis trigger. |
 | `ZenChoiceCard` | Mutually exclusive picker cards. |
 
 ### One scaffold per section
@@ -233,9 +239,10 @@ and that shortcut still reaches the app.
 
 Small interactive state changes use a critically damped spring with response
 `0.28`; larger retargetable changes use response `0.35`, also critically
-damped. The ZenBar waveform alone uses damping `0.8` because it represents
-physical speech energy. Reduce Motion replaces spatial springs with 0.12–0.16s
-opacity/color feedback rather than removing feedback entirely.
+damped. Painted controls sink one point and invert the keycap inset on press.
+The ZenBar waveform alone uses damping `0.8` because it represents
+physical speech energy. Reduce Motion replaces spatial springs and travel with
+0.12–0.16s opacity/color feedback rather than removing feedback entirely.
 
 ## Checking the work
 

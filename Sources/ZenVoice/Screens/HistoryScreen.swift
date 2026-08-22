@@ -18,6 +18,7 @@ import ZenVoiceStorage
 
 struct HistoryScreen: View {
     @ObservedObject var viewModel: HistoryViewModel
+
     @State private var confirmsDeleteAll = false
     @State private var spellingRecord: DictationRecord?
     @State private var spellingSuggestions: [CorrectionSuggestion] = []
@@ -86,15 +87,21 @@ struct HistoryScreen: View {
             }
         }
         .alert(
-            deleteConfirmationTitle,
+            viewModel.scope == .recovery
+                ? "Clear Recovery Inbox?"
+                : "Delete all dictations?",
             isPresented: $confirmsDeleteAll
         ) {
             Button("Cancel", role: .cancel) {}
-            Button("Delete All", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 viewModel.deleteAll(in: viewModel.scope)
             }
         } message: {
-            Text(deleteConfirmationMessage)
+            Text(
+                viewModel.scope == .recovery
+                    ? "This permanently deletes Recovery Inbox items."
+                    : "This permanently deletes saved dictations. Recovery items are kept."
+            )
         }
         .sheet(item: $spellingRecord) { record in
             SpellingCorrectionSheet(
@@ -119,25 +126,6 @@ struct HistoryScreen: View {
         }
     }
 
-    private var deleteConfirmationTitle: String {
-        switch viewModel.scope {
-        case .all:
-            return "Delete all dictations?"
-        case .recovery:
-            return "Delete the Recovery Inbox?"
-        }
-    }
-
-    private var deleteConfirmationMessage: String {
-        switch viewModel.scope {
-        case .all:
-            return
-                "This permanently deletes \(viewModel.standardRecords.count) saved dictations. Recovery Inbox items are kept."
-        case .recovery:
-            return
-                "This permanently deletes \(viewModel.recoveryRecords.count) Recovery Inbox items and any retained recovery audio. Saved dictations are kept."
-        }
-    }
 
     private var recordGroups: some View {
         ForEach(groupedRecords, id: \.title) { group in
@@ -167,33 +155,27 @@ struct HistoryScreen: View {
     }
 
     private var deleteAllButton: some View {
-        Button("Delete All") {
+        Button(viewModel.scope == .recovery ? "Clear inbox" : "Delete") {
             confirmsDeleteAll = true
         }
         .buttonStyle(
             ZenDestructiveButtonStyle(
-                minWidth: 100,
+                minWidth: 88,
                 height: ZenDesign.Layout.hitTarget
             )
         )
         .disabled(viewModel.scopedRecords.isEmpty)
-        .frame(minHeight: ZenDesign.Layout.hitTarget)
     }
 
     private var consentCard: some View {
         ZenPanel {
             VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top, spacing: 15) {
-                    Image(systemName: "lock.shield")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                        .frame(width: 46, height: 46)
-                        .background {
-                            RoundedRectangle(
-                                cornerRadius: 12, style: .continuous
-                            )
-                            .fill(ZenDesign.Semantic.surfaceRaised)
-                        }
+                    HStack(alignment: .top, spacing: 15) {
+                        ZenIconChip(
+                            systemImage: "lock.shield",
+                            size: 46,
+                            tint: ZenDesign.Semantic.textSecondary
+                        )
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Keep a private local history?")
@@ -244,12 +226,13 @@ struct HistoryScreen: View {
     private var emptyState: some View {
         ZenPanel {
             VStack(spacing: ZenDesign.Spacing.xs) {
-                Image(
-                    systemName: viewModel.scope == .recovery
-                        ? "checkmark.circle" : "text.badge.checkmark"
+                ZenIconChip(
+                    systemImage: viewModel.scope == .recovery
+                        ? "checkmark.circle"
+                        : "text.badge.checkmark",
+                    size: 40,
+                    tint: ZenDesign.Semantic.textTertiary
                 )
-                .font(.system(size: 24, weight: .light))
-                .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 Text(
                     viewModel.scope == .recovery
                         ? "Recovery Inbox is empty"
@@ -462,19 +445,14 @@ private struct HistoryRecordRow: View {
     let setCategory: (DictationCategory) -> Void
     let delete: () -> Void
 
+    @State private var expanded = false
     var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            ZStack {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.small,
-                    style: .continuous
-                )
-                .fill(iconTint.opacity(0.12))
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(iconTint)
-            }
-            .frame(width: 40, height: 40)
+        HStack(alignment: .center, spacing: 13) {
+            ZenIconChip(
+                systemImage: icon,
+                size: ZenDesign.Layout.hitTarget,
+                tint: iconTint
+            )
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: ZenDesign.Spacing.xs) {
@@ -495,30 +473,44 @@ private struct HistoryRecordRow: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
+                ZStack(alignment: .bottomTrailing) {
+                    Text(transcript)
+                        .font(ZenDesign.Typography.body)
+                        .foregroundStyle(
+                            record.status == .failed
+                                ? ZenDesign.Semantic.textSecondary
+                                : ZenDesign.Semantic.textPrimary
+                        )
+                        .lineLimit(expanded ? nil : 2)
+                        .frame(
+                            maxWidth: .infinity,
+                            minHeight: 36,
+                            maxHeight: expanded ? nil : 36,
+                            alignment: .topLeading
+                        )
+                        .padding(.trailing, showsMoreControl ? 44 : 0)
 
-                Text(transcript)
-                    .font(ZenDesign.Typography.body)
-                    .foregroundStyle(
-                        record.status == .failed
-                            ? ZenDesign.Semantic.textSecondary
-                            : ZenDesign.Semantic.textPrimary
-                    )
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if record.finalTranscript != nil {
-                    Text(
-                        "\(record.wordCount) words · "
-                            + "\(Int(record.wordsPerMinute.rounded())) wpm"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    if showsMoreControl {
+                        Button(expanded ? "Less" : "More") {
+                            expanded.toggle()
+                        }
+                        .buttonStyle(.plain)
+                        .font(ZenDesign.Typography.captionStrong)
+                        .foregroundStyle(ZenDesign.Semantic.accent)
+                        .padding(.leading, 8)
+                        .background(ZenDesign.Semantic.surface)
+                        .accessibilityLabel(
+                            expanded
+                                ? "Show less of this transcript"
+                                : "Show full transcript"
+                        )
+                    }
                 }
             }
 
             Spacer(minLength: 10)
 
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 if record.status == .failed,
                    record.recoveryAudioURL != nil {
                     Button("Retry", action: retry)
@@ -526,13 +518,22 @@ private struct HistoryRecordRow: View {
                 }
 
                 if record.finalTranscript != nil {
-                    Button("Copy", action: copy)
-                        .buttonStyle(
-                            ZenSecondaryButtonStyle(minWidth: 72)
-                        )
+                    Button(action: copy) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                            .frame(
+                                width: ZenDesign.Layout.hitTarget,
+                                height: ZenDesign.Layout.hitTarget
+                            )
+                            .background { ZenKeycap(kind: .muted) }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(ZenPressButtonStyle())
+                    .accessibilityLabel("Copy transcript")
                 }
 
-                Menu {
+                ZenKebabMenu(label: "More actions for this dictation") {
                     if record.finalTranscript != nil {
                         Button(
                             "Correct spelling…",
@@ -558,15 +559,7 @@ private struct HistoryRecordRow: View {
                         }
                     }
                     Button("Delete", role: .destructive, action: delete)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .frame(width: 26, height: 26)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .accessibilityLabel("More actions for this dictation")
             }
         }
         .padding(ZenDesign.Spacing.md)
@@ -591,6 +584,10 @@ private struct HistoryRecordRow: View {
             return transcript
         }
         return record.errorMessage ?? "This dictation did not finish."
+    }
+
+    private var showsMoreControl: Bool {
+        transcript.count > 110
     }
 
     private var icon: String {

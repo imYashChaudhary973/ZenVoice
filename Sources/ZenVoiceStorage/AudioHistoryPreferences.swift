@@ -34,6 +34,8 @@ public final class AudioHistoryPreferences {
     public static let defaultMaxAgeDays = 30
     /// Minimum sensible cap: 100 MB.
     public static let minimumMaxSizeBytes: Int64 = 100 * 1_024 * 1_024
+    /// Upper bound so a typo cannot request petabytes.
+    public static let maximumMaxSizeBytes: Int64 = 1_024 * 1_024 * 1_024 * 1_024
 
     private let defaults: UserDefaults
 
@@ -69,10 +71,11 @@ public final class AudioHistoryPreferences {
             return max(Self.minimumMaxSizeBytes, stored)
         }
         set {
-            defaults.set(
+            let clamped = min(
                 max(Self.minimumMaxSizeBytes, newValue),
-                forKey: Key.maxSizeBytes
+                Self.maximumMaxSizeBytes
             )
+            defaults.set(clamped, forKey: Key.maxSizeBytes)
         }
     }
 

@@ -165,16 +165,15 @@ struct ZenIconChip: View {
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: size * 0.44, weight: .medium))
+            .font(.system(size: size * 0.42, weight: .medium))
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(tint)
             .frame(width: size, height: size)
             .background {
-                RoundedRectangle(
-                    cornerRadius: size * 0.28,
-                    style: .continuous
+                ZenKeycap(
+                    kind: .muted,
+                    cornerRadius: max(6, size * 0.22)
                 )
-                .fill(background ?? tint.opacity(0.14))
             }
             .accessibilityHidden(true)
     }
@@ -246,5 +245,53 @@ extension ZenCardHeader where Trailing == EmptyView {
             iconTint: iconTint,
             trailing: { EmptyView() }
         )
+    }
+}
+
+/// Pins a SwiftUI control to the window titlebar's trailing edge.
+///
+/// Unified toolbars pack items after the title, so a search field never
+/// reaches the right corner. AppKit's titlebar accessory does.
+struct ZenTitlebarTrailing<Content: View>: NSViewRepresentable {
+    @ViewBuilder var content: () -> Content
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var accessory: NSTitlebarAccessoryViewController?
+        var hosting: NSHostingView<AnyView>?
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let probe = NSView(frame: .zero)
+        probe.isHidden = true
+        return probe
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        let root = AnyView(content())
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            if let hosting = context.coordinator.hosting {
+                hosting.rootView = root
+                return
+            }
+            let hosting = NSHostingView(rootView: root)
+            hosting.frame = NSRect(x: 0, y: 0, width: 216, height: 36)
+            let accessory = NSTitlebarAccessoryViewController()
+            accessory.layoutAttribute = .right
+            accessory.view = hosting
+            window.addTitlebarAccessoryViewController(accessory)
+            context.coordinator.hosting = hosting
+            context.coordinator.accessory = accessory
+        }
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.accessory?.removeFromParent()
+        coordinator.accessory = nil
+        coordinator.hosting = nil
     }
 }

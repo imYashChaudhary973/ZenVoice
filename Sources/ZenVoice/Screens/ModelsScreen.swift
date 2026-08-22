@@ -114,7 +114,7 @@ struct ModelsScreen: View {
             HStack(spacing: ZenDesign.Spacing.sm) {
                 ZenIconChip(
                     systemImage: "cpu",
-                    size: 38,
+                    size: ZenDesign.Layout.hitTarget,
                     tint: selected
                         ? ZenDesign.Semantic.accent
                         : ZenDesign.Semantic.textSecondary

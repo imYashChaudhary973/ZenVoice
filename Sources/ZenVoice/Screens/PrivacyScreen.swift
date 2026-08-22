@@ -25,9 +25,7 @@ struct PrivacyScreen: View {
         ModelManagerViewModel
     let openModels: () -> Void
     var embedded = false
-    @State private var confirmsDeleteRecoveryAudio = false
-    @State private var confirmsDeleteTranscripts = false
-    @State private var confirmsDeleteRules = false
+
 
     var body: some View {
         Group {
@@ -47,45 +45,7 @@ struct PrivacyScreen: View {
             historyViewModel.refresh()
             voiceProfileViewModel.refresh()
         }
-        .alert(
-            "Delete all retained recovery audio?",
-            isPresented: $confirmsDeleteRecoveryAudio
-        ) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete Audio", role: .destructive) {
-                historyViewModel.deleteAllRecoveryAudio()
-            }
-        } message: {
-            Text(
-                "Failed dictations will no longer be retryable, but saved partial transcript text remains in encrypted History."
-            )
-        }
-        .alert(
-            "Delete all history?",
-            isPresented: $confirmsDeleteTranscripts
-        ) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete All", role: .destructive) {
-                historyViewModel.deleteAll()
-            }
-        } message: {
-            Text(
-                "This removes every saved transcript and recovery recording from this Mac."
-            )
-        }
-        .alert(
-            "Delete all correction rules?",
-            isPresented: $confirmsDeleteRules
-        ) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete Rules", role: .destructive) {
-                voiceProfileViewModel.deleteAllRules()
-            }
-        } message: {
-            Text(
-                "This permanently removes every encrypted personal replacement rule."
-            )
-        }
+
     }
 
     private var privacyContent: some View {
@@ -177,12 +137,12 @@ struct PrivacyScreen: View {
                     subtitle:
                         "\(historyViewModel.savedTranscriptCount) records · AES-GCM, key in the macOS Keychain"
                 ) {
-                    Button("Delete") {
-                        confirmsDeleteTranscripts = true
+                    ZenHoldToDeleteButton(
+                        label: "Delete",
+                        minWidth: 108
+                    ) {
+                        historyViewModel.deleteAll()
                     }
-                    .buttonStyle(
-                        ZenDestructiveButtonStyle(minWidth: 84)
-                    )
                     .disabled(historyViewModel.savedTranscriptCount == 0)
                 }
                 ZenPanelDivider()
@@ -192,12 +152,12 @@ struct PrivacyScreen: View {
                     subtitle:
                         "\(historyViewModel.recoveryAudioCount) clips · kept at most 24 hours, only if you allowed it"
                 ) {
-                    Button("Delete") {
-                        confirmsDeleteRecoveryAudio = true
+                    ZenHoldToDeleteButton(
+                        label: "Delete",
+                        minWidth: 108
+                    ) {
+                        historyViewModel.deleteAllRecoveryAudio()
                     }
-                    .buttonStyle(
-                        ZenDestructiveButtonStyle(minWidth: 84)
-                    )
                     .disabled(historyViewModel.recoveryAudioCount == 0)
                 }
                 ZenPanelDivider()
@@ -207,12 +167,12 @@ struct PrivacyScreen: View {
                     subtitle:
                         "\(voiceProfileViewModel.snapshot.correctionRules.count) rules · encrypted with the same key"
                 ) {
-                    Button("Delete") {
-                        confirmsDeleteRules = true
+                    ZenHoldToDeleteButton(
+                        label: "Delete",
+                        minWidth: 108
+                    ) {
+                        voiceProfileViewModel.deleteAllRules()
                     }
-                    .buttonStyle(
-                        ZenDestructiveButtonStyle(minWidth: 84)
-                    )
                     .disabled(
                         voiceProfileViewModel.snapshot
                             .correctionRules.isEmpty
@@ -227,7 +187,7 @@ struct PrivacyScreen: View {
                 ) {
                     Button("Manage", action: openModels)
                         .buttonStyle(
-                            ZenPrimaryButtonStyle(minWidth: 84)
+                            ZenPrimaryButtonStyle(minWidth: 108)
                         )
                 }
             }
@@ -274,18 +234,12 @@ private struct PermissionRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: ZenDesign.Spacing.md) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                .frame(width: 40, height: 40)
-                .background {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.small,
-                        style: .continuous
-                    )
-                    .fill(ZenDesign.Semantic.surfaceRaised)
-                }
+        HStack(alignment: .center, spacing: ZenDesign.Spacing.md) {
+            ZenIconChip(
+                systemImage: icon,
+                size: ZenDesign.Layout.hitTarget,
+                tint: ZenDesign.Semantic.textSecondary
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)

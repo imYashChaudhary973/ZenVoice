@@ -46,9 +46,7 @@ struct FormattingScreen: View {
                 ZenBanner(
                     kind: .warn,
                     icon: "exclamationmark.triangle",
-                    text:
-                        "Cloud formatting is selected but not ready. "
-                        + "Finish the provider setup below."
+                    text: "Cloud formatting needs a provider and key below."
                 )
             }
             CloudAIConfigurationView(viewModel: cloudAIViewModel)
@@ -57,8 +55,7 @@ struct FormattingScreen: View {
                 kind: .info,
                 icon: "hand.raised",
                 text:
-                    "Formatting and replacements run on this Mac. Only Cloud "
-                    + "mode sends finished text to your configured provider."
+                    "Replacements stay on this Mac. Cloud mode sends finished text only."
             )
         }
     }
@@ -243,7 +240,12 @@ struct FormattingScreen: View {
                 }
             }
         }
-        .buttonStyle(ZenPrimaryButtonStyle())
+        .buttonStyle(
+            ZenPrimaryButtonStyle(
+                minWidth: 150,
+                height: ZenDesign.Layout.hitTarget
+            )
+        )
         .disabled(
             heardPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || replacementPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

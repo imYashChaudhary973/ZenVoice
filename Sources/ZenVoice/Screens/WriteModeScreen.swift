@@ -79,44 +79,19 @@ struct WriteModeScreen: View {
     private var defaultPromptSection: some View {
         ZenSection(
             title: "Rewrite prompt",
-            caption: "Used when no per-app custom prompt hints are set."
+            caption: "Used when no per-app hints are set."
         ) {
             ZenPanel {
-                VStack(alignment: .leading, spacing: 10) {
-                    TextEditor(
-                        text: Binding(
-                            get: { viewModel.writeModeDefaultPrompt },
-                            set: viewModel.setWriteModeDefaultPrompt
-                        )
-                    )
-                    .font(ZenDesign.Typography.body)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .scrollContentBackground(.hidden)
-                    .padding(ZenDesign.Spacing.xs)
-                    .frame(minHeight: 64, maxHeight: 82)
-                    .background {
-                        RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.small,
-                            style: .continuous
-                        )
-                        .fill(ZenDesign.Semantic.surfaceSunken)
-                        .overlay {
-                            RoundedRectangle(
-                                cornerRadius: ZenDesign.Radius.small,
-                                style: .continuous
-                            )
-                            .strokeBorder(
-                                ZenDesign.Semantic.borderStrong
-                            )
-                        }
-                    }
-
-                    Text(
-                        "\(viewModel.writeModeDefaultPrompt.count) characters"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                }
+                ZenTextArea(
+                    label: "Prompt",
+                    text: Binding(
+                        get: { viewModel.writeModeDefaultPrompt },
+                        set: viewModel.setWriteModeDefaultPrompt
+                    ),
+                    hint: "Applied to the current selection.",
+                    maxLength: 2_000,
+                    minHeight: 64
+                )
                 .padding(ZenDesign.Spacing.md)
             }
         }
