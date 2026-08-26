@@ -1,0 +1,34 @@
+{
+  "modelBytes": 37896192,
+  "runs": [
+    {
+      "minutes": 30,
+      "realTimeFactor": 153.7194475040333,
+      "maximumResidentBytes": 496762880,
+      "peakFootprintBytes": 812778552,
+      "networkDeniedSandbox": true
+    },
+    {
+      "minutes": 60,
+      "realTimeFactor": 138.2997806372963,
+      "maximumResidentBytes": 693403648,
+      "peakFootprintBytes": 922223888,
+      "networkDeniedSandbox": true
+    },
+    {
+      "minutes": 90,
+      "realTimeFactor": 132.9603583322391,
+      "maximumResidentBytes": 938803200,
+      "peakFootprintBytes": 965821760,
+      "networkDeniedSandbox": true
+    }
+  ],
+  "networkRequestsObserved": 0,
+  "temporaryArtifactsRemaining": 0,
+  "embeddingArtifactsRemaining": 0,
+  "modelCacheArtifactsRemaining": 0,
+  "crossLectureEmbeddingComparisons": 0,
+  "persistentVoiceprints": 0,
+  "persistedEmbeddingArtifactsEncrypted": false,
+  "deleteBehaviorVerified": false
+}

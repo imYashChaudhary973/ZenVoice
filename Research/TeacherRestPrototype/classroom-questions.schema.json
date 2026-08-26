@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zenvoice.local/schemas/classroom-questions.json",
+  "title": "Classroom question annotations",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["start", "end", "text", "referenceRole"],
+    "properties": {
+      "start": {"type": "number", "minimum": 0},
+      "end": {"type": "number", "exclusiveMinimum": 0},
+      "text": {"type": "string", "minLength": 1},
+      "referenceRole": {"enum": ["teacher", "others", "overlap"]}
+    },
+    "additionalProperties": false
+  }
+}

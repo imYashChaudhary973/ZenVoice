@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zenvoice.local/schemas/classroom-consent.json",
+  "title": "Classroom lecture consent",
+  "type": "object",
+  "required": [
+    "lectureID",
+    "teacherID",
+    "roomID",
+    "recordedAt",
+    "durationSeconds",
+    "teacherConsent",
+    "participantConsent",
+    "consentScope",
+    "retention"
+  ],
+  "properties": {
+    "lectureID": {"type": "string", "minLength": 1},
+    "teacherID": {"type": "string", "minLength": 1},
+    "roomID": {"type": "string", "minLength": 1},
+    "recordedAt": {"type": "string", "minLength": 10},
+    "durationSeconds": {"type": "number", "minimum": 1800, "maximum": 5400},
+    "teacherConsent": {"const": true},
+    "participantConsent": {"const": true},
+    "consentScope": {"const": "local-research-only"},
+    "retention": {"const": "delete-with-lecture"},
+    "notes": {"type": "string"}
+  },
+  "additionalProperties": false
+}

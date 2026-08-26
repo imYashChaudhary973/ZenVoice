@@ -1,0 +1,48 @@
+{
+  "assessedAt": "2026-08-23",
+  "ami": {
+    "ready": true,
+    "annotations": "Datasets/ami_public_1.6.2",
+    "calibrationMeetings": [
+      "ES2008b",
+      "ES2008c",
+      "ES2008d"
+    ],
+    "heldOutMeetings": [
+      "ES2004a",
+      "ES2004b",
+      "ES2004c",
+      "ES2004d",
+      "IS1009a",
+      "IS1009b",
+      "IS1009c",
+      "IS1009d"
+    ],
+    "roleDefinition": "The longest annotated speaker is the simulated teacher. Every other confident speaker is Others; reference overlap is Overlap.",
+    "questionDefinition": "AMI Elicit dialogue acts ami_da_5, ami_da_8, ami_da_11, and ami_da_13 with word-derived timestamps."
+  },
+  "existingConsentedDictation": {
+    "path": "Datasets/consented-dictation",
+    "recordings": 103,
+    "distinctRecordedSpeakers": 1,
+    "totalMinutes": 18.619,
+    "maximumRecordingSeconds": 16.359,
+    "qualifyingClassroomLectures": 0,
+    "usableForPromotion": false,
+    "reason": "The corpus is short single-speaker dictation, not consented multi-speaker classroom audio."
+  },
+  "classroom": {
+    "ready": false,
+    "manifest": null,
+    "evaluationLectures": 0,
+    "evaluationTeachers": 0,
+    "evaluationRooms": 0,
+    "evaluationHours": 0,
+    "evaluationStudentQuestions": 0,
+    "teacherDisjoint": false,
+    "roomDisjoint": false,
+    "missingPrerequisite": "classroom lecture root is missing"
+  },
+  "phase1B1Decision": "FAIL_CLOSED_CLASSROOM_CORPUS_MISSING",
+  "phase1C1Decision": "FAIL_CLOSED_CLASSROOM_CORPUS_MISSING"
+}

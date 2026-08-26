@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "status": "frozen",
+  "frozenAt": "2026-08-22",
+  "decisionRule": "PASS only when every hard requirement passes on AMI engineering data and teacher/room-disjoint consented classroom evaluation data. Missing classroom data is FAIL, not SKIP.",
+  "metrics": {
+    "teacherPrecisionMinimum": 0.98,
+    "teacherRecallMinimum": 0.95,
+    "mainSuggestionAccuracyMinimum": 0.95,
+    "studentQuestionAttributionMinimum": 0.95,
+    "silenceFalsePositiveMaximum": 0.02,
+    "unsafeOverlapAssignmentMaximum": 0.0,
+    "minimumRealTimeFactor": 10.0,
+    "maximumPeakMemoryBytes": 1073741824,
+    "preferredMaximumModelBytes": 104857600
+  },
+  "labels": ["teacher", "others", "unknown", "overlap", "silence"],
+  "dominanceSuggestion": {
+    "minimumTopShare": 0.35,
+    "minimumTopToSecondRatio": 1.25,
+    "tiesProduceNoSuggestion": true,
+    "neverWritesTeacher": true
+  },
+  "turnFiltering": {
+    "minimumDurationSeconds": 1.0,
+    "minimumQuality": 0.7,
+    "maximumMergeGapSeconds": 0.5,
+    "overlapAlwaysUnknown": true
+  },
+  "thresholdSelection": {
+    "teacherSimilarityGrid": [0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95],
+    "unknownWidthGrid": [0.05, 0.10, 0.15, 0.20],
+    "selection": "On calibration data only, maximize teacher recall subject to teacher precision >= 0.98, silence false positive <= 0.02, and unsafe overlap assignment = 0. Break ties by lower unknown rate, then higher teacher threshold. Freeze before held-out evaluation."
+  },
+  "ami": {
+    "calibrationMeetings": ["ES2008b", "ES2008c", "ES2008d"],
+    "heldOutMeetings": ["ES2004a", "ES2004b", "ES2004c", "ES2004d", "IS1009a", "IS1009b", "IS1009c", "IS1009d"],
+    "stress": ["ES2004a.Array1-01", "ES2003b.AB-same-gender", "60-minute-composite", "90-minute-composite"]
+  },
+  "classroom": {
+    "required": true,
+    "consentRequired": true,
+    "minimumEvaluationLectures": 10,
+    "minimumEvaluationTeachers": 5,
+    "minimumEvaluationRooms": 3,
+    "minimumEvaluationHours": 8,
+    "minimumEvaluationStudentQuestions": 100,
+    "teacherDisjointCalibrationAndEvaluation": true,
+    "roomDisjointCalibrationAndEvaluation": true,
+    "requiredDurationsMinutes": [30, 60, 90]
+  },
+  "longForm": {
+    "durationsMinutes": [30, 60, 90],
+    "mustCompleteLocally": true,
+    "mustLeaveNoTemporaryArtifacts": true
+  },
+  "privacy": {
+    "networkRequestsAllowed": 0,
+    "crossLectureEmbeddingComparisonsAllowed": 0,
+    "persistentVoiceprintsAllowed": 0,
+    "embeddingCacheEncryptedIfPersisted": true,
+    "deleteMustRemoveTurnsEmbeddingsAndCaches": true
+  },
+  "prototypeModels": {
+    "runtime": "CoreML",
+    "segmentation": {
+      "source": "FluidInference/speaker-diarization-coreml",
+      "upstream": "pyannote/speaker-diarization-community-1",
+      "revision": "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
+      "asset": "Segmentation.mlmodelc"
+    },
+    "embedding": {
+      "source": "FluidInference/speaker-diarization-coreml",
+      "upstream": "WeSpeaker v2",
+      "revision": "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
+      "asset": "Embedding.mlmodelc"
+    }
+  }
+}

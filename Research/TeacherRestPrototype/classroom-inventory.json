@@ -1,0 +1,46 @@
+{
+  "assessedAt": "2026-08-23",
+  "phase": "1C.1",
+  "decision": "FAIL_CLOSED_NO_QUALIFYING_CLASSROOM_LECTURES",
+  "searched": [
+    "Datasets/consented-dictation",
+    "Datasets/ami_public_1.6.2",
+    "Datasets/ami-audio",
+    "Datasets/ami-audio-training",
+    "Datasets/ami-audio-validation",
+    "Datasets/incoming",
+    "Research/TeacherRestPrototype"
+  ],
+  "consentedDictation": {
+    "path": "Datasets/consented-dictation",
+    "speakerGroupFolders": 9,
+    "speakerGroupsWithAudio": 1,
+    "audioClips": 103,
+    "distinctRecordedSpeakers": 1,
+    "totalMinutes": 18.619,
+    "maximumRecordingSeconds": 16.359,
+    "multiSpeakerLectures": 0,
+    "usableForPromotion": false,
+    "reason": "Single-speaker short dictation. Not a classroom lecture corpus."
+  },
+  "amiEngineering": {
+    "annotations": "Datasets/ami_public_1.6.2",
+    "headsetMeetingsPresent": [
+      "ES2002a", "ES2002b", "ES2002c", "ES2002d",
+      "ES2003a", "ES2003b", "ES2003c", "ES2003d",
+      "ES2004a", "ES2004b", "ES2004c", "ES2004d",
+      "ES2005a", "ES2005b", "ES2005c", "ES2005d",
+      "ES2006a", "ES2006b", "ES2006c", "ES2006d",
+      "ES2007a", "ES2007b", "ES2007c", "ES2007d",
+      "ES2008a", "ES2008b", "ES2008c", "ES2008d"
+    ],
+    "missingHeldOutAudio": ["IS1009a", "IS1009b", "IS1009c", "IS1009d"],
+    "arrayMicrophonesPresent": false,
+    "usableForPromotion": false,
+    "reason": "AMI is engineering data only. GATE.json still requires consented classroom evaluation."
+  },
+  "classroom": {
+    "ready": false,
+    "qualifyingLectures": 0
+  }
+}

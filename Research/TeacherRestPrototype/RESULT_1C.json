@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "evaluatedAt": "2026-08-23",
+  "phase": "1C",
+  "decision": "FAIL",
+  "phase2Authorized": false,
+  "architecture": {
+    "segmentation": "Pyannote Community-1 powerset logits via CoreML, exclusive FluidAudio timeline disabled",
+    "embedding": "WeSpeaker v2 CoreML, 256 dimensions, overlap not excluded",
+    "roleLogic": "Pure Swift per-turn scoring against up to 8 confirmed-teacher prototypes; clustering is suggestion-only",
+    "silenceGate": "Neural speech probability, overlap probability, SNR vs per-lecture noise floor, minimum duration",
+    "lsEend": "FluidAudio 0.15.6 AMI variant ran; not adopted as primary segmentation",
+    "classroomFineTune": "blocked; no consented classroom corpus",
+    "productDependencyAdded": false
+  },
+  "frozenGate": "GATE.json",
+  "corpus": {
+    "amiCalibrationMeetings": 3,
+    "amiHeldOutAndStressMeetings": 10,
+    "classroomReady": false,
+    "qualifyingConsentedClassroomLectures": 0,
+    "existingConsentedRecordings": 103,
+    "existingConsentedDistinctSpeakers": 1,
+    "existingConsentedMaximumSeconds": 16.359
+  },
+  "segmentationCompare": {
+    "powersetOverlapRecallES2004a": 0.5116,
+    "powersetSilenceFalseAlarmES2004a": 0.0894,
+    "lsEendOverlapRecallES2004a": 0.4000,
+    "lsEendSilenceFalseAlarmES2004a": 0.0413,
+    "powersetOverlapRecallRange": [0.388, 0.653]
+  },
+  "calibration": {
+    "selectionStatus": "CLASSROOM_CALIBRATION_MISSING",
+    "teacherSimilarity": 0.95,
+    "othersSimilarity": 0.90,
+    "teacherPrecision": 0.8521879830421145,
+    "teacherRecall": 0.5924364203077968,
+    "mainSuggestionAccuracy": 0,
+    "studentQuestionAttribution": 0.673469387755102,
+    "silenceFalsePositiveRate": 0.14318669207043566,
+    "unsafeOverlapAssignmentRate": 0.2643067921006835
+  },
+  "heldOut": {
+    "teacherPrecision": 0.899376921016169,
+    "teacherRecall": 0.6195769946697677,
+    "mainSuggestionAccuracy": 0.7,
+    "studentQuestionAttribution": 0.6403508771929824,
+    "silenceFalsePositiveRate": 0.09660541932840135,
+    "unsafeOverlapAssignmentRate": 0.2521631175428122,
+    "unknownSpeechRate": 0.3436856558547224,
+    "minimumRealTimeFactor": 27.76430292516027
+  },
+  "versusPhase1B": {
+    "teacherPrecision": {"was": 0.8251, "now": 0.8994},
+    "teacherRecall": {"was": 0.9011, "now": 0.6196},
+    "mainSuggestionAccuracy": {"was": 0.6, "now": 0.7},
+    "studentQuestionAttribution": {"was": 0.8068, "now": 0.6404},
+    "silenceFalsePositiveRate": {"was": 0.1367, "now": 0.0966},
+    "unsafeOverlapAssignmentRate": {"was": 0.8913, "now": 0.2522}
+  },
+  "missingPrerequisites": [
+    "Consent-validated classroom JSONL manifest and referenced local artifacts",
+    "At least 10 consented classroom evaluation lectures",
+    "At least 5 evaluation teachers across 3 rooms",
+    "At least 8 classroom evaluation hours and 100 student questions",
+    "Teacher-disjoint and room-disjoint calibration/evaluation splits",
+    "Separate classroom evaluation buckets for 30–<60, 60–<90, and 90 minutes"
+  ]
+}

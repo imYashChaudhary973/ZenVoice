@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "evaluatedAt": "2026-08-22",
+  "decision": "FAIL",
+  "phase2Authorized": false,
+  "architecture": {
+    "segmentation": "Pyannote Community-1 CoreML via FluidAudio v0.12.4",
+    "embedding": "WeSpeaker v2 CoreML, 256 dimensions",
+    "roleLogic": "Pure Swift per-lecture confirmed-teacher centroid with Teacher/Others/Unknown thresholds",
+    "modelRevision": "1ed7a662fdc7109e36d822db793ee6eebdaf8594",
+    "modelBytes": 37896192,
+    "productDependencyAdded": false
+  },
+  "frozenGate": "GATE.json",
+  "corpus": {
+    "amiCalibrationMeetings": 3,
+    "amiHeldOutAndStressMeetings": 10,
+    "classroomReady": false,
+    "qualifyingConsentedClassroomLectures": 0,
+    "existingConsentedRecordings": 60,
+    "existingConsentedDistinctSpeakers": 1,
+    "existingConsentedMaximumSeconds": 16.3593125
+  },
+  "calibration": {
+    "selectionStatus": "NO_CONFIGURATION_MET_CALIBRATION_CONSTRAINTS",
+    "teacherSimilarity": 0.6,
+    "othersSimilarity": 0.55,
+    "teacherPrecision": 0.5639593199158116,
+    "teacherRecall": 0.8621261727758891,
+    "mainSuggestionAccuracy": 0,
+    "studentQuestionAttribution": 0.5510204081632653,
+    "silenceFalsePositiveRate": 0.16463180198730382,
+    "unsafeOverlapAssignmentRate": 0.7551892859845141
+  },
+  "heldOut": {
+    "teacherPrecision": 0.8251164255824859,
+    "teacherRecall": 0.9011395844328466,
+    "mainSuggestionAccuracy": 0.6,
+    "studentQuestionAttribution": 0.8068181818181818,
+    "silenceFalsePositiveRate": 0.1366951092362451,
+    "unsafeOverlapAssignmentRate": 0.8912523936051776,
+    "unknownSpeechRate": 0.031449409678849176,
+    "minimumRealTimeFactor": 134.17276389455103,
+    "maximumPeakMemoryBytes": 665780224
+  },
+  "gateChecks": [
+    {"name": "teacherPrecision", "required": 0.98, "actual": 0.8251164255824859, "passed": false},
+    {"name": "teacherRecall", "required": 0.95, "actual": 0.9011395844328466, "passed": false},
+    {"name": "mainSuggestionAccuracy", "required": 0.95, "actual": 0.6, "passed": false},
+    {"name": "studentQuestionAttribution", "required": 0.95, "actual": 0.8068181818181818, "passed": false},
+    {"name": "silenceFalsePositiveRate", "requiredMaximum": 0.02, "actual": 0.1366951092362451, "passed": false},
+    {"name": "unsafeOverlapAssignmentRate", "requiredMaximum": 0, "actual": 0.8912523936051776, "passed": false},
+    {"name": "requiredLongFormDurations", "required": 3, "actual": 3, "passed": true},
+    {"name": "longFormRealTimeFactor", "required": 10, "actual": 132.9603583322391, "passed": true},
+    {"name": "longFormPeakMemoryBytes", "requiredMaximum": 1073741824, "actual": 965821760, "passed": true},
+    {"name": "networkIsolation", "required": true, "actual": true, "passed": true},
+    {"name": "temporaryArtifactCleanup", "required": 0, "actual": 0, "passed": true},
+    {"name": "embeddingArtifactCleanup", "required": 0, "actual": 0, "passed": true},
+    {"name": "crossLectureEmbeddingIsolation", "required": 0, "actual": 0, "passed": true},
+    {"name": "persistentVoiceprints", "required": 0, "actual": 0, "passed": true},
+    {"name": "persistedEmbeddingEncryption", "required": true, "actual": false, "passed": false},
+    {"name": "deleteBehavior", "required": true, "actual": false, "passed": false},
+    {"name": "classroomCorpus", "required": true, "actual": false, "passed": false}
+  ],
+  "longForm": [
+    {"minutes": 30, "processingSeconds": 11.709643959999084, "realTimeFactor": 153.7194475040333, "maximumResidentBytes": 496762880, "peakFootprintBytes": 812778552, "networkDeniedSandbox": true},
+    {"minutes": 60, "processingSeconds": 26.030410051345825, "realTimeFactor": 138.2997806372963, "maximumResidentBytes": 693403648, "peakFootprintBytes": 922223888, "networkDeniedSandbox": true},
+    {"minutes": 90, "processingSeconds": 40.613608956336975, "realTimeFactor": 132.9603583322391, "maximumResidentBytes": 938803200, "peakFootprintBytes": 965821760, "networkDeniedSandbox": true}
+  ],
+  "missingPrerequisites": [
+    "Consent-validated classroom JSONL manifest and referenced local artifacts",
+    "At least 10 consented classroom evaluation lectures",
+    "At least 5 evaluation teachers across 3 rooms",
+    "At least 8 classroom evaluation hours and 100 student questions",
+    "Teacher-disjoint and room-disjoint calibration/evaluation splits",
+    "Separate classroom evaluation buckets for 30–<60, 60–<90, and 90 minutes"
+  ]
+}

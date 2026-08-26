@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zenvoice.local/schemas/classroom-lecture.json",
+  "title": "Consented classroom lecture",
+  "type": "object",
+  "required": [
+    "lectureID",
+    "split",
+    "teacherID",
+    "roomID",
+    "audioPath",
+    "rttmPath",
+    "questionsPath",
+    "candidatePath",
+    "durationSeconds",
+    "studentQuestionCount",
+    "teacherConsent",
+    "participantConsent"
+  ],
+  "properties": {
+    "lectureID": {"type": "string", "minLength": 1},
+    "split": {"enum": ["calibration", "evaluation"]},
+    "teacherID": {"type": "string", "minLength": 1},
+    "roomID": {"type": "string", "minLength": 1},
+    "audioPath": {"type": "string", "minLength": 1},
+    "rttmPath": {"type": "string", "minLength": 1},
+    "questionsPath": {"type": "string", "minLength": 1},
+    "candidatePath": {"type": "string", "minLength": 1},
+    "durationSeconds": {"type": "number", "minimum": 1800, "maximum": 5400},
+    "studentQuestionCount": {"type": "integer", "minimum": 0},
+    "teacherConsent": {"const": true},
+    "participantConsent": {"const": true},
+    "notes": {"type": "string"}
+  },
+  "additionalProperties": false
+}
