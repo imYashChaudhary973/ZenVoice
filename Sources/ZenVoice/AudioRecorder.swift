@@ -55,7 +55,7 @@ final class AudioRecorder: NSObject,
     }
 
     private let captureQueue = DispatchQueue(
-        label: "dev.yashchaudhary.ZenVoice.audioCapture",
+        label: "com.zenvoice.app.audioCapture",
         qos: .userInitiated
     )
     private var captureSession: AVCaptureSession?

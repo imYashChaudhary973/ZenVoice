@@ -60,7 +60,7 @@ public class NemotronSpeechEngineBase: @unchecked Sendable, SpeechEngine {
         self.descriptor = descriptor
         self.engineID = engineID
         self.queue = DispatchQueue(
-            label: "dev.yashchaudhary.ZenVoice.nemotron-\(engineID)",
+            label: "com.zenvoice.app.nemotron-\(engineID)",
             qos: .userInitiated
         )
     }

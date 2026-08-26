@@ -123,10 +123,10 @@ func waitForAgenticRecord(
 
 func runAgenticPreferenceChecks() {
     let defaults = UserDefaults(
-        suiteName: "dev.yashchaudhary.ZenVoice.agentic-checks"
+        suiteName: "com.zenvoice.app.agentic-checks"
     )!
     defaults.removePersistentDomain(
-        forName: "dev.yashchaudhary.ZenVoice.agentic-checks"
+        forName: "com.zenvoice.app.agentic-checks"
     )
 
     guard !AgenticModePreferences.isEnabled(defaults: defaults),
@@ -202,7 +202,7 @@ func runAgenticPreferenceChecks() {
     }
 
     defaults.removePersistentDomain(
-        forName: "dev.yashchaudhary.ZenVoice.agentic-checks"
+        forName: "com.zenvoice.app.agentic-checks"
     )
     print("ZenVoiceCoreChecks: agentic preferences passed")
 }

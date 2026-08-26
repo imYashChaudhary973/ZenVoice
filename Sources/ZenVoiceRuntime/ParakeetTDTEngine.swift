@@ -41,7 +41,7 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
             attribution:
                 "Parakeet TDT 0.6B v2 by NVIDIA. English-only. Runtime: "
                 + "parakeet.cpp v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
-            queueLabel: "dev.yashchaudhary.ZenVoice.parakeet-tdt-v2"
+            queueLabel: "com.zenvoice.app.parakeet-tdt-v2"
         )
 
         /// TDT 0.6B v3 (multilingual).
@@ -53,7 +53,7 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
             attribution:
                 "Parakeet TDT 0.6B v3 by NVIDIA. Runtime: parakeet.cpp "
                 + "v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
-            queueLabel: "dev.yashchaudhary.ZenVoice.parakeet-tdt-v3"
+            queueLabel: "com.zenvoice.app.parakeet-tdt-v3"
         )
     }
 

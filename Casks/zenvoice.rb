@@ -14,6 +14,6 @@ cask "zenvoice" do
   zap trash: [
     "~/Library/Application Support/ZenVoice",
     "~/Library/Caches/ZenVoice",
-    "~/Library/Preferences/dev.yashchaudhary.ZenVoice.plist",
+    "~/Library/Preferences/com.zenvoice.app.plist",
   ]
 end

@@ -65,7 +65,7 @@ public final class ParakeetFlashEngine: @unchecked Sendable, SpeechEngine {
     public init(modelURL: URL) {
         self.modelURL = modelURL
         self.queue = DispatchQueue(
-            label: "dev.yashchaudhary.ZenVoice.parakeet-flash",
+            label: "com.zenvoice.app.parakeet-flash",
             qos: .userInitiated
         )
     }

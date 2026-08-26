@@ -48,7 +48,7 @@ public actor LinkClient {
 
     private let device: LinkDeviceIdentity
     private let queue = DispatchQueue(
-        label: "dev.yashchaudhary.ZenVoice.link.client"
+        label: "com.zenvoice.app.link.client"
     )
 
     private var connection: NWConnection?

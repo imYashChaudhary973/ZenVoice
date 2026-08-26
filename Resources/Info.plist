@@ -11,7 +11,7 @@
 	<key>CFBundleIconFile</key>
 	<string>ZenVoice</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.yashchaudhary.ZenVoice</string>
+	<string>com.zenvoice.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -19,7 +19,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.4.0</string>
+	<string>0.4.1</string>
 	<key>CFBundleVersion</key>
 	<string>3</string>
 	<key>LSMinimumSystemVersion</key>

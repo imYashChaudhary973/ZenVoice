@@ -99,7 +99,7 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
         self.tokenizerURL = modelsDirectory
             .appendingPathComponent(Self.tokenizerFilename, isDirectory: false)
         self.queue = DispatchQueue(
-            label: "dev.yashchaudhary.ZenVoice.cohere",
+            label: "com.zenvoice.app.cohere",
             qos: .userInitiated
         )
     }

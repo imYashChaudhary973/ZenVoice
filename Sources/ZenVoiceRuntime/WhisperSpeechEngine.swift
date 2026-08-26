@@ -63,7 +63,7 @@ public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
         self.configuration = configuration
         self.transcriber = WhisperTranscriber(configuration: configuration)
         self.queue = DispatchQueue(
-            label: "dev.yashchaudhary.ZenVoice.whisper-\(configuration.modelID)",
+            label: "com.zenvoice.app.whisper-\(configuration.modelID)",
             qos: .userInitiated
         )
     }

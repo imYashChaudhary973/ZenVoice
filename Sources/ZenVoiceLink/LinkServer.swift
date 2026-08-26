@@ -79,7 +79,7 @@ public actor LinkServer {
     private var policy: LinkServerPolicy
     private let handlers: LinkServerHandlers
     private let queue = DispatchQueue(
-        label: "dev.yashchaudhary.ZenVoice.link.server"
+        label: "com.zenvoice.app.link.server"
     )
 
     private var listener: NWListener?

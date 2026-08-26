@@ -47,7 +47,7 @@ cask = <<~CASK
     zap trash: [
       "~/Library/Application Support/ZenVoice",
       "~/Library/Caches/ZenVoice",
-      "~/Library/Preferences/app.zenvoice.ZenVoice.plist",
+      "~/Library/Preferences/com.zenvoice.app.plist",
     ]
   end
 CASK

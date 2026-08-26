@@ -52,11 +52,11 @@ public struct BundleIdentifierPolicy: Sendable {
 /// and foreign bundles cannot accidentally use the production Application
 /// Support path, UserDefaults suite, or Keychain namespace.
 ///
-/// The production identifier is `dev.yashchaudhary.ZenVoice`. Any other
+/// The production identifier is `com.zenvoice.app`. Any other
 /// identifier is rejected unless it is listed in `allowedQAIdentifiers`.
 public enum RuntimeIdentity {
     /// The canonical production bundle identifier.
-    public static let productionBundleID = "dev.yashchaudhary.ZenVoice"
+    public static let productionBundleID = "com.zenvoice.app"
 
     /// Resolves the bundle-identifier policy for the given bundle.
     ///

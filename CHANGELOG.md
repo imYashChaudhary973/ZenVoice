@@ -4,6 +4,9 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-27
+
+
 ## [0.4.0] - 2026-08-27
 
 

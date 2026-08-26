@@ -92,7 +92,7 @@ signing requirement. Ad-hoc signing ties that requirement to one specific build
 hash, so a rebuilt executable looks like a new app to macOS.
 
 Apple Development signing gives local builds a stable requirement based on the
-Apple-issued signer, team, and `dev.yashchaudhary.ZenVoice` bundle identifier.
+Apple-issued signer, team, and `com.zenvoice.app` bundle identifier.
 Because the build enables Hardened Runtime, the signature also embeds
 `com.apple.security.device.audio-input` so AVFoundation may request microphone
 access.
