@@ -49,7 +49,7 @@ final class AudioRecorder: NSObject,
             case .invalidDeterministicFixture:
                 return
                     "The E2E audio fixture must be a readable 16 kHz mono "
-                    + "local file no larger than 100 MB or 10 minutes."
+                    + "local file no larger than 100 MB or 90 minutes."
             }
         }
     }
@@ -75,7 +75,7 @@ final class AudioRecorder: NSObject,
 #if DEBUG
     private static let fixtureEnvironmentKey = "ZENVOICE_E2E_AUDIO_FILE"
     private static let maximumFixtureBytes: Int64 = 100 * 1_024 * 1_024
-    private static let maximumFixtureDuration: TimeInterval = 10 * 60
+    private static let maximumFixtureDuration: TimeInterval = 90 * 60
     private var deterministicFixtureDuration: TimeInterval?
 #endif
     /// Where the last consumed phrase ended.

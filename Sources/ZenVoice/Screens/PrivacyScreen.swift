@@ -19,6 +19,7 @@ import ZenVoiceStorage
 struct PrivacyScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
+    @ObservedObject var lectureViewModel: LectureViewModel
     @ObservedObject var voiceProfileViewModel:
         VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel:
@@ -43,6 +44,7 @@ struct PrivacyScreen: View {
         }
         .onAppear {
             historyViewModel.refresh()
+            lectureViewModel.refreshList()
             voiceProfileViewModel.refresh()
         }
 
@@ -145,6 +147,13 @@ struct PrivacyScreen: View {
                     }
                     .disabled(historyViewModel.savedTranscriptCount == 0)
                 }
+                ZenPanelDivider()
+                ZenRow(
+                    icon: "books.vertical",
+                    title: "Lecture recordings",
+                    subtitle:
+                        "\(lectureViewModel.lectureCountDisplayString) · \(lectureViewModel.lectureAudioDisplayString) audio · WAV files are not encrypted"
+                )
                 ZenPanelDivider()
                 ZenRow(
                     icon: "tray",

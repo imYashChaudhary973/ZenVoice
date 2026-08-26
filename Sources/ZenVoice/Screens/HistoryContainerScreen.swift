@@ -23,10 +23,12 @@ import ZenVoiceStorage
 struct HistoryContainerScreen: View {
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
+    @ObservedObject var lectureViewModel: LectureViewModel
+    @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case dictations, audio, insights
+        case dictations, audio, lectures, insights
 
         var id: String { rawValue }
 
@@ -36,6 +38,8 @@ struct HistoryContainerScreen: View {
                 return "Dictations"
             case .audio:
                 return "Audio"
+            case .lectures:
+                return "Lectures"
             case .insights:
                 return "Insights"
             }
@@ -49,7 +53,7 @@ struct HistoryContainerScreen: View {
             icon: "clock.fill",
             title: "History",
             subtitle:
-                "Every dictation, recording, and statistic — all kept on this Mac.",
+                "Every dictation, recording, lecture, and statistic — all kept on this Mac.",
             tabs: {
                 ZenTabStrip(
                     items: Tab.allCases.map { tab in
@@ -64,6 +68,11 @@ struct HistoryContainerScreen: View {
                 HistoryScreen(viewModel: historyViewModel)
             case .audio:
                 AudioHistoryScreen(viewModel: audioHistoryViewModel)
+            case .lectures:
+                LecturesScreen(
+                    viewModel: lectureViewModel,
+                    cloudAIViewModel: cloudAIViewModel
+                )
             case .insights:
                 InsightsScreen(viewModel: insightsViewModel)
             }

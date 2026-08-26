@@ -19,6 +19,7 @@ import ZenVoiceCore
 struct HelpAndAboutScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
+    @ObservedObject var lectureViewModel: LectureViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
     let openModels: () -> Void
@@ -34,6 +35,7 @@ struct HelpAndAboutScreen: View {
                 PrivacyScreen(
                     viewModel: viewModel,
                     historyViewModel: historyViewModel,
+                    lectureViewModel: lectureViewModel,
                     voiceProfileViewModel: voiceProfileViewModel,
                     modelManagerViewModel: modelManagerViewModel,
                     openModels: openModels,

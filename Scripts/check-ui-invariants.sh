@@ -24,7 +24,7 @@ tab_children=(
     LanguagesScreen ModelsScreen
     CommandModeScreen CommandsScreen WriteModeScreen FormattingScreen
     VoiceProfileScreen AppProfilesScreen
-    HistoryScreen AudioHistoryScreen InsightsScreen
+    HistoryScreen AudioHistoryScreen LecturesScreen InsightsScreen
     HelpScreen UpdatesScreen
 )
 for screen in $tab_children; do
@@ -165,6 +165,17 @@ if ! grep -q "struct ZenHoldToDeleteButton" "$components" \
     fail "History/Privacy no longer use the shared copy, kebab, or hold-delete controls"
 else
     pass "History uses copy and kebab; Privacy uses hold-to-delete"
+fi
+
+lectures="$screens/LecturesScreen.swift"
+if ! grep -q "ZenSecondaryButtonStyle" "$lectures" \
+    || ! grep -q "frame(minHeight: 44)" "$lectures" \
+    || ! grep -q "ZenHoldToDeleteButton" "$lectures" \
+    || ! grep -q "accessibilityReduceMotion" "$settings_view" \
+    || ! grep -q "accessibilityReduceMotion" "$components"; then
+    fail "lecture controls lost 44pt targets or shared Reduce Motion handling"
+else
+    pass "lecture controls keep 44pt targets and shared Reduce Motion handling"
 fi
 
 if ! grep -q "wrappedModelID" "$screens/ModelsScreen.swift" \

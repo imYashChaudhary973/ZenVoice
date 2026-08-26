@@ -3,7 +3,7 @@ set -u
 
 project_dir=${0:A:h:h}
 app_path=${1:-"$project_dir/build/ZenVoice.app"}
-distribution_archive=${2:-"$project_dir/build/ZenVoice-distribution.zip"}
+distribution_archive=${2:-"$project_dir/build/ZenVoice.dmg"}
 blocker_count=0
 source_cdhash=""
 
@@ -145,84 +145,60 @@ fi
 
 if [[ ! -f "$distribution_archive" ]]; then
     block "distribution artifact is missing at $distribution_archive"
+elif [[ "$distribution_archive" != *.dmg ]]; then
+    block "distribution artifact must be a DMG"
 else
-    archive_inventory_valid=true
-    if ! command -v zipinfo >/dev/null 2>&1; then
-        block "zipinfo is required to inspect the distribution artifact"
-        archive_inventory_valid=false
-    elif ! archive_entries=$(zipinfo -1 "$distribution_archive" 2>/dev/null); then
-        block "distribution artifact inventory could not be read"
-        archive_inventory_valid=false
-    elif [[ -z "$archive_entries" ]]; then
-        block "distribution artifact is empty"
-        archive_inventory_valid=false
+    artifact_valid=true
+    artifact_temp=$(mktemp -d 2>/dev/null)
+    mount_point="$artifact_temp/mnt"
+    if [[ -z "$artifact_temp" ]]; then
+        block "temporary directory for distribution inspection could not be created"
+        artifact_valid=false
+    elif ! hdiutil attach "$distribution_archive" -mountpoint "$mount_point" -noverify -quiet >/dev/null 2>&1; then
+        block "distribution DMG could not be mounted"
+        artifact_valid=false
     else
-        unexpected_entries=$(
-            printf '%s\n' "$archive_entries" |
-                grep -Ev '^ZenVoice\.app(/.*)?$' ||
-                true
-        )
-        unsafe_entries=$(
-            printf '%s\n' "$archive_entries" |
-                grep -E '(^/|(^|/)\.\.(/|$))' ||
-                true
-        )
-        if [[ -n "$unexpected_entries" || -n "$unsafe_entries" ]]; then
-            block "distribution artifact contains payload outside ZenVoice.app"
-            archive_inventory_valid=false
-        fi
-    fi
-
-    if [[ "$archive_inventory_valid" == true ]]; then
-        artifact_temp=$(mktemp -d 2>/dev/null)
-        if [[ -z "$artifact_temp" ]]; then
-            block "temporary directory for distribution inspection could not be created"
-        elif ! ditto -x -k "$distribution_archive" "$artifact_temp" >/dev/null 2>&1; then
-            block "distribution artifact could not be extracted"
-            rm -rf "$artifact_temp"
+        extracted_app=$(find "$mount_point" -maxdepth 2 -type d -name 'ZenVoice.app' | head -n 1)
+        if [[ -z "$extracted_app" || ! -d "$extracted_app" || -L "$extracted_app" ]]; then
+            block "DMG does not contain a regular ZenVoice.app bundle"
+            artifact_valid=false
+        elif ! codesign --verify --deep --strict "$extracted_app" >/dev/null 2>&1; then
+            block "DMG app has invalid nested code signatures"
+            artifact_valid=false
         else
-            extracted_app="$artifact_temp/ZenVoice.app"
-            artifact_valid=true
-            if [[ ! -d "$extracted_app" || -L "$extracted_app" ]]; then
-                block "distribution artifact does not contain a regular ZenVoice.app bundle"
+            extracted_signature=$(codesign -dvv "$extracted_app" 2>&1 || true)
+            extracted_cdhash=$(
+                codesign -dvvv "$extracted_app" 2>&1 |
+                    grep -m 1 '^CDHash=' ||
+                    true
+            )
+            if [[ "$extracted_signature" != *"Authority=Developer ID Application:"* ]]; then
+                block "DMG app is not Developer-ID signed"
                 artifact_valid=false
-            elif ! codesign --verify --deep --strict "$extracted_app" >/dev/null 2>&1; then
-                block "distribution artifact has invalid nested code signatures"
+            elif [[ -n "$source_cdhash" && "$extracted_cdhash" != "$source_cdhash" ]]; then
+                block "DMG app does not match the packaged app"
                 artifact_valid=false
-            else
-                extracted_signature=$(codesign -dvv "$extracted_app" 2>&1 || true)
-                extracted_cdhash=$(
-                    codesign -dvvv "$extracted_app" 2>&1 |
-                        grep -m 1 '^CDHash=' ||
-                        true
-                )
-                if [[ "$extracted_signature" != *"Authority=Developer ID Application:"* ]]; then
-                    block "distribution artifact is not Developer-ID signed"
-                    artifact_valid=false
-                elif [[ -n "$source_cdhash" && "$extracted_cdhash" != "$source_cdhash" ]]; then
-                    block "distribution artifact does not match the packaged app"
-                    artifact_valid=false
-                elif ! xcrun stapler validate "$extracted_app" >/dev/null 2>&1; then
-                    block "distribution artifact has no valid stapled ticket"
-                    artifact_valid=false
-                elif ! spctl --assess --type execute "$extracted_app" >/dev/null 2>&1; then
-                    block "distribution artifact is rejected by Gatekeeper"
-                    artifact_valid=false
-                fi
+            elif ! xcrun stapler validate "$extracted_app" >/dev/null 2>&1; then
+                block "DMG app has no valid stapled ticket"
+                artifact_valid=false
+            elif ! spctl --assess --type execute "$extracted_app" >/dev/null 2>&1; then
+                block "DMG app is rejected by Gatekeeper"
+                artifact_valid=false
             fi
+        fi
+        hdiutil detach "$mount_point" -quiet >/dev/null 2>&1 || true
+    fi
 
-            if [[ "$artifact_valid" == true ]]; then
-                if archive_sha256=$(shasum -a 256 "$distribution_archive"); then
-                    archive_sha256=${archive_sha256%% *}
-                    pass "distribution artifact contains only the packaged app and is signed, stapled, and Gatekeeper-approved"
-                    pass "distribution SHA-256 is $archive_sha256"
-                else
-                    block "distribution artifact SHA-256 could not be calculated"
-                fi
-            fi
-            rm -rf "$artifact_temp"
+    if [[ "$artifact_valid" == true ]]; then
+        if archive_sha256=$(shasum -a 256 "$distribution_archive"); then
+            archive_sha256=${archive_sha256%% *}
+            pass "distribution DMG contains a signed, stapled, Gatekeeper-approved ZenVoice.app"
+            pass "distribution SHA-256 is $archive_sha256"
+        else
+            block "distribution DMG SHA-256 could not be calculated"
         fi
     fi
+    rm -rf "$artifact_temp"
 fi
 
 if (( blocker_count > 0 )); then

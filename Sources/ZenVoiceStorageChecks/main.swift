@@ -1736,6 +1736,217 @@ private func checkAgenticTaskPersistence() async throws {
     )
 }
 
+private func checkLectureStore() async throws {
+    try await require(
+        LectureStore.reservedAudioBytes == 16_000 * 4 * 90 * 60,
+        "90-minute reserve is not 16 kHz float32 mono"
+    )
+    try await require(
+        LectureStore.hasRoom(availableBytes: LectureStore.reservedAudioBytes),
+        "exact reserve should be enough"
+    )
+    try await require(
+        !LectureStore.hasRoom(
+            availableBytes: LectureStore.reservedAudioBytes - 1
+        ),
+        "one byte under reserve must refuse start"
+    )
+    try await require(
+        LectureStore.displayedElapsed(
+            accumulated: 10,
+            runningSince: Date(timeIntervalSince1970: 0),
+            now: Date(timeIntervalSince1970: 5)
+        ) == 15,
+        "elapsed must add only the running segment"
+    )
+    try await require(
+        LectureStore.shouldStopAtCap(LectureStore.maximumDuration),
+        "cap must fire at 90:00"
+    )
+    try await require(
+        !LectureStore.shouldStopAtCap(LectureStore.maximumDuration - 1),
+        "cap must not fire before 90:00"
+    )
+
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("zenvoice-lectures-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = LectureStore(directoryURL: directory)
+
+    do {
+        _ = try store.createRecording(availableBytes: 0)
+        throw CheckError.failed("createRecording ignored a full disk")
+    } catch LectureStore.StoreError.insufficientDisk {
+    }
+
+    let created = try store.createRecording(
+        availableBytes: LectureStore.reservedAudioBytes
+    )
+    let wav = store.audioURL(for: created.id)
+    try Data("partial".utf8).write(to: wav)
+    try store.markIncompleteIfOpen()
+    let reloaded = try store.load(id: created.id)
+    try await require(
+        reloaded.status == .incomplete,
+        "open lecture was not marked incomplete"
+    )
+    try await require(
+        FileManager.default.fileExists(atPath: wav.path),
+        "incomplete mark deleted the WAV"
+    )
+    try await require(
+        wav.path.hasPrefix(directory.path + "/"),
+        "lecture WAV escaped Lectures/"
+    )
+
+    var lecture = try store.createRecording(
+        availableBytes: LectureStore.reservedAudioBytes
+    )
+    lecture.elapsedSeconds = 15 * 60
+    lecture.status = .complete
+    try store.save(lecture)
+    let keys = StaticKeyProvider()
+    try store.setOriginalTranscript(
+        "fifteen minute lecture transcript",
+        for: lecture.id,
+        keyProvider: keys
+    )
+    do {
+        try store.setOriginalTranscript(
+            "replacement must not land",
+            for: lecture.id,
+            keyProvider: keys
+        )
+        throw CheckError.failed("original transcript was overwritten")
+    } catch LectureStore.StoreError.originalTranscriptLocked {
+    }
+    let loadedText = try store.originalTranscript(
+        for: lecture.id,
+        keyProvider: keys
+    )
+    try await require(
+        loadedText == "fifteen minute lecture transcript",
+        "stored original transcript did not round-trip"
+    )
+    try Data("audio-kept".utf8).write(to: store.audioURL(for: lecture.id))
+    var failed = try store.load(id: lecture.id)
+    failed.status = .failed
+    try store.save(failed)
+    try await require(
+        FileManager.default.fileExists(
+            atPath: store.audioURL(for: lecture.id).path
+        ),
+        "failed decode deleted the lecture WAV"
+    )
+}
+
+private func checkLectureList() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("zenvoice-lectures-list-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = LectureStore(directoryURL: directory)
+    let keys = StaticKeyProvider()
+
+    var first = try store.createRecording(
+        availableBytes: LectureStore.reservedAudioBytes
+    )
+    first.title = "Morning lecture"
+    first.elapsedSeconds = 120
+    first.status = .complete
+    try store.save(first)
+    try store.setOriginalTranscript(
+        "first original",
+        for: first.id,
+        engineID: "parakeet-tdt-v3",
+        keyProvider: keys
+    )
+    let firstAudio = store.audioURL(for: first.id)
+    try Data(repeating: 0x01, count: 4).write(to: firstAudio)
+
+    var second = try store.createRecording(
+        availableBytes: LectureStore.reservedAudioBytes
+    )
+    second.title = "Afternoon lecture"
+    second.elapsedSeconds = 90
+    second.status = .failed
+    try store.save(second)
+    let secondAudio = store.audioURL(for: second.id)
+    try Data(repeating: 0x02, count: 6).write(to: secondAudio)
+    let inventory = try store.inventory()
+    try await require(
+        inventory.lectureCount == 2 && inventory.audioBytes == 10,
+        "lecture Privacy inventory count or audio bytes is wrong"
+    )
+
+    let listed = try store.all()
+    try await require(listed.count == 2, "two lectures did not appear")
+    let opened = try store.load(id: first.id)
+    try await require(
+        opened.displayTitle == "Morning lecture",
+        "open did not load the first lecture"
+    )
+    try await require(
+        opened.listStatus == .transcribed,
+        "transcribed lecture did not report transcribed"
+    )
+    try await require(
+        opened.engineID == "parakeet-tdt-v3",
+        "engine id was not stored"
+    )
+    let copied = try store.originalTranscript(for: first.id, keyProvider: keys)
+    try await require(copied == "first original", "copy original failed")
+    try store.setSummary(
+        "Outline\n- Topic\n\nKey terms\n- Term\n\nQuestions asked\nNone.",
+        for: first.id,
+        keyProvider: keys
+    )
+    let summary = try store.summary(for: first.id, keyProvider: keys)
+    try await require(
+        summary?.contains("Questions asked") == true,
+        "lecture summary did not round-trip"
+    )
+    let originalAfterSummary = try store.originalTranscript(
+        for: first.id,
+        keyProvider: keys
+    )
+    try await require(
+        originalAfterSummary == "first original",
+        "summary mutated the immutable original"
+    )
+    try await require(
+        try store.load(id: first.id).listStatus == .summarized,
+        "summarized lecture did not report summarized"
+    )
+    try store.removeRecordingArtifacts(id: first.id)
+    try await require(
+        !FileManager.default.fileExists(atPath: firstAudio.path),
+        "delete left lecture audio behind"
+    )
+    try await require(
+        !FileManager.default.fileExists(
+            atPath: store.sidecarURL(for: first.id).path
+        ),
+        "delete left the lecture row behind"
+    )
+    let inventoryAfterDelete = try store.inventory()
+    try await require(
+        inventoryAfterDelete.lectureCount == 1
+            && inventoryAfterDelete.audioBytes == 6,
+        "Privacy inventory did not update after delete"
+    )
+    let remaining = try store.all()
+    try await require(remaining.count == 1, "delete removed the wrong set")
+    try await require(
+        remaining[0].id == second.id,
+        "delete touched the other lecture"
+    )
+    let sqlite = try FileManager.default.contentsOfDirectory(
+        at: directory,
+        includingPropertiesForKeys: nil
+    ).filter { $0.pathExtension == "sqlite" }
+    try await require(sqlite.isEmpty, "lecture audio was stored in SQLite")
+}
+
 do {
     try await checkEncryptedStorage()
     try await checkRecoveryExpiry()
@@ -1760,7 +1971,9 @@ do {
     try await checkAudioHistoryPreferenceDefaults()
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
-    print("ZenVoiceStorageChecks: 23 checks passed")
+    try await checkLectureStore()
+    try await checkLectureList()
+    print("ZenVoiceStorageChecks: 25 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

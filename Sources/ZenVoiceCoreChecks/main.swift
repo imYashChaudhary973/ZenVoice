@@ -3156,6 +3156,25 @@ for token in forbiddenInBody where bodyText.contains(token) {
     failEngineCheck("the cloud request body leaked \(token)")
 }
 
+var lectureConfiguration = cloudConfiguration
+lectureConfiguration.prompt = CloudAIPromptTemplate.lecture.text
+let lectureRequest = try! cloudEngine.makeRequest(
+    transcript: "Topic one. What does gravity mean?",
+    configuration: lectureConfiguration
+)
+let lectureBody = String(
+    decoding: try! lectureRequest.encodedBody(),
+    as: UTF8.self
+)
+for heading in ["Outline", "Key terms", "Questions asked"]
+where !lectureBody.contains(heading) {
+    failEngineCheck("lecture prompt omitted \(heading)")
+}
+guard lectureBody.contains("Do not label speakers as teacher or student"),
+      lectureRequest.userContent == "Topic one. What does gravity mean?" else {
+    failEngineCheck("lecture summary prompt or transcript changed")
+}
+
 // The API key must never be part of the request value itself.
 let requestDescription = "\(cloudRequest)"
 guard !requestDescription.contains("sk-") else {

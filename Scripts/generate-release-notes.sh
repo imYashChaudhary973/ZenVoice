@@ -28,5 +28,6 @@ awk -v ver="$version" '
 
 echo ""
 echo "## Artifacts"
-echo "- ZenVoice-distribution.zip contains the signed and notarized ZenVoice.app."
-echo "  Verify with: spctl --assess --type execute ZenVoice.app"
+echo "- ZenVoice.dmg contains the signed, notarized, and stapled ZenVoice.app."
+echo "  Drag ZenVoice.app to Applications, then verify with:"
+echo "  spctl --assess --type execute /Applications/ZenVoice.app"

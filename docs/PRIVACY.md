@@ -67,6 +67,32 @@ that window rather than the whole database.
 - Audio never leaves the Mac unless the user exports it themselves.
 - Full rationale in [ADR 0010](decisions/0010-audio-history.md).
 
+### Lecture capture
+
+- Start/stop lives in History → Lectures. The dictation hotkey does not
+  create, append to, or paste a lecture.
+- Audio is a 16 kHz mono WAV in private Application Support (`Lectures/`).
+  Like Audio History, the WAV is **not encrypted at rest**.
+- A lecture is independent of the Audio History toggle. Starting one is
+  consent to keep that file until you delete it.
+- Quit or crash mid-session keeps the partial WAV and marks the sidecar
+  `incomplete`.
+- v1 stops at 90 minutes and refuses to start if the disk cannot hold that
+  much 16 kHz float32 mono audio.
+- After Stop, the selected local engine transcribes the file. The original
+  transcript is encrypted in the sidecar with the History vault key. Failed
+  decode keeps the WAV and offers Retry. Nothing is pasted into another app.
+- Summarize appears only when Cloud AI is enabled and is disabled until its
+  provider is fully configured. It sends only the original transcript text
+  and the fixed lecture-summary prompt through the existing Cloud path. Audio,
+  title, file paths, engine metadata, and other lectures never enter the
+  request. The encrypted summary is stored separately; failure leaves the
+  original untouched.
+- Privacy & Data shows the current lecture count and total bytes used by
+  lecture WAV files. The inventory reads local file metadata only and sends
+  nothing.
+- Full contract in [ADR 0014](decisions/0014-lecture-capture-v1.md).
+
 ### Transcripts
 
 - Stored in memory as the last transcript for immediate recovery.

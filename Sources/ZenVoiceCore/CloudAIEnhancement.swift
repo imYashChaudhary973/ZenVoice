@@ -408,6 +408,23 @@ public struct CloudAIPromptTemplate: Equatable, Sendable {
         """
     )
 
+    public static let lecture = CloudAIPromptTemplate(
+        name: "Lecture summary",
+        text: """
+        Summarize this lecture transcript. Use only the words in the \
+        transcript. Do not invent speakers, names, or facts.
+
+        Reply with three sections:
+        1. Outline — the main topics in order
+        2. Key terms — important words or definitions
+        3. Questions asked — questions that appear in the text. If none, \
+        write "None."
+
+        Do not label speakers as teacher or student. Reply with the summary \
+        only.
+        """
+    )
+
     public static let builtIns: [CloudAIPromptTemplate] = [
         .cleanUp, .tightenUp
     ]

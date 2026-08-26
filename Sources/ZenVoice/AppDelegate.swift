@@ -183,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
     private var audioHistoryViewModel: AudioHistoryViewModel!
+    private var lectureViewModel: LectureViewModel!
     private var cloudAIViewModel: CloudAIViewModel!
     private var cloudPreviewWindowController:
         CloudAIPreviewWindowController?
@@ -518,6 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let processingHistoryID = transcribingHistoryID
         activeHistoryID = nil
         transcribingHistoryID = nil
+        lectureViewModel?.markIncompleteForTermination()
         let recordedAudio = recorder.stop()
         if let historyID {
             if nonPersistentHistoryIDs.contains(historyID)
@@ -831,6 +833,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return InMemoryCloudAIKeyStore()
         }
         return CloudAIKeychainKeyStore(policy: policy)
+    }
+
+    private func makeLectureViewModel() -> LectureViewModel {
+        let store: LectureStore
+        if let policy = try? RuntimeIdentity.policy(),
+           let live = try? LectureStore.live(policy: policy) {
+            store = live
+        } else {
+            store = LectureStore(
+                directoryURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "ZenVoiceLectures",
+                        isDirectory: true
+                    )
+            )
+        }
+        return LectureViewModel(
+            store: store,
+            isDictationRecording: { [weak self] in
+                self?.recorder.isRecording == true
+            },
+            keyProvider: (try? RuntimeIdentity.policy()).map {
+                KeychainVaultKeyProvider(policy: $0)
+            },
+            transcribeFile: { [weak self] url in
+                guard let self else {
+                    throw LectureStore.StoreError.io(
+                        "ZenVoice is no longer running."
+                    )
+                }
+                await self.waitForEngineConfiguration()
+                guard let registry = self.engineRegistry else {
+                    throw LectureStore.StoreError.io(
+                        "No speech engine is available."
+                    )
+                }
+                let result = try await registry.transcribe(
+                    audioURL: url,
+                    profile: LanguagePreferences.load(),
+                    defaults: RuntimeIdentity.userDefaults()
+                )
+                return (result.finalTranscript, result.modelID)
+            },
+            summarizeTranscript: { [weak self] transcript in
+                guard let self else {
+                    throw LectureStore.StoreError.io(
+                        "ZenVoice is no longer running."
+                    )
+                }
+                var configuration = CloudAIPreferences.load()
+                configuration.prompt = CloudAIPromptTemplate.lecture.text
+                let key = ((try? self.makeCloudAIKeyStore().loadKey()) ?? nil)
+                    ?? ""
+                let result = try await CloudAIEnhancementEngine().enhance(
+                    transcript: transcript,
+                    configuration: configuration,
+                    apiKey: key
+                )
+                return result.enhanced
+            }
+        )
     }
 
 
@@ -1452,10 +1515,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         )
         updatesViewModel = UpdatesViewModel()
+        lectureViewModel = makeLectureViewModel()
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
             audioHistoryViewModel: audioHistoryViewModel,
+            lectureViewModel: lectureViewModel,
             cloudAIViewModel: cloudAIViewModel,
             updatesViewModel: updatesViewModel,
             insightsViewModel: insightsViewModel,
@@ -1723,6 +1788,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !state.isBusy else {
             return
         }
+        if lectureViewModel?.isSessionActive == true {
+            showError("Stop the lecture before dictating.")
+            return
+        }
+
 
         if whisperEngine == nil {
             Task { @MainActor [weak self] in

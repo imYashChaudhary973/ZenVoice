@@ -4,6 +4,29 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-27
+
+
+
+### Added
+
+- Offline lecture capture (Phase 1): start / pause / resume / stop in
+  History → Lectures. Writes a local 16 kHz mono WAV, shows elapsed time,
+  stops at 90 minutes, and keeps a partial file as incomplete on quit.
+- Lecture Stop transcribes the whole file with the selected local engine.
+  The original transcript is encrypted and copyable. Failed decode keeps
+  the audio and shows Retry. Nothing is pasted into another app.
+- History → Lectures lists each lecture with title, duration, engine, and
+  status. Open, copy original, retry transcribe, and hold-to-delete. Separate
+  from dictation History. Audio stays on disk, not in SQLite.
+- Optional lecture summaries use the existing BYO-key Cloud path and a fixed
+  outline / key terms / questions prompt. Original and encrypted summary are
+  shown side by side; provider failures leave the original untouched.
+- Lecture controls retain 44pt targets and shared Reduce Motion behavior.
+  Privacy & Data now reports lecture count and audio disk usage. Lifecycle
+  checks cover capacity refusal, encrypted original / summary isolation, and
+  deletion of both WAV and sidecar.
+
 ### Changed
 
 - Painted buttons, icon buttons, and menu-picker triggers use Opensource UI
