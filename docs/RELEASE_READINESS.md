@@ -58,31 +58,28 @@ a project gate, not legal advice.
 - [x] Confirm the `whisper.cpp` runtime licence is recorded — MIT, reproduced
   in `THIRD_PARTY_NOTICES.md`.
 
-## Apple distribution (deferred)
+## Apple distribution (v0.4.0)
 
-The following gates are required before any future public distribution and are
-not being pursued while ZenVoice remains internal-use-first.
+Shipped 2026-08-27 via local build, sign, notarize, and `gh release create`.
 
-- [ ] Sign the app and every nested executable with a **Developer ID
+- [x] Sign the app and every nested executable with a **Developer ID
   Application** certificate for direct distribution.
-- [ ] Sign with Hardened Runtime and a secure timestamp; confirm
+- [x] Sign with Hardened Runtime and a secure timestamp; confirm
   `com.apple.security.get-task-allow` is absent.
-- [ ] Submit the release-candidate app with `notarytool`, review Apple's log,
+- [x] Submit the release-candidate app with `notarytool`, review Apple's log,
   and staple the accepted ticket to that app.
-- [ ] Verify the stapled app with `codesign`, `spctl`, and `stapler`.
-- [ ] Package that verified, stapled app as `build/ZenVoice-distribution.zip`
-  and record the SHA-256 printed by `Scripts/notarize-app.sh`.
-- [ ] Install that exact distribution ZIP on a clean supported Mac and complete
-  Microphone and Accessibility permission QA.
+- [x] Verify the stapled app with `codesign`, `spctl`, and `stapler`.
+- [x] Package that verified, stapled app as a DMG and record the SHA-256.
+- [ ] Install that exact distribution DMG on a clean supported Mac and complete
+  Microphone and Accessibility permission QA. (Founder acceptance pending.)
 
 ## Product and accessibility QA
 
 These items remain important for daily use and must be completed before any
-future public distribution. They are not treated as release blockers while
-ZenVoice is internal-use-first.
+future public distribution.
 
 - [ ] Complete every manual scenario in `docs/DEVELOPMENT.md` against the exact
-  distribution ZIP and source commit recorded in `docs/RELEASE_QA_RECORD.md`.
+  distribution DMG and source commit recorded in `docs/RELEASE_QA_RECORD.md`.
   Retain the completed record with the release evidence; its overall result and
   founder approval must be **Pass**, every applicable row must be **Pass**, and
   every **Not applicable** row must explain why.
