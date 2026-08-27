@@ -4,6 +4,23 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-08-28
+
+
+## [0.4.5] - 2026-08-28
+
+### Added
+
+- New Insights dashboard layout with WPM gauge, total words, fixes, app usage,
+  and a GitHub-style contribution calendar.
+
+### Fixed
+
+- Fixed an app freeze that could occur when opening the History → Insights tab.
+  The freeze was caused by a SwiftUI layout/animation feedback loop in the
+  settings window transition; the transition has been removed and the Insights
+  layout is now fixed-width and stable.
+
 ## [0.4.4] - 2026-08-27
 
 ### Changed

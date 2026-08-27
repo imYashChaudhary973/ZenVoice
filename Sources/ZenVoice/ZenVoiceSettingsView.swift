@@ -102,7 +102,6 @@ struct ZenVoiceSettingsView: View {
                 } detail: {
                     content
                         .id(selection)
-                        .transition(.opacity)
                 }
                 .navigationSplitViewStyle(.balanced)
                 .toolbarBackground(.visible, for: .windowToolbar)
