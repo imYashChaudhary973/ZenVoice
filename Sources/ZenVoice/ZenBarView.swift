@@ -32,7 +32,6 @@ struct ZenBarView: View {
     let cancelRecording: () -> Void
     let finishRecording: () -> Void
     let dismissError: () -> Void
-    let setMode: (ZenBarMode) -> Void
     let cancelAgenticGoal: () -> Void
 
     var body: some View {
@@ -129,7 +128,6 @@ struct ZenBarView: View {
                             .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     }
                     Spacer()
-                    modeSwitcher
                     OverlayBarButton(
                         title: "Start",
                         emphasized: true,
@@ -282,51 +280,6 @@ struct ZenBarView: View {
             .padding(.trailing, ZenDesign.Spacing.xs)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityLabel(displayedError(message))
-        }
-    }
-
-    private var modeSwitcher: some View {
-        HStack(spacing: 3) {
-            ForEach(ZenBarMode.allCases, id: \.self) { mode in
-                let isSelected = state.mode == mode
-                Button {
-                    setMode(mode)
-                } label: {
-                    Image(systemName: mode.icon)
-                        .font(ZenDesign.Typography.captionStrong)
-                        .foregroundStyle(
-                            isSelected
-                                ? ZenDesign.Semantic.textPrimary
-                                : ZenDesign.Semantic.textSecondary
-                        )
-                        .frame(width: 28, height: 26)
-                        .background {
-                            RoundedRectangle(
-                                cornerRadius: ZenDesign.Radius.barControl,
-                                style: .continuous
-                            )
-                            .fill(
-                                isSelected
-                                    ? ZenDesign.Semantic.surfaceSunken
-                                    : Color.clear
-                            )
-                        }
-                        .frame(
-                            width: ZenDesign.Layout.hitTarget,
-                            height: ZenDesign.Layout.hitTarget
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(
-                    ZenPressButtonStyle(
-                        cornerRadius: ZenDesign.Radius.barControl
-                    )
-                )
-                .accessibilityLabel(mode.displayName)
-                .accessibilityAddTraits(
-                    isSelected ? .isSelected : []
-                )
-            }
         }
     }
 

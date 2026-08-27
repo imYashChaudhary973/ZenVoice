@@ -25,6 +25,8 @@ struct OverlayBarButton: View {
             Text(title)
                 .font(.system(size: 11.5, weight: emphasized ? .semibold : .medium))
                 .foregroundStyle(emphasized ? ZenDesign.Semantic.accent : ZenDesign.Semantic.textSecondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 10)
                 .frame(height: 30)
                 .background {

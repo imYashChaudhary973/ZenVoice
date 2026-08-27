@@ -4,6 +4,14 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-08-27
+
+### Changed
+
+- Removed Command Mode and Write Mode from the ZenBar; only Dictation is
+  exposed until those modes are ready.
+- Fixed the ZenBar "Start" button label so it stays on a single line.
+
 ## [0.4.3] - 2026-08-27
 
 

@@ -1247,9 +1247,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             dismissError: { [weak self] in
                 self?.dismissZenBarError()
             },
-            setMode: { [weak self] mode in
-                self?.state.mode = mode
-            },
             cancelAgenticGoal: { [weak self] in
                 self?.agenticModeCoordinator?.cancelActiveGoal()
             }
@@ -3090,26 +3087,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
         }
 
-        switch state.mode {
-        case .command:
-            handleCommandModeTranscript(
-                textToInsert,
-                historyID: historyID,
-                shouldPersist: shouldPersist,
-                historySaveError: historySaveError
-            )
-            return
-        case .write:
-            handleWriteModeTranscript(
-                textToInsert,
-                recordedAudio: recordedAudio,
-                historyID: historyID,
-                shouldPersist: shouldPersist,
-                historySaveError: historySaveError
-            )
-            return
-        case .dictation:
-            break
+        // Only dictation is exposed in the current ZenBar UI; command and
+        // write mode are still compiled but not selectable.
+        if state.mode != .dictation {
+            state.mode = .dictation
         }
 
         if textToInsert.isEmpty, hasPriorInsertion {

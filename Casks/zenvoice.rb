@@ -1,8 +1,8 @@
 cask "zenvoice" do
-  version "0.4.3"
-  sha256 "552ebb3a101edb97be704d4b4199f0d1bb1bddfb378add6cbfcf0c0f72c021dc"
+  version "0.4.4"
+  sha256 :no_check
 
-  url "https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.3/ZenVoice.dmg"
+  url "https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.4/ZenVoice.dmg"
   name "ZenVoice"
   desc "Privacy-first macOS speech capture, transcription, and lecture summaries"
   homepage "https://github.com/imYashChaudhary973/ZenVoice"

@@ -55,7 +55,6 @@ final class OverlayPanelController {
         cancelRecording: @escaping () -> Void,
         finishRecording: @escaping () -> Void,
         dismissError: @escaping () -> Void,
-        setMode: @escaping (ZenBarMode) -> Void,
         cancelAgenticGoal: @escaping () -> Void
     ) {
         self.kind = kind
@@ -90,7 +89,6 @@ final class OverlayPanelController {
                 cancelRecording: cancelRecording,
                 finishRecording: finishRecording,
                 dismissError: dismissError,
-                setMode: setMode,
                 cancelAgenticGoal: cancelAgenticGoal
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -165,7 +163,6 @@ final class OverlayPanelController {
         cancelRecording: @escaping () -> Void,
         finishRecording: @escaping () -> Void,
         dismissError: @escaping () -> Void,
-        setMode: @escaping (ZenBarMode) -> Void,
         cancelAgenticGoal: @escaping () -> Void
     ) -> some View {
         switch kind {
@@ -177,7 +174,6 @@ final class OverlayPanelController {
                     cancelRecording: cancelRecording,
                     finishRecording: finishRecording,
                     dismissError: dismissError,
-                    setMode: setMode,
                     cancelAgenticGoal: cancelAgenticGoal
                 )
             )
