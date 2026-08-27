@@ -472,6 +472,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configureHoldToDictate()
         configureAnticipatoryWarmup()
         configureSettingsWindow()
+        SparkleUpdater.shared.start()
         // The main window is the app. Opening it on launch is what the
         // approved design specifies: ZenVoice keeps its menu-bar presence and
         // its global hotkey, but starting it shows you the app rather than
