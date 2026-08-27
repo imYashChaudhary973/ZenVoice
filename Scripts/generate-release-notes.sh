@@ -21,9 +21,10 @@ fi
 
 # Print the section for this version if it exists, otherwise Unreleased.
 awk -v ver="$version" '
-    /^## \[Unreleased\]/ { start=1; next }
+    index($0, "## [" ver "]") == 1 { start=1; next }
     start && /^## \[/ { exit }
     start { print }
+    /^## \[/ { start=0 }
 ' "$changelog"
 
 echo ""
