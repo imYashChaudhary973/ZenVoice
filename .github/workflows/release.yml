@@ -155,7 +155,7 @@ jobs:
           rm -f "$key_path"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@c95fe14e0d0d351b72f4a6a93d6f7980c3bf4b1c # v2.2.0
+        uses: softprops/action-gh-release@7b4da11513bf3f43f9999e90eabced41ab8bb048 # v2.2.0
         with:
           tag_name: v${{ github.event.inputs.version }}
           name: ZenVoice ${{ github.event.inputs.version }}
