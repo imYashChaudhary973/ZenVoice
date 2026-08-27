@@ -9,35 +9,35 @@
 #   ./Scripts/generate-homebrew-cask.rb --version 0.3.0 --zip build/ZenVoice-distribution.zip
 
 require 'digest'
+require 'fileutils'
 require 'optparse'
 
-options = { zip: nil, version: nil, output: nil }
+options = { dmg: nil, version: nil, output: nil }
 OptionParser.new do |opts|
-  opts.banner = "Usage: #{File.basename(__FILE__)} --version VERSION --zip PATH [--output PATH]"
+  opts.banner = "Usage: #{File.basename(__FILE__)} --version VERSION --dmg PATH [--output PATH]"
   opts.on('--version VERSION', 'Release version') { |v| options[:version] = v }
-  opts.on('--zip PATH', 'Path to distribution zip') { |p| options[:zip] = p }
+  opts.on('--dmg PATH', 'Path to distribution DMG') { |p| options[:dmg] = p }
   opts.on('--output PATH', 'Output cask file path') { |p| options[:output] = p }
 end.parse!
 
 raise OptionParser::MissingArgument, '--version' if options[:version].nil?
-raise OptionParser::MissingArgument, '--zip' if options[:zip].nil?
+raise OptionParser::MissingArgument, '--dmg' if options[:dmg].nil?
 
-zip_path = File.expand_path(options[:zip])
-raise "Zip not found: #{zip_path}" unless File.exist?(zip_path)
+dmg_path = File.expand_path(options[:dmg])
+raise "DMG not found: #{dmg_path}" unless File.exist?(dmg_path)
 
-sha256 = Digest::SHA256.file(zip_path).hexdigest
+sha256 = Digest::SHA256.file(dmg_path).hexdigest
 
-repo_owner = ENV.fetch('ZENVOICE_HOMEBREW_TAP_OWNER', 'zenvoice')
-repo_name = ENV.fetch('ZENVOICE_HOMEBREW_TAP_REPO', 'homebrew-tap')
+repo_owner = ENV.fetch('ZENVOICE_HOMEBREW_TAP_OWNER', 'imYashChaudhary973')
 
 cask = <<~CASK
   cask "zenvoice" do
     version "#{options[:version]}"
     sha256 "#{sha256}"
 
-    url "https://github.com/#{repo_owner}/ZenVoice/releases/download/v#{options[:version]}/ZenVoice-distribution.zip"
+    url "https://github.com/#{repo_owner}/ZenVoice/releases/download/v#{options[:version]}/ZenVoice.dmg"
     name "ZenVoice"
-    desc "Free, open-source, privacy-first macOS dictation"
+    desc "Privacy-first macOS speech capture, transcription, and lecture summaries"
     homepage "https://github.com/#{repo_owner}/ZenVoice"
 
     auto_updates true
