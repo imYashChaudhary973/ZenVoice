@@ -58,41 +58,38 @@ a project gate, not legal advice.
 - [x] Confirm the `whisper.cpp` runtime licence is recorded — MIT, reproduced
   in `THIRD_PARTY_NOTICES.md`.
 
-## Apple distribution (v0.4.1)
+## Apple distribution (v0.4.4)
 
 Shipped 2026-08-27 via local build, sign, notarize, and `gh release create`
-(asset: `ZenVoice.dmg`).
+(asset: `ZenVoice.dmg`). Source commit `4a996f468500c3a77e5782946a5bf2beef3506a3`.
 
-### v0.4.1 installed-app smoke evidence
+### v0.4.4 installed-app smoke evidence
 
-Captured from `/Applications/ZenVoice.app` and the published DMG on 2026-08-27.
+Captured from `/Applications/ZenVoice.app` and the published DMG on 2026-08-28.
 
 ```zsh
 $ mdls -name kMDItemVersion -name kMDItemCFBundleIdentifier -name kMDItemDisplayName /Applications/ZenVoice.app
 kMDItemCFBundleIdentifier = "com.zenvoice.app"
 kMDItemDisplayName        = "ZenVoice.app"
-kMDItemVersion            = "0.4.1"
+kMDItemVersion            = "0.4.4"
 
 $ plutil -extract CFBundleShortVersionString raw /Applications/ZenVoice.app/Contents/Info.plist && plutil -extract CFBundleVersion raw /Applications/ZenVoice.app/Contents/Info.plist && plutil -extract CFBundleIdentifier raw /Applications/ZenVoice.app/Contents/Info.plist
-0.4.1
-3
+0.4.4
+4
 com.zenvoice.app
 
-$ codesign -dv --verbose=4 /Applications/ZenVoice.app 2>&1 | head -20
+$ codesign -dv --verbose=4 /Applications/ZenVoice.app 2>&1 | head -12
 Executable=/Applications/ZenVoice.app/Contents/MacOS/ZenVoice
 Identifier=com.zenvoice.app
 Format=app bundle with Mach-O thin (arm64)
-CodeDirectory v=20500 size=84988 flags=0x10000(runtime) hashes=2645+7 location=embedded
-VersionPlatform=1
-VersionMin=917504
-VersionSDK=917504
+CodeDirectory v=20500 size=84828 flags=0x10000(runtime) hashes=2640+7 location=embedded
 Hash type=sha256 size=32
-CandidateCDHash sha256=2fd87f308b49f49f617df56b6c75498365dc8b69
-Signature size=8979
+CandidateCDHash sha256=30dfc4141eba8d8880f78d879ad71b3f0e4bab00
+Signature size=8978
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
 Authority=Developer ID Certification Authority
 Authority=Apple Root CA
-Timestamp=27 Aug 2026 at 04:16:40
+Timestamp=27 Aug 2026 at 10:37:36
 Notarization Ticket=stapled
 TeamIdentifier=8QSM298XJ2
 Runtime Version=14.0.0
@@ -103,83 +100,75 @@ source=Notarized Developer ID
 origin=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
 
 $ xcrun stapler validate /Applications/ZenVoice.app 2>&1
-Processing: /Applications/ZenVoice.app
 The validate action worked!
 
 $ codesign -d --entitlements :- /Applications/ZenVoice.app 2>&1
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>com.apple.security.device.audio-input</key><true/></dict></plist>
 
-$ find /Applications/ZenVoice.app \( -type f -perm +111 \) -o -name "*.dylib" -o -name "*.framework" | xargs -I{} codesign -dv --verbose=2 "{}" 2>&1 | grep -E "^(Executable|Identifier|Authority)" | head -30
+$ find /Applications/ZenVoice.app \( -type f -perm +111 \) -o -name "*.dylib" -o -name "*.framework" | xargs -I{} sh -c 'codesign -dv --verbose=2 "$1" 2>&1 | grep -E "^(Executable|Identifier|Authority)" | head -3' _ {} 2>&1 | head -80
 Executable=/Applications/ZenVoice.app/Contents/MacOS/ZenVoice
 Identifier=com.zenvoice.app
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Authority=Developer ID Certification Authority
-Authority=Apple Root CA
+Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Sparkle
+Identifier=org.sparkle-project.Sparkle
+Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
+Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate
+Identifier=Autoupdate
+Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
+Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater
+Identifier=org.sparkle-project.Sparkle.Updater
+Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
+Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader
+Identifier=org.sparkle-project.DownloaderService
+Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
+Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer
+Identifier=org.sparkle-project.InstallerLauncher
+Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
+Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle
+Identifier=org.sparkle-project.Sparkle
+Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
+Executable=/Applications/ZenVoice.app/Contents/Frameworks/whisper.framework/Versions/Current/whisper
+Identifier=org.ggml.whisper
+Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
 Executable=/Applications/ZenVoice.app/Contents/Frameworks/whisper.framework/Versions/A/whisper
 Identifier=org.ggml.whisper
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Authority=Developer ID Certification Authority
-Authority=Apple Root CA
 Executable=/Applications/ZenVoice.app/Contents/Frameworks/libparakeet.dylib
 Identifier=libparakeet
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Authority=Developer ID Certification Authority
-Authority=Apple Root CA
 
 $ lipo -archs /Applications/ZenVoice.app/Contents/MacOS/ZenVoice
 arm64
 
-$ strings /Applications/ZenVoice.app/Contents/MacOS/ZenVoice | grep -iE "lecture|diarization|speaker|two.role|two-person" | sort -u | head -25
-Lecture path left the Lectures folder.
-Lecture recordings
-Lecture summary
-LectureRow
-LectureStore
-LectureViewModel
-Lectures folder is missing.
-LecturesScreen
-No lectures yet.
-Not enough free disk for a 90-minute lecture.
-Records on this Mac. The dictation hotkey does not start a lecture.
-Stop dictation before starting a lecture.
-Stop the lecture before dictating.
-The lecture produced no text.
-ZenVoiceLectures
-lecture
-lecture.original.
-lecture.summary.
-lectureCount
-lectures
-
-$ curl -sL https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.1/ZenVoice.dmg -o /tmp/ZenVoice-published.dmg && shasum -a 256 /tmp/ZenVoice-published.dmg
-332c18253c2ac501febfe8076d2b6978c6c22a0e520d4c37c7bcf6f73b5d7639  /tmp/ZenVoice-published.dmg
+$ curl -sL https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.4/ZenVoice.dmg -o /tmp/ZenVoice-published-0.4.4.dmg && shasum -a 256 /tmp/ZenVoice-published-0.4.4.dmg
+8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2  /tmp/ZenVoice-published-0.4.4.dmg
 
 $ grep -E "version|sha256|url" Casks/zenvoice.rb
-  version "0.4.1"
-  sha256 "332c18253c2ac501febfe8076d2b6978c6c22a0e520d4c37c7bcf6f73b5d7639"
+  version "0.4.4"
+  sha256 "8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2"
   url "https://github.com/imYashChaudhary973/ZenVoice/releases/download/v#{version}/ZenVoice.dmg"
 
-$ xcrun stapler validate /tmp/ZenVoice-published.dmg 2>&1
-Processing: /tmp/ZenVoice-published.dmg
+$ xcrun stapler validate /tmp/ZenVoice-published-0.4.4.dmg 2>&1
 The validate action worked!
 
-$ hdiutil verify /tmp/ZenVoice-published.dmg 2>&1 | tail -5
-hdiutil: verify: checksum of "/tmp/ZenVoice-published.dmg" is VALID
+$ hdiutil verify /tmp/ZenVoice-published-0.4.4.dmg 2>&1 | tail -5
+hdiutil verify: checksum of "/tmp/ZenVoice-published-0.4.4.dmg" is VALID
 ```
 
-Summary of automated checks:
+Summary of automated checks for v0.4.4:
 
-- Version 0.4.1, bundle ID `com.zenvoice.app`.
+- Version 0.4.4, bundle ID `com.zenvoice.app`, build 4.
 - Architecture is `arm64` (Apple Silicon baseline).
 - Hardened Runtime flag `0x10000(runtime)` is present; only entitlement is
   `com.apple.security.device.audio-input`; `get-task-allow` is absent.
 - Notarization ticket is stapled to the installed app; `spctl` reports
   `accepted`, `stapler validate` succeeds.
 - The published DMG SHA-256 matches the cask and the expected release asset
-  (`332c18253c2ac501febfe8076d2b6978c6c22a0e520d4c37c7bcf6f73b5d7639`); the
+  (`8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2`); the
   DMG also passes `stapler validate` and `hdiutil verify`.
-- Lecture feature strings are present in the binary (`LectureViewModel`,
-  `LecturesScreen`, `Stop dictation before starting a lecture`, etc.).
+- Sparkle auto-update framework and XPC services are present and signed.
+- `swift build`, `swift run ZenVoiceCoreChecks`, `swift run ZenVoiceStorageChecks`,
+  and `./Scripts/check-ui-invariants.sh` all pass on the source commit.
 
 - [x] Sign the app and every nested executable with a **Developer ID
   Application** certificate for direct distribution.
@@ -190,18 +179,17 @@ Summary of automated checks:
 - [x] Verify the stapled app with `codesign`, `spctl`, and `stapler`.
 - [x] Package that verified, stapled app as a DMG and record the SHA-256.
 - [ ] Install that exact distribution DMG on a clean supported Mac and complete
-  Microphone and Accessibility permission QA. (Founder acceptance pending.)
-  Installed copy `/Applications/ZenVoice.app` is the same SHA-256 as the DMG
-  and passes signing/notarization checks; clean-install permission QA remains
-  manual.
+  Microphone and Accessibility permission QA. In-progress: see
+  [`docs/RELEASE_QA_RECORD_0.4.4_2026-08-28.md`](RELEASE_QA_RECORD_0.4.4_2026-08-28.md).
 
 ## Product and accessibility QA
 
 These items remain important for daily use and must be completed before any
-future public distribution.
+future public distribution. The v0.4.4 QA record tracks progress:
+[`docs/RELEASE_QA_RECORD_0.4.4_2026-08-28.md`](RELEASE_QA_RECORD_0.4.4_2026-08-28.md).
 
 - [ ] Complete every manual scenario in `docs/DEVELOPMENT.md` against the exact
-  distribution DMG and source commit recorded in `docs/RELEASE_QA_RECORD.md`.
+  distribution DMG and source commit recorded in `docs/RELEASE_QA_RECORD_0.4.4_2026-08-28.md`.
   Retain the completed record with the release evidence; its overall result and
   founder approval must be **Pass**, every applicable row must be **Pass**, and
   every **Not applicable** row must explain why. (Manual end-to-end QA; cannot
