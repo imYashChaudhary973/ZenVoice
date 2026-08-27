@@ -27,40 +27,42 @@ struct InsightsScreen: View {
     @State private var showsShareCard = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
-            if let error = viewModel.errorMessage {
-                ZenBanner(
-                    kind: .danger,
-                    icon: "exclamationmark.triangle",
-                    text: error
-                )
-            }
-
-            metrics
-            activitySection
-
-            HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
-                appsSection
-                categoriesSection
-            }
-
-            HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
-                ZenBanner(
-                    kind: .info,
-                    icon: "lock",
-                    text:
-                        "Insights are calculated locally. ZenVoice stores app identity — never window titles, URLs, recipients, or surrounding text."
-                )
-                Button {
-                    showsShareCard = true
-                } label: {
-                    Label(
-                        "Share highlights",
-                        systemImage: "square.and.arrow.up"
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+                if let error = viewModel.errorMessage {
+                    ZenBanner(
+                        kind: .danger,
+                        icon: "exclamationmark.triangle",
+                        text: error
                     )
                 }
-                .buttonStyle(ZenSecondaryButtonStyle(height: 60))
+
+                topMetricsGrid
+
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.xl) {
+                    desktopUsageCard
+                    streakCard
+                }
+
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
+                    ZenBanner(
+                        kind: .info,
+                        icon: "lock",
+                        text:
+                            "Insights are calculated locally. ZenVoice stores app identity — never window titles, URLs, recipients, or surrounding text."
+                    )
+                    Button {
+                        showsShareCard = true
+                    } label: {
+                        Label(
+                            "Share highlights",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle(height: 60))
+                }
             }
+            .padding(ZenDesign.Spacing.xl)
         }
         .onAppear(perform: viewModel.refresh)
         .sheet(isPresented: $showsShareCard) {
@@ -68,155 +70,447 @@ struct InsightsScreen: View {
         }
     }
 
-    // MARK: stat tiles
+    // MARK: top metrics
 
-    private var metrics: some View {
-        HStack(spacing: ZenDesign.Spacing.sm) {
-            ZenStatTile(
-                value: viewModel.snapshot.totalWordCount.formatted(),
-                label: "words dictated"
-            )
-            ZenStatTile(
-                value:
-                    "\(Int(viewModel.snapshot.weightedWordsPerMinute.rounded()))",
-                label: "weighted WPM"
-            )
-            ZenStatTile(
-                value:
-                    "\(viewModel.snapshot.currentStreakDays) day"
-                    + (viewModel.snapshot.currentStreakDays == 1 ? "" : "s"),
-                label: "streak",
-                detail: "best: \(viewModel.snapshot.longestStreakDays)"
-            )
-            ZenStatTile(
-                value: viewModel.snapshot.dictationCount.formatted(),
-                label: "dictations"
-            )
+    private var topMetricsGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: ZenDesign.Spacing.xl),
+                GridItem(.flexible(), spacing: ZenDesign.Spacing.xl),
+                GridItem(.flexible(), spacing: ZenDesign.Spacing.xl),
+                GridItem(.flexible(), spacing: ZenDesign.Spacing.xl),
+            ],
+            spacing: ZenDesign.Spacing.xl
+        ) {
+            wpmCard
+            fixesCard
+            totalWordsCard
+            topAppCard
         }
     }
 
-    // MARK: words per day
+    private var wpmCard: some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                metricEyebrow("Words per minute", icon: "waveform")
+                Text("\(Int(viewModel.snapshot.weightedWordsPerMinute.rounded()))")
+                    .font(ZenDesign.Typography.metric)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
 
-    private var activitySection: some View {
-        ZenSection(
-            title: "Words per day",
-            caption: busiestCaption
-        ) {
-            ZenPanel {
-                HStack(alignment: .bottom, spacing: 10) {
-                    ForEach(displayedActivity) { day in
-                        VStack(spacing: 6) {
-                            RoundedRectangle(
-                                cornerRadius: 4, style: .continuous
-                            )
-                            .fill(
-                                day.wordCount == maxActivityWords
-                                    && day.wordCount > 0
-                                    ? ZenDesign.Semantic.accent
-                                    : day.wordCount > 0
-                                        ? ZenDesign.Semantic.accentMuted
-                                        : ZenDesign.Semantic.surfaceRaised
-                            )
-                            .frame(
-                                height: activityHeight(for: day.wordCount)
-                            )
-                            .frame(maxHeight: 96, alignment: .bottom)
-                            .accessibilityLabel(
-                                "\(day.date.formatted(.dateTime.weekday(.wide))): \(day.wordCount) words"
-                            )
-                            Text(
-                                day.date.formatted(
-                                    .dateTime.weekday(.abbreviated)
-                                )
-                                .lowercased()
-                            )
+                Spacer(minLength: 0)
+
+                ZStack {
+                    ZenGauge(progress: wpmGaugeProgress)
+                        .frame(height: 64)
+                    VStack(spacing: 0) {
+                        Text("avg")
                             .font(ZenDesign.Typography.caption)
                             .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        Text("WPM")
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    }
+                    .padding(.top, 18)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(ZenDesign.Spacing.lg)
+            .frame(minHeight: 180, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private var wpmGaugeProgress: Double {
+        let wpm = viewModel.snapshot.weightedWordsPerMinute
+        guard wpm > 0 else { return 0 }
+        let maxWPM: Double = 200
+        return min(1.0, wpm / maxWPM)
+    }
+
+    private var fixesCard: some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                metricEyebrow("Fixes made by ZenVoice", icon: "wand.and.stars")
+                Text(viewModel.snapshot.correctionCount.formatted())
+                    .font(ZenDesign.Typography.metric)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+
+                if viewModel.snapshot.correctionCount > 0 {
+                    Spacer(minLength: ZenDesign.Spacing.md)
+                    Text("Corrections applied across all dictations.")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(ZenDesign.Spacing.lg)
+            .frame(minHeight: 180, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private var totalWordsCard: some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                metricEyebrow("Total words dictated", icon: "text.quote")
+
+                Text(viewModel.snapshot.totalWordCount.formatted())
+                    .font(ZenDesign.Typography.metric)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+
+                Spacer(minLength: ZenDesign.Spacing.md)
+
+                Text(totalWordsFlavor)
+                    .font(ZenDesign.Typography.body)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+
+                if let topApp = viewModel.snapshot.topApplications.first {
+                    Spacer(minLength: ZenDesign.Spacing.sm)
+                    HStack(spacing: ZenDesign.Spacing.xs) {
+                        Image(systemName: "macwindow")
+                            .foregroundStyle(ZenDesign.Semantic.textOnAccent)
+                            .padding(ZenDesign.Spacing.xs)
+                            .background(ZenDesign.Semantic.accentFill)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(ZenDesign.Semantic.surfaceSunken)
+                                Capsule()
+                                    .fill(ZenDesign.Semantic.accent)
+                                    .frame(
+                                        width: proxy.size.width
+                                            * CGFloat(percentOfWords(topApp.wordCount)) / 100
+                                    )
+                            }
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(height: 12)
+
+                        Text(topApp.displayName)
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            .lineLimit(1)
                     }
                 }
-                .padding(ZenDesign.Spacing.md)
-                .frame(height: 140, alignment: .bottom)
+
+                Spacer(minLength: 0)
             }
+            .padding(ZenDesign.Spacing.lg)
+            .frame(minHeight: 180, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
-    private var busiestCaption: String {
-        guard
-            let top = viewModel.snapshot.recentActivity
-                .max(by: { $0.wordCount < $1.wordCount }),
-            top.wordCount > 0
-        else {
-            return "\(viewModel.snapshot.dictationCount) dictations total"
+    private var totalWordsFlavor: String {
+        let words = viewModel.snapshot.totalWordCount
+        guard words >= 1000 else {
+            return "Keep going — every word counts."
         }
-        return "Busiest: \(top.date.formatted(.dateTime.weekday(.wide))) · \(top.wordCount.formatted()) words"
+        let chapters = max(1, words / 2500)
+        return "You've written about \(chapters) book chapter\(chapters == 1 ? "" : "s")!"
     }
 
-    // MARK: apps & categories
+    private var topAppCard: some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                metricEyebrow("Most used app", icon: "macwindow")
 
-    private var appsSection: some View {
-        ZenSection(title: "Where you dictate") {
-            ZenPanel {
-                VStack(alignment: .leading, spacing: 0) {
-                    if viewModel.snapshot.topApplications.isEmpty {
-                        ZenRow(
-                            icon: "app",
-                            title: "No application context yet",
-                            subtitle:
-                                "ZenVoice remembers only the app name, never window titles or URLs."
+                if let topApp = viewModel.snapshot.topApplications.first {
+                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                        Text(topApp.displayName)
+                            .font(ZenDesign.Typography.sectionTitle)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            .lineLimit(2)
+
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(topApp.wordCount.formatted())
+                                .font(ZenDesign.Typography.metricCaption)
+                                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            Text("words")
+                                .font(ZenDesign.Typography.caption)
+                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        }
+
+                        ZenMeterRow(
+                            label: "of total",
+                            percent: percentOfWords(topApp.wordCount)
                         )
-                        .padding(.vertical, ZenDesign.Spacing.sm)
-                    } else {
+                    }
+                } else {
+                    Spacer(minLength: 0)
+                    Text("No app data yet")
+                        .font(ZenDesign.Typography.body)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    Text("Dictate into a few apps to see which one you use most.")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(ZenDesign.Spacing.lg)
+            .frame(minHeight: 180, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func metricEyebrow(_ label: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                .accessibilityHidden(true)
+            Text(label.uppercased())
+                .font(ZenDesign.Typography.eyebrow)
+                .tracking(1.0)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                .lineLimit(1)
+        }
+    }
+
+    // MARK: desktop usage
+
+    private var desktopUsageCard: some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Desktop usage")
+                        .font(ZenDesign.Typography.sectionTitle)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Spacer()
+                    Text("TOTAL APPS USED | \(viewModel.snapshot.distinctApplicationCount)")
+                        .font(ZenDesign.Typography.eyebrow)
+                        .tracking(1.0)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+                .padding(ZenDesign.Spacing.lg)
+
+                if viewModel.snapshot.categories.isEmpty {
+                    ZenRow(
+                        icon: "square.grid.2x2",
+                        title: "No categories yet",
+                        subtitle: "Work categories appear after saved dictations."
+                    )
+                    .padding(ZenDesign.Spacing.lg)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
                         ForEach(
-                            viewModel.snapshot.topApplications
-                        ) { app in
-                            ZenMeterRow(
-                                label: app.displayName,
-                                percent: percentOfWords(app.wordCount)
-                            )
+                            Array(categoryRows.enumerated()),
+                            id: \.offset
+                        ) { index, row in
+                            categoryBar(row: row)
+                            if index < categoryRows.count - 1 {
+                                ZenPanelDivider()
+                                    .padding(.leading, 48)
+                            }
                         }
-                        .padding(.horizontal, ZenDesign.Spacing.md)
                     }
+                    .padding(.horizontal, ZenDesign.Spacing.lg)
+                    .padding(.vertical, ZenDesign.Spacing.md)
                 }
-                .padding(.vertical, ZenDesign.Spacing.xs)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
 
-    private var categoriesSection: some View {
-        ZenSection(title: "What kind of work") {
-            ZenPanel {
-                VStack(alignment: .leading, spacing: 0) {
-                    if viewModel.snapshot.categories.isEmpty {
-                        ZenRow(
-                            icon: "square.grid.2x2",
-                            title: "No categories yet",
-                            subtitle: "Work categories appear after saved dictations."
-                        )
-                    } else {
-                        ForEach(viewModel.snapshot.categories) { insight in
-                            ZenMeterRow(
-                                label: insight.category.displayName,
-                                percent: percentOfWords(insight.wordCount)
-                            )
-                        }
-                        .padding(.horizontal, ZenDesign.Spacing.md)
-                    }
-                }
-                .padding(.vertical, ZenDesign.Spacing.xs)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    private func percentOfWords(_ count: Int) -> Int {
+    private var categoryRows: [(category: DictationCategory, wordCount: Int, percent: Int)] {
         let total = max(1, viewModel.snapshot.totalWordCount)
-        return Int(
-            (Double(count) / Double(total) * 100).rounded()
-        )
+        let rows = viewModel.snapshot.categories
+            .sorted { $0.wordCount > $1.wordCount }
+            .map { insight in
+                (
+                    insight.category,
+                    insight.wordCount,
+                    Int((Double(insight.wordCount) / Double(total) * 100).rounded())
+                )
+            }
+        return Array(rows.prefix(6))
     }
+
+    private func categoryBar(
+        row: (category: DictationCategory, wordCount: Int, percent: Int)
+    ) -> some View {
+        HStack(spacing: ZenDesign.Spacing.md) {
+            Image(systemName: categoryIcon(row.category))
+                .font(.system(size: 18))
+                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                .frame(width: 24, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(row.category.displayName.uppercased())
+                        .font(ZenDesign.Typography.captionStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Spacer()
+                    Text("\(row.wordCount.formatted())")
+                        .font(ZenDesign.Typography.captionStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                }
+
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(ZenDesign.Semantic.surfaceSunken)
+                        Capsule()
+                            .fill(categoryColor(row.category))
+                            .frame(
+                                width: proxy.size.width
+                                    * CGFloat(max(0, min(row.percent, 100))) / 100
+                            )
+                    }
+                }
+                .frame(height: 8)
+            }
+        }
+        .padding(.vertical, ZenDesign.Spacing.sm)
+        .frame(minHeight: 44)
+    }
+
+    private func categoryIcon(_ category: DictationCategory) -> String {
+        switch category {
+        case .documents: return "doc.text"
+        case .email: return "envelope"
+        case .workMessages: return "briefcase"
+        case .personalMessages: return "message"
+        case .aiPrompts: return "sparkles"
+        case .notes: return "note.text"
+        case .development: return "terminal"
+        case .other: return "ellipsis"
+        }
+    }
+
+    private func categoryColor(_ category: DictationCategory) -> Color {
+        switch category {
+        case .documents: return ZenDesign.Semantic.accent
+        case .email: return ZenDesign.Semantic.success
+        case .workMessages: return ZenDesign.Semantic.warn
+        case .personalMessages: return ZenDesign.Semantic.accentFill
+        case .aiPrompts: return ZenDesign.Semantic.accentStrong
+        case .notes: return ZenDesign.Semantic.successMuted
+        case .development: return ZenDesign.Semantic.textTertiary
+        case .other: return ZenDesign.Semantic.surfaceRaised
+        }
+    }
+
+    // MARK: streak calendar
+
+    private var streakCard: some View {
+        ZenPanel {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(viewModel.snapshot.currentStreakDays) day streak")
+                        .font(ZenDesign.Typography.sectionTitle)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Spacer()
+                    Text("LONGEST STREAK | \(viewModel.snapshot.longestStreakDays) DAYS")
+                        .font(ZenDesign.Typography.eyebrow)
+                        .tracking(1.0)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+                .padding(ZenDesign.Spacing.lg)
+
+                contributionCalendar
+                    .padding(.horizontal, ZenDesign.Spacing.lg)
+                    .padding(.bottom, ZenDesign.Spacing.md)
+
+                HStack(spacing: ZenDesign.Spacing.sm) {
+                    Text("More")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    ForEach(0..<4) { level in
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(calendarColor(level: level))
+                            .frame(width: 12, height: 12)
+                    }
+                    Text("Less")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+
+                    Spacer()
+
+                    Toggle("Current streak", isOn: .constant(true))
+                        .toggleStyle(.checkbox)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .disabled(true)
+                }
+                .padding(ZenDesign.Spacing.lg)
+            }
+        }
+    }
+
+    private var contributionCalendar: some View {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weeks = viewModel.snapshot.activityCalendar.chunked(into: 7)
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    ForEach(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], id: \.self) { day in
+                        Text(day)
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            .frame(height: 14)
+                    }
+                }
+
+                ForEach(Array(weeks.enumerated()), id: \.offset) { weekIndex, week in
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let label = monthLabel(for: week, calendar: calendar, today: today) {
+                            Text(label)
+                                .font(ZenDesign.Typography.caption)
+                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                                .frame(height: 14)
+                        } else {
+                            Color.clear.frame(height: 14)
+                        }
+
+                        ForEach(Array(week.enumerated()), id: \.offset) { _, day in
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(calendarColor(for: day.wordCount))
+                                .frame(width: 14, height: 14)
+                                .accessibilityLabel(
+                                    "\(day.date.formatted(.dateTime.month().day())): \(day.wordCount) words"
+                                )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func monthLabel(
+        for week: [DailyActivityInsight],
+        calendar: Calendar,
+        today: Date
+    ) -> String? {
+        guard let firstDay = week.first?.date else { return nil }
+        let components = calendar.dateComponents([.day], from: firstDay)
+        guard components.day == 1 || firstDay == today else { return nil }
+        return firstDay.formatted(.dateTime.month(.abbreviated))
+    }
+
+    private func calendarColor(for wordCount: Int) -> Color {
+        let level: Int
+        switch wordCount {
+        case 0: level = 0
+        case 1..<50: level = 1
+        case 50..<200: level = 2
+        case 200..<500: level = 3
+        default: level = 4
+        }
+        return calendarColor(level: level)
+    }
+
+    private func calendarColor(level: Int) -> Color {
+        switch level {
+        case 0: return ZenDesign.Semantic.surfaceSunken
+        case 1: return ZenDesign.Semantic.accent.opacity(0.18)
+        case 2: return ZenDesign.Semantic.accent.opacity(0.40)
+        case 3: return ZenDesign.Semantic.accent.opacity(0.65)
+        default: return ZenDesign.Semantic.accent
+        }
+    }
+
+    // MARK: helpers
 
     private var shareSummary: ShareCardSummary {
         ShareCardSummary(
@@ -229,33 +523,67 @@ struct InsightsScreen: View {
         )
     }
 
-    private var maxActivityWords: Int {
-        displayedActivity.map(\.wordCount).max() ?? 0
+    private func percentOfWords(_ count: Int) -> Int {
+        let total = max(1, viewModel.snapshot.totalWordCount)
+        return Int(
+            (Double(count) / Double(total) * 100).rounded()
+        )
     }
+}
 
-    private var displayedActivity: [DisplayActivityDay] {
-        guard viewModel.snapshot.recentActivity.isEmpty else {
-            return viewModel.snapshot.recentActivity.map {
-                DisplayActivityDay(date: $0.date, wordCount: $0.wordCount)
+// MARK: gauge
+
+private struct ZenGauge: View {
+    let progress: Double
+
+    var body: some View {
+        Canvas { context, size in
+            let clamped = max(0, min(1, progress))
+            let center = CGPoint(x: size.width / 2, y: size.height)
+            let radius = min(size.width, size.height * 2) / 2 - 8
+            let startAngle = Angle.degrees(180)
+            let endAngle = Angle.degrees(360)
+            let progressEnd = Angle.degrees(180 + 180 * clamped)
+
+            let trackPath = Path { path in
+                path.addArc(
+                    center: center,
+                    radius: radius,
+                    startAngle: startAngle,
+                    endAngle: endAngle,
+                    clockwise: false
+                )
             }
-        }
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: Date())
-        return (0..<7).reversed().compactMap { offset in
-            guard let date = calendar.date(
-                byAdding: .day,
-                value: -offset,
-                to: start
-            ) else {
-                return nil
+            let progressPath = Path { path in
+                path.addArc(
+                    center: center,
+                    radius: radius,
+                    startAngle: startAngle,
+                    endAngle: progressEnd,
+                    clockwise: false
+                )
             }
-            return DisplayActivityDay(date: date, wordCount: 0)
+
+            context.stroke(
+                trackPath,
+                with: .color(ZenDesign.Semantic.surfaceSunken),
+                lineWidth: 10
+            )
+            context.stroke(
+                progressPath,
+                with: .color(ZenDesign.Semantic.accent),
+                lineWidth: 10
+            )
         }
     }
+}
 
-    private func activityHeight(for wordCount: Int) -> CGFloat {
-        let maximum = max(1, maxActivityWords)
-        guard wordCount > 0 else { return 4 }
-        return 12 + 84 * CGFloat(wordCount) / CGFloat(maximum)
+// MARK: array chunking helper
+
+private extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
+        }
     }
 }

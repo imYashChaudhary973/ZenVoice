@@ -120,6 +120,7 @@ public struct LocalInsightsSnapshot: Sendable {
     public let categories: [CategoryInsight]
     public let topApplications: [ApplicationInsight]
     public let recentActivity: [DailyActivityInsight]
+    public let activityCalendar: [DailyActivityInsight]
     public let today: TodayUsageInsight
 
     public static let empty = LocalInsightsSnapshot(
@@ -134,6 +135,7 @@ public struct LocalInsightsSnapshot: Sendable {
         categories: [],
         topApplications: [],
         recentActivity: [],
+        activityCalendar: [],
         today: .empty
     )
 
@@ -231,6 +233,26 @@ public struct LocalInsightsSnapshot: Sendable {
             )
         }
 
+        let calendarDays: Int = 112
+        let activityCalendar: [DailyActivityInsight] =
+            (0..<calendarDays).reversed().compactMap { offset in
+            guard let date = calendar.date(
+                byAdding: .day,
+                value: -offset,
+                to: today
+            ) else {
+                return nil
+            }
+            let matching = events.filter {
+                calendar.isDate($0.startedAt, inSameDayAs: date)
+            }
+            return DailyActivityInsight(
+                date: date,
+                dictationCount: matching.count,
+                wordCount: matching.reduce(0) { $0 + $1.wordCount }
+            )
+        }
+
         let todayEvents = events.filter {
             calendar.isDate($0.startedAt, inSameDayAs: today)
         }
@@ -273,6 +295,7 @@ public struct LocalInsightsSnapshot: Sendable {
             categories: categories,
             topApplications: Array(applications.prefix(5)),
             recentActivity: activity,
+            activityCalendar: activityCalendar,
             today: todayUsage
         )
     }
