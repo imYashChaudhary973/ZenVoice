@@ -158,6 +158,19 @@ cp -R "$build_dir/whisper.framework" "$frameworks_dir/"
 # bundle builds and signs cleanly but dyld refuses to start it, so the failure
 # only shows up when the installed app is launched.
 cp "$build_dir/libparakeet.dylib" "$frameworks_dir/"
+# SwiftPM does not embed linked frameworks into app bundles. Sparkle is linked
+# via @rpath/Sparkle.framework; without this copy dyld refuses to launch the
+# installed app even though the bundle builds and signs cleanly.
+sparkle_framework="$build_dir/Sparkle.framework"
+if [[ ! -d "$sparkle_framework" ]]; then
+    sparkle_framework="$project_dir/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+fi
+if [[ -d "$sparkle_framework" ]]; then
+    cp -R "$sparkle_framework" "$frameworks_dir/"
+else
+    echo "Error: Sparkle.framework not found for embedding." >&2
+    exit 1
+fi
 install_name_tool \
     -add_rpath "@executable_path/../Frameworks" \
     "$contents_dir/MacOS/ZenVoice"
@@ -190,6 +203,25 @@ if [[ -n "$signing_identity" ]]; then
         "$timestamp_flag" \
         --sign "$signing_identity" \
         "$frameworks_dir/libparakeet.dylib"
+    # Sparkle ships nested helper binaries (Updater.app, Autoupdate,
+    # XPCServices/*.xpc). Notarization rejects the framework if any nested
+    # executable lacks Developer ID + timestamp, so sign every one of them
+    # before the framework itself.
+    while IFS= read -r helper; do
+        codesign \
+            --force \
+            --options runtime \
+            "$timestamp_flag" \
+            --sign "$signing_identity" \
+            "$helper"
+    done < <(find "$frameworks_dir/Sparkle.framework" -type f -perm -111 ! -name "*.h" ! -name "*.modulemap" 2>/dev/null | sort -u; find "$frameworks_dir/Sparkle.framework" \( -name "*.app" -o -name "*.xpc" \) 2>/dev/null | sort -u)
+    codesign \
+        --force \
+        --options runtime \
+        "$timestamp_flag" \
+        --sign "$signing_identity" \
+        "$frameworks_dir/Sparkle.framework"
+
     codesign \
         --force \
         --options runtime \
@@ -213,6 +245,18 @@ else
         --options runtime \
         --sign - \
         "$frameworks_dir/libparakeet.dylib"
+    while IFS= read -r helper; do
+        codesign \
+            --force \
+            --options runtime \
+            --sign - \
+            "$helper"
+    done < <(find "$frameworks_dir/Sparkle.framework" -type f -perm -111 ! -name "*.h" ! -name "*.modulemap" 2>/dev/null | sort -u; find "$frameworks_dir/Sparkle.framework" \( -name "*.app" -o -name "*.xpc" \) 2>/dev/null | sort -u)
+    codesign \
+        --force \
+        --options runtime \
+        --sign - \
+        "$frameworks_dir/Sparkle.framework"
     codesign \
         --force \
         --options runtime \
