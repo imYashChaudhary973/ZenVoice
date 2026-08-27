@@ -249,27 +249,6 @@ struct ModelsScreen: View {
         .padding(.horizontal, ZenDesign.Spacing.lg)
         .padding(.vertical, ZenDesign.Spacing.md)
     }
-                }
-            }
-
-            if downloadingEngine {
-                VStack(alignment: .leading, spacing: 5) {
-                    ZenProgressBar(value: viewModel.downloadProgress ?? 0)
-                        .frame(height: 3)
-                    Text(
-                        viewModel.isVerifyingDownload
-                            ? "Verifying checksum…"
-                            : "Downloading \(Int(((viewModel.downloadProgress ?? 0) * 100).rounded()))%"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                }
-                .padding(.leading, 50)
-            }
-        }
-        .padding(.horizontal, ZenDesign.Spacing.lg)
-        .padding(.vertical, ZenDesign.Spacing.md)
-    }
 
     private enum ListedModel: Identifiable {
         case engine(EngineLinkedModel)
