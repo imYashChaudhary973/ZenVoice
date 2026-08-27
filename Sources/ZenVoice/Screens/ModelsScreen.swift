@@ -191,34 +191,56 @@ struct ModelsScreen: View {
         let downloadable = viewModel.engines.first {
             $0.descriptor.id == availability.engine.id
         }
+        let downloadingEngine = downloadable.map(viewModel.isEngineDownloading) ?? false
 
-        return ZenRow(
-            icon: "waveform",
-            iconTint: selected ? ZenDesign.Semantic.accent : nil,
-            title: availability.engine.displayName,
-            subtitle: availability.engine.privacyNote
-        ) {
-            if selected {
-                ZenBadge(text: "Active", kind: .success)
-            } else if availability.isAvailable {
-                Button("Use") {
-                    viewModel.selectEngine(availability.engine.id)
+        return VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+            ZenRow(
+                icon: "waveform",
+                iconTint: selected ? ZenDesign.Semantic.accent : nil,
+                title: availability.engine.displayName,
+                subtitle: availability.engine.privacyNote
+            ) {
+                if selected {
+                    ZenBadge(text: "Active", kind: .success)
+                } else if availability.isAvailable {
+                    Button("Use") {
+                        viewModel.selectEngine(availability.engine.id)
+                    }
+                    .buttonStyle(ZenSecondaryButtonStyle())
+                } else if let downloadable,
+                          availability.engine.requiresDownload {
+                    if downloadingEngine {
+                        Button("Cancel") { viewModel.cancelDownload() }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+                    } else {
+                        Button("Download") {
+                            viewModel.downloadEngine(downloadable)
+                        }
+                        .buttonStyle(ZenSecondaryButtonStyle())
+                        .disabled(viewModel.downloadingModelID != nil)
+                    }
+                } else {
+                    ZenBadge(text: "Unavailable", kind: .neutral)
                 }
-                .buttonStyle(ZenSecondaryButtonStyle())
-            } else if let downloadable,
-                      availability.engine.requiresDownload {
-                Button(
-                    viewModel.isEngineDownloading(downloadable)
-                        ? "Downloading…" : "Download"
-                ) {
-                    viewModel.downloadEngine(downloadable)
+            }
+
+            if downloadingEngine {
+                VStack(alignment: .leading, spacing: 5) {
+                    ZenProgressBar(value: viewModel.downloadProgress ?? 0)
+                        .frame(height: 3)
+                    Text(
+                        viewModel.isVerifyingDownload
+                            ? "Verifying checksum…"
+                            : "Downloading \(Int(((viewModel.downloadProgress ?? 0) * 100).rounded()))%"
+                    )
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
-                .buttonStyle(ZenSecondaryButtonStyle())
-                .disabled(viewModel.isEngineDownloading(downloadable))
-            } else {
-                ZenBadge(text: "Unavailable", kind: .neutral)
+                .padding(.leading, 50)
             }
         }
+        .padding(.horizontal, ZenDesign.Spacing.lg)
+        .padding(.vertical, ZenDesign.Spacing.md)
     }
 
     private enum ListedModel: Identifiable {

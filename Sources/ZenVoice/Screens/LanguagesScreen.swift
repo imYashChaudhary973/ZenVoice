@@ -113,10 +113,29 @@ struct LanguagesScreen: View {
 
                 ZenPanelDivider()
 
-                DisclosureGroup(
-                    "Browse all \(LanguageCatalog.languages.count) languages",
-                    isExpanded: $showsAllLanguages
-                ) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showsAllLanguages.toggle()
+                    }
+                } label: {
+                    HStack(spacing: ZenDesign.Spacing.sm) {
+                        Text("Browse all \(LanguageCatalog.languages.count) languages")
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(ZenDesign.Typography.badge)
+                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            .rotationEffect(.degrees(showsAllLanguages ? 180 : 0))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, ZenDesign.Spacing.md)
+                    .padding(.vertical, ZenDesign.Spacing.md)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(ZenPressButtonStyle())
+
+                if showsAllLanguages {
                     VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                         ZenSearchField(
                             placeholder: "Search languages…",
@@ -126,10 +145,9 @@ struct LanguagesScreen: View {
                             languageButton(language)
                         }
                     }
-                    .padding(.top, ZenDesign.Spacing.sm)
+                    .padding(.horizontal, ZenDesign.Spacing.md)
+                    .padding(.bottom, ZenDesign.Spacing.md)
                 }
-                .font(ZenDesign.Typography.bodyStrong)
-                .padding(ZenDesign.Spacing.md)
             }
 
             if viewModel.languageProfile.requiresMultilingualModel {
