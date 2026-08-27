@@ -203,6 +203,13 @@ struct ModelsScreen: View {
                 if selected {
                     ZenBadge(text: "Active", kind: .success)
                 } else if availability.isAvailable {
+                    if viewModel.isRecommendedEngine(availability.engine.id) {
+                        ZenBadge(
+                            text: "Recommended",
+                            kind: .accent,
+                            systemImage: "sparkles"
+                        )
+                    }
                     Button("Use") {
                         viewModel.selectEngine(availability.engine.id)
                     }
@@ -221,6 +228,27 @@ struct ModelsScreen: View {
                     }
                 } else {
                     ZenBadge(text: "Unavailable", kind: .neutral)
+                }
+            }
+
+            if downloadingEngine {
+                VStack(alignment: .leading, spacing: 5) {
+                    ZenProgressBar(value: viewModel.downloadProgress ?? 0)
+                        .frame(height: 3)
+                    Text(
+                        viewModel.isVerifyingDownload
+                            ? "Verifying checksum…"
+                            : "Downloading \(Int(((viewModel.downloadProgress ?? 0) * 100).rounded()))%"
+                    )
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+                .padding(.leading, 50)
+            }
+        }
+        .padding(.horizontal, ZenDesign.Spacing.lg)
+        .padding(.vertical, ZenDesign.Spacing.md)
+    }
                 }
             }
 

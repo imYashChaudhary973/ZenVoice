@@ -457,6 +457,10 @@ final class ModelManagerViewModel: ObservableObject {
         engineRecommendation()?.preferredEngineID == engineID
     }
 
+    func recommendedEngineRationale() -> String? {
+        engineRecommendation()?.rationale
+    }
+
     func selectEngine(_ engineID: String) {
         if EngineIdentifiers.isPreviewOnly(engineID) {
             errorMessage =
