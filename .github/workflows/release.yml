@@ -103,13 +103,15 @@ jobs:
             ./Scripts/notarize-app.sh
 
       - name: Build DMG
+        env:
+          VERSION: ${{ github.event.inputs.version }}
         run: |
           rm -rf build/dmg-staging build/ZenVoice.dmg
           mkdir -p build/dmg-staging
           cp -R build/ZenVoice.app build/dmg-staging/ZenVoice.app
           ln -s /Applications build/dmg-staging/Applications
           hdiutil create \
-            -volname "ZenVoice ${{ github.event.inputs.version }}" \
+            -volname "ZenVoice $VERSION" \
             -srcfolder build/dmg-staging \
             -ov \
             -format UDZO \
