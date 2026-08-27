@@ -6,6 +6,29 @@ All notable ZenVoice changes are recorded here.
 
 ## [0.4.2] - 2026-08-27
 
+### Added
+
+- Engine downloads in Models now show a determinate progress bar and a
+  percentage/verifying caption, matching the existing Whisper model download
+  experience.
+- Models engine rows show a "Recommended" badge for the engine that best fits
+  this Mac and the selected language.
+- The onboarding model step now surfaces the recommended engine with its
+  rationale and offers a one-tap "Use recommended engine" action.
+
+### Changed
+
+- "Browse all 64 languages" on the Languages screen is now a full-width tappable
+  card; the whole row expands or collapses the list, not just the disclosure
+  arrow.
+- Onboarding is now strict: the "Skip setup" button is gone, and Continue is
+  disabled until each step's requirement is met. Permissions must be granted,
+  and the recommended model must be downloaded and verified before the user
+  can finish setup.
+- Onboarding cards, rows, and buttons now use the same shared components and
+  design tokens as the rest of the app (`ZenPanel`, `ZenRow`, `ZenIconChip`,
+  `ZenBadge`, `ZenPrimaryButtonStyle`, etc.).
+
 
 ## [0.4.1] - 2026-08-27
 
