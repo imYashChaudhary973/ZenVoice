@@ -50,6 +50,7 @@ Public GitHub beta. Apache-2.0.
 - **Live preview** — optional on-device preview while you speak. Flash and Nemotron Ultra Fast are preview-only; final insert stays on TDT v3 or Whisper.
 - **Formatting** — Off, deterministic Clean, guarded on-device Smart (macOS 26+), or opt-in BYO-key Cloud. Cloud never sends audio.
 - **Encrypted history** — AES-GCM transcripts, search, copy, retry, delete, Recovery Inbox. Pause independently of Private Dictation.
+- **Lecture Capture (v1)** — record long-form audio from the menu bar, transcribe it with your chosen on-device engine, and optionally summarize the text with your own API key. Audio stays on disk; only finished text is sent if you enable a cloud summary.
 - **Insights** — words, weighted WPM, streaks, apps, categories. All derived locally. Share cards carry numbers only.
 - **Voice profile** — recurring phrases and explicit correction rules, encrypted. Not a biometric voiceprint.
 - **Audio Doctor** — three-second local mic check. Pin a microphone or follow System Default.
@@ -116,7 +117,7 @@ NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Int
 
 ## Quick start
 
-1. **Download** `ZenVoice-distribution.zip` from [Releases](https://github.com/imYashChaudhary973/ZenVoice/releases/latest). Unzip and drag `ZenVoice.app` to `/Applications`.
+1. **Download** `ZenVoice.dmg` from [Releases](https://github.com/imYashChaudhary973/ZenVoice/releases/latest). Open the DMG and drag `ZenVoice.app` to `/Applications`.
 2. **Allow Microphone and Accessibility.** Without Accessibility, text still lands on the clipboard.
 3. **Finish setup** — language, then the recommended engine/model, then a test dictation.
 4. **Put the caret** in any editable field. Press `⌃⌥Space`, speak, press it again.
