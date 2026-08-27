@@ -39,6 +39,10 @@ let package = Package(
         .package(
             url: "https://github.com/microsoft/onnxruntime-swift-package-manager",
             from: "1.24.2"
+        ),
+        .package(
+            url: "https://github.com/sparkle-project/Sparkle",
+            from: "2.6.0"
         )
     ],
     targets: [
@@ -72,6 +76,7 @@ let package = Package(
                 "ZenVoiceStorage",
                 "ZenVoiceRuntime",
                 "ZenVoiceLink",
+                .product(name: "Sparkle", package: "Sparkle"),
             ]
         ),
         .executableTarget(

@@ -32,5 +32,10 @@
 	<string>ZenVoice records your speech so it can transcribe it locally on this Mac.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>ZenVoice uses Apple Speech to turn your recordings into text when you select the Apple Speech engine.</string>
+	<!-- Sparkle auto-update configuration. Replace placeholders with the real feed URL and EdDSA public key at release build time. -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/imYashChaudhary973/ZenVoice/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>PLACEHOLDER_EDDSA_PUBLIC_KEY_REPLACE_BEFORE_RELEASE</string>
 </dict>
 </plist>
