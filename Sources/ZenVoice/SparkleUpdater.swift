@@ -12,23 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import Combine
 import Foundation
 import os
 import Sparkle
+import SwiftUI
+import ZenVoiceCore
 
 /// Wrapper around Sparkle's `SPUUpdater`.
 ///
-/// The updater is started automatically on launch from `AppDelegate`.
-/// Feed URL and public key are read from `Info.plist` so release tooling can
-/// inject them without recompiling; placeholders are committed to keep real
-/// secrets out of the repository.
+/// Started automatically on launch from `AppDelegate`. Feed URL and public
+/// key are read from `Info.plist` so release tooling can inject them without
+/// recompiling; placeholders are committed to keep real secrets out of the
+/// repository.
 @MainActor
-final class SparkleUpdater: NSObject, SPUUpdaterDelegate {
+final class SparkleUpdater: NSObject, ObservableObject, SPUUpdaterDelegate {
     static let shared = SparkleUpdater()
+
+    /// Mirrors `SPUUpdater.automaticallyChecksForUpdates` and persists the
+    /// user's preference.
+    @Published var automaticallyCheckForUpdates: Bool {
+        didSet {
+            updater?.automaticallyChecksForUpdates = automaticallyCheckForUpdates
+            UpdatePreferences.setAutomaticEnabled(automaticallyCheckForUpdates)
+        }
+    }
+
+    /// True while Sparkle is actively checking or downloading an update.
+    @Published private(set) var updateInProgress: Bool = false
+
+    /// Date of the last completed background check, if any.
+    @Published private(set) var lastUpdateCheckDate: Date?
 
     private var updater: SPUUpdater?
 
     private override init() {
+        automaticallyCheckForUpdates = UpdatePreferences.isAutomaticEnabled()
         super.init()
     }
 
@@ -46,25 +65,46 @@ final class SparkleUpdater: NSObject, SPUUpdaterDelegate {
 
         do {
             try newUpdater.start()
+            newUpdater.automaticallyChecksForUpdates = automaticallyCheckForUpdates
+            lastUpdateCheckDate = newUpdater.lastUpdateCheckDate
             updater = newUpdater
         } catch {
-            os_log("Failed to start Sparkle updater: %{public}@", type: .error, error.localizedDescription)
+            os_log(
+                "Failed to start Sparkle updater: %{public}@",
+                type: .error,
+                error.localizedDescription
+            )
         }
     }
 
     /// Triggers an explicit "Check for Updates" from UI (e.g. Settings).
     func checkForUpdates() {
+        updateInProgress = true
         updater?.checkForUpdates()
     }
 
     // MARK: - SPUUpdaterDelegate
 
     func feedURLString(for updater: SPUUpdater) -> String? {
-        // Return the placeholder feed URL from Info.plist when present.
+        // Return the feed URL from Info.plist when present. A nil value here
+        // falls back to any feed URL Sparkle was initialized with.
         Bundle.main.infoDictionary?["SUFeedURL"] as? String
     }
 
     func updaterMayCheck(forUpdates updater: SPUUpdater) -> Bool {
         true
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+        error: Error?
+    ) {
+        updateInProgress = false
+        lastUpdateCheckDate = updater.lastUpdateCheckDate
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        updateInProgress = false
     }
 }

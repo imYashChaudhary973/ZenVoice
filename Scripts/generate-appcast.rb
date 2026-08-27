@@ -56,17 +56,23 @@ raise "Private key not found: #{key_path}" unless File.exist?(key_path)
 length = File.size(dmg_path)
 sha256 = Digest::SHA256.file(dmg_path).hexdigest
 
-# Locate Sparkle's sign_update tool. Prefer a local copy if the project vendors
-# Sparkle binaries, otherwise rely on PATH.
-sparkle_bin_dir = File.join(project_dir, 'vendor', 'sparkle', 'bin')
-sign_update = File.join(sparkle_bin_dir, 'sign_update')
-sign_update = 'sign_update' unless File.executable?(sign_update)
+# Locate Sparkle's sign_update tool. Prefer a SwiftPM artifact copy, then a
+# vendored copy, then PATH.
+sparkle_bin_candidates = [
+  File.join(project_dir, '.build', 'artifacts', 'sparkle', 'Sparkle', 'bin', 'sign_update'),
+  File.join(project_dir, 'vendor', 'sparkle', 'bin', 'sign_update'),
+  'sign_update'
+]
+sign_update = sparkle_bin_candidates.find { |c| File.executable?(c) } || 'sign_update'
 
-signature = nil
-IO.popen([sign_update, '--private-key-file', key_path, dmg_path], err: [:child, :out]) do |io|
-  signature = io.read.strip
+signature_output = nil
+IO.popen([sign_update, '--ed-key-file', key_path, '-p', dmg_path], err: [:child, :out]) do |io|
+  signature_output = io.read.strip
 end
-raise "sign_update failed or produced no output" if signature.nil? || signature.empty?
+raise "sign_update failed or produced no output" if signature_output.nil? || signature_output.empty?
+# sign_update -p prints only the base64 EdDSA signature.
+signature = signature_output.lines.last&.strip || signature_output
+raise "sign_update output does not look like a base64 EdDSA signature: #{signature_output.inspect}" unless signature.match?(/\A[A-Za-z0-9+\/=]+\z/)
 
 # Pull release notes for this version from CHANGELOG.md.
 changelog_path = File.join(project_dir, 'CHANGELOG.md')
@@ -131,7 +137,8 @@ enclosure.add_attributes({
   'type' => 'application/octet-stream',
   'sparkle:version' => options[:version],
   'sparkle:shortVersionString' => options[:version],
-  'sparkle:edSignature' => signature
+  'sparkle:edSignature' => signature,
+  'sparkle:digest' => sha256
 })
 item << enclosure
 

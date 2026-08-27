@@ -113,16 +113,6 @@ let package = Package(
             dependencies: ["ZenVoiceCore"]
         ),
         .executableTarget(
-            name: "ZenVoice",
-            dependencies: [
-                "ZenVoiceCore",
-                "ZenVoiceStorage",
-                "ZenVoiceRuntime",
-                "ZenVoiceLink",
-                .product(name: "Sparkle", package: "Sparkle"),
-            ]
-        ),
-        .executableTarget(
             name: "ZenVoiceLinkChecks",
             dependencies: ["ZenVoiceCore", "ZenVoiceLink"]
         ),

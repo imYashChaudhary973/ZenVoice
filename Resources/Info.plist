@@ -19,7 +19,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.4.2</string>
+	<string>0.4.3</string>
 	<key>CFBundleVersion</key>
 	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
@@ -32,10 +32,11 @@
 	<string>ZenVoice records your speech so it can transcribe it locally on this Mac.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>ZenVoice uses Apple Speech to turn your recordings into text when you select the Apple Speech engine.</string>
-	<!-- Sparkle auto-update configuration. Replace placeholders with the real feed URL and EdDSA public key at release build time. -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 	<key>SUFeedURL</key>
 	<string>https://github.com/imYashChaudhary973/ZenVoice/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>PLACEHOLDER_EDDSA_PUBLIC_KEY_REPLACE_BEFORE_RELEASE</string>
+	<string>FldQiOtbpQ/D/qzcaHc8Yvf9OdEyDPD6gQSs/xLD14Q=</string>
 </dict>
 </plist>

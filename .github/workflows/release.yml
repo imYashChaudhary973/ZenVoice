@@ -140,6 +140,20 @@ jobs:
         run: |
           ./Scripts/generate-release-notes.sh "$VERSION" > build/RELEASE_NOTES.md
 
+      - name: Sign and generate Sparkle appcast
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          key_path="$RUNNER_TEMP/sparkle_private_key.pem"
+          printf '%s' '${{ secrets.ZENVOICE_SPARKLE_PRIVATE_KEY }}' | base64 -d -o "$key_path"
+          ./Scripts/generate-appcast.rb \
+            --version "$VERSION" \
+            --dmg build/ZenVoice.dmg \
+            --feed-url "https://github.com/imYashChaudhary973/ZenVoice/releases/latest/download/appcast.xml" \
+            --private-key "$key_path" \
+            --output build/appcast.xml
+          rm -f "$key_path"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@c95fe14e0d0d351b72f4a6a93d6f7980c3bf4b1c # v2.2.0
         with:
@@ -149,6 +163,7 @@ jobs:
           make_latest: true
           files: |
             build/ZenVoice.dmg
+            build/appcast.xml
           fail_on_unmatched_files: true
 
       - name: Prepare Homebrew cask update

@@ -180,7 +180,7 @@ public enum UpdatePreferences {
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
         guard defaults.object(forKey: Key.automatic) != nil else {
-            return false
+            return true
         }
         return defaults.bool(forKey: Key.automatic)
     }
