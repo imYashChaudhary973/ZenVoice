@@ -254,9 +254,9 @@ rejects editable or dirty dependency checkouts, verifies that tracked inputs
 remain unchanged through signing, and reports the source commit.
 `Scripts/notarize-app.sh` creates a separate upload archive, submits it with
 `notarytool`, staples and verifies the app with `codesign`, `stapler`, and
-`spctl`, then packages the stapled app as `build/ZenVoice-distribution.zip` and
-prints its SHA-256. The local gate rejects additional top-level payloads and
-verifies that the ZIP contains the same app.
+`spctl`, then packages the stapled app as a DMG (`build/ZenVoice.dmg`) and
+prints its SHA-256. The local gate mounts the DMG, verifies that it contains
+only `ZenVoice.app`, and confirms Gatekeeper acceptance with `spctl`.
 
 The automated GitHub release flow is defined in `.github/workflows/release.yml`:
 
@@ -264,19 +264,19 @@ The automated GitHub release flow is defined in `.github/workflows/release.yml`:
 2. Merge the version bump PR to `main`.
 3. Go to the Actions tab, select **Release**, enter the version, and trigger the
    workflow manually.
-4. The workflow builds, signs, notarizes, and packages the app, then creates a
-   GitHub Release with the distribution ZIP and release notes.
+4. The workflow builds, signs, notarizes, and packages the app as a signed,
+   stapled DMG, then creates a GitHub Release with `ZenVoice.dmg` and the
+   generated release notes.
 5. Optionally provide `ZENVOICE_HOMEBREW_TAP_TOKEN` in the repository secrets so
    the workflow can propose a cask update to the tap repository.
 
-Required repository secrets (add these in GitHub Settings > Secrets and Variables
-> Actions before running):
-
-- `ZENVOICE_SIGNING_IDENTITY` — full "Developer ID Application: ..." string.
-- `ZENVOICE_APPLE_ID` — Apple ID for notarytool.
-- `ZENVOICE_TEAM_ID` — Apple Developer Team ID.
-- `ZENVOICE_APP_PASSWORD` — app-specific password for notarytool.
-- `ZENVOICE_HOMEBREW_TAP_TOKEN` — optional GitHub token for the Homebrew tap.
+Required repository secrets are listed in
+[`docs/RELEASE_SECRETS.md`](./RELEASE_SECRETS.md). Add them in GitHub Settings >
+Secrets and Variables > Actions before running the workflow. The short version:
+`ZENVOICE_SIGNING_IDENTITY`, `ZENVOICE_SIGNING_CERTIFICATE`,
+`ZENVOICE_SIGNING_CERTIFICATE_PASSWORD`, `ZENVOICE_NOTARY_KEY`,
+`ZENVOICE_NOTARY_KEY_ID`, `ZENVOICE_NOTARY_ISSUER_ID`, and optionally
+`ZENVOICE_HOMEBREW_TAP_TOKEN`.
 
 Do not place Developer ID certificates, private keys, App Store Connect API
 keys, notary credentials, or passwords in the repository. The release workflow
