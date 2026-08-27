@@ -1,6 +1,6 @@
 cask "zenvoice" do
   version "0.4.3"
-  sha256 "3e44253176d8cb3cefa1c8b2d2afe42387a0d9f85a2ac65994c790511d995fd6"
+  sha256 "552ebb3a101edb97be704d4b4199f0d1bb1bddfb378add6cbfcf0c0f72c021dc"
 
   url "https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.3/ZenVoice.dmg"
   name "ZenVoice"
