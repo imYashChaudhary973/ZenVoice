@@ -55,6 +55,26 @@ struct OnboardingScreen: View {
     @State private var step: Step = .welcome
     @State private var sandboxText = ""
 
+    private var canContinue: Bool {
+        switch step {
+        case .welcome:
+            return true
+        case .permissions:
+            return settingsViewModel.microphoneStatus == .allowed
+                && settingsViewModel.accessibilityStatus == .allowed
+        case .shortcut:
+            return true
+        case .language:
+            return true
+        case .model:
+            guard let featuredModel else { return false }
+            return modelManagerViewModel.isInstalled(featuredModel)
+        case .test:
+            guard let featuredModel else { return false }
+            return modelManagerViewModel.isInstalled(featuredModel)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center) {
@@ -115,22 +135,14 @@ struct OnboardingScreen: View {
             Divider().overlay(ZenDesign.Semantic.border)
 
             HStack {
-                Button("Skip setup") {
-                    finish()
-                }
-                .buttonStyle(ZenPressButtonStyle())
-                .foregroundStyle(
-                    ZenDesign.Semantic.textSecondary
-                )
-
-                Spacer()
-
                 if step != .welcome {
                     Button("Back") {
                         move(by: -1)
                     }
                     .buttonStyle(ZenSecondaryButtonStyle())
                 }
+
+                Spacer()
 
                 Button(
                     step == .test
@@ -144,6 +156,7 @@ struct OnboardingScreen: View {
                     }
                 }
                 .buttonStyle(ZenPrimaryButtonStyle())
+                .disabled(!canContinue)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, ZenDesign.Spacing.xxl)
@@ -214,7 +227,7 @@ struct OnboardingScreen: View {
                     settingsViewModel.requestAccessibilityAccess
             )
             Text(
-                "Both are optional — you can continue and grant them later from Privacy. Without Accessibility, transcripts are copied to the clipboard instead."
+                "Both are required before you can continue. ZenVoice cannot hear or insert text without them."
             )
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(
@@ -308,55 +321,34 @@ struct OnboardingScreen: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: ZenDesign.Spacing.sm) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(ZenDesign.Typography.bodyStrong)
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textPrimary
-                        )
-                    Text(detail)
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textSecondary
-                        )
-                }
-                Spacer()
-                Image(
-                    systemName: selected
-                        ? "checkmark.circle.fill"
-                        : "circle"
-                )
-                .foregroundStyle(
-                    selected
-                        ? ZenDesign.Semantic.accent
-                        : ZenDesign.Semantic.textTertiary
-                )
-            }
-            .padding(ZenDesign.Spacing.md)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: ZenDesign.Radius.medium,
-                    style: .continuous
-                )
-                .fill(
-                    selected
-                        ? ZenDesign.Semantic.accentMuted
-                        : ZenDesign.Component.cardBackground
-                )
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: ZenDesign.Radius.medium,
-                        style: .continuous
+            ZenInsetRow(tinted: selected) {
+                HStack(spacing: ZenDesign.Spacing.sm) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textPrimary
+                            )
+                        Text(detail)
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(
+                                ZenDesign.Semantic.textSecondary
+                            )
+                    }
+                    Spacer()
+                    Image(
+                        systemName: selected
+                            ? "checkmark.circle.fill"
+                            : "circle"
                     )
-                    .strokeBorder(
+                    .foregroundStyle(
                         selected
                             ? ZenDesign.Semantic.accent
-                            : ZenDesign.Semantic.border
+                            : ZenDesign.Semantic.textTertiary
                     )
                 }
+                .padding(.vertical, ZenDesign.Spacing.xs)
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(ZenPressButtonStyle())
         .accessibilityLabel(title)
@@ -428,11 +420,43 @@ struct OnboardingScreen: View {
                             modelManagerViewModel.errorMessage {
                             ErrorBanner(message: error)
                         }
+
+                        if let recommendation = modelManagerViewModel.engineRecommendation() {
+                            ZenPanelDivider()
+                            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                                HStack(spacing: ZenDesign.Spacing.xs) {
+                                    Text("Recommended engine")
+                                        .font(ZenDesign.Typography.bodyStrong)
+                                        .foregroundStyle(
+                                            ZenDesign.Semantic.textPrimary
+                                        )
+                                    Spacer()
+                                    ZenBadge(
+                                        text: modelManagerViewModel.engines.first {
+                                            $0.descriptor.id == recommendation.preferredEngineID
+                                        }?.descriptor.displayName ?? recommendation.preferredEngineID,
+                                        kind: .accent
+                                    )
+                                }
+                                Text(recommendation.rationale)
+                                    .font(ZenDesign.Typography.caption)
+                                    .foregroundStyle(
+                                        ZenDesign.Semantic.textSecondary
+                                    )
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if !modelManagerViewModel.isSelectedEngine(recommendation.preferredEngineID) {
+                                    Button("Use recommended engine") {
+                                        modelManagerViewModel.selectEngine(recommendation.preferredEngineID)
+                                    }
+                                    .buttonStyle(ZenPrimaryButtonStyle())
+                                }
+                            }
+                        }
                     }
                 }
             }
             Text(
-                "You can skip this and download from Models later — dictation needs at least one speech model."
+                "Download the recommended model before continuing. You can add more models later in Models."
             )
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(
@@ -558,18 +582,11 @@ struct OnboardingScreen: View {
         detail: String
     ) -> some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-            Image(systemName: icon)
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                .frame(width: 52, height: 52)
-                .background {
-                    RoundedRectangle(
-                        cornerRadius: 14,
-                        style: .continuous
-                    )
-                    .fill(ZenDesign.Semantic.surfaceRaised)
-                }
-                .accessibilityHidden(true)
+            ZenIconChip(
+                systemImage: icon,
+                size: 52,
+                tint: ZenDesign.Semantic.textSecondary
+            )
             Text(title)
                 .font(ZenDesign.Typography.display)
                 .foregroundStyle(
@@ -593,51 +610,30 @@ struct OnboardingScreen: View {
         status: SettingsViewModel.PermissionStatus,
         action: @escaping () -> Void
     ) -> some View {
-        HStack {
-            Image(
-                systemName:
+        ZenPanel(padding: 0) {
+            ZenRow(
+                icon:
                     status.isAllowed
                         ? "checkmark.circle.fill"
-                        : "exclamationmark.circle"
-            )
-            .foregroundStyle(
-                status.isAllowed
+                        : "exclamationmark.circle",
+                iconTint: status.isAllowed
                     ? ZenDesign.Semantic.success
-                    : ZenDesign.Semantic.warn
-            )
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(ZenDesign.Typography.bodyStrong)
-                    .foregroundStyle(
-                        ZenDesign.Semantic.textPrimary
-                    )
-                if let remedy = status.remedy {
-                    Text(remedy)
-                        .font(ZenDesign.Typography.caption)
+                    : ZenDesign.Semantic.warn,
+                title: title,
+                subtitle: status.remedy
+            ) {
+                HStack(spacing: ZenDesign.Spacing.sm) {
+                    Text(status.title)
+                        .font(ZenDesign.Typography.captionStrong)
                         .foregroundStyle(
-                            ZenDesign.Semantic.textTertiary
+                            ZenDesign.Semantic.textSecondary
                         )
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let actionTitle = status.actionTitle {
+                        Button(actionTitle, action: action)
+                            .buttonStyle(ZenSecondaryButtonStyle())
+                    }
                 }
             }
-            Spacer(minLength: ZenDesign.Spacing.sm)
-            Text(status.title)
-                .font(ZenDesign.Typography.captionStrong)
-                .foregroundStyle(
-                    ZenDesign.Semantic.textSecondary
-                )
-            if let actionTitle = status.actionTitle {
-                Button(actionTitle, action: action)
-                    .buttonStyle(ZenSecondaryButtonStyle())
-            }
-        }
-        .padding(ZenDesign.Spacing.md)
-        .background {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.medium,
-                style: .continuous
-            )
-            .fill(ZenDesign.Component.cardBackground)
         }
     }
 
@@ -646,13 +642,7 @@ struct OnboardingScreen: View {
         value: String,
         isReady: Bool
     ) -> some View {
-        HStack {
-            Text(title)
-                .font(ZenDesign.Typography.captionStrong)
-                .foregroundStyle(
-                    ZenDesign.Semantic.textSecondary
-                )
-            Spacer()
+        ZenRow(title: title) {
             ZenBadge(
                 text: value,
                 kind: isReady ? .success : .danger,
