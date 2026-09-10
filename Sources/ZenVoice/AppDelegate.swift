@@ -719,9 +719,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let profile = LanguagePreferences.load()
         let selectedID = SelectedEnginePreferences.load(for: profile)
         Task {
+            let resolved = registry.resolve(
+                for: profile,
+                selectedID: selectedID
+            )
             if LiveDictationPreferences.isPreviewEnabled(),
-               let preview = registry.resolvePreview(for: profile) {
-                try? await preview.prepare()
+               let preview = registry.resolvePreview(for: profile)
+            {
+                let resolvedID = resolved?.descriptor.id
+                let previewIsWhisper =
+                    preview.descriptor.id == EngineIdentifiers.whisper
+                let resolvedIsParakeet =
+                    resolvedID == EngineIdentifiers.parakeetTDTv3
+                    || resolvedID == EngineIdentifiers.parakeetTDTv2
+                if !(previewIsWhisper && resolvedIsParakeet) {
+                    try? await preview.prepare()
+                }
             }
             try? await registry.prepare(
                 for: profile,

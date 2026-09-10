@@ -70,6 +70,12 @@ public struct HardwareProfile: Equatable, Sendable {
         architecture == "Apple Silicon"
     }
 
+    /// 8 GB unified-memory Macs. Apple ships 8 then 16; `< 12` is that 8 GB
+    /// bucket with a gap so 16 GB cannot fall in by rounding.
+    public var isMemoryConstrained: Bool {
+        memoryGigabytes < 12
+    }
+
     public var summary: String {
         "\(memoryGigabytes) GB memory • \(logicalCoreCount) cores • \(architecture)"
     }
@@ -134,23 +140,14 @@ public enum ModelRecommendationEngine {
         if language == .hinglish {
             return "hindi2hinglish-apex"
         }
-        // English on Apple Silicon defaults to Whisper Turbo, the most capable
-        // open multilingual model available through whisper.cpp. Without GPU
-        // transcription the same size model is too slow, so Intel and small-
-        // memory Macs fall through to Small.
-        if language == .english, profile.hasGPUAcceleratedTranscription {
-            return "whisper-large-v3-turbo"
+        // Intel and 8 GB Macs: Distil for English (faster decode), Turbo for
+        // every other language. TDT is an engine choice, not a Whisper file.
+        if !profile.hasGPUAcceleratedTranscription || profile.isMemoryConstrained {
+            return language == .english
+                ? "whisper-distil-large-v3"
+                : "whisper-large-v3-turbo"
         }
-        // No Metal path: model size translates directly into waiting, and Small
-        // is the largest multilingual build that stays responsive. It is a
-        // compromise rather than a tier — 35.5% word error rate overall, and
-        // effectively European-languages-only.
-        guard profile.hasGPUAcceleratedTranscription else {
-            return "whisper-small-multilingual"
-        }
-        return profile.memoryGigabytes >= 8
-            ? "whisper-large-v3-turbo"
-            : "whisper-small-multilingual"
+        return "whisper-large-v3-turbo"
     }
 
     public static func recommendedModel(
@@ -195,7 +192,9 @@ public enum ModelRecommendationEngine {
         )
         if model.id == recommendedID {
             if language.prefersParakeetTDTv3,
-               profile.hasGPUAcceleratedTranscription {
+               profile.hasGPUAcceleratedTranscription,
+               !profile.isMemoryConstrained
+            {
                 return ModelRecommendation(
                     level: .supported,
                     title: "99-language fallback",

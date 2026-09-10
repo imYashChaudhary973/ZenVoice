@@ -117,6 +117,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Distil-Whisper Large V3 model weights
+
+- Project: `distil-whisper/distil-large-v3`
+- GGML conversion: [`distil-whisper/distil-large-v3-ggml`](https://huggingface.co/distil-whisper/distil-large-v3-ggml)
+- Download revision: `0d78dd96ed9fc152325f63b53788fec3b43de031`
+- Upstream: <https://huggingface.co/distil-whisper/distil-large-v3>
+- Licence: MIT
+
+Distil-Whisper is distilled from OpenAI Whisper large-v3. English-only.
+The MIT licence text is the same as [OpenAI Whisper model weights](#openai-whisper-model-weights) above.
+
 ## Whisper-Hindi2Hinglish-Apex model weights
 
 - Publisher: Oriserve
