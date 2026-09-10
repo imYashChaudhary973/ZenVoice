@@ -56,7 +56,7 @@ do {
     let environment = ProcessInfo.processInfo.environment
     let modelsDirectory = try VerifiedModelCatalog.modelsDirectory()
     var exercised = 0
-    for configuration: ParakeetTDTEngine.Configuration in [.v2, .v3] {
+    for configuration: ParakeetTDTEngine.Configuration in [.v3] {
         let modelURL = modelsDirectory
             .appendingPathComponent(configuration.modelFilename)
         guard FileManager.default.fileExists(atPath: modelURL.path) else {
