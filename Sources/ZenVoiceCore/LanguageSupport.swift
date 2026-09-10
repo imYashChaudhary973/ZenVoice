@@ -216,24 +216,9 @@ public struct LanguageProfile:
         case .english:
             return !requiresMultilingualModel
         case .multilingual:
-            // A general multilingual model is not an option for Hinglish. It
-            // was allowed on the theory that it "still works, just badly";
-            // measured against 30 real code-switched recordings it does not
-            // work at all. It preserves **0 of 31** English words, respelling
-            // `document` as डोक्यूमेंट and `tutorial` as टिटूटूरल — every
-            // English word phonetically rewritten in a script the reader did
-            // not ask for. The specialist preserves 82 of 96.
-            //
-            // Some of them are also far slower, because general models can
-            // fail to *terminate* on code-switched speech: one clip made
-            // Whisper Tiny emit "We are in India" about a hundred times, and
-            // Medium ran past fifteen minutes on thirty clips the specialist
-            // finished in twenty-nine seconds. Turbo does terminate normally
-            // on the same audio — it simply produces unusable output — so the
-            // block rests on the loanwords, not on the speed.
-            //
-            // See docs/TRANSCRIPTION_ACCURACY.md.
-            return self != .hinglish
+            // Apex is retired. Turbo is the Hinglish stand-in until a
+            // replacement ships. It still mangles loanwords; that is accepted.
+            return true
         case .hinglish:
             // The reverse still holds: a Hinglish specialist is not a better
             // multilingual model. It scores 16.8% word error rate on English

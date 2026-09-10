@@ -356,7 +356,6 @@ struct AppProfilesScreen: View {
             (EngineIdentifiers.whisperLargeV3Turbo, "Whisper Large V3 Turbo"),
             (EngineIdentifiers.whisperDistilLargeV3, "Distil-Whisper Large V3"),
             (EngineIdentifiers.whisperLargeV3, "Whisper Large V3"),
-            (EngineIdentifiers.hinglishApex, "Hinglish Apex"),
         ]
     }
 

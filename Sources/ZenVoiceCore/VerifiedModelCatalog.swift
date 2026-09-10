@@ -134,7 +134,7 @@ public enum VerifiedModelCatalog {
     public static let sourceRepository =
         "https://huggingface.co/ggerganov/whisper.cpp"
 
-    /// Four files, each one engine in the picker.
+    /// Three files, each one engine in the picker. Apex is retired.
     public static let models: [VerifiedModel] = [
         model(
             id: EngineIdentifiers.whisperLargeV3Turbo,
@@ -165,14 +165,6 @@ public enum VerifiedModelCatalog {
             sha256:
                 "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298",
             size: 1_519_521_155
-        ),
-        hinglishModel(
-            id: EngineIdentifiers.hinglishApex,
-            name: "Hinglish Apex",
-            filename: "ggml-hindi2hinglish-apex-q8_0.bin",
-            sha256:
-                "0b4324d2c1ad64f20883ee7fcd5d2bb0a8466287dc70d74bc47066200c28c719",
-            size: 874_188_075
         )
     ]
 
@@ -206,6 +198,14 @@ public enum VerifiedModelCatalog {
     ///                               independent and open-source.
     public static let retiredModels: [VerifiedModel] = [
         retiredParakeetModel(),
+        hinglishModel(
+            id: EngineIdentifiers.hinglishApex,
+            name: "Hinglish Apex",
+            filename: "ggml-hindi2hinglish-apex-q8_0.bin",
+            sha256:
+                "0b4324d2c1ad64f20883ee7fcd5d2bb0a8466287dc70d74bc47066200c28c719",
+            size: 874_188_075
+        ),
         model(
             id: "whisper-small-multilingual",
             name: "Whisper Small",

@@ -70,7 +70,7 @@ struct HelpScreen: View {
             id: 6,
             question: "How does Hinglish mode work?",
             answer:
-                "With the verified Hinglish Apex model installed, the Hinglish profile writes Hindi-English speech in Latin script the way you'd type it. Other multilingual models are not offered for Hinglish because they lose code-switched English words.",
+                "Hinglish Apex is retired for now. The Hinglish profile uses Whisper Large V3 Turbo until a replacement ships.",
             tags: "hinglish hindi language apex latin"
         ),
         ZenFAQ(

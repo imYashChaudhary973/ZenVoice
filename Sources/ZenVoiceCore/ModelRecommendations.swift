@@ -138,7 +138,7 @@ public enum ModelRecommendationEngine {
         // Recommending on hardware alone sent every Hinglish user to a model
         // that cannot do the one thing they chose the app for.
         if language == .hinglish {
-            return "hindi2hinglish-apex"
+            return EngineIdentifiers.whisperLargeV3Turbo
         }
         // Intel and 8 GB Macs: Distil for English (faster decode), Turbo for
         // every other language. TDT is an engine choice, not a Whisper file.

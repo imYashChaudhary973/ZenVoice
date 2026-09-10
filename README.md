@@ -69,7 +69,6 @@ Choose an engine. Use downloads its file.
 | **Whisper Large V3 Turbo** | Auto-detect / 99-language fallback | [99 languages](#whisper) | ~547 MB | Apple Silicon |
 | **Whisper Large V3** | Higher-accuracy multilingual Whisper | 99 languages | ~1.0 GB | Apple Silicon |
 | **Distil-Whisper Large V3** | Faster English | English | ~1.4 GB | Apple Silicon + Intel |
-| **Hinglish Apex** | Hindi–English Latin output | Hinglish | ~834 MB | Apple Silicon |
 
 Measured on the frozen Common Voice Spontaneous set (2026-08-18): **Parakeet TDT v3 is 6.9% WER at 73× real time**; Whisper Turbo is 8.2% at 11×. Full table: [REAL_SPEECH_CORPUS.md](docs/REAL_SPEECH_CORPUS.md).
 
@@ -79,7 +78,7 @@ Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, G
 
 ### Whisper
 
-Turbo and Large V3 cover up to 99 languages. Distil-Whisper Large V3 is English-only. Tiny, Base, Small, and Medium are retired.
+Turbo and Large V3 cover up to 99 languages. Distil-Whisper Large V3 is English-only. Tiny, Base, Small, Medium, and Hinglish Apex are retired.
 
 ### What gets recommended
 
@@ -88,7 +87,7 @@ Turbo and Large V3 cover up to 99 languages. Distil-Whisper Large V3 is English-
 | English or European locale on Apple Silicon (16 GB+) | Parakeet TDT v3 |
 | Apple Silicon under 12 GB | Distil-Whisper Large V3 |
 | Auto-detect / non-European | Whisper Large V3 Turbo |
-| Hinglish | Apex only |
+| Hinglish | Whisper Large V3 Turbo (Apex retired) |
 | No TDT v3 installed | Whisper Large V3 Turbo |
 | Intel English | Distil-Whisper Large V3 |
 

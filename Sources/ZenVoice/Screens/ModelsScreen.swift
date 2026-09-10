@@ -24,14 +24,12 @@ struct ModelMismatchAlert: Equatable {
 struct ModelsScreen: View {
     @ObservedObject var viewModel: ModelManagerViewModel
     @Binding var mismatchAlert: ModelMismatchAlert?
-    @State private var modelPendingRemoval: VerifiedModel?
 
     var body: some View {
         ZenSection(title: "Speech engines") {
             VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                 Text(
-                    "Choose the engine that transcribes. Every listed option "
-                        + "runs on this Mac."
+                    "Choose the engine. Use downloads its file if needed."
                 )
                 .font(ZenDesign.Typography.body)
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -70,120 +68,8 @@ struct ModelsScreen: View {
                         }
                     }
                 }
-
-                Text("Models")
-                    .font(ZenDesign.Typography.bodyStrong)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .padding(.top, ZenDesign.Spacing.sm)
-
-                Text(
-                    "The active row is the file the engine above loads. "
-                        + "Only Whisper can pick among four."
-                )
-                .font(ZenDesign.Typography.caption)
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-
-                ZenPanel {
-                    ForEach(
-                        Array(listedModels.enumerated()),
-                        id: \.element.id
-                    ) { index, item in
-                        if index > 0 { ZenPanelDivider() }
-                        switch item {
-                        case .engine(let linked):
-                            engineModelRow(linked)
-                        case .whisper(let model):
-                            modelRow(model)
-                        }
-                    }
-                }
             }
         }
-        .alert(
-            "Remove downloaded model?",
-            isPresented: Binding(
-                get: { modelPendingRemoval != nil },
-                set: { if !$0 { modelPendingRemoval = nil } }
-            ),
-            presenting: modelPendingRemoval
-        ) { model in
-            Button("Cancel", role: .cancel) {}
-            Button("Remove", role: .destructive) {
-                viewModel.remove(model)
-                modelPendingRemoval = nil
-            }
-        } message: { model in
-            Text("\(model.displayName) will be removed from this Mac.")
-        }
-    }
-
-    private func modelRow(_ model: VerifiedModel) -> some View {
-        let installed = viewModel.isInstalled(model)
-        let selected = viewModel.isSelected(model)
-        let downloading = viewModel.downloadingModelID == model.id
-
-        return VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
-            HStack(spacing: ZenDesign.Spacing.sm) {
-                ZenIconChip(
-                    systemImage: "cpu",
-                    size: ZenDesign.Layout.hitTarget,
-                    tint: selected
-                        ? ZenDesign.Semantic.accent
-                        : ZenDesign.Semantic.textSecondary
-                )
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(model.displayName)
-                        .font(ZenDesign.Typography.bodyStrong)
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    Text("\(model.languageCapability.displayName) · \(model.formattedFileSize) · \(model.tier.displayName)")
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                }
-                Spacer()
-
-                if selected {
-                    ZenBadge(
-                        text: "Active",
-                        kind: .success,
-                        systemImage: "checkmark"
-                    )
-                } else if downloading {
-                    Button("Cancel") { viewModel.cancelDownload() }
-                        .buttonStyle(ZenSecondaryButtonStyle())
-                } else if installed {
-                    Button("Use") { chooseWhisper(model) }
-                        .buttonStyle(ZenPrimaryButtonStyle())
-                    ZenIconButton(
-                        systemImage: "trash",
-                        label: "Remove \(model.displayName)",
-                        isDanger: true
-                    ) {
-                        modelPendingRemoval = model
-                    }
-                } else {
-                    Button("Download") { viewModel.download(model) }
-                        .buttonStyle(ZenSecondaryButtonStyle())
-                        .disabled(viewModel.downloadingModelID != nil)
-                }
-            }
-
-            if downloading {
-                VStack(alignment: .leading, spacing: 5) {
-                    ZenProgressBar(value: viewModel.downloadProgress ?? 0)
-                        .frame(height: 3)
-                    Text(
-                        viewModel.isVerifyingDownload
-                            ? "Verifying checksum…"
-                            : "Downloading \(Int(((viewModel.downloadProgress ?? 0) * 100).rounded()))%"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                }
-                .padding(.leading, 50)
-            }
-        }
-        .padding(.horizontal, ZenDesign.Spacing.lg)
-        .padding(.vertical, ZenDesign.Spacing.md)
     }
 
     private func engineRow(_ availability: EngineAvailability) -> some View {
@@ -220,8 +106,8 @@ struct ModelsScreen: View {
                         Button("Cancel") { viewModel.cancelDownload() }
                             .buttonStyle(ZenSecondaryButtonStyle())
                     } else {
-                        Button("Download") {
-                            viewModel.downloadEngine(downloadable)
+                        Button("Use") {
+                            viewModel.selectEngine(availability.engine.id)
                         }
                         .buttonStyle(ZenSecondaryButtonStyle())
                         .disabled(viewModel.downloadingModelID != nil)
@@ -250,166 +136,6 @@ struct ModelsScreen: View {
         .padding(.vertical, ZenDesign.Spacing.md)
     }
 
-    private enum ListedModel: Identifiable {
-        case engine(EngineLinkedModel)
-        case whisper(VerifiedModel)
-
-        var id: String {
-            switch self {
-            case .engine(let linked): return "engine-\(linked.id)"
-            case .whisper(let model): return "whisper-\(model.id)"
-            }
-        }
-    }
-
-    private struct EngineLinkedModel: Identifiable {
-        let id: String
-        let title: String
-        let subtitle: String
-        let engineIDs: [String]
-        let engineName: String
-    }
-
-    private var listedModels: [ListedModel] {
-        engineLinkedModels.map(ListedModel.engine)
-            + viewModel.models.map(ListedModel.whisper)
-    }
-
-    private var engineLinkedModels: [EngineLinkedModel] {
-        var byID: [String: EngineLinkedModel] = [:]
-        var order: [String] = []
-        for engine in viewModel.engines {
-            guard let modelID = engine.wrappedModelID else { continue }
-            if let existing = byID[modelID] {
-                byID[modelID] = EngineLinkedModel(
-                    id: existing.id,
-                    title: existing.title,
-                    subtitle: existing.subtitle,
-                    engineIDs: existing.engineIDs + [engine.descriptor.id],
-                    engineName: existing.engineName
-                )
-                continue
-            }
-            let listing = engineListing(engine)
-            let size = listing.bytes.map {
-                ByteCountFormatter.string(
-                    fromByteCount: $0,
-                    countStyle: .file
-                )
-            } ?? ""
-            byID[modelID] = EngineLinkedModel(
-                id: modelID,
-                title: listing.title,
-                subtitle:
-                    "\(listing.language.displayName) · \(size) · \(listing.tier.displayName)",
-                engineIDs: [engine.descriptor.id],
-                engineName: engine.descriptor.displayName
-            )
-            order.append(modelID)
-        }
-        return order.compactMap { byID[$0] }
-    }
-
-    private func engineListing(_ engine: VerifiedEngine) -> (
-        title: String,
-        language: ModelLanguageCapability,
-        tier: ModelPerformanceTier,
-        bytes: Int64?
-    ) {
-        switch engine.descriptor.id {
-        case EngineIdentifiers.parakeetTDTv3:
-            return (
-                "Parakeet TDT V3",
-                .multilingual,
-                .highAccuracy,
-                engine.fileSizeBytes
-            )
-        default:
-            return (
-                engine.descriptor.displayName,
-                .multilingual,
-                .balanced,
-                engine.fileSizeBytes
-            )
-        }
-    }
-
-    private func engineModelRow(_ linked: EngineLinkedModel) -> some View {
-        let selected = linked.engineIDs.contains {
-            viewModel.isSelectedEngine($0)
-        }
-        return HStack(spacing: ZenDesign.Spacing.sm) {
-            ZenIconChip(
-                systemImage: "cpu",
-                size: ZenDesign.Layout.hitTarget,
-                tint: selected
-                    ? ZenDesign.Semantic.accent
-                    : ZenDesign.Semantic.textSecondary
-            )
-            VStack(alignment: .leading, spacing: 3) {
-                Text(linked.title)
-                    .font(ZenDesign.Typography.bodyStrong)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                Text(linked.subtitle)
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-            }
-            Spacer()
-            if selected {
-                ZenBadge(
-                    text: "Active",
-                    kind: .success,
-                    systemImage: "checkmark"
-                )
-            } else {
-                Button("Use") { refuse(linked) }
-                    .buttonStyle(ZenSecondaryButtonStyle())
-            }
-        }
-        .padding(.horizontal, ZenDesign.Spacing.lg)
-        .padding(.vertical, ZenDesign.Spacing.md)
-    }
-
-    private func chooseWhisper(_ model: VerifiedModel) {
-        if let engineID = viewModel.activeEngineID,
-           engineID != EngineIdentifiers.whisper {
-            let name = viewModel.activeEngineDisplayName
-            let modelID = VerifiedEngineCatalog.engine(id: engineID)?
-                .wrappedModelID
-            showMismatch(
-                title: "Can't use this model",
-                description: modelID.map {
-                    "\(name) only loads \($0)."
-                } ?? "\(name) does not load Whisper files."
-            )
-            return
-        }
-        viewModel.select(model)
-    }
-
-    private func refuse(_ linked: EngineLinkedModel) {
-        let name = viewModel.activeEngineDisplayName
-        if let engineID = viewModel.activeEngineID,
-           let allowed = VerifiedEngineCatalog.engine(id: engineID)?
-            .wrappedModelID {
-            showMismatch(
-                title: "Can't use this model",
-                description: "\(name) only loads \(allowed)."
-            )
-        } else {
-            showMismatch(
-                title: "Can't use this model",
-                description: "\(name) does not load \(linked.title)."
-            )
-        }
-    }
-
-    private func showMismatch(title: String, description: String) {
-        mismatchAlert = ModelMismatchAlert(
-            title: title,
-            description: description
-        )
-    }
 }
 
 struct ModelMismatchToastOverlay: View {

@@ -74,10 +74,13 @@ public enum ModelProfileTransition {
         let compatible = installedModels.filter {
             profile.isCompatible(with: $0.languageCapability)
         }
-        if profile == .hinglish {
-            return compatible.first {
-                $0.languageCapability == .hinglish
-            }
+        if profile == .hinglish,
+           let specialist = compatible.first(where: {
+               $0.languageCapability == .hinglish
+                   && !VerifiedModelCatalog.isRetired($0)
+           })
+        {
+            return specialist
         }
         if let recommendedModelID,
            let recommended = compatible.first(where: {
@@ -98,8 +101,7 @@ public enum ModelProfileTransition {
     ) -> String {
         if profile == .hinglish {
             return
-                "Hinglish requires the verified Hinglish Apex model. "
-                + "Download it in Models to continue."
+                "Hinglish uses Whisper Large V3 Turbo while Apex is retired."
         }
         if profile == .english {
             return
