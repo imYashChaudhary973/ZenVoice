@@ -634,7 +634,7 @@ guard ModelRecommendationEngine.recommendedModelID(
       ModelRecommendationEngine.recommendedModelID(
         for: intelMac,
         language: .english
-      ) != "whisper-large-v3-turbo" else {
+      ) == "whisper-distil-large-v3" else {
     FileHandle.standardError.write(
         Data("FAIL: language-aware model recommendation is wrong\n".utf8)
     )
@@ -658,12 +658,11 @@ for profile in [capableMac, intelMac] {
         }
     }
 }
-// The catalogue is deliberately four. Each entry is the measured best at one
-// job; the size ladders it replaced were not a speed-for-accuracy curve.
-guard VerifiedModelCatalog.models.count == 4 else {
+// Distil and Large V3 added for the memory-aware default. Small and Medium stay.
+guard VerifiedModelCatalog.models.count == 6 else {
     FileHandle.standardError.write(
         Data(
-            ("FAIL: expected 4 offered models, found "
+            ("FAIL: expected 6 offered models, found "
                 + "\(VerifiedModelCatalog.models.count)\n").utf8
         )
     )
@@ -1331,11 +1330,9 @@ print("ZenVoiceCoreChecks: private and hold controls passed")
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
 let verifiedModels = VerifiedModelCatalog.allModels
-// Four offered, seven retired. Parakeet was retired because it depends on the
-// closed-source FluidAudio runtime; Whisper is now the only transcription
-// engine — see ``VerifiedModelCatalog.models``.
-guard VerifiedModelCatalog.models.count == 4,
-      verifiedModels.count == 11,
+// Six offered, seven retired.
+guard VerifiedModelCatalog.models.count == 6,
+      verifiedModels.count == 13,
       // Nothing retired may still be offered, and everything retired must
       // still resolve — by identifier and by filename — so that a model
       // already on disk does not become "no model installed".
@@ -1481,27 +1478,30 @@ let spanishProfile = LanguageProfile(
     inputLanguageCode: "es",
     outputMode: .spokenLanguage
 )
-guard ModelRecommendationEngine.recommendedModelID(
-    for: eightGigabyteProfile
-) == "whisper-large-v3-turbo",
-ModelRecommendationEngine.recommendedModelID(
-    for: sixteenGigabyteProfile
-) == "whisper-large-v3-turbo",
-ModelRecommendationEngine.recommendedModelID(
-    for: twentyFourGigabyteProfile
-) == "whisper-large-v3-turbo",
-ModelRecommendationEngine.recommendedModelID(
-    for: eightGigabyteProfile,
-    language: spanishProfile
-) == "whisper-large-v3-turbo",
-ModelRecommendationEngine.recommendedModelID(
-    for: twentyFourGigabyteProfile,
-    language: spanishProfile
-) == "whisper-large-v3-turbo",
-ModelRecommendationEngine.recommendedTier(
-    for: sixteenGigabyteProfile,
-    language: spanishProfile
-) == .highAccuracy else {
+guard eightGigabyteProfile.isMemoryConstrained,
+      !sixteenGigabyteProfile.isMemoryConstrained,
+      !twentyFourGigabyteProfile.isMemoryConstrained,
+      ModelRecommendationEngine.recommendedModelID(
+          for: eightGigabyteProfile
+      ) == "whisper-distil-large-v3",
+      ModelRecommendationEngine.recommendedModelID(
+          for: sixteenGigabyteProfile
+      ) == "whisper-large-v3-turbo",
+      ModelRecommendationEngine.recommendedModelID(
+          for: twentyFourGigabyteProfile
+      ) == "whisper-large-v3-turbo",
+      ModelRecommendationEngine.recommendedModelID(
+          for: eightGigabyteProfile,
+          language: spanishProfile
+      ) == "whisper-large-v3-turbo",
+      ModelRecommendationEngine.recommendedModelID(
+          for: twentyFourGigabyteProfile,
+          language: spanishProfile
+      ) == "whisper-large-v3-turbo",
+      ModelRecommendationEngine.recommendedTier(
+          for: sixteenGigabyteProfile,
+          language: spanishProfile
+      ) == .highAccuracy else {
     FileHandle.standardError.write(
         Data("FAIL: hardware model recommendation is incorrect\n".utf8)
     )
@@ -1522,20 +1522,16 @@ let smallIntelProfile = HardwareProfile(
     architecture: "Intel",
     availableModelStorageBytes: 10_000_000_000
 )
-// Both land on Small, including the 8 GB machine that used to be sent to Tiny.
-// Tiny multilingual is not a lighter option, it is a broken one — 64.5% word
-// error rate against Small's 35.5% — and recommending a model that cannot do
-// the job is worse than recommending one that is merely slow.
 guard ModelRecommendationEngine.recommendedModelID(
     for: intelProfile
-) == "whisper-small-multilingual",
+) == "whisper-distil-large-v3",
 ModelRecommendationEngine.recommendedModelID(
     for: smallIntelProfile
-) == "whisper-small-multilingual",
+) == "whisper-distil-large-v3",
 ModelRecommendationEngine.recommendedModelID(
     for: intelProfile,
     language: spanishProfile
-) == "whisper-small-multilingual",
+) == "whisper-large-v3-turbo",
 !intelProfile.hasGPUAcceleratedTranscription,
 twentyFourGigabyteProfile.hasGPUAcceleratedTranscription else {
     FileHandle.standardError.write(
@@ -2562,7 +2558,7 @@ let recommendationRegistry = EngineRegistry(
 
 let englishRec = EngineRecommendationEngine.recommendation(
     for: .english,
-    hardware: HardwareProfile.current(),
+    hardware: twentyFourGigabyteProfile,
     registry: recommendationRegistry
 )
 guard let englishRec,
@@ -2576,7 +2572,7 @@ let hinglishRegistry = EngineRegistry(
 )
 let hinglishRec = EngineRecommendationEngine.recommendation(
     for: .hinglish,
-    hardware: HardwareProfile.current(),
+    hardware: twentyFourGigabyteProfile,
     registry: hinglishRegistry
 )
 guard let hinglishRec,
@@ -2595,7 +2591,7 @@ let noAppleRegistry = EngineRegistry(
 )
 let noAppleRec = EngineRecommendationEngine.recommendation(
     for: .english,
-    hardware: HardwareProfile.current(),
+    hardware: twentyFourGigabyteProfile,
     registry: noAppleRegistry
 )
 guard let noAppleRec,
@@ -2612,7 +2608,7 @@ let tdtRegistry = EngineRegistry(
 )
 let tdtEnglishRec = EngineRecommendationEngine.recommendation(
     for: .english,
-    hardware: HardwareProfile.current(),
+    hardware: twentyFourGigabyteProfile,
     registry: tdtRegistry
 )
 guard let tdtEnglishRec,
@@ -2629,12 +2625,32 @@ let intelEngineRec = EngineRecommendationEngine.recommendation(
 )
 guard let intelEngineRec,
       intelEngineRec.preferredEngineID == EngineIdentifiers.whisper else {
-    failEngineCheck("Intel should prefer Whisper Small, not TDT v3")
+    failEngineCheck("Intel should prefer Whisper, not TDT v3")
+}
+
+let constrainedEngineRec = EngineRecommendationEngine.recommendation(
+    for: .english,
+    hardware: eightGigabyteProfile,
+    registry: tdtRegistry
+)
+guard let constrainedEngineRec,
+      constrainedEngineRec.preferredEngineID == EngineIdentifiers.whisper else {
+    failEngineCheck("8 GB Apple Silicon should prefer Whisper, not TDT v3")
+}
+
+let sixteenEngineRec = EngineRecommendationEngine.recommendation(
+    for: .english,
+    hardware: sixteenGigabyteProfile,
+    registry: tdtRegistry
+)
+guard let sixteenEngineRec,
+      sixteenEngineRec.preferredEngineID == EngineIdentifiers.parakeetTDTv3 else {
+    failEngineCheck("16 GB Apple Silicon should prefer TDT v3")
 }
 
 let autoEngineRec = EngineRecommendationEngine.recommendation(
     for: autoDetectProfile,
-    hardware: HardwareProfile.current(),
+    hardware: twentyFourGigabyteProfile,
     registry: tdtRegistry
 )
 guard let autoEngineRec,

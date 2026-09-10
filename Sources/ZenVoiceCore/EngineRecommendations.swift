@@ -37,10 +37,8 @@ public struct EngineRecommendation: Equatable, Sendable {
 
 /// Recommends a speech engine for a language profile.
 ///
-/// In Phase 2a only Whisper and Apple Speech are active, so the recommendation
-/// is simple: Apple Speech for supported locales on this Mac, Whisper
-/// everywhere else. The structure is designed so Phase 2b can add Parakeet and
-/// Nemotron by inserting them before Apple Speech/Whisper when they are active.
+/// Parakeet TDT v3 on Apple Silicon with 16 GB or more. Whisper on Intel
+/// and 8 GB Macs. Apple Speech remains the zero-download fallback.
 public enum EngineRecommendationEngine {
     /// Recommended engine and fallbacks for the profile.
     ///
@@ -70,7 +68,9 @@ public enum EngineRecommendationEngine {
             )
         }
 
-        if !hardware.hasGPUAcceleratedTranscription {
+        if !hardware.hasGPUAcceleratedTranscription
+            || hardware.isMemoryConstrained
+        {
             return firstAvailable(
                 [
                     EngineIdentifiers.whisper,
@@ -78,8 +78,9 @@ public enum EngineRecommendationEngine {
                 ],
                 in: active,
                 rationale:
-                    "Intel has no Metal path. Whisper Small is the "
-                    + "compromise; Apple Speech is the zero-download fallback."
+                    hardware.hasGPUAcceleratedTranscription
+                    ? "Under 12 GB: Whisper, not TDT v3."
+                    : "Intel has no Metal path. Whisper, not TDT v3."
             )
         }
 

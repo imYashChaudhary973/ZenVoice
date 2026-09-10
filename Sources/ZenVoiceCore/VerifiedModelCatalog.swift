@@ -134,16 +134,9 @@ public enum VerifiedModelCatalog {
     public static let sourceRepository =
         "https://huggingface.co/ggerganov/whisper.cpp"
 
-    /// Four models, each the measured best at one job.
-    ///
-    /// The catalogue was eleven. Nine of those were rungs on two size ladders —
-    /// tiny, base, small, medium — offered on the assumption that model size
-    /// buys a smooth speed-for-accuracy trade the user can position themselves
-    /// on. Benchmarked end to end, that assumption is wrong in both families.
-    ///
-    /// In English the trade is between speed and accuracy. Whisper Turbo is the
-    /// default on Apple Silicon; Whisper Small is the fallback where GPU
-    /// transcription is unavailable.
+    /// Six models. Distil is the English default on Intel and 8 GB Macs.
+    /// Turbo covers 99 languages. Large V3 is the accuracy pick. Small and
+    /// Medium stay offered. Apex is Hinglish-only.
     ///
     /// In multilingual the trade is a cliff rather than a curve. Anything below
     /// Turbo is not "faster with a little less accuracy", it is unusable:
@@ -173,9 +166,6 @@ public enum VerifiedModelCatalog {
                 "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
             size: 487_601_967
         ),
-        // Matches Whisper Medium's accuracy at roughly a third of the download,
-        // and handles every language rather than English alone. The default
-        // recommendation on Apple Silicon.
         model(
             id: "whisper-large-v3-turbo",
             name: "Whisper Turbo",
@@ -185,6 +175,26 @@ public enum VerifiedModelCatalog {
             sha256:
                 "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
             size: 574_041_195
+        ),
+        distilModel(
+            id: "whisper-distil-large-v3",
+            name: "Distil-Whisper Large V3",
+            filename: "ggml-distil-large-v3.bin",
+            sha256:
+                "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298",
+            size: 1_519_521_155
+        ),
+        // ponytail: q5_0 not F16 (3.1 GB). Switch to ggml-large-v3.bin if
+        // q5_0 WER is too far from the F16 checkpoint.
+        model(
+            id: "whisper-large-v3",
+            name: "Whisper Large V3",
+            filename: "ggml-large-v3-q5_0.bin",
+            tier: .highAccuracy,
+            language: .multilingual,
+            sha256:
+                "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1",
+            size: 1_081_140_203
         ),
         // Hindi-English code-switching, written in Latin script directly.
         //
@@ -553,11 +563,6 @@ public enum VerifiedModelCatalog {
             filename: filename,
             tier: .highAccuracy,
             languageCapability: .hinglish,
-            // Who produced *this file*, matching how the stock entries name
-            // ggml-org rather than OpenAI. Oriserve trained the weights and
-            // are credited for them in `attribution` and `upstreamRepository`,
-            // but they never published a GGML — this conversion is ours, and
-            // the checksum below is pinned against it.
             publisher: "ZenVoice",
             sourceRepository: convertedModelRepository,
             upstreamRepository:
@@ -572,6 +577,42 @@ public enum VerifiedModelCatalog {
                 "Whisper-Hindi2Hinglish-Apex by Oriserve, fine-tuned from "
                 + "OpenAI Whisper large-v3-turbo. Converted to whisper.cpp "
                 + "GGML and quantized to q8_0 for ZenVoice."
+        )
+    }
+
+    public static let distilModelRevision =
+        "0d78dd96ed9fc152325f63b53788fec3b43de031"
+    public static let distilModelRepository =
+        "https://huggingface.co/distil-whisper/distil-large-v3-ggml"
+
+    private static func distilModel(
+        id: String,
+        name: String,
+        filename: String,
+        sha256: String,
+        size: Int64
+    ) -> VerifiedModel {
+        VerifiedModel(
+            id: id,
+            displayName: name,
+            filename: filename,
+            tier: .fast,
+            languageCapability: .english,
+            publisher: "Hugging Face Distil-Whisper",
+            sourceRepository: distilModelRepository,
+            upstreamRepository:
+                "https://huggingface.co/distil-whisper/distil-large-v3",
+            sourceRevision: distilModelRevision,
+            sha256: sha256,
+            fileSizeBytes: size,
+            format: "whisper.cpp GGML",
+            license: "MIT",
+            licenseURL:
+                "https://github.com/huggingface/distil-whisper/blob/main/LICENSE",
+            attribution:
+                "Distil-Whisper large-v3 by Hugging Face, distilled from "
+                + "OpenAI Whisper large-v3. English-only. Converted to "
+                + "whisper.cpp GGML."
         )
     }
 
