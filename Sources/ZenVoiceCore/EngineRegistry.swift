@@ -42,16 +42,15 @@ public struct EngineRegistry: Sendable {
         }
     }
 
-    /// The engine the user explicitly chose, if it is available.
     public func preferredEngine(
         for profile: LanguageProfile,
         selectedID: String?
     ) -> (any SpeechEngine)? {
-        guard let selectedID,
-              !EngineIdentifiers.isPreviewOnly(selectedID) else {
+        guard let selectedID else {
             return nil
         }
-        guard let engine = engines.first(where: { $0.descriptor.id == selectedID }),
+        let id = EngineIdentifiers.canonical(selectedID)
+        guard let engine = engines.first(where: { $0.descriptor.id == id }),
               isCompatible(engine: engine, profile: profile),
               engine.isAvailable(for: profile) else {
             return nil
@@ -74,7 +73,7 @@ public struct EngineRegistry: Sendable {
             return preferred
         }
 
-        for id in fallbackOrder where !EngineIdentifiers.isPreviewOnly(id) {
+        for id in fallbackOrder {
             guard let engine = engines.first(where: { $0.descriptor.id == id }),
                   isCompatible(engine: engine, profile: profile),
                   engine.isAvailable(for: profile) else {
@@ -84,8 +83,7 @@ public struct EngineRegistry: Sendable {
         }
 
         return engines.first {
-            !EngineIdentifiers.isPreviewOnly($0.descriptor.id)
-                && isCompatible(engine: $0, profile: profile)
+            isCompatible(engine: $0, profile: profile)
                 && $0.isAvailable(for: profile)
         }
     }
@@ -102,26 +100,25 @@ public struct EngineRegistry: Sendable {
         return resolve(for: profile, selectedID: selectedID)
     }
 
-    /// Live-preview engine: Flash, then Nemotron Ultra Fast (streaming mode),
-    /// then Whisper. Never used for final insert.
+    /// Live-preview engine: the selected Whisper file if it is available,
+    /// otherwise any compatible Whisper-family engine.
     public func resolvePreview(
-        for profile: LanguageProfile,
-        nemotronMode: NemotronPreferences.Mode = NemotronPreferences.load()
+        for profile: LanguageProfile
     ) -> (any SpeechEngine)? {
-        var order = [EngineIdentifiers.parakeetFlash]
-        if nemotronMode == .streaming {
-            order.append(EngineIdentifiers.nemotronSpeechUltraFast)
-        }
-        order.append(EngineIdentifiers.whisper)
-        for id in order {
-            guard let engine = engines.first(where: { $0.descriptor.id == id }),
-                  engine.isAvailable(for: profile),
-                  isCompatible(engine: engine, profile: profile) else {
-                continue
-            }
+        let selectedID = SelectedEnginePreferences.load(for: profile)
+            .map(EngineIdentifiers.canonical)
+        if let selectedID,
+           EngineIdentifiers.isWhisperFamily(selectedID),
+           let engine = engines.first(where: { $0.descriptor.id == selectedID }),
+           engine.isAvailable(for: profile),
+           isCompatible(engine: engine, profile: profile) {
             return engine
         }
-        return nil
+        return engines.first {
+            EngineIdentifiers.isWhisperFamily($0.descriptor.id)
+                && $0.isAvailable(for: profile)
+                && isCompatible(engine: $0, profile: profile)
+        }
     }
 
     /// Prepares the resolved engine for the profile.
@@ -272,8 +269,7 @@ public struct EngineRegistry: Sendable {
         var seen: Set<String> = []
 
         func append(_ engine: any SpeechEngine) {
-            guard !EngineIdentifiers.isPreviewOnly(engine.descriptor.id),
-                  !seen.contains(engine.descriptor.id),
+            guard !seen.contains(engine.descriptor.id),
                   isCompatible(engine: engine, profile: profile),
                   engine.isAvailable(for: profile) else {
                 return

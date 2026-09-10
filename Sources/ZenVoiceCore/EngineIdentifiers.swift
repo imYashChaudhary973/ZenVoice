@@ -17,27 +17,32 @@ import Foundation
 /// Stable identifiers for every speech engine ZenVoice knows about.
 ///
 /// These strings are persisted in user defaults and referenced by the verified
-/// engine catalogue, so they must never change. The runtime implementations in
-/// `ZenVoiceRuntime` use the same values.
+/// engine catalogue, so they must never change. Whisper engine IDs match the
+/// catalogue model IDs so choosing an engine selects its file.
 public enum EngineIdentifiers {
+    /// Pre-unification ID. Canonicalized to ``whisperLargeV3Turbo``.
     public static let whisper = "whisper"
-    public static let appleSpeech = "apple-speech"
-    public static let parakeetTDTv2 = "parakeet-tdt-v2"
+    public static let whisperLargeV3Turbo = "whisper-large-v3-turbo"
+    public static let whisperLargeV3 = "whisper-large-v3"
+    public static let whisperDistilLargeV3 = "whisper-distil-large-v3"
+    public static let hinglishApex = "hindi2hinglish-apex"
     public static let parakeetTDTv3 = "parakeet-tdt-v3"
-    public static let parakeetFlash = "parakeet-flash"
-    public static let nemotronSpeechUltraFast = "nemotron-speech-ultra-fast"
-    public static let nemotronSpeechMultilingual = "nemotron-speech-multilingual"
-    public static let cohereTranscribe = "cohere-transcribe"
 
-    /// Streaming engines used for live preview only. Final insert never
-    /// resolves to these IDs — they are too inaccurate as whole-file decoders
-    /// (Flash 14.1% WER, Nemotron Ultra Fast 23.8% on the 2026-08-18 table).
-    public static let previewOnlyIDs: Set<String> = [
-        parakeetFlash,
-        nemotronSpeechUltraFast
-    ]
+    public static func canonical(_ engineID: String) -> String {
+        engineID == whisper ? whisperLargeV3Turbo : engineID
+    }
 
-    public static func isPreviewOnly(_ engineID: String) -> Bool {
-        previewOnlyIDs.contains(engineID)
+    public static func isKnown(_ engineID: String) -> Bool {
+        let id = canonical(engineID)
+        return id == parakeetTDTv3
+            || VerifiedModelCatalog.model(id: id) != nil
+    }
+
+    public static func isWhisperFamily(_ engineID: String) -> Bool {
+        let id = canonical(engineID)
+        guard let model = VerifiedModelCatalog.model(id: id) else {
+            return false
+        }
+        return model.format.contains("whisper.cpp")
     }
 }

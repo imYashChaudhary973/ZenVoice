@@ -658,11 +658,11 @@ for profile in [capableMac, intelMac] {
         }
     }
 }
-// Distil and Large V3 added for the memory-aware default. Small and Medium stay.
-guard VerifiedModelCatalog.models.count == 6 else {
+// Turbo, Large V3, Distil, Apex. Small and Medium are retired.
+guard VerifiedModelCatalog.models.count == 4 else {
     FileHandle.standardError.write(
         Data(
-            ("FAIL: expected 6 offered models, found "
+            ("FAIL: expected 4 offered models, found "
                 + "\(VerifiedModelCatalog.models.count)\n").utf8
         )
     )
@@ -966,7 +966,7 @@ let mailProfile = ApplicationProfile(
     ),
     formattingMode: .clean,
     voiceCommandsEnabled: true,
-    preferredEngineID: EngineIdentifiers.appleSpeech,
+    preferredEngineID: EngineIdentifiers.parakeetTDTv3,
     preferredOutputMode: .englishTranslation
 )
 ApplicationProfilePreferences.save(
@@ -986,7 +986,7 @@ guard let loadedProfile = ApplicationProfilePreferences.profile(
     for: mailProfile.bundleIdentifier,
     defaults: applicationDefaults
 ),
-      loadedProfile.preferredEngineID == EngineIdentifiers.appleSpeech,
+      loadedProfile.preferredEngineID == EngineIdentifiers.parakeetTDTv3,
       loadedProfile.preferredOutputMode == .englishTranslation else {
     FileHandle.standardError.write(
         Data(
@@ -1330,8 +1330,8 @@ print("ZenVoiceCoreChecks: private and hold controls passed")
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
 let verifiedModels = VerifiedModelCatalog.allModels
-// Six offered, seven retired.
-guard VerifiedModelCatalog.models.count == 6,
+// Four offered, nine retired.
+guard VerifiedModelCatalog.models.count == 4,
       verifiedModels.count == 13,
       // Nothing retired may still be offered, and everything retired must
       // still resolve — by identifier and by filename — so that a model
@@ -2502,11 +2502,11 @@ guard SelectedEnginePreferences.migrateLegacyWhisperSelectionIfNeeded(
 ), SelectedEnginePreferences.load(
     for: englishProfile,
     defaults: migrationDefaults
-) == EngineIdentifiers.whisper else {
+) == EngineIdentifiers.canonical(migrationModel.id) else {
     failEngineCheck("legacy Whisper selection was not migrated")
 }
 SelectedEnginePreferences.save(
-    EngineIdentifiers.appleSpeech,
+    EngineIdentifiers.parakeetTDTv3,
     for: englishProfile,
     defaults: migrationDefaults
 )
@@ -2516,7 +2516,7 @@ guard !SelectedEnginePreferences.migrateLegacyWhisperSelectionIfNeeded(
 ), SelectedEnginePreferences.load(
     for: englishProfile,
     defaults: migrationDefaults
-) == EngineIdentifiers.appleSpeech else {
+) == EngineIdentifiers.parakeetTDTv3 else {
     failEngineCheck("engine migration overwrote an explicit preference")
 }
 
@@ -2540,35 +2540,38 @@ private func fakeEngineWithID(
     )
 }
 
-let fakeWhisper = fakeEngineWithID(
-    id: EngineIdentifiers.whisper,
+let fakeTurbo = fakeEngineWithID(
+    id: EngineIdentifiers.whisperLargeV3Turbo,
     capability: .multilingual
 )
-let fakeHinglishWhisper = fakeEngineWithID(
-    id: EngineIdentifiers.whisper,
+let fakeDistil = fakeEngineWithID(
+    id: EngineIdentifiers.whisperDistilLargeV3,
+    capability: .english
+)
+let fakeApex = fakeEngineWithID(
+    id: EngineIdentifiers.hinglishApex,
     capability: .hinglish
 )
-let fakeAppleSpeech = fakeEngineWithID(
-    id: EngineIdentifiers.appleSpeech,
+let fakeTDTv3 = fakeEngineWithID(
+    id: EngineIdentifiers.parakeetTDTv3,
     capability: .multilingual
 )
-let recommendationRegistry = EngineRegistry(
-    engines: [fakeWhisper, fakeAppleSpeech]
+let whisperRegistry = EngineRegistry(
+    engines: [fakeTurbo, fakeDistil]
 )
 
 let englishRec = EngineRecommendationEngine.recommendation(
     for: .english,
     hardware: twentyFourGigabyteProfile,
-    registry: recommendationRegistry
+    registry: whisperRegistry
 )
 guard let englishRec,
-      englishRec.preferredEngineID == EngineIdentifiers.appleSpeech,
-      englishRec.fallbackEngineIDs == [EngineIdentifiers.whisper] else {
-    failEngineCheck("English recommendation should prefer Apple Speech then Whisper")
+      englishRec.preferredEngineID == EngineIdentifiers.whisperLargeV3Turbo else {
+    failEngineCheck("English without TDT should prefer Whisper Turbo")
 }
 
 let hinglishRegistry = EngineRegistry(
-    engines: [fakeHinglishWhisper, fakeAppleSpeech]
+    engines: [fakeApex, fakeTurbo]
 )
 let hinglishRec = EngineRecommendationEngine.recommendation(
     for: .hinglish,
@@ -2576,35 +2579,13 @@ let hinglishRec = EngineRecommendationEngine.recommendation(
     registry: hinglishRegistry
 )
 guard let hinglishRec,
-      hinglishRec.preferredEngineID == EngineIdentifiers.whisper,
+      hinglishRec.preferredEngineID == EngineIdentifiers.hinglishApex,
       hinglishRec.fallbackEngineIDs.isEmpty else {
-    failEngineCheck("Hinglish recommendation should be Whisper only")
+    failEngineCheck("Hinglish recommendation should be Apex only")
 }
 
-let unavailableApple = fakeEngineWithID(
-    id: EngineIdentifiers.appleSpeech,
-    capability: .multilingual,
-    available: false
-)
-let noAppleRegistry = EngineRegistry(
-    engines: [fakeWhisper, unavailableApple]
-)
-let noAppleRec = EngineRecommendationEngine.recommendation(
-    for: .english,
-    hardware: twentyFourGigabyteProfile,
-    registry: noAppleRegistry
-)
-guard let noAppleRec,
-      noAppleRec.preferredEngineID == EngineIdentifiers.whisper else {
-    failEngineCheck("Unavailable Apple Speech should fall back to Whisper")
-}
-
-let fakeTDTv3 = fakeEngineWithID(
-    id: EngineIdentifiers.parakeetTDTv3,
-    capability: .multilingual
-)
 let tdtRegistry = EngineRegistry(
-    engines: [fakeWhisper, fakeAppleSpeech, fakeTDTv3]
+    engines: [fakeTurbo, fakeDistil, fakeTDTv3]
 )
 let tdtEnglishRec = EngineRecommendationEngine.recommendation(
     for: .english,
@@ -2614,7 +2595,7 @@ let tdtEnglishRec = EngineRecommendationEngine.recommendation(
 guard let tdtEnglishRec,
       tdtEnglishRec.preferredEngineID == EngineIdentifiers.parakeetTDTv3,
       tdtEnglishRec.fallbackEngineIDs
-        == [EngineIdentifiers.appleSpeech, EngineIdentifiers.whisper] else {
+        == [EngineIdentifiers.whisperLargeV3Turbo] else {
     failEngineCheck("English with TDT v3 installed should prefer TDT v3")
 }
 
@@ -2624,8 +2605,9 @@ let intelEngineRec = EngineRecommendationEngine.recommendation(
     registry: tdtRegistry
 )
 guard let intelEngineRec,
-      intelEngineRec.preferredEngineID == EngineIdentifiers.whisper else {
-    failEngineCheck("Intel should prefer Whisper, not TDT v3")
+      intelEngineRec.preferredEngineID
+        == EngineIdentifiers.whisperDistilLargeV3 else {
+    failEngineCheck("Intel should prefer Distil, not TDT v3")
 }
 
 let constrainedEngineRec = EngineRecommendationEngine.recommendation(
@@ -2634,8 +2616,9 @@ let constrainedEngineRec = EngineRecommendationEngine.recommendation(
     registry: tdtRegistry
 )
 guard let constrainedEngineRec,
-      constrainedEngineRec.preferredEngineID == EngineIdentifiers.whisper else {
-    failEngineCheck("8 GB Apple Silicon should prefer Whisper, not TDT v3")
+      constrainedEngineRec.preferredEngineID
+        == EngineIdentifiers.whisperDistilLargeV3 else {
+    failEngineCheck("8 GB Apple Silicon should prefer Distil, not TDT v3")
 }
 
 let sixteenEngineRec = EngineRecommendationEngine.recommendation(
@@ -2654,58 +2637,30 @@ let autoEngineRec = EngineRecommendationEngine.recommendation(
     registry: tdtRegistry
 )
 guard let autoEngineRec,
-      autoEngineRec.preferredEngineID == EngineIdentifiers.whisper else {
+      autoEngineRec.preferredEngineID
+        == EngineIdentifiers.whisperLargeV3Turbo else {
     failEngineCheck("Auto-detect should prefer Whisper Turbo")
 }
 
-let fakeFlash = fakeEngineWithID(
-    id: EngineIdentifiers.parakeetFlash,
-    capability: .english
-)
 let previewRegistry = EngineRegistry(
-    engines: [fakeWhisper, fakeFlash, fakeTDTv3],
+    engines: [fakeTurbo, fakeTDTv3],
     fallbackOrder: [
         EngineIdentifiers.parakeetTDTv3,
-        EngineIdentifiers.whisper
+        EngineIdentifiers.whisperLargeV3Turbo
     ]
 )
-guard previewRegistry.resolve(
-        for: .english,
-        selectedID: EngineIdentifiers.parakeetFlash
-      )?.descriptor.id == EngineIdentifiers.parakeetTDTv3 else {
-    failEngineCheck("Flash must not win final resolve")
-}
 guard previewRegistry.resolvePreview(for: .english)?.descriptor.id
-        == EngineIdentifiers.parakeetFlash else {
-    failEngineCheck("Flash should win live preview resolve")
+        == EngineIdentifiers.whisperLargeV3Turbo else {
+    failEngineCheck("Live preview should use Whisper, not TDT")
 }
 
-let wrappedModels: [(String, String)] = [
-    (EngineIdentifiers.parakeetTDTv2, "nvidia/parakeet-tdt-0.6b-v2"),
-    (EngineIdentifiers.parakeetTDTv3, "nvidia/parakeet-tdt-0.6b-v3"),
-    (
-        EngineIdentifiers.parakeetFlash,
-        "nvidia/parakeet_realtime_eou_120m-v1"
-    ),
-    (
-        EngineIdentifiers.nemotronSpeechUltraFast,
-        "nvidia/nemotron-3.5-asr-streaming-0.6b"
-    ),
-    (
-        EngineIdentifiers.nemotronSpeechMultilingual,
-        "nvidia/nemotron-3.5-asr-streaming-0.6b"
-    )
-]
-for (engineID, expected) in wrappedModels {
-    guard VerifiedEngineCatalog.engine(id: engineID)?.wrappedModelID
-            == expected else {
-        failEngineCheck("\(engineID) does not wrap \(expected)")
-    }
-}
 guard VerifiedEngineCatalog.engine(
-        id: EngineIdentifiers.appleSpeech
-      )?.wrappedModelID == nil else {
-    failEngineCheck("Apple Speech should not wrap a downloadable model")
+        id: EngineIdentifiers.parakeetTDTv3
+      )?.wrappedModelID == "nvidia/parakeet-tdt-0.6b-v3" else {
+    failEngineCheck("TDT v3 does not wrap nvidia/parakeet-tdt-0.6b-v3")
+}
+guard VerifiedEngineCatalog.engine(id: "apple-speech") == nil else {
+    failEngineCheck("Apple Speech should be gone from the catalogue")
 }
 
 

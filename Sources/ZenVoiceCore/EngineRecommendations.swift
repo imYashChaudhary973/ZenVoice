@@ -37,8 +37,8 @@ public struct EngineRecommendation: Equatable, Sendable {
 
 /// Recommends a speech engine for a language profile.
 ///
-/// Parakeet TDT v3 on Apple Silicon with 16 GB or more. Whisper on Intel
-/// and 8 GB Macs. Apple Speech remains the zero-download fallback.
+/// Parakeet TDT v3 on Apple Silicon with 16 GB or more. Distil or Turbo on
+/// Intel and 8 GB Macs. Apex for Hinglish.
 public enum EngineRecommendationEngine {
     /// Recommended engine and fallbacks for the profile.
     ///
@@ -53,15 +53,15 @@ public enum EngineRecommendationEngine {
         let active = registry.engines.filter {
             registry.isCompatible(engine: $0, profile: profile)
                 && $0.isAvailable(for: profile)
-                && !EngineIdentifiers.isPreviewOnly($0.descriptor.id)
         }
         guard !active.isEmpty else {
             return nil
         }
 
         if profile.isHinglish {
-            return whisperOnlyRecommendation(
-                active: active,
+            return firstAvailable(
+                [EngineIdentifiers.hinglishApex],
+                in: active,
                 rationale:
                     "Only Whisper Apex supports Hinglish code-switching with "
                     + "Latin-script output."
@@ -73,14 +73,15 @@ public enum EngineRecommendationEngine {
         {
             return firstAvailable(
                 [
-                    EngineIdentifiers.whisper,
-                    EngineIdentifiers.appleSpeech
+                    EngineIdentifiers.whisperDistilLargeV3,
+                    EngineIdentifiers.whisperLargeV3Turbo
                 ],
                 in: active,
                 rationale:
                     hardware.hasGPUAcceleratedTranscription
-                    ? "Under 12 GB: Whisper, not TDT v3."
-                    : "Intel has no Metal path. Whisper, not TDT v3."
+                    ? "Under 12 GB: Distil-Whisper, not TDT v3."
+                    : "Intel has no Metal path. Distil-Whisper is the English "
+                        + "speed option; Turbo covers other languages."
             )
         }
 
@@ -88,26 +89,21 @@ public enum EngineRecommendationEngine {
             return firstAvailable(
                 [
                     EngineIdentifiers.parakeetTDTv3,
-                    EngineIdentifiers.appleSpeech,
-                    EngineIdentifiers.whisper
+                    EngineIdentifiers.whisperLargeV3Turbo
                 ],
                 in: active,
                 rationale:
                     "Parakeet TDT v3 is the measured English/European default "
-                    + "(6.9% WER, 73×). Apple Speech is the zero-download "
-                    + "fallback. Whisper Turbo covers 99 languages."
+                    + "(6.9% WER, 73×). Whisper Large V3 Turbo covers 99 "
+                    + "languages."
             )
         }
 
         return firstAvailable(
-            [
-                EngineIdentifiers.whisper,
-                EngineIdentifiers.appleSpeech
-            ],
+            [EngineIdentifiers.whisperLargeV3Turbo],
             in: active,
             rationale:
-                "Whisper Turbo is the 99-language default. Apple Speech is "
-                + "the zero-download fallback."
+                "Whisper Large V3 Turbo is the 99-language default."
         )
     }
 
@@ -122,26 +118,10 @@ public enum EngineRecommendationEngine {
             hardware: hardware,
             registry: registry
         ) else {
-            return [EngineIdentifiers.whisper]
+            return [EngineIdentifiers.whisperLargeV3Turbo]
         }
         return [recommendation.preferredEngineID]
             + recommendation.fallbackEngineIDs
-    }
-
-    private static func whisperOnlyRecommendation(
-        active: [any SpeechEngine],
-        rationale: String
-    ) -> EngineRecommendation? {
-        guard let whisper = active.first(
-            where: { $0.descriptor.id == EngineIdentifiers.whisper }
-        ) else {
-            return nil
-        }
-        return EngineRecommendation(
-            preferredEngineID: whisper.descriptor.id,
-            fallbackEngineIDs: [],
-            rationale: rationale
-        )
     }
 
     private static func firstAvailable(

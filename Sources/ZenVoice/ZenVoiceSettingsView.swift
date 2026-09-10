@@ -202,7 +202,7 @@ struct ZenVoiceSettingsView: View {
         case .language:
             return "language hinglish automatic detection output script"
         case .models:
-            return "model engine whisper parakeet nemotron cohere"
+            return "model engine whisper parakeet distil"
         case .personalisation:
             return "formatting vocabulary app rules corrections cloud"
         case .history:

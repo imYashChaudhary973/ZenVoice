@@ -317,41 +317,12 @@ struct ModelsScreen: View {
         bytes: Int64?
     ) {
         switch engine.descriptor.id {
-        case EngineIdentifiers.parakeetTDTv2:
-            return (
-                "Parakeet TDT V2",
-                .english,
-                .highAccuracy,
-                engine.fileSizeBytes
-            )
         case EngineIdentifiers.parakeetTDTv3:
             return (
                 "Parakeet TDT V3",
                 .multilingual,
                 .highAccuracy,
                 engine.fileSizeBytes
-            )
-        case EngineIdentifiers.parakeetFlash:
-            return (
-                "Parakeet Flash",
-                .english,
-                .fast,
-                engine.fileSizeBytes
-            )
-        case EngineIdentifiers.nemotronSpeechUltraFast,
-             EngineIdentifiers.nemotronSpeechMultilingual:
-            return (
-                "Nemotron 3.5",
-                .multilingual,
-                .balanced,
-                engine.fileSizeBytes
-            )
-        case EngineIdentifiers.cohereTranscribe:
-            return (
-                "Cohere Transcribe",
-                .multilingual,
-                .highAccuracy,
-                VerifiedEngineCatalog.cohereBundleSizeBytes
             )
         default:
             return (

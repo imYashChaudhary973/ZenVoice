@@ -71,10 +71,9 @@ public protocol SpeechEngine: Sendable {
     /// unprepared state.
     ///
     /// Called when dictation has been idle long enough that holding a loaded
-    /// model costs more than reloading it will. A resident model runs from
-    /// about 600 MB (Whisper Turbo) to 940 MB (Nemotron), almost all of it GPU
-    /// buffers, and a menu-bar app that nobody is dictating into should not be
-    /// holding that.
+    /// model costs more than reloading it will. A resident model is hundreds
+    /// of megabytes of GPU buffers, and a menu-bar app that nobody is
+    /// dictating into should not be holding that.
     ///
     /// Must be safe to call when the engine was never prepared, and safe to
     /// follow with `prepare()` or `transcribe(...)`, which reload on demand.
@@ -96,26 +95,14 @@ public extension SpeechEngine {
 /// benchmark grouping. New families are added here as engines arrive.
 public enum EngineFamily: String, Codable, CaseIterable, Sendable {
     case whisper
-    case appleSpeech
     case parakeetTDT
-    case parakeetFlash
-    case nemotronSpeech
-    case cohereTranscribe
 
     public var displayName: String {
         switch self {
         case .whisper:
             return "Whisper"
-        case .appleSpeech:
-            return "Apple Speech"
         case .parakeetTDT:
             return "Parakeet TDT"
-        case .parakeetFlash:
-            return "Parakeet Flash"
-        case .nemotronSpeech:
-            return "Nemotron Speech"
-        case .cohereTranscribe:
-            return "Cohere Transcribe"
         }
     }
 }

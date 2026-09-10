@@ -1,9 +1,8 @@
 # Third-Party Notices
 
-ZenVoice embeds the `whisper.cpp` runtime, uses the Apple `Speech` framework
-on-device, and lets the user download reviewed speech model weights from a
-verified in-app catalogue. ZenVoice does not bundle model weights in the
-repository or application.
+ZenVoice embeds the `whisper.cpp` and `parakeet.cpp` runtimes and lets the
+user download reviewed speech model weights from a verified in-app catalogue.
+ZenVoice does not bundle model weights in the repository or application.
 
 This notice records the reviewed upstream source, pinned runtime revision, and
 applicable licence text. It is not a licence for ZenVoice itself. ZenVoice is
@@ -73,17 +72,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Apple Speech
-
-- Framework: `Speech` (`SFSpeechRecognizer`)
-- Publisher: Apple Inc.
-- Source: <https://developer.apple.com/documentation/speech>
-- Licence: Apple Software License Agreement (see the Xcode and SDKs licence
-  included with your Apple developer tools)
-- Privacy posture: `requiresOnDeviceRecognition = true` is set for every
-  recognition request; audio is processed locally and is not sent to Apple's
-  servers.
-
 ## OpenAI Whisper model weights
 
 - Project: `openai/whisper`
@@ -145,85 +133,15 @@ is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND, either express or implied. See the License for the specific language
 governing permissions and limitations under the License.
 
-## ONNX Runtime
+## NVIDIA Parakeet TDT v3
 
-ZenVoice links ONNX Runtime through the Swift Package Manager release to run the
-Cohere Transcribe engine locally.
-
-- Project: `microsoft/onnxruntime-swift-package-manager`
-- Source: <https://github.com/microsoft/onnxruntime-swift-package-manager>
-- Swift product: `onnxruntime`
-- Swift module: `OnnxRuntimeBindings`
-- Licence: ONNX Runtime licence (MIT for the open-source runtime)
-
-```text
-MIT License
-
-Copyright (c) Microsoft Corporation
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-## Active speech engines
-
-The following engines are integrated into `ZenVoiceRuntime` and selectable from
-the UI. Their identifiers, families, and licences were fixed before
-integration so that later phases can add implementations without renaming user
-preferences or changing the catalogue schema.
-
-### NVIDIA Parakeet family
-
-- Parakeet TDT v2:
-  [`nvidia/parakeet-tdt-0.6b-v2`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2)
-- Parakeet TDT v3:
-  [`nvidia/parakeet-tdt-0.6b-v3`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
-- Parakeet Flash:
-  [`nvidia/parakeet_realtime_eou_120m-v1`](https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1)
-- GGUF conversion and runtime:
-  [`mudler/parakeet-cpp-gguf`](https://huggingface.co/mudler/parakeet-cpp-gguf)
+- Upstream: [`nvidia/parakeet-tdt-0.6b-v3`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
+- GGUF conversion: [`mudler/parakeet-cpp-gguf`](https://huggingface.co/mudler/parakeet-cpp-gguf)
 - Publisher: NVIDIA
 - Runtime: `parakeet.cpp` v0.5.0 (MIT)
 - Licence: CC-BY-4.0
 - Licence text: <https://creativecommons.org/licenses/by/4.0/legalcode>
 
-### NVIDIA Nemotron Speech family
-
-- Nemotron Speech 3.5 Ultra Fast:
-  [`nvidia/nemotron-3.5-asr-streaming-0.6b`](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b)
-- Nemotron 3.5 Multilingual: same upstream checkpoint, run in offline/whole-file
-  mode for 40-locale transcription.
-- Publisher: NVIDIA
-- Runtime: `parakeet.cpp` v0.5.0 (MIT)
-- Licence: OpenMDW-1.1
-- Licence text: <https://openmdw.ai/license/1-1/>
-
-### Cohere Transcribe
-
-- Model: `CohereLabs/cohere-transcribe-03-2026`
-- ONNX INT8 export: [`cstr/cohere-transcribe-onnx-int8`](https://huggingface.co/cstr/cohere-transcribe-onnx-int8)
-- Publisher: Cohere Inc.
-- Runtime: ONNX Runtime Swift (`microsoft/onnxruntime-swift-package-manager`)
-- Licence: Apache License 2.0
-- Licence text: see [Apache License 2.0](#apache-license-20) below
-- Privacy posture: weights are Apache-2.0 and run locally via ONNX Runtime
-  with the CoreML execution provider. A cloud API path remains optional and
-  requires explicit opt-in plus a user-supplied API key.
 
 ## Retired NVIDIA Parakeet Unified EN 0.6B CoreML model
 

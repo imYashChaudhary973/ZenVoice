@@ -591,16 +591,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             engineRegistry = makeEngineRegistry(whisper: whisper)
             warmUpEngines()
         } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
-            // ZenVoice can still offer Apple Speech and Parakeet even when no
-            // Whisper model is installed yet. Defer the error message until
-            // dictation actually starts without an available engine.
-            let whisper = WhisperSpeechEngine(
-                configuration: ZenVoiceConfiguration(
-                    modelURL: URL(fileURLWithPath: "/dev/null")
-                )
-            )
-            whisperEngine = whisper
-            engineRegistry = makeEngineRegistry(whisper: whisper)
+            // TDT v3 can still run when no Whisper file is installed yet.
+            whisperEngine = nil
+            engineRegistry = makeEngineRegistry(whisper: nil)
         } catch {
             state.phase = .error(error.localizedDescription)
         }
@@ -608,32 +601,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsViewModel?.refreshSystemStatus()
     }
 
-    private func makeEngineRegistry(whisper: WhisperSpeechEngine) -> EngineRegistry {
-        let apple = AppleSpeechEngine()
-        let parakeetFlash = makeParakeetFlashEngine()
-        let parakeetTDTv2 = makeParakeetTDTEngine(.v2)
-        let parakeetTDTv3 = makeParakeetTDTEngine(.v3)
-        let nemotronUltraFast = makeNemotronSpeechUltraFastEngine()
-        let nemotronMultilingual = makeNemotronSpeechMultilingualEngine()
-        let cohere = makeCohereTranscribeEngine()
-        var engines: [any SpeechEngine] = [whisper, apple]
-        if let parakeetFlash {
-            engines.append(parakeetFlash)
+    private func makeEngineRegistry(whisper: WhisperSpeechEngine?) -> EngineRegistry {
+        var engines: [any SpeechEngine] = []
+        if let whisper {
+            engines.append(whisper)
         }
-        if let parakeetTDTv2 {
-            engines.append(parakeetTDTv2)
-        }
-        if let parakeetTDTv3 {
+        if let parakeetTDTv3 = makeParakeetTDTEngine(.v3) {
             engines.append(parakeetTDTv3)
-        }
-        if let nemotronUltraFast {
-            engines.append(nemotronUltraFast)
-        }
-        if let nemotronMultilingual {
-            engines.append(nemotronMultilingual)
-        }
-        if let cohere {
-            engines.append(cohere)
         }
         let temporary = EngineRegistry(engines: engines)
         let fallbackOrder = EngineRecommendationEngine.fallbackOrder(
@@ -647,14 +621,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }
 
-    private func makeParakeetFlashEngine() -> ParakeetFlashEngine? {
-        makeEngineIfModelExists(
-            filename: ParakeetFlashEngine.modelFilename
-        ) { url in
-            ParakeetFlashEngine(modelURL: url)
-        }
-    }
-
     private func makeParakeetTDTEngine(
         _ configuration: ParakeetTDTEngine.Configuration
     ) -> ParakeetTDTEngine? {
@@ -663,33 +629,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ) { url in
             ParakeetTDTEngine(configuration: configuration, modelURL: url)
         }
-    }
-
-    private func makeNemotronSpeechUltraFastEngine()
-        -> NemotronSpeechUltraFastEngine? {
-        makeEngineIfModelExists(
-            filename: NemotronEngineConstants.modelFilename
-        ) { url in
-            NemotronSpeechUltraFastEngine(modelURL: url)
-        }
-    }
-
-    private func makeNemotronSpeechMultilingualEngine()
-        -> NemotronSpeechMultilingualEngine? {
-        makeEngineIfModelExists(
-            filename: NemotronEngineConstants.modelFilename
-        ) { url in
-            NemotronSpeechMultilingualEngine(modelURL: url)
-        }
-    }
-
-    private func makeCohereTranscribeEngine() -> CohereTranscribeEngine? {
-        guard let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
-        else {
-            return nil
-        }
-        let engine = CohereTranscribeEngine(modelsDirectory: modelsDirectory)
-        return engine.isAvailable ? engine : nil
     }
 
     private func makeEngineIfModelExists<Engine: SpeechEngine>(
@@ -726,12 +665,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if LiveDictationPreferences.isPreviewEnabled(),
                let preview = registry.resolvePreview(for: profile)
             {
+                let previewIsWhisper = EngineIdentifiers.isWhisperFamily(
+                    preview.descriptor.id
+                )
                 let resolvedID = resolved?.descriptor.id
-                let previewIsWhisper =
-                    preview.descriptor.id == EngineIdentifiers.whisper
                 let resolvedIsParakeet =
                     resolvedID == EngineIdentifiers.parakeetTDTv3
-                    || resolvedID == EngineIdentifiers.parakeetTDTv2
                 if !(previewIsWhisper && resolvedIsParakeet) {
                     try? await preview.prepare()
                 }
@@ -2404,7 +2343,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let processed: ProcessedTranscription?
             if expectsRemainder {
-                let result = try whisperEngine.transcribe(
+                let result = try await whisperEngine.enqueuePreview(
                     samples: remainingSamples,
                     languageProfile: behavior.languageProfile,
                     initialPrompt: behavior.context
@@ -2731,20 +2670,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         languageProfile: LanguageProfile,
         initialPrompt: String?
     ) async throws -> TranscriptionResult {
-        if let flash = engine as? ParakeetFlashEngine {
-            return try await flash.transcribe(
-                samples: samples,
-                languageProfile: languageProfile,
-                initialPrompt: initialPrompt
-            )
-        }
-        if let nemotron = engine as? NemotronSpeechUltraFastEngine {
-            return try await nemotron.transcribe(
-                samples: samples,
-                languageProfile: languageProfile,
-                initialPrompt: initialPrompt
-            )
-        }
         let whisper = (engine as? WhisperSpeechEngine) ?? whisperFallback
         guard let whisper else {
             throw EngineError.noEngineAvailable

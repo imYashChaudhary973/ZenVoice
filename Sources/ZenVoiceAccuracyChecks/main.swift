@@ -13,9 +13,6 @@
 // limitations under the License.
 
 import Foundation
-#if os(macOS)
-import Speech
-#endif
 import ZenVoiceCore
 import ZenVoiceRuntime
 
@@ -282,35 +279,9 @@ private func makeEngineRegistry(
 ) -> EngineRegistry {
     let whisper = WhisperSpeechEngine(configuration: configuration)
     var engines: [any SpeechEngine] = [whisper]
-    #if os(macOS)
-    // Apple Speech requires an app target with the Speech Recognition
-    // entitlement and an interactive authorization prompt. Including it in a
-    // headless executable target can abort the process, so only add it when
-    // the harness is already authorized. The multi-engine benchmark still
-    // exercises Whisper and will automatically include Parakeet/Nemotron
-    // engines once they are wired into EngineRegistry.
-    if SFSpeechRecognizer.authorizationStatus() == .authorized {
-        engines.append(AppleSpeechEngine())
-    }
-    if let parakeetFlash = makeParakeetFlashEngine() {
-        engines.append(parakeetFlash)
-    }
-    if let parakeetTDTv2 = makeParakeetTDTEngine(.v2) {
-        engines.append(parakeetTDTv2)
-    }
     if let parakeetTDTv3 = makeParakeetTDTEngine(.v3) {
         engines.append(parakeetTDTv3)
     }
-    if let nemotronUltraFast = makeNemotronSpeechUltraFastEngine() {
-        engines.append(nemotronUltraFast)
-    }
-    if let nemotronMultilingual = makeNemotronSpeechMultilingualEngine() {
-        engines.append(nemotronMultilingual)
-    }
-    if let cohere = makeCohereTranscribeEngine() {
-        engines.append(cohere)
-    }
-    #endif
     let temporary = EngineRegistry(engines: engines)
     let fallbackOrder = EngineRecommendationEngine.fallbackOrder(
         for: LanguageProfile.english,
@@ -321,22 +292,6 @@ private func makeEngineRegistry(
         engines: engines,
         fallbackOrder: fallbackOrder
     )
-}
-
-private func makeParakeetFlashEngine() -> ParakeetFlashEngine? {
-    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
-    guard let modelsDirectory else {
-        return nil
-    }
-    let modelURL = modelsDirectory
-        .appendingPathComponent(
-            ParakeetFlashEngine.modelFilename,
-            isDirectory: false
-        )
-    guard FileManager.default.fileExists(atPath: modelURL.path) else {
-        return nil
-    }
-    return ParakeetFlashEngine(modelURL: modelURL)
 }
 
 private func makeParakeetTDTEngine(
@@ -355,50 +310,6 @@ private func makeParakeetTDTEngine(
         return nil
     }
     return ParakeetTDTEngine(configuration: configuration, modelURL: modelURL)
-}
-
-private func makeNemotronSpeechUltraFastEngine()
-    -> NemotronSpeechUltraFastEngine? {
-    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
-    guard let modelsDirectory else {
-        return nil
-    }
-    let modelURL = modelsDirectory
-        .appendingPathComponent(
-            NemotronEngineConstants.modelFilename,
-            isDirectory: false
-        )
-    guard FileManager.default.fileExists(atPath: modelURL.path) else {
-        return nil
-    }
-    return NemotronSpeechUltraFastEngine(modelURL: modelURL)
-}
-
-private func makeNemotronSpeechMultilingualEngine()
-    -> NemotronSpeechMultilingualEngine? {
-    let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
-    guard let modelsDirectory else {
-        return nil
-    }
-    let modelURL = modelsDirectory
-        .appendingPathComponent(
-            NemotronEngineConstants.modelFilename,
-            isDirectory: false
-        )
-    guard FileManager.default.fileExists(atPath: modelURL.path) else {
-        return nil
-    }
-    return NemotronSpeechMultilingualEngine(modelURL: modelURL)
-}
-
-
-private func makeCohereTranscribeEngine() -> CohereTranscribeEngine? {
-    guard let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
-    else {
-        return nil
-    }
-    let engine = CohereTranscribeEngine(modelsDirectory: modelsDirectory)
-    return engine.isAvailable ? engine : nil
 }
 
 private func runRealSpeechSmoke() -> Bool {
@@ -539,9 +450,7 @@ private func listEngineBaselineCandidates() -> Bool {
 /// measured accuracy rather than hardware heuristics.
 ///
 /// The engine id must match a registry descriptor exactly; a miss fails
-/// closed with the list of ids this machine actually has. Apple Speech only
-/// joins the registry when this process is already authorized, so it is
-/// effectively gated behind a manual QA step rather than unattended CI.
+/// closed with the list of ids this machine actually has.
 private func measureEngineBaseline(engineID: String) -> Bool {
     guard let corpusPath = environment["ZENVOICE_ACCURACY_CORPUS"] else {
         fail("ZENVOICE_ACCURACY_ENGINE requires ZENVOICE_ACCURACY_CORPUS")
