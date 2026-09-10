@@ -65,6 +65,14 @@ public enum SelectedEnginePreferences {
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
         if let existing = load(for: profile, defaults: defaults) {
+            if existing == EngineIdentifiers.hinglishApex {
+                save(
+                    EngineIdentifiers.whisperLargeV3Turbo,
+                    for: profile,
+                    defaults: defaults
+                )
+                return true
+            }
             let canonical = EngineIdentifiers.canonical(existing)
             if canonical != existing {
                 save(canonical, for: profile, defaults: defaults)

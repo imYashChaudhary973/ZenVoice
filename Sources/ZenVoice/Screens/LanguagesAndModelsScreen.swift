@@ -26,7 +26,7 @@ struct LanguagesAndModelsScreen: View {
             icon: "globe",
             title: "Languages & Models",
             subtitle:
-                "What you speak, and the on-device engines that understand it."
+                "What you speak, and one on-device engine that understands it."
         ) {
             LanguagesScreen(viewModel: viewModel)
             ModelsScreen(

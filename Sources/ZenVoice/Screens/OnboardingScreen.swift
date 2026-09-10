@@ -305,7 +305,7 @@ struct OnboardingScreen: View {
                 )
             }
             Text(
-                "64 more languages live in Languages. Hinglish uses Hinglish Apex; auto-detect uses a multilingual model. The next step recommends the right download."
+                "64 more languages live in Languages. Auto-detect uses a multilingual model. The next step recommends the right download."
             )
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(

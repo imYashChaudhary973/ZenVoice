@@ -60,11 +60,11 @@ public enum EngineRecommendationEngine {
 
         if profile.isHinglish {
             return firstAvailable(
-                [EngineIdentifiers.hinglishApex],
+                [EngineIdentifiers.whisperLargeV3Turbo],
                 in: active,
                 rationale:
-                    "Only Whisper Apex supports Hinglish code-switching with "
-                    + "Latin-script output."
+                    "Apex is retired. Whisper Large V3 Turbo covers Hinglish "
+                    + "until a replacement ships."
             )
         }
 

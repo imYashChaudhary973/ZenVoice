@@ -622,11 +622,11 @@ let intelMac = HardwareProfile(
 guard ModelRecommendationEngine.recommendedModelID(
         for: capableMac,
         language: .hinglish
-      ) == "hindi2hinglish-apex",
+      ) == "whisper-large-v3-turbo",
       ModelRecommendationEngine.recommendedModelID(
         for: intelMac,
         language: .hinglish
-      ) == "hindi2hinglish-apex",
+      ) == "whisper-large-v3-turbo",
       ModelRecommendationEngine.recommendedModelID(
         for: capableMac,
         language: .english
@@ -658,11 +658,11 @@ for profile in [capableMac, intelMac] {
         }
     }
 }
-// Turbo, Large V3, Distil, Apex. Small and Medium are retired.
-guard VerifiedModelCatalog.models.count == 4 else {
+// Turbo, Large V3, Distil. Apex is retired.
+guard VerifiedModelCatalog.models.count == 3 else {
     FileHandle.standardError.write(
         Data(
-            ("FAIL: expected 4 offered models, found "
+            ("FAIL: expected 3 offered models, found "
                 + "\(VerifiedModelCatalog.models.count)\n").utf8
         )
     )
@@ -687,14 +687,10 @@ for id in [
     }
 }
 guard let apex = VerifiedModelCatalog.model(id: "hindi2hinglish-apex"),
+      VerifiedModelCatalog.isRetired(apex),
       let medium = VerifiedModelCatalog.model(
           id: "whisper-medium-multilingual"
       ),
-      ModelRecommendationEngine.recommendation(
-          for: apex,
-          profile: capableMac,
-          language: .hinglish
-      ).rationale.contains("code-switching"),
       !ModelRecommendationEngine.recommendation(
           for: medium,
           profile: capableMac,
@@ -706,14 +702,10 @@ guard let apex = VerifiedModelCatalog.model(id: "hindi2hinglish-apex"),
     exit(1)
 }
 
-// And a general multilingual model must not be offered for Hinglish at all.
-guard !LanguageProfile.hinglish.isCompatible(with: .multilingual),
+guard LanguageProfile.hinglish.isCompatible(with: .multilingual),
       LanguageProfile.hinglish.isCompatible(with: .hinglish),
-      // The reverse still holds: the specialist is not a general model.
       !LanguageProfile.english.isCompatible(with: .hinglish),
       LanguageProfile.english.isCompatible(with: .multilingual),
-      // A non-English language that is not Hinglish still uses a general
-      // multilingual model, which is the only option it has.
       LanguageProfile(inputLanguageCode: "es", outputMode: .spokenLanguage)
         .isCompatible(with: .multilingual) else {
     FileHandle.standardError.write(
@@ -754,21 +746,19 @@ guard let retiredEnglish = VerifiedModelCatalog.model(
       ModelProfileTransition.profileForSelecting(
           model: turbo,
           currentProfile: .hinglish
-      ) == nil,
+      ) == .hinglish,
       ModelProfileTransition.modelForSelecting(
           profile: .hinglish,
           currentModel: retiredEnglish,
           installedModels: [retiredEnglish, apex, turbo],
-          recommendedModelID: apex.id
-      ) == apex,
+          recommendedModelID: turbo.id
+      ) == turbo,
       ModelProfileTransition.modelForSelecting(
           profile: .english,
           currentModel: apex,
           installedModels: [retiredEnglish, apex, turbo],
           recommendedModelID: turbo.id
       ) == turbo,
-      // Existing compatible legacy selections remain stable until the user
-      // explicitly chooses a replacement.
       ModelProfileTransition.modelForSelecting(
           profile: .english,
           currentModel: retiredEnglish,
@@ -779,10 +769,10 @@ guard let retiredEnglish = VerifiedModelCatalog.model(
           profile: .hinglish,
           currentModel: retiredEnglish,
           installedModels: [retiredEnglish, turbo],
-          recommendedModelID: apex.id
-      ) == nil,
+          recommendedModelID: turbo.id
+      ) == turbo,
       ModelProfileTransition.unavailableMessage(for: .hinglish)
-        .contains("Hinglish Apex"),
+        .contains("Apex is retired"),
       ModelProfileTransition.unavailableMessage(for: .english)
         .contains("English or multilingual"),
       ModelProfileTransition.incompatibilityBadge(
@@ -792,7 +782,7 @@ guard let retiredEnglish = VerifiedModelCatalog.model(
       ModelProfileTransition.incompatibilityBadge(
           model: turbo,
           currentProfile: .hinglish
-      ) == "Not for Hinglish",
+      ) == nil,
       ModelProfileTransition.incompatibilityBadge(
           model: retiredEnglish,
           currentProfile: LanguageProfile(
@@ -1330,8 +1320,8 @@ print("ZenVoiceCoreChecks: private and hold controls passed")
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
 let verifiedModels = VerifiedModelCatalog.allModels
-// Four offered, nine retired.
-guard VerifiedModelCatalog.models.count == 4,
+// Three offered, ten retired.
+guard VerifiedModelCatalog.models.count == 3,
       verifiedModels.count == 13,
       // Nothing retired may still be offered, and everything retired must
       // still resolve — by identifier and by filename — so that a model
@@ -1746,11 +1736,7 @@ LanguagePreferences.save(.hinglish, defaults: languageDefaults)
 guard LanguagePreferences.load(defaults: languageDefaults) == .hinglish,
       LanguageProfile.english.isCompatible(with: .english),
       !LanguageProfile.hinglish.isCompatible(with: .english),
-      // A general multilingual model is no longer offered for Hinglish. It
-      // used to be, on the theory that it worked badly rather than not at
-      // all; measured on 30 real code-switched recordings it preserves 0 of
-      // 31 English words against the specialist's 82 of 96.
-      !LanguageProfile.hinglish.isCompatible(with: .multilingual),
+      LanguageProfile.hinglish.isCompatible(with: .multilingual),
       // A Hinglish model is a specialist. It serves the Hinglish profile and
       // nothing else — measured at 20.9% word error rate on English dictation
       // against Whisper Medium's 2.0%, so letting it near another profile
@@ -2548,10 +2534,6 @@ let fakeDistil = fakeEngineWithID(
     id: EngineIdentifiers.whisperDistilLargeV3,
     capability: .english
 )
-let fakeApex = fakeEngineWithID(
-    id: EngineIdentifiers.hinglishApex,
-    capability: .hinglish
-)
 let fakeTDTv3 = fakeEngineWithID(
     id: EngineIdentifiers.parakeetTDTv3,
     capability: .multilingual
@@ -2571,7 +2553,7 @@ guard let englishRec,
 }
 
 let hinglishRegistry = EngineRegistry(
-    engines: [fakeApex, fakeTurbo]
+    engines: [fakeTurbo, fakeDistil]
 )
 let hinglishRec = EngineRecommendationEngine.recommendation(
     for: .hinglish,
@@ -2579,9 +2561,8 @@ let hinglishRec = EngineRecommendationEngine.recommendation(
     registry: hinglishRegistry
 )
 guard let hinglishRec,
-      hinglishRec.preferredEngineID == EngineIdentifiers.hinglishApex,
-      hinglishRec.fallbackEngineIDs.isEmpty else {
-    failEngineCheck("Hinglish recommendation should be Apex only")
+      hinglishRec.preferredEngineID == EngineIdentifiers.whisperLargeV3Turbo else {
+    failEngineCheck("Hinglish recommendation should be Turbo while Apex is retired")
 }
 
 let tdtRegistry = EngineRegistry(

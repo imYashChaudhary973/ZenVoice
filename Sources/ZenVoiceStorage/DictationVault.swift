@@ -897,7 +897,7 @@ public actor DictationVault {
 
     public func preferredVocabulary(
         activeScope: CorrectionLanguageScope,
-        limit: Int = 12
+        limit: Int = 40
     ) throws -> [String] {
         guard limit > 0 else {
             return []

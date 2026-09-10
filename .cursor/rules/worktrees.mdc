@@ -1,0 +1,11 @@
+---
+description: Feature work stays off main. Use a git worktree, merge only when the user says the worktree is good.
+alwaysApply: true
+---
+
+# Worktrees, not dirty main
+
+- Never implement a feature on `main`. Create a new git worktree and branch from `origin/main`.
+- Do not leave uncommitted feature work on `main`. Park leftovers on a `wip/` branch if they must be kept.
+- Merge to `main` only after the user says that worktree is good. Open a PR; do not commit straight to `main`.
+- One feature (or one requested batch) per worktree. Do not pile unrelated edits onto `main` to "save a branch".
