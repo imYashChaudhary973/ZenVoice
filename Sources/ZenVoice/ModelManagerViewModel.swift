@@ -21,6 +21,7 @@ enum VerifiedModelDownloadError: LocalizedError {
     case invalidSource
     case invalidResponse
     case unexpectedSize
+    case rangeUnsupported
     case checksumMismatch
     case modelNotInstalled
 
@@ -32,6 +33,8 @@ enum VerifiedModelDownloadError: LocalizedError {
             "The approved model server returned an invalid response."
         case .unexpectedSize:
             "The downloaded model has an unexpected file size."
+        case .rangeUnsupported:
+            "The download source ignored range requests; retrying."
         case .checksumMismatch:
             "The downloaded model failed SHA-256 verification."
         case .modelNotInstalled:
@@ -45,36 +48,63 @@ enum VerifiedModelDownloadPhase: Sendable {
     case verifying
 }
 
-private final class DownloadTaskHandle: @unchecked Sendable {
+private final class MultiPartDownloadHandle: @unchecked Sendable {
     private let lock = NSLock()
-    private var task: URLSessionDownloadTask?
+    private var tasks: [URLSessionDownloadTask] = []
     private var wasCancelled = false
     private var exceededExpectedSize = false
+    private var finished = false
+    var expectedTotalBytes: Int64 = 0
+
+    func finish() {
+        lock.lock()
+        finished = true
+        lock.unlock()
+    }
+
+    var isFinished: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return finished || wasCancelled || exceededExpectedSize
+    }
+
+    var activeTasks: [URLSessionDownloadTask] {
+        lock.lock()
+        defer { lock.unlock() }
+        return tasks.filter { $0.state == .running }
+    }
+
+    func setExpectedTotalBytes(_ bytes: Int64) {
+        lock.lock()
+        expectedTotalBytes = bytes
+        lock.unlock()
+    }
 
     func install(_ task: URLSessionDownloadTask) {
         lock.lock()
-        self.task = task
-        let shouldCancel = wasCancelled
-        lock.unlock()
-        if shouldCancel {
+        if wasCancelled {
+            lock.unlock()
             task.cancel()
+            return
         }
+        tasks.append(task)
+        lock.unlock()
     }
 
     func cancel() {
         lock.lock()
         wasCancelled = true
-        let task = task
+        let tasks = tasks
         lock.unlock()
-        task?.cancel()
+        tasks.forEach { $0.cancel() }
     }
 
     func cancelForUnexpectedSize() {
         lock.lock()
         exceededExpectedSize = true
-        let task = task
+        let tasks = tasks
         lock.unlock()
-        task?.cancel()
+        tasks.forEach { $0.cancel() }
     }
 
     var wasCancelledForUnexpectedSize: Bool {
@@ -200,7 +230,190 @@ struct VerifiedModelDownloader {
         progress:
             AsyncStream<VerifiedModelDownloadPhase>.Continuation
     ) async throws -> (URL, URLResponse) {
-        let handle = DownloadTaskHandle()
+        // HuggingFace's CDN throttles per connection, so large files are
+        // fetched as concurrent byte ranges. Small files keep one stream.
+        guard expectedSize >= 16 * 1_048_576 else {
+            return try await downloadSingle(
+                request,
+                expectedSize: expectedSize,
+                progress: progress
+            )
+        }
+        let handle = MultiPartDownloadHandle()
+        defer { handle.finish() }
+        let partSize = Int64((Double(expectedSize) / 4).rounded(.up))
+        var ranges: [Range<Int64>] = []
+        var start: Int64 = 0
+        while start < expectedSize {
+            let end = min(start + partSize, expectedSize)
+            ranges.append(start..<end)
+            start = end
+        }
+
+        let poller = Task.detached(priority: .utility) {
+            while !handle.isFinished {
+                let received = handle.activeTasks.reduce(Int64(0)) {
+                    $0 + max(0, $1.countOfBytesReceived)
+                }
+                if received > expectedSize {
+                    handle.cancelForUnexpectedSize()
+                    return
+                }
+                let fraction = min(
+                    1,
+                    Double(received) / Double(max(1, expectedSize))
+                )
+                progress.yield(.downloading(fraction))
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+        }
+        defer { poller.cancel() }
+
+        return try await withTaskCancellationHandler {
+            // Probe with the first range. A 200 means the server ignored
+            // Range and sent the whole file — exactly the single-stream
+            // result, so reuse it.
+            let first = try await downloadPart(
+                request: request,
+                byteRange: ranges[0],
+                handle: handle
+            )
+            guard let httpResponse = first.response as? HTTPURLResponse,
+                  httpResponse.statusCode == 206 else {
+                return (first.url, first.response)
+            }
+            var byIndex = [URL?](repeating: nil, count: ranges.count)
+            byIndex[0] = first.url
+            try await withThrowingTaskGroup(of: (Int, URL).self) { group in
+                for (index, range) in ranges.enumerated().dropFirst() {
+                    group.addTask {
+                        let part = try await self.downloadPart(
+                            request: request,
+                            byteRange: range,
+                            handle: handle
+                        )
+                        guard let response = part.response as? HTTPURLResponse,
+                              response.statusCode == 206 else {
+                            throw VerifiedModelDownloadError.rangeUnsupported
+                        }
+                        let values = try part.url.resourceValues(forKeys: [
+                            .fileSizeKey
+                        ])
+                        guard Int64(values.fileSize ?? -1)
+                            == range.upperBound - range.lowerBound else {
+                            throw VerifiedModelDownloadError.unexpectedSize
+                        }
+                        return (index, part.url)
+                    }
+                }
+                for try await (index, url) in group {
+                    byIndex[index] = url
+                }
+            }
+            let partURLs = try byIndex.map { url in
+                guard let url else {
+                    throw VerifiedModelDownloadError.invalidResponse
+                }
+                return url
+            }
+            let assembledURL = try assemble(partURLs)
+            return (assembledURL, first.response)
+        } onCancel: {
+            handle.cancel()
+        }
+    }
+
+    private func downloadPart(
+        request: URLRequest,
+        byteRange: Range<Int64>,
+        handle: MultiPartDownloadHandle
+    ) async throws -> (url: URL, response: URLResponse) {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                var partRequest = request
+                partRequest.setValue(
+                    "bytes=\(byteRange.lowerBound)-\(byteRange.upperBound - 1)",
+                    forHTTPHeaderField: "Range"
+                )
+                let task = URLSession.shared.downloadTask(
+                    with: partRequest
+                ) { temporaryURL, response, error in
+                    if handle.wasCancelledForUnexpectedSize {
+                        continuation.resume(
+                            throwing:
+                                VerifiedModelDownloadError.unexpectedSize
+                        )
+                    } else if let error {
+                        continuation.resume(throwing: error)
+                    } else if let temporaryURL, let response {
+                        do {
+                            let retainedURL =
+                                FileManager.default.temporaryDirectory
+                                .appendingPathComponent(
+                                    "ZenVoice-\(UUID().uuidString).part"
+                                )
+                            try FileManager.default.moveItem(
+                                at: temporaryURL,
+                                to: retainedURL
+                            )
+                            continuation.resume(
+                                returning: (retainedURL, response)
+                            )
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    } else {
+                        continuation.resume(
+                            throwing:
+                                VerifiedModelDownloadError.invalidResponse
+                        )
+                    }
+                }
+                handle.install(task)
+                task.resume()
+            }
+        } onCancel: {
+            handle.cancel()
+        }
+    }
+
+    private func assemble(_ partURLs: [URL]) throws -> URL {
+        // The first part is renamed into place; the rest append in order
+        // and are deleted as they are consumed, so peak disk use stays
+        // close to one copy of the file.
+        let assembledURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ZenVoice-\(UUID().uuidString).download")
+        try FileManager.default.moveItem(at: partURLs[0], to: assembledURL)
+        let destination = try FileHandle(forWritingTo: assembledURL)
+        // FileHandle(forWritingTo:) opens at position 0; without this seek
+        // the first appended part overwrites part 0 instead of extending.
+        try destination.seekToEnd()
+        defer { try? destination.close() }
+        for part in partURLs.dropFirst() {
+            let source = try FileHandle(forReadingFrom: part)
+            do {
+                while let chunk = try source.read(upToCount: 1_048_576),
+                      !chunk.isEmpty {
+                    try destination.write(contentsOf: chunk)
+                }
+                try? source.close()
+                try FileManager.default.removeItem(at: part)
+            } catch {
+                try? source.close()
+                throw error
+            }
+        }
+        return assembledURL
+    }
+
+    private func downloadSingle(
+        _ request: URLRequest,
+        expectedSize: Int64,
+        progress:
+            AsyncStream<VerifiedModelDownloadPhase>.Continuation
+    ) async throws -> (URL, URLResponse) {
+        let handle = MultiPartDownloadHandle()
+        handle.setExpectedTotalBytes(expectedSize)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let task = URLSession.shared.downloadTask(
@@ -245,14 +458,14 @@ struct VerifiedModelDownloader {
                         let received = max(0, task.countOfBytesReceived)
                         let announced =
                             task.countOfBytesExpectedToReceive
-                        if received > expectedSize
-                            || announced > expectedSize {
+                        if received > handle.expectedTotalBytes
+                            || announced > handle.expectedTotalBytes {
                             handle.cancelForUnexpectedSize()
                             return
                         }
                         let fraction = min(
                             1,
-                            Double(received) / Double(max(1, expectedSize))
+                            Double(received) / Double(max(1, handle.expectedTotalBytes))
                         )
                         progress.yield(.downloading(fraction))
                         try? await Task.sleep(for: .milliseconds(150))
@@ -282,8 +495,6 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var selectedEngineID: String?
     @Published private(set) var engineAvailabilities: [EngineAvailability] = []
     @Published private(set) var installedEngineIDs: Set<String> = []
-    @Published private(set) var nemotronMode: NemotronPreferences.Mode =
-        NemotronPreferences.load()
     @Published var errorMessage: String?
 
     private let downloader: VerifiedModelDownloader
@@ -373,34 +584,23 @@ final class ModelManagerViewModel: ObservableObject {
 
     func refreshEngineInstallStatus() {
         var installed: Set<String> = []
+        let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
         for engine in engines {
-            let isInstalled: Bool
-            switch engine.descriptor.id {
-            case EngineIdentifiers.parakeetTDTv3:
-                let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory(
-                    fileManager: fileManager
+            let id = EngineIdentifiers.canonical(engine.descriptor.id)
+            let filename = engine.downloadFilename
+                ?? VerifiedModelCatalog.model(id: id)?.filename
+            if let filename, let modelsDirectory {
+                let modelURL = modelsDirectory.appendingPathComponent(
+                    filename,
+                    isDirectory: false
                 )
-                let modelURL = modelsDirectory?
-                    .appendingPathComponent(
-                        ParakeetTDTEngine.Configuration.v3.modelFilename,
-                        isDirectory: false
-                    )
-                isInstalled = modelURL.map {
-                    fileManager.fileExists(atPath: $0.path)
-                } ?? false
-            case EngineIdentifiers.cohereTranscribe:
-                let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory(
-                    fileManager: fileManager
-                )
-                let engine = modelsDirectory.map {
-                    CohereTranscribeEngine(modelsDirectory: $0)
+                if fileManager.fileExists(atPath: modelURL.path) {
+                    installed.insert(id)
                 }
-                isInstalled = engine?.isAvailable ?? false
-            default:
-                isInstalled = engine.descriptor.requiresDownload == false
-            }
-            if isInstalled {
-                installed.insert(engine.descriptor.id)
+            } else if engine.descriptor.requiresDownload == false {
+                installed.insert(id)
             }
         }
         installedEngineIDs = installed
@@ -408,12 +608,19 @@ final class ModelManagerViewModel: ObservableObject {
 
     func refreshEngineSelection() {
         let profile = LanguagePreferences.load()
-        if let selected = SelectedEnginePreferences.load(for: profile),
-           EngineIdentifiers.isPreviewOnly(selected) {
-            SelectedEnginePreferences.clear(for: profile)
-            selectedEngineID = nil
+        if let selected = SelectedEnginePreferences.load(for: profile) {
+            if !EngineIdentifiers.isKnown(selected) {
+                SelectedEnginePreferences.clear(for: profile)
+                selectedEngineID = nil
+            } else {
+                let canonical = EngineIdentifiers.canonical(selected)
+                if canonical != selected {
+                    SelectedEnginePreferences.save(canonical, for: profile)
+                }
+                selectedEngineID = canonical
+            }
         } else {
-            selectedEngineID = SelectedEnginePreferences.load(for: profile)
+            selectedEngineID = nil
         }
         let active =
             engineRegistryProvider()?.availability(for: profile) ?? []
@@ -421,25 +628,23 @@ final class ModelManagerViewModel: ObservableObject {
         let activeIDs = Set(active.map(\.engine.id))
         merged.append(
             contentsOf: engines.compactMap { engine in
-                guard !activeIDs.contains(engine.descriptor.id) else {
+                let id = EngineIdentifiers.canonical(engine.descriptor.id)
+                guard !activeIDs.contains(id) else {
                     return nil
                 }
+                let installed = installedEngineIDs.contains(id)
                 return EngineAvailability(
                     engine: engine.descriptor,
-                    isAvailable: false,
-                    reason: engine.descriptor.requiresDownload
-                        ? .requiresDownload
-                        : .runtimeNotReady(engine.descriptor.id)
+                    isAvailable: installed,
+                    reason: installed
+                        ? nil
+                        : (engine.descriptor.requiresDownload
+                            ? .requiresDownload
+                            : .runtimeNotReady(id))
                 )
             }
         )
         engineAvailabilities = merged
-        nemotronMode = NemotronPreferences.load()
-    }
-
-    func setNemotronMode(_ mode: NemotronPreferences.Mode) {
-        NemotronPreferences.save(mode)
-        nemotronMode = mode
     }
 
     func engineRecommendation() -> EngineRecommendation? {
@@ -454,7 +659,8 @@ final class ModelManagerViewModel: ObservableObject {
     }
 
     func isRecommendedEngine(_ engineID: String) -> Bool {
-        engineRecommendation()?.preferredEngineID == engineID
+        engineRecommendation()?.preferredEngineID
+            == EngineIdentifiers.canonical(engineID)
     }
 
     func recommendedEngineRationale() -> String? {
@@ -462,38 +668,44 @@ final class ModelManagerViewModel: ObservableObject {
     }
 
     func selectEngine(_ engineID: String) {
-        if EngineIdentifiers.isPreviewOnly(engineID) {
-            errorMessage =
-                "Preview only — final insert uses Parakeet TDT v3 or Whisper Turbo."
-            return
-        }
+        let id = EngineIdentifiers.canonical(engineID)
         let profile = LanguagePreferences.load()
-        guard let availability = engineAvailabilities.first(
-            where: { $0.engine.id == engineID }
-        ) else {
-            return
-        }
-        guard availability.isAvailable else {
+        if let availability = engineAvailabilities.first(where: {
+            $0.engine.id == id
+        }), !availability.isAvailable,
+           availability.reason != nil,
+           availability.reason != .requiresDownload {
             errorMessage = unavailabilityLabel(for: availability)
             return
         }
-        SelectedEnginePreferences.save(engineID, for: profile)
-        selectedEngineID = engineID
+        if let engine = engines.first(where: { $0.descriptor.id == id }),
+           engine.descriptor.requiresDownload,
+           !installedEngineIDs.contains(id) {
+            downloadEngine(engine, thenSelect: true)
+            return
+        }
+        if let model = VerifiedModelCatalog.model(id: id) {
+            guard case .success = apply(model: model, profile: profile) else {
+                return
+            }
+        }
+        SelectedEnginePreferences.save(id, for: profile)
+        selectedEngineID = id
         enginePrepareTask?.cancel()
         enginePrepareTask = Task { [weak self] in
             do {
                 try await self?.engineRegistryProvider()?.prepare(
                     for: profile,
-                    selectedID: engineID
+                    selectedID: id
                 )
             } catch is CancellationError {
-                // User moved on before preparation finished.
             } catch {
                 await MainActor.run {
                     self?.errorMessage = error.localizedDescription
                 }
             }
         }
+        selectionInvalidated()
     }
 
     var activeEngineID: String? {
@@ -512,15 +724,12 @@ final class ModelManagerViewModel: ObservableObject {
         ) else {
             return "Not installed"
         }
-        if engine.descriptor.id == EngineIdentifiers.whisper,
-           let model = ModelSelectionPreferences.load() {
-            return model.displayName
-        }
         return engine.descriptor.displayName
     }
 
     func isSelectedEngine(_ engineID: String) -> Bool {
-        activeEngineID == engineID
+        activeEngineID == EngineIdentifiers.canonical(engineID)
+            || selectedEngineID == EngineIdentifiers.canonical(engineID)
     }
 
     private func unavailabilityLabel(for availability: EngineAvailability)
@@ -544,7 +753,8 @@ final class ModelManagerViewModel: ObservableObject {
     }
 
     func download(_ model: VerifiedModel) {
-        guard downloadTask == nil else {
+        guard downloadTask == nil,
+              engineDownloadTasks.isEmpty else {
             return
         }
         errorMessage = nil
@@ -614,6 +824,10 @@ final class ModelManagerViewModel: ObservableObject {
         activeDownloadID = nil
         downloadTask?.cancel()
         downloadTask = nil
+        for task in engineDownloadTasks.values {
+            task.cancel()
+        }
+        engineDownloadTasks.removeAll()
         downloadingModelID = nil
         downloadProgress = nil
         isVerifyingDownload = false
@@ -642,7 +856,7 @@ final class ModelManagerViewModel: ObservableObject {
             return
         }
         refreshEngineSelection()
-        selectEngine(EngineIdentifiers.whisper)
+        selectEngine(model.id)
     }
 
     @discardableResult
@@ -802,147 +1016,53 @@ final class ModelManagerViewModel: ObservableObject {
         engineDownloadTasks[engine.descriptor.id]?.isCancelled == false
     }
 
-    func downloadEngine(_ engine: VerifiedEngine) {
-        guard engineDownloadTasks[engine.descriptor.id] == nil else {
+    func downloadEngine(_ engine: VerifiedEngine, thenSelect: Bool = false) {
+        let id = EngineIdentifiers.canonical(engine.descriptor.id)
+        guard engineDownloadTasks[id] == nil,
+              downloadTask == nil else {
             return
         }
         errorMessage = nil
-        engineDownloadTasks[engine.descriptor.id] = Task { [weak self] in
+        downloadingModelID = id
+        downloadProgress = 0
+        isVerifyingDownload = false
+        engineDownloadTasks[id] = Task { [weak self] in
             defer {
-                self?.engineDownloadTasks.removeValue(
-                    forKey: engine.descriptor.id
-                )
+                self?.engineDownloadTasks.removeValue(forKey: id)
+                self?.downloadingModelID = nil
+                self?.downloadProgress = nil
+                self?.isVerifyingDownload = false
                 self?.refreshEngineInstallStatus()
                 self?.refreshEngineSelection()
             }
             do {
-                switch engine.descriptor.id {
-                case EngineIdentifiers.parakeetFlash:
-                    try await self?.downloadParakeetFlash()
-                case EngineIdentifiers.parakeetTDTv2:
-                    try await self?.downloadParakeetTDTv2()
-                case EngineIdentifiers.parakeetTDTv3:
-                    try await self?.downloadParakeetTDTv3()
-                case EngineIdentifiers.nemotronSpeechUltraFast,
-                     EngineIdentifiers.nemotronSpeechMultilingual:
-                    try await self?.downloadNemotronModel()
-                case EngineIdentifiers.cohereTranscribe:
-                    try await self?.downloadCohereModel()
-                default:
-                    break
+                guard let filename = engine.downloadFilename
+                    ?? VerifiedModelCatalog.model(id: id)?.filename
+                else {
+                    throw VerifiedModelDownloadError.invalidSource
+                }
+                try await self?.downloadEngineModel(
+                    engineID: id,
+                    filename: filename
+                )
+                await MainActor.run {
+                    self?.refreshEngineInstallStatus()
+                    if let model = VerifiedModelCatalog.model(id: id) {
+                        self?.installedModelIDs.insert(model.id)
+                    }
+                    if thenSelect {
+                        self?.selectEngine(id)
+                    } else {
+                        self?.selectionInvalidated()
+                    }
                 }
             } catch is CancellationError {
-                // Explicit user cancellation is handled by the UI.
             } catch {
                 await MainActor.run {
                     self?.errorMessage = error.localizedDescription
                 }
             }
         }
-    }
-
-    private func downloadParakeetFlash() async throws {
-        try await downloadEngineModel(
-            engineID: EngineIdentifiers.parakeetFlash,
-            filename: ParakeetFlashEngine.modelFilename
-        )
-    }
-
-    private func downloadParakeetTDTv2() async throws {
-        try await downloadEngineModel(
-            engineID: EngineIdentifiers.parakeetTDTv2,
-            filename: ParakeetTDTEngine.Configuration.v2.modelFilename
-        )
-    }
-
-    private func downloadParakeetTDTv3() async throws {
-        try await downloadEngineModel(
-            engineID: EngineIdentifiers.parakeetTDTv3,
-            filename: ParakeetTDTEngine.Configuration.v3.modelFilename
-        )
-    }
-
-    private func downloadNemotronModel() async throws {
-        try await downloadEngineModel(
-            engineID: EngineIdentifiers.nemotronSpeechMultilingual,
-            filename: NemotronEngineConstants.modelFilename
-        )
-    }
-
-    private func downloadCohereModel() async throws {
-        let base =
-            "https://huggingface.co/cstr/cohere-transcribe-onnx-int8/resolve/main/"
-        let engine = VerifiedEngineCatalog.engine(
-            id: EngineIdentifiers.cohereTranscribe
-        )
-        guard let sourceRevision = engine?.sourceRevision else {
-            throw VerifiedModelDownloadError.invalidSource
-        }
-        let directory = try VerifiedModelCatalog.modelsDirectory(
-            fileManager: fileManager
-        )
-        try await downloadCohereFile(
-            filename: VerifiedEngineCatalog.cohereEncoderFilename,
-            sourceURL: URL(string: base + "cohere-encoder.int8.onnx?download=true")!,
-            expectedSize: VerifiedEngineCatalog.cohereEncoderSizeBytes,
-            expectedSHA256: VerifiedEngineCatalog.cohereEncoderSHA256,
-            sourceRevision: sourceRevision,
-            destinationDirectory: directory
-        )
-        try await downloadCohereFile(
-            filename: VerifiedEngineCatalog.cohereDecoderFilename,
-            sourceURL: URL(string: base + "cohere-decoder.int8.onnx?download=true")!,
-            expectedSize: VerifiedEngineCatalog.cohereDecoderSizeBytes,
-            expectedSHA256: VerifiedEngineCatalog.cohereDecoderSHA256,
-            sourceRevision: sourceRevision,
-            destinationDirectory: directory
-        )
-        try await downloadCohereFile(
-            filename: VerifiedEngineCatalog.cohereTokenizerFilename,
-            sourceURL: URL(string: base + "tokens.txt?download=true")!,
-            expectedSize: VerifiedEngineCatalog.cohereTokenizerSizeBytes,
-            expectedSHA256: VerifiedEngineCatalog.cohereTokenizerSHA256,
-            sourceRevision: sourceRevision,
-            destinationDirectory: directory
-        )
-        try await downloadCohereFile(
-            filename: VerifiedEngineCatalog.cohereEncoderDataFilename,
-            sourceURL: URL(string: base + "cohere-encoder.int8.onnx.data?download=true")!,
-            expectedSize: VerifiedEngineCatalog.cohereEncoderDataSizeBytes,
-            expectedSHA256: VerifiedEngineCatalog.cohereEncoderDataSHA256,
-            sourceRevision: sourceRevision,
-            destinationDirectory: directory
-        )
-        try await downloadCohereFile(
-            filename: VerifiedEngineCatalog.cohereDecoderDataFilename,
-            sourceURL: URL(string: base + "cohere-decoder.int8.onnx.data?download=true")!,
-            expectedSize: VerifiedEngineCatalog.cohereDecoderDataSizeBytes,
-            expectedSHA256: VerifiedEngineCatalog.cohereDecoderDataSHA256,
-            sourceRevision: sourceRevision,
-            destinationDirectory: directory
-        )
-    }
-
-    private func downloadCohereFile(
-        filename: String,
-        sourceURL: URL,
-        expectedSize: Int64,
-        expectedSHA256: String,
-        sourceRevision: String,
-        destinationDirectory: URL
-    ) async throws {
-        let (_, progress) =
-            AsyncStream<VerifiedModelDownloadPhase>.makeStream()
-        defer { progress.finish() }
-        _ = try await downloader.download(
-            sourceURL: sourceURL,
-            sourceRevision: sourceRevision,
-            filename: filename,
-            expectedSize: expectedSize,
-            expectedSHA256: expectedSHA256,
-            destinationDirectory: destinationDirectory,
-            progress: progress
-        )
     }
 
     private func downloadEngineModel(
@@ -960,9 +1080,25 @@ final class ModelManagerViewModel: ObservableObject {
         let directory = try VerifiedModelCatalog.modelsDirectory(
             fileManager: fileManager
         )
-        let (_, progress) =
+        let (stream, progress) =
             AsyncStream<VerifiedModelDownloadPhase>.makeStream()
-        defer { progress.finish() }
+        let reporter = Task { [weak self] in
+            for await phase in stream {
+                guard let self else { return }
+                switch phase {
+                case .downloading(let fraction):
+                    self.downloadProgress = fraction
+                    self.isVerifyingDownload = false
+                case .verifying:
+                    self.downloadProgress = 1
+                    self.isVerifyingDownload = true
+                }
+            }
+        }
+        defer {
+            progress.finish()
+            reporter.cancel()
+        }
         _ = try await downloader.download(
             sourceURL: sourceURL,
             sourceRevision: sourceRevision,

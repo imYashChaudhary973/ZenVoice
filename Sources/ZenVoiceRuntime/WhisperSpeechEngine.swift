@@ -22,23 +22,26 @@ import whisper
 /// adds the engine protocol on top. Model discovery, verification, and language
 /// compatibility remain in `ZenVoiceConfiguration`.
 public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
-    public static let engineID = EngineIdentifiers.whisper
+    public var engineID: String {
+        configuration.modelID
+    }
 
     public var descriptor: EngineDescriptor {
-        EngineDescriptor(
-            id: Self.engineID,
-            displayName: "Whisper",
+        let model = VerifiedModelCatalog.model(id: configuration.modelID)
+        return EngineDescriptor(
+            id: engineID,
+            displayName: model?.displayName ?? "Whisper",
             family: .whisper,
             supportedLanguages: [],
             requiresDownload: true,
             requiresInternet: false,
-            format: "whisper.cpp GGML",
-            publisher: "ggml-org / Georgi Gerganov",
-            license: "MIT",
-            licenseURL:
-                "https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE",
-            attribution: "OpenAI Whisper weights converted for whisper.cpp "
-                + "by ggml-org.",
+            format: model?.format ?? "whisper.cpp GGML",
+            publisher: model?.publisher ?? "ggml-org / Georgi Gerganov",
+            license: model?.license ?? "MIT",
+            licenseURL: model?.licenseURL
+                ?? "https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE",
+            attribution: model?.attribution
+                ?? "OpenAI Whisper weights converted for whisper.cpp by ggml-org.",
             privacyNote: "Runs entirely on this Mac. No audio leaves the device."
         )
     }
@@ -159,19 +162,5 @@ public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
         } onCancel: {
             cancellation.cancel()
         }
-    }
-
-    /// Synchronous decode for callers already serialized on this engine's
-    /// queue. Anything else must use the queued variants above.
-    public func transcribe(
-        samples: [Float],
-        languageProfile: LanguageProfile,
-        initialPrompt: String? = nil
-    ) throws -> TranscriptionResult {
-        try transcriber.transcribe(
-            samples: samples,
-            languageProfile: languageProfile,
-            initialPrompt: initialPrompt
-        )
     }
 }

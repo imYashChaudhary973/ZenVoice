@@ -32,18 +32,6 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
         let attribution: String
         let queueLabel: String
 
-        /// TDT 0.6B v2 (English-only).
-        public static let v2 = Configuration(
-            engineID: EngineIdentifiers.parakeetTDTv2,
-            modelFilename: "tdt-0.6b-v2-q8_0.gguf",
-            displayName: "Parakeet TDT v2",
-            languageCapability: .english,
-            attribution:
-                "Parakeet TDT 0.6B v2 by NVIDIA. English-only. Runtime: "
-                + "parakeet.cpp v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
-            queueLabel: "com.zenvoice.app.parakeet-tdt-v2"
-        )
-
         /// TDT 0.6B v3 (multilingual).
         public static let v3 = Configuration(
             engineID: EngineIdentifiers.parakeetTDTv3,

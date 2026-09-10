@@ -352,8 +352,11 @@ struct AppProfilesScreen: View {
     private var engineOptions: [(id: String?, name: String)] {
         [
             (nil, "Use global engine preference"),
-            (EngineIdentifiers.whisper, "Whisper (local)"),
-            (EngineIdentifiers.appleSpeech, "Apple Speech (on-device)"),
+            (EngineIdentifiers.parakeetTDTv3, "Parakeet TDT v3"),
+            (EngineIdentifiers.whisperLargeV3Turbo, "Whisper Large V3 Turbo"),
+            (EngineIdentifiers.whisperDistilLargeV3, "Distil-Whisper Large V3"),
+            (EngineIdentifiers.whisperLargeV3, "Whisper Large V3"),
+            (EngineIdentifiers.hinglishApex, "Hinglish Apex"),
         ]
     }
 

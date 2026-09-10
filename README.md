@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Engines-Parakeet%20TDT%20v3%20%7C%20v2%20%7C%20Flash%20%7C%20Nemotron%203.5%20%7C%20Whisper%20%7C%20Apple%20Speech%20%7C%20Cohere-543EF5?style=for-the-badge" alt="Supported engines">
+  <img src="https://img.shields.io/badge/Engines-Parakeet%20TDT%20v3%20%7C%20Whisper-543EF5?style=for-the-badge" alt="Supported engines">
 </p>
 
 <p align="center">
@@ -46,8 +46,8 @@ Public GitHub beta. Apache-2.0.
 
 - **Global shortcut** — `⌃⌥Space` by default. Hold-to-dictate, paste-last (`⌃⌥V`), and Private Dictation (`⌃⌥P`) are configurable.
 - **ZenBar** — a 108×36 capsule on the display you are working on. Controls appear on hover. An error is the one state that stays open.
-- **On-device engines** — Whisper, Apple Speech, Parakeet TDT v2/v3, Parakeet Flash, Nemotron 3.5, and Cohere Transcribe. Nothing is sent to a speech API.
-- **Live preview** — optional on-device preview while you speak. Flash and Nemotron Ultra Fast are preview-only; final insert stays on TDT v3 or Whisper.
+- **On-device engines** — Whisper and Parakeet TDT v3. Nothing is sent to a speech API.
+- **Live preview** — optional on-device Whisper preview while you speak. Final insert stays on TDT v3 or Whisper.
 - **Formatting** — Off, deterministic Clean, guarded on-device Smart (macOS 26+), or opt-in BYO-key Cloud. Cloud never sends audio.
 - **Encrypted history** — AES-GCM transcripts, search, copy, retry, delete, Recovery Inbox. Pause independently of Private Dictation.
 - **Lecture Capture (v1)** — record long-form audio from the menu bar, transcribe it with your chosen on-device engine, and optionally summarize the text with your own API key. Audio stays on disk; only finished text is sent if you enable a cloud summary.
@@ -61,21 +61,15 @@ Public GitHub beta. Apache-2.0.
 
 ## Supported models
 
-An **engine** is the runtime. A **model** is the file it loads. Whisper can pick among four files. Each NVIDIA engine is pinned to one checkpoint. Mixing families does not work.
+Choose an engine. Use downloads its file.
 
-| Engine / model | Best for | Languages | Download | Hardware |
+| Engine | Best for | Languages | Download | Hardware |
 |---|---|---|---|---|
 | **Parakeet TDT v3** | Default English / European insert | [25 languages](#parakeet-tdt-v3) | ~897 MB | Apple Silicon |
-| **Parakeet TDT v2** | English-only insert | English | ~862 MB | Apple Silicon |
-| **Parakeet Flash** | Live English preview only | English | ~168 MB | Apple Silicon |
-| **Nemotron 3.5 Ultra Fast** | Streaming preview only | ~40 locales | ~938 MB | Apple Silicon |
-| **Nemotron 3.5 Multilingual** | Offline multilingual insert | ~40 locales | same file as Ultra Fast | Apple Silicon |
-| **Whisper Turbo** | Auto-detect / 99-language fallback | [99 languages](#whisper) | ~547 MB | Apple Silicon |
-| **Whisper Medium** | High-accuracy multilingual Whisper | 99 languages | ~1.4 GB | Apple Silicon |
-| **Whisper Small** | Intel / low-memory compromise | 99 languages (European in practice) | ~465 MB | Apple Silicon + Intel |
+| **Whisper Large V3 Turbo** | Auto-detect / 99-language fallback | [99 languages](#whisper) | ~547 MB | Apple Silicon |
+| **Whisper Large V3** | Higher-accuracy multilingual Whisper | 99 languages | ~1.0 GB | Apple Silicon |
+| **Distil-Whisper Large V3** | Faster English | English | ~1.4 GB | Apple Silicon + Intel |
 | **Hinglish Apex** | Hindi–English Latin output | Hinglish | ~834 MB | Apple Silicon |
-| **Cohere Transcribe** | Local high-accuracy multilingual | [14 languages](#cohere-transcribe) | ~3.1 GB | Apple Silicon |
-| **Apple Speech** | Zero-download fallback | System languages | None | Apple Silicon + Intel |
 
 Measured on the frozen Common Voice Spontaneous set (2026-08-18): **Parakeet TDT v3 is 6.9% WER at 73× real time**; Whisper Turbo is 8.2% at 11×. Full table: [REAL_SPEECH_CORPUS.md](docs/REAL_SPEECH_CORPUS.md).
 
@@ -83,31 +77,20 @@ Measured on the frozen Common Voice Spontaneous set (2026-08-18): **Parakeet TDT
 
 Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Russian, Slovak, Slovenian, Spanish, Swedish, Ukrainian.
 
-### Parakeet TDT v2
-
-English.
-
-### Cohere Transcribe
-
-English, French, German, Italian, Spanish, Portuguese, Greek, Dutch, Polish, Mandarin, Japanese, Korean, Vietnamese, Arabic.
-
-### Apple Speech
-
-Whatever on-device languages macOS Speech has installed. Audio never leaves the Mac (`requiresOnDeviceRecognition`).
-
 ### Whisper
 
-Up to 99 languages, depending on the file. Turbo is the multilingual default. Small is the Intel fallback, not a speed tier. Tiny and Base are retired.
+Turbo and Large V3 cover up to 99 languages. Distil-Whisper Large V3 is English-only. Tiny, Base, Small, and Medium are retired.
 
 ### What gets recommended
 
 | Condition | Final engine |
 |---|---|
-| English or European locale on Apple Silicon | Parakeet TDT v3 |
-| Auto-detect / non-European | Whisper Turbo |
+| English or European locale on Apple Silicon (16 GB+) | Parakeet TDT v3 |
+| Apple Silicon under 12 GB | Distil-Whisper Large V3 |
+| Auto-detect / non-European | Whisper Large V3 Turbo |
 | Hinglish | Apex only |
-| No TDT v3 installed | Apple Speech |
-| Intel | Whisper Small |
+| No TDT v3 installed | Whisper Large V3 Turbo |
+| Intel English | Distil-Whisper Large V3 |
 
 Pinned hashes and URLs: [Model catalogue](docs/MODEL_CATALOG.md).
 
@@ -128,9 +111,9 @@ NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Int
 ## Requirements
 
 - Apple Silicon Mac for NVIDIA engines and the recommended path
-- Intel Macs: Whisper Small only
+- Intel Macs: Distil-Whisper Large V3 (English) or Whisper Large V3 Turbo
 - Build target is macOS 14+. Certified on recent macOS; 14–26 are uncertified
-- Disk: one engine file, typically 170 MB–1.4 GB (Cohere ~3.1 GB if you choose it)
+- Disk: one engine file, typically 547 MB–1.4 GB
 - Microphone access
 - Accessibility permission to type into other apps
 
@@ -220,7 +203,7 @@ flowchart LR
 |---|---|
 | `ZenVoice` | App, ZenBar, settings window, design system |
 | `ZenVoiceCore` | Cleanup, formatting, hotkeys, catalogues, insertion policy |
-| `ZenVoiceRuntime` | Local engines: Whisper, Apple Speech, Parakeet, Nemotron, Cohere |
+| `ZenVoiceRuntime` | Local engines: Whisper, Parakeet TDT v3 |
 | `ZenVoiceStorage` | Encrypted vault, insights, voice profile, audio archive |
 | `ZenVoice*Checks` | Deterministic checks the compiler cannot see |
 

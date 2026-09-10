@@ -134,41 +134,11 @@ public enum VerifiedModelCatalog {
     public static let sourceRepository =
         "https://huggingface.co/ggerganov/whisper.cpp"
 
-    /// Six models. Distil is the English default on Intel and 8 GB Macs.
-    /// Turbo covers 99 languages. Large V3 is the accuracy pick. Small and
-    /// Medium stay offered. Apex is Hinglish-only.
-    ///
-    /// In multilingual the trade is a cliff rather than a curve. Anything below
-    /// Turbo is not "faster with a little less accuracy", it is unusable:
-    ///
-    ///     turbo        13.2% WER   1,451 ms
-    ///     medium       14.5%       1,173 ms
-    ///     small        35.5%         456 ms
-    ///     base         55.1%         139 ms
-    ///     tiny         64.5%          91 ms
-    ///
-    /// Small survives only as the fallback for Macs that cannot run Turbo well,
-    /// and it is offered as exactly that rather than as a speed choice — at
-    /// 35.5% it is European-languages-only in practice, scoring 100% on both
-    /// Japanese and Mandarin.
-    ///
-    /// Nothing here is deleted; see ``retiredModels``.
+    /// Four files, each one engine in the picker.
     public static let models: [VerifiedModel] = [
-        // The fallback for Intel and small-memory Macs, where Turbo is too slow.
-        // Offered as a compromise, not as a tier.
         model(
-            id: "whisper-small-multilingual",
-            name: "Whisper Small",
-            filename: "ggml-small.bin",
-            tier: .balanced,
-            language: .multilingual,
-            sha256:
-                "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
-            size: 487_601_967
-        ),
-        model(
-            id: "whisper-large-v3-turbo",
-            name: "Whisper Turbo",
+            id: EngineIdentifiers.whisperLargeV3Turbo,
+            name: "Whisper Large V3 Turbo",
             filename: "ggml-large-v3-turbo-q5_0.bin",
             tier: .highAccuracy,
             language: .multilingual,
@@ -176,18 +146,10 @@ public enum VerifiedModelCatalog {
                 "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
             size: 574_041_195
         ),
-        distilModel(
-            id: "whisper-distil-large-v3",
-            name: "Distil-Whisper Large V3",
-            filename: "ggml-distil-large-v3.bin",
-            sha256:
-                "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298",
-            size: 1_519_521_155
-        ),
         // ponytail: q5_0 not F16 (3.1 GB). Switch to ggml-large-v3.bin if
         // q5_0 WER is too far from the F16 checkpoint.
         model(
-            id: "whisper-large-v3",
+            id: EngineIdentifiers.whisperLargeV3,
             name: "Whisper Large V3",
             filename: "ggml-large-v3-q5_0.bin",
             tier: .highAccuracy,
@@ -196,35 +158,21 @@ public enum VerifiedModelCatalog {
                 "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1",
             size: 1_081_140_203
         ),
-        // Hindi-English code-switching, written in Latin script directly.
-        //
-        // Every other model reaches Hinglish by transcribing Devanagari and
-        // romanizing it, which destroys the English half of the sentence:
-        // `computer` becomes `कंप्यूटर` becomes `kampyutara`. Measured on the
-        // accuracy harness, that path preserves 0 of 26 English words. This
-        // model preserves 21.
-        //
-        // It is a specialist and is offered only for the Hinglish profile.
-        // On English dictation it scores 16.8% word error rate against Whisper
-        // Medium's 2.0%, because 700 hours of Hindi fine-tuning cost it the
-        // technical English vocabulary it started with.
+        distilModel(
+            id: EngineIdentifiers.whisperDistilLargeV3,
+            name: "Distil-Whisper Large V3",
+            filename: "ggml-distil-large-v3.bin",
+            sha256:
+                "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298",
+            size: 1_519_521_155
+        ),
         hinglishModel(
-            id: "hindi2hinglish-apex",
+            id: EngineIdentifiers.hinglishApex,
             name: "Hinglish Apex",
             filename: "ggml-hindi2hinglish-apex-q8_0.bin",
             sha256:
                 "0b4324d2c1ad64f20883ee7fcd5d2bb0a8466287dc70d74bc47066200c28c719",
             size: 874_188_075
-        ),
-        model(
-            id: "whisper-medium-multilingual",
-            name: "Whisper Medium",
-            filename: "ggml-medium.bin",
-            tier: .highAccuracy,
-            language: .multilingual,
-            sha256:
-                "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
-            size: 1_533_763_059
         )
     ]
 
@@ -258,6 +206,26 @@ public enum VerifiedModelCatalog {
     ///                               independent and open-source.
     public static let retiredModels: [VerifiedModel] = [
         retiredParakeetModel(),
+        model(
+            id: "whisper-small-multilingual",
+            name: "Whisper Small",
+            filename: "ggml-small.bin",
+            tier: .balanced,
+            language: .multilingual,
+            sha256:
+                "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+            size: 487_601_967
+        ),
+        model(
+            id: "whisper-medium-multilingual",
+            name: "Whisper Medium",
+            filename: "ggml-medium.bin",
+            tier: .highAccuracy,
+            language: .multilingual,
+            sha256:
+                "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
+            size: 1_533_763_059
+        ),
         model(
             id: "whisper-medium-en",
             name: "Whisper Medium",

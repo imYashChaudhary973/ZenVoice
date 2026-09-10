@@ -17,7 +17,7 @@ import Foundation
 /// Persists the user's chosen speech engine per language profile.
 ///
 /// A profile can have a different engine from another profile: English may use
-/// Apple Speech while Hinglish uses Whisper. The key is the profile identifier,
+/// Parakeet TDT v3 while Hinglish uses Whisper. The key is the profile identifier,
 /// so selecting a language also restores its last engine choice.
 public enum SelectedEnginePreferences {
     public static let preferenceKey = "ZenVoice.selectedEngineIDs"
@@ -58,18 +58,29 @@ public enum SelectedEnginePreferences {
     }
 
     /// Migrates installs that selected a Whisper model before ZenVoice stored
-    /// an engine preference. Without this, the new recommendation order can
-    /// silently route an explicitly chosen Whisper model through Parakeet.
+    /// an engine preference, and the pre-unification `whisper` engine ID.
     @discardableResult
     public static func migrateLegacyWhisperSelectionIfNeeded(
         for profile: LanguageProfile,
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
-        guard load(for: profile, defaults: defaults) == nil,
-              ModelSelectionPreferences.load(defaults: defaults) != nil else {
+        if let existing = load(for: profile, defaults: defaults) {
+            let canonical = EngineIdentifiers.canonical(existing)
+            if canonical != existing {
+                save(canonical, for: profile, defaults: defaults)
+                return true
+            }
             return false
         }
-        save(EngineIdentifiers.whisper, for: profile, defaults: defaults)
+        guard let model = ModelSelectionPreferences.load(defaults: defaults)
+        else {
+            return false
+        }
+        save(
+            EngineIdentifiers.canonical(model.id),
+            for: profile,
+            defaults: defaults
+        )
         return true
     }
 }
