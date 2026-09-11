@@ -2,9 +2,15 @@
 
 ## Current privacy promise
 
-ZenVoice's current transcription pipeline is local. Application code does not
-send audio, transcripts, clipboard contents, or usage analytics over the
-network.
+Local engines are the default. Application code does not send audio,
+transcripts, clipboard contents, or usage analytics over the network unless
+you opt in:
+
+- **Cloud speech** — you tap Use on OpenAI Transcribe, Gemini Transcribe,
+  Scribe v2, or Grok Transcribe. That clip is uploaded after you stop and
+  billed to your key. Details: [Cloud speech](CLOUD_SPEECH.md).
+- **Cloud formatting** — you enable it and supply a key. Finished text plus
+  your prompt leave; audio does not.
 
 The Privacy screen shows live local counts for encrypted transcripts, retained
 recovery audio, correction rules, and installed speech models. These counts are
@@ -21,7 +27,9 @@ that window rather than the whole database.
   device identifier and follows the current macOS input.
 - Audio Doctor records an explicit three-second local fixture, validates its
   signal and format, deletes it immediately, and creates no History record.
-- Read in-process by the selected bundled local speech runtime.
+- Read in-process by the selected local engine. If you tapped Use on a cloud
+  engine, the WAV is uploaded after you stop instead; see
+  [Cloud speech](CLOUD_SPEECH.md).
 - Deleted after successful transcription, unless Audio History is enabled — see
   below.
 - Deleted immediately when a recording is cancelled.
@@ -32,12 +40,6 @@ that window rather than the whole database.
   24 hours when recovery is enabled.
 - Turning failed-audio recovery off deletes any recovery recordings that are
   already retained.
-- Private Dictation mode retains no transcript or recovery audio, including
-  when it is enabled during an active or transcribing dictation and ZenVoice
-  exits unexpectedly. If it is enabled mid-dictation after a live-preview
-  partial has already been written, that partial stays encrypted in the
-  database until the dictation completes or ZenVoice next launches, whichever
-  comes first; both discard it.
 - A crash or forced termination could leave a temporary file until macOS cleans
   its temporary directory when history is disabled.
 - Users can delete all retained recovery audio independently from the Privacy
@@ -58,40 +60,15 @@ that window rather than the whole database.
 - Two budgets bound the archive, both user-configurable: total size (default
   2 GB, minimum 100 MB) and age (default 30 days, minimum 1 day). Cleanup runs
   at launch and after each archived recording, deleting the oldest first.
-- Archiving follows transcript persistence, so Private Dictation, paused
-  history, and suppressed dictations are never archived.
+- Archiving follows transcript persistence, so paused history and suppressed
+  dictations are never archived.
 - Recordings can be played back, deleted individually, or deleted all at once.
 - Export produces a ZIP of the audio plus a metadata manifest — timestamp,
   duration, size, language, model, target app, category. Transcript text is
   excluded unless the user explicitly turns it on for that export.
-- Audio never leaves the Mac unless the user exports it themselves.
+- The Audio History archive never leaves the Mac unless you export it. A
+  selected cloud engine uploads the live dictation clip, not this archive.
 - Full rationale in [ADR 0010](decisions/0010-audio-history.md).
-
-### Lecture capture
-
-- Start/stop lives in History → Lectures. The dictation hotkey does not
-  create, append to, or paste a lecture.
-- Audio is a 16 kHz mono WAV in private Application Support (`Lectures/`).
-  Like Audio History, the WAV is **not encrypted at rest**.
-- A lecture is independent of the Audio History toggle. Starting one is
-  consent to keep that file until you delete it.
-- Quit or crash mid-session keeps the partial WAV and marks the sidecar
-  `incomplete`.
-- v1 stops at 90 minutes and refuses to start if the disk cannot hold that
-  much 16 kHz float32 mono audio.
-- After Stop, the selected local engine transcribes the file. The original
-  transcript is encrypted in the sidecar with the History vault key. Failed
-  decode keeps the WAV and offers Retry. Nothing is pasted into another app.
-- Summarize appears only when Cloud AI is enabled and is disabled until its
-  provider is fully configured. It sends only the original transcript text
-  and the fixed lecture-summary prompt through the existing Cloud path. Audio,
-  title, file paths, engine metadata, and other lectures never enter the
-  request. The encrypted summary is stored separately; failure leaves the
-  original untouched.
-- Privacy & Data shows the current lecture count and total bytes used by
-  lecture WAV files. The inventory reads local file metadata only and sends
-  nothing.
-- Full contract in [ADR 0014](decisions/0014-lecture-capture-v1.md).
 
 ### Transcripts
 
@@ -105,16 +82,13 @@ that window rather than the whole database.
 - Protected by a 256-bit key stored in the user's macOS Keychain.
 - Kept until the user deletes an item or chooses Delete All; ZenVoice does not
   automatically expire transcript history.
-- Never synced or uploaded by ZenVoice.
+- Never synced or uploaded by ZenVoice, except Cloud formatting after you opt
+  in (finished text plus your prompt) or a selected cloud engine (the clip).
 
 ### Application context
 
 - When history is enabled, ZenVoice stores the target application's bundle
   identifier and display name.
-- Application profiles store only the bundle identifier, display name,
-  language choice, refinement mode, ZenIntelligence mode, Command Mode command
-  set, Write Mode default sub-mode, custom prompt hints, and voice-command
-  toggle in local preferences.
 - The optional next-dictation context is bounded to 500 characters, held only
   in memory, and cleared when recording starts. It is not stored in History,
   preferences, logs, or analytics.
@@ -133,7 +107,7 @@ that window rather than the whole database.
   user-correctable categories.
 - A streak day requires at least one completed dictation containing five final
   words.
-- Private Dictation and unsaved dictations never contribute to insights.
+- Unsaved dictations never contribute to insights.
 - ZenVoice does not send insight data, app identity, or category data to a
   server.
 
@@ -148,8 +122,7 @@ that window rather than the whole database.
 - Only rules explicitly saved inside ZenVoice are applied. ZenVoice does not
   watch or infer later edits made in another application.
 - Correction usage increases only when the corrected transcript is saved to
-  history. Private Dictation and unsaved dictations leave no correction-usage
-  event.
+  history. Unsaved dictations leave no correction-usage event.
 - Delete All removes correction rules before rotating the vault key.
 - Personal rule application and saved-history pattern analysis can be paused
   independently. Pausing leaves existing encrypted data untouched.
@@ -163,8 +136,7 @@ that window rather than the whole database.
 - Failed dictations appear with Retry only while valid recovery audio exists.
 - Usable partial transcripts remain copyable even when their audio has been
   deleted.
-- The existing 24-hour failed-audio expiry and Private Dictation rules still
-  apply.
+- The existing 24-hour failed-audio expiry still applies.
 
 ### Instant Refine
 
@@ -180,16 +152,14 @@ that window rather than the whole database.
 - The lexical and semantic guards reject invention, deletion, paraphrasing,
   changed quantities, and changed negations before model output can replace the
   local transcript.
-- Private Dictation can use the same in-memory formatting while saving no
-  transcript or correction-usage event.
 - The former downloadable Qwen/llama.cpp path remains removed; ZenVoice
   downloads and loads no refinement weights.
 
 ### Cloud AI Enhancement
 
-- **This is the only ZenVoice feature that can send your text off this Mac.**
-  It is off by default and does nothing until you both enable it and supply
-  your own provider API key.
+- **This is the only feature that sends transcript text off this Mac.** Cloud
+  speech is the only feature that sends audio. Both are off by default and do
+  nothing until you opt in and supply your own provider API key.
 - What is sent: the finished transcript text and your prompt.
 - What is never sent: audio, the application you dictated into (bundle
   identifier or name), the next-dictation context, transcript history,
@@ -213,11 +183,10 @@ that window rather than the whole database.
 
 - ZenVoice is distributed directly rather than through the Mac App Store, so
   updates are verified against a signed release feed.
-- The updater is currently inert: public distribution is deferred, and no
-  release feed is configured for this build.
+- The signed GitHub Releases appcast is configured (`SUFeedURL`). Checks run
+  when automatic checking is on or you ask explicitly.
 - An update check sends only what fetching a static URL requires — no install
   identifier, no usage data, no transcript or audio content.
-- Checks happen only when automatic checking is enabled or you ask explicitly.
 - The feed is signed with Ed25519 and verified against a key built into the
   app; the downloaded archive's SHA-256 must match the signed feed. Any
   verification failure rejects the update and changes nothing.
@@ -295,7 +264,7 @@ that window rather than the whole database.
 - Live phrase samples stay in memory and are processed by the same selected
   local speech runtime after a detected pause.
 - Stable phrases are encrypted into the active History record for interruption
-  recovery; Private Dictation and paused History write no partial text.
+  recovery; paused History writes no partial text.
 - Commit on pause is off by default. When enabled, it inserts only into the
   application that was active when dictation began.
 - In-memory samples are released with the recording session and are never sent
@@ -321,7 +290,8 @@ that window rather than the whole database.
   expected sizes, and SHA-256 digests before installation. ZenVoice constructs
   every download URL itself and installs only after the whole download verifies.
 - The `whisper.cpp` XCFramework is checksum-pinned; it runs in process.
-- No API key or online account is required.
+- Local engines require no API key. Cloud engines need a key you paste in
+  Models; see [Cloud speech](CLOUD_SPEECH.md).
 
 ## macOS permissions
 

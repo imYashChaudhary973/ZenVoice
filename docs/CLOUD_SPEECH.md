@@ -1,46 +1,56 @@
 # Cloud speech-to-text
 
-Local engines stay. Cloud engines are first-class and built for **fast
-insert**: stop speaking → upload the clip → text in the focused app.
+Local engines stay the default. Cloud engines are first-class and built for
+**fast insert**: stop speaking → upload the clip → text in the focused app.
 
-**ZenPense** does not implement STT. It receives whatever ZenVoice pastes
-into the focused field, same as Notes or Mail.
+They do nothing until you paste a key in Models and tap **Use** on that
+engine. Audio then leaves this Mac and is billed to your key.
 
-Grok (xAI) has **no public speech API**. It is not an engine.
+## Engines
+
+| Engine | Model | Endpoint | Auth |
+| --- | --- | --- | --- |
+| OpenAI Transcribe | `gpt-4o-mini-transcribe` | `https://api.openai.com/v1/audio/transcriptions` | `Authorization: Bearer` |
+| Gemini Transcribe | `gemini-2.0-flash` | Google AI Studio `generateContent` | `x-goog-api-key` |
+| Scribe v2 | `scribe_v2` | `https://api.elevenlabs.io/v1/speech-to-text` | `xi-api-key` |
+| Grok Transcribe | xAI STT | `https://api.x.ai/v1/stt` | `Authorization: Bearer` |
+
+Keys live in the Keychain, one account per provider. Turning the engine off
+does not delete the key; deleting the key in Models does.
 
 ## Speed rule
 
 Do not decode locally first when a cloud engine is selected. Do not send the
 transcript through Cloud AI Formatting afterwards. One network hop. Shared
-TLS session, warmed on `prepare()` while the user is still speaking.
+ephemeral `URLSession` (12 s request / 18 s resource), TLS warmed with a
+`HEAD` on `prepare()` while the user is still speaking.
 
 ```
 stop → POST wav → insert text
 ```
 
-## Phases
+If the API fails, ZenVoice decodes the **same clip** with the local engine
+and ZenBar says so. There is no silent cloud fallback the other way: a local
+engine never uploads.
 
-### Phase 1 — OpenAI transcribe — done
+## Request bodies
 
-BYO-key, `gpt-4o-mini-transcribe`, Models list, no silent cloud fallback,
-skip Cloud Formatting on this path.
+Nothing but the clip, the model, and an optional language code. No bundle ID,
+history, insights, voice-profile data, device id, or install id.
 
-### Phase 2 — Feel instant — done
+| Engine | Body |
+| --- | --- |
+| OpenAI | multipart: `model`, optional `language`, `file` (`audio/wav`) |
+| Gemini | JSON: fixed transcribe prompt + inline `audio/wav` |
+| Scribe v2 | multipart: `model_id`, `file` (`audio/wav`) |
+| Grok | multipart: optional `format=true`, optional `language`, `file` last |
 
-Shared `URLSession`, 12s timeout, TLS warm on dictation start, history
-marking does not block the upload.
-
-### Phase 3 — Gemini — done
-
-`Gemini Transcribe` (`gemini-2.0-flash` generateContent + inline wav).
-Separate Google AI Studio key in Keychain.
-
-### Phase 4 — Pages and Grok — done
-
-Help, Overview, and Privacy describe the opt-in. Grok is documented as
-unavailable until xAI ships transcription — no fake engine.
+Cookies are never stored. The session is ephemeral.
 
 ## Privacy
 
-Off by default. Key in Keychain. Body is file + model + language (OpenAI)
-or audio + transcribe prompt (Gemini). No bundle ID, history, or device id.
+Off by default. Once you tap Use, that clip is subject to the provider's
+retention and training policies, which ZenVoice cannot control.
+
+Cloud **formatting** is a separate opt-in and still sends finished text only,
+never audio. See [Privacy](PRIVACY.md).
