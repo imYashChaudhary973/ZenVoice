@@ -30,6 +30,7 @@ public enum EngineIdentifiers {
     public static let openaiTranscribe = "openai-transcribe"
     public static let geminiTranscribe = "gemini-transcribe"
     public static let elevenLabsScribe = "elevenlabs-scribe"
+    public static let grokTranscribe = "grok-transcribe"
 
     public static func canonical(_ engineID: String) -> String {
         engineID == whisper ? whisperLargeV3Turbo : engineID
@@ -41,6 +42,7 @@ public enum EngineIdentifiers {
             || id == openaiTranscribe
             || id == geminiTranscribe
             || id == elevenLabsScribe
+            || id == grokTranscribe
             || VerifiedModelCatalog.model(id: id) != nil
     }
 
@@ -49,6 +51,7 @@ public enum EngineIdentifiers {
         return id == openaiTranscribe
             || id == geminiTranscribe
             || id == elevenLabsScribe
+            || id == grokTranscribe
     }
 
     public static func isWhisperFamily(_ engineID: String) -> Bool {

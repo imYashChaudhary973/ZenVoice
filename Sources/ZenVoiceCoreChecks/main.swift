@@ -3320,6 +3320,40 @@ guard EngineIdentifiers.isCloudSpeech(
 ) else {
     failEngineCheck("elevenlabs engine id was not classified as cloud speech")
 }
+let grokRequest = GrokSpeechRequest(
+    languageCode: "en",
+    audio: speechAudio,
+    boundary: "testboundary"
+)
+let grokBody = String(decoding: grokRequest.encodedBody(), as: UTF8.self)
+let grokFileIndex = grokBody.range(of: "name=\"file\"")?.lowerBound
+let grokFormatIndex = grokBody.range(of: "name=\"format\"")?.lowerBound
+guard grokBody.contains("format"),
+      grokBody.contains("language"),
+      grokBody.contains("en"),
+      grokFileIndex != nil,
+      grokFormatIndex != nil,
+      grokFormatIndex! < grokFileIndex!,
+      !grokBody.contains("bundleIdentifier") else {
+    failEngineCheck("grok speech request shape is wrong")
+}
+let grokAuthorized = grokRequest.urlRequest(apiKey: "xai-test-key")
+guard grokAuthorized.value(forHTTPHeaderField: "Authorization")
+        == "Bearer xai-test-key",
+      grokAuthorized.url?.host == "api.x.ai" else {
+    failEngineCheck("grok speech URLRequest was not built correctly")
+}
+guard let parsedGrok = try? CloudSpeechEngine.parseGrokTranscript(
+    from: Data("{\"text\":\" Hello Grok. \"}".utf8)
+),
+parsedGrok == "Hello Grok." else {
+    failEngineCheck("grok speech transcript was not parsed")
+}
+guard EngineIdentifiers.isCloudSpeech(
+    EngineIdentifiers.grokTranscribe
+) else {
+    failEngineCheck("grok engine id was not classified as cloud speech")
+}
 print("ZenVoiceCoreChecks: cloud speech request passed")
 
 // MARK: - Anthropic request shape checks

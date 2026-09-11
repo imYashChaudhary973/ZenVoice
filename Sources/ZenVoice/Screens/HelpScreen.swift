@@ -35,8 +35,8 @@ struct HelpScreen: View {
             id: 1,
             question: "Does my voice ever leave this Mac?",
             answer:
-                "By default, no. Local engines (Parakeet, Whisper) record, transcribe, and store everything on this Mac. If you tap Use on a cloud engine in Models (OpenAI, Gemini, or Scribe v2), that clip is uploaded after you stop and billed to your key. Cloud formatting still sends text only, never audio.",
-            tags: "privacy cloud offline network openai gemini scribe elevenlabs"
+                "By default, no. Local engines (Parakeet, Whisper) record, transcribe, and store everything on this Mac. If you tap Use on a cloud engine in Models (OpenAI, Gemini, Scribe v2, or Grok), that clip is uploaded after you stop and billed to your key. Cloud formatting still sends text only, never audio.",
+            tags: "privacy cloud offline network openai gemini scribe elevenlabs grok"
         ),
         ZenFAQ(
             id: 2,
@@ -75,10 +75,10 @@ struct HelpScreen: View {
         ),
         ZenFAQ(
             id: 8,
-            question: "How do I use OpenAI, Gemini, or Scribe v2 for dictation?",
+            question: "How do I use cloud speech for dictation?",
             answer:
-                "Open Models, paste your OpenAI, Google AI Studio, or ElevenLabs key under Cloud speech, then tap Use on that engine. Speak as usual. After you stop, the wav is uploaded once and the text is inserted. If the API fails, ZenVoice decodes the same clip locally.",
-            tags: "openai gemini scribe elevenlabs cloud transcribe key"
+                "Open Models, paste your OpenAI, Google AI Studio, ElevenLabs, or xAI key under Cloud speech, then tap Use on that engine. Speak as usual. After you stop, the wav is uploaded once and the text is inserted. If the API fails, ZenVoice decodes the same clip locally.",
+            tags: "openai gemini scribe elevenlabs grok cloud transcribe key"
         ),
         ZenFAQ(
             id: 9,

@@ -499,9 +499,11 @@ final class ModelManagerViewModel: ObservableObject {
     @Published var openAISpeechKeyDraft = ""
     @Published var geminiSpeechKeyDraft = ""
     @Published var elevenLabsSpeechKeyDraft = ""
+    @Published var grokSpeechKeyDraft = ""
     @Published private(set) var hasOpenAISpeechKey = false
     @Published private(set) var hasGeminiSpeechKey = false
     @Published private(set) var hasElevenLabsSpeechKey = false
+    @Published private(set) var hasGrokSpeechKey = false
 
     private let downloader: VerifiedModelDownloader
     private let fileManager: FileManager
@@ -512,6 +514,7 @@ final class ModelManagerViewModel: ObservableObject {
     private let openAISpeechKeyStore: any CloudAIKeyStoring
     private let geminiSpeechKeyStore: any CloudAIKeyStoring
     private let elevenLabsSpeechKeyStore: any CloudAIKeyStoring
+    private let grokSpeechKeyStore: any CloudAIKeyStoring
     private var downloadTask: Task<Void, Never>?
     private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
@@ -527,7 +530,8 @@ final class ModelManagerViewModel: ObservableObject {
         engineRegistryProvider: @escaping () -> EngineRegistry? = { nil },
         openAISpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore(),
         geminiSpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore(),
-        elevenLabsSpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore()
+        elevenLabsSpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore(),
+        grokSpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore()
     ) {
         self.downloader = downloader
         self.fileManager = fileManager
@@ -537,6 +541,7 @@ final class ModelManagerViewModel: ObservableObject {
         self.openAISpeechKeyStore = openAISpeechKeyStore
         self.geminiSpeechKeyStore = geminiSpeechKeyStore
         self.elevenLabsSpeechKeyStore = elevenLabsSpeechKeyStore
+        self.grokSpeechKeyStore = grokSpeechKeyStore
         hardwareProfile = HardwareProfile.current(fileManager: fileManager)
         selectedModelID = ModelSelectionPreferences.load()?.id
         refreshCloudSpeechKeys()
@@ -549,6 +554,7 @@ final class ModelManagerViewModel: ObservableObject {
         hasOpenAISpeechKey = hasKey(openAISpeechKeyStore)
         hasGeminiSpeechKey = hasKey(geminiSpeechKeyStore)
         hasElevenLabsSpeechKey = hasKey(elevenLabsSpeechKeyStore)
+        hasGrokSpeechKey = hasKey(grokSpeechKeyStore)
     }
 
     func saveOpenAISpeechKey() {
@@ -585,6 +591,18 @@ final class ModelManagerViewModel: ObservableObject {
 
     func deleteElevenLabsSpeechKey() {
         deleteKey(store: elevenLabsSpeechKeyStore)
+    }
+
+    func saveGrokSpeechKey() {
+        saveKey(
+            grokSpeechKeyDraft,
+            store: grokSpeechKeyStore,
+            clearDraft: { grokSpeechKeyDraft = "" }
+        )
+    }
+
+    func deleteGrokSpeechKey() {
+        deleteKey(store: grokSpeechKeyStore)
     }
 
     private func hasKey(_ store: any CloudAIKeyStoring) -> Bool {
