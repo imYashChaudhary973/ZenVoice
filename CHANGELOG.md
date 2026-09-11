@@ -4,22 +4,33 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
-## [0.4.5] - 2026-08-28
-
-
-## [0.4.5] - 2026-08-28
+## [0.4.5] - 2026-09-11
 
 ### Added
 
 - New Insights dashboard layout with WPM gauge, total words, fixes, app usage,
   and a GitHub-style contribution calendar.
+- Optional cloud speech engines: OpenAI Transcribe, Gemini Transcribe,
+  ElevenLabs Scribe v2, and Grok Transcribe. Bring-your-own key; audio leaves
+  this Mac only after you tap Use on that engine.
+- Live audio meter on the ZenBar while dictating.
+- On-device voice commands.
+
+### Changed
+
+- Settings row icons, heading chips, and shortcut pills are smaller and denser.
+- Models is a single engine picker. Distil is the default on 8 GB and Intel Macs.
 
 ### Fixed
 
 - Fixed an app freeze that could occur when opening the History → Insights tab.
-  The freeze was caused by a SwiftUI layout/animation feedback loop in the
-  settings window transition; the transition has been removed and the Insights
-  layout is now fixed-width and stable.
+- Check for Updates no longer freezes the settings window.
+
+### Removed
+
+- Lecture capture, application profiles, overlay settings, Private Dictation,
+  and the live-transcript toggle.
+- Apple Speech, Flash, Nemotron, Cohere, Apex, and Parakeet TDT v2.
 
 ## [0.4.4] - 2026-08-27
 
