@@ -91,7 +91,15 @@ private struct ZenGlassSurfaceModifier: ViewModifier {
                         style: .continuous
                     )
                 )
-        } else if #available(macOS 26.0, *) {
+        } else {
+            glassOrMaterial(content)
+        }
+    }
+
+    @ViewBuilder
+    private func glassOrMaterial(_ content: Content) -> some View {
+#if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
             if let tint {
                 content.glassEffect(
                     interactive
@@ -106,22 +114,29 @@ private struct ZenGlassSurfaceModifier: ViewModifier {
                 )
             }
         } else {
-            content
-                .background {
-                    ZenMaterialSurface(
-                        material: .popover,
-                        tint: tint?.opacity(0.16)
-                            ?? ZenDesign.Semantic.surface.opacity(0.82),
-                        fallback: ZenDesign.Semantic.surface
-                    )
-                }
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: cornerRadius,
-                        style: .continuous
-                    )
-                )
+            materialFallback(content)
         }
+#else
+        materialFallback(content)
+#endif
+    }
+
+    private func materialFallback(_ content: Content) -> some View {
+        content
+            .background {
+                ZenMaterialSurface(
+                    material: .popover,
+                    tint: tint?.opacity(0.16)
+                        ?? ZenDesign.Semantic.surface.opacity(0.82),
+                    fallback: ZenDesign.Semantic.surface
+                )
+            }
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: cornerRadius,
+                    style: .continuous
+                )
+            )
     }
 }
 
@@ -146,6 +161,7 @@ struct ZenGlassContainer<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
+#if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             GlassEffectContainer(spacing: spacing) {
                 content
@@ -153,6 +169,9 @@ struct ZenGlassContainer<Content: View>: View {
         } else {
             content
         }
+#else
+        content
+#endif
     }
 }
 
