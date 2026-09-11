@@ -258,13 +258,81 @@ private struct GeminiSpeechJSON: Encodable {
     var generationConfig: GenerationConfig
 }
 
+/// ElevenLabs Scribe v2 batch speech-to-text.
+public struct ElevenLabsSpeechRequest: Equatable, Sendable {
+    public static let defaultModel = "scribe_v2"
+    public static let defaultEndpoint = URL(
+        string: "https://api.elevenlabs.io/v1/speech-to-text"
+    )!
+
+    public let endpoint: URL
+    public let model: String
+    public let filename: String
+    public let audio: Data
+    public let boundary: String
+
+    public init(
+        endpoint: URL = ElevenLabsSpeechRequest.defaultEndpoint,
+        model: String = ElevenLabsSpeechRequest.defaultModel,
+        filename: String = "speech.wav",
+        audio: Data,
+        boundary: String = "ZenVoiceBoundary"
+    ) {
+        self.endpoint = endpoint
+        self.model = model
+        self.filename = filename
+        self.audio = audio
+        self.boundary = boundary
+    }
+
+    public func urlRequest(apiKey: String) -> URLRequest {
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 12
+        request.httpShouldHandleCookies = false
+        request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
+        request.setValue(
+            "multipart/form-data; boundary=\(boundary)",
+            forHTTPHeaderField: "Content-Type"
+        )
+        request.httpBody = encodedBody()
+        return request
+    }
+
+    public func encodedBody() -> Data {
+        var body = Data()
+        func append(_ string: String) {
+            body.append(Data(string.utf8))
+        }
+        func field(_ name: String, _ value: String) {
+            append("--\(boundary)\r\n")
+            append(
+                "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n"
+            )
+            append("\(value)\r\n")
+        }
+        field("model_id", model)
+        append("--\(boundary)\r\n")
+        append(
+            "Content-Disposition: form-data; name=\"file\"; "
+                + "filename=\"\(filename)\"\r\n"
+        )
+        append("Content-Type: audio/wav\r\n\r\n")
+        body.append(audio)
+        append("\r\n--\(boundary)--\r\n")
+        return body
+    }
+}
+
 public struct CloudSpeechEngine: SpeechEngine {
     public static let openAIModel = "gpt-4o-mini-transcribe"
     public static let geminiModel = GeminiSpeechRequest.defaultModel
+    public static let scribeModel = ElevenLabsSpeechRequest.defaultModel
 
     public enum Provider: String, Sendable {
         case openAI
         case gemini
+        case elevenLabs
     }
 
     public let descriptor: EngineDescriptor
@@ -334,6 +402,35 @@ public struct CloudSpeechEngine: SpeechEngine {
         )
     }
 
+    public static func elevenLabs(
+        keyStore: any CloudAIKeyStoring,
+        transport: any CloudSpeechTransport = SharedCloudSpeechTransport.shared
+    ) -> CloudSpeechEngine {
+        CloudSpeechEngine(
+            provider: .elevenLabs,
+            keyStore: keyStore,
+            transport: transport,
+            model: scribeModel,
+            descriptor: EngineDescriptor(
+                id: EngineIdentifiers.elevenLabsScribe,
+                displayName: "Scribe v2",
+                family: .cloud,
+                supportedLanguages: [],
+                requiresDownload: false,
+                requiresInternet: true,
+                format: "ElevenLabs speech-to-text API",
+                publisher: "ElevenLabs",
+                license: "Provider terms",
+                licenseURL: "https://elevenlabs.io/terms",
+                attribution:
+                    "Scribe v2 via the user's ElevenLabs API key.",
+                privacyNote:
+                    "Audio leaves this Mac and is billed to your ElevenLabs account."
+            ),
+            warmURL: URL(string: "https://api.elevenlabs.io")!
+        )
+    }
+
     private init(
         provider: Provider,
         keyStore: any CloudAIKeyStoring,
@@ -395,6 +492,12 @@ public struct CloudSpeechEngine: SpeechEngine {
                 languageCode: language,
                 audio: audio
             ).urlRequest(apiKey: key)
+        case .elevenLabs:
+            urlRequest = ElevenLabsSpeechRequest(
+                model: model,
+                filename: audioURL.lastPathComponent,
+                audio: audio
+            ).urlRequest(apiKey: key)
         }
         let data: Data
         let response: URLResponse
@@ -416,6 +519,8 @@ public struct CloudSpeechEngine: SpeechEngine {
             text = try Self.parseOpenAITranscript(from: data)
         case .gemini:
             text = try Self.parseGeminiTranscript(from: data)
+        case .elevenLabs:
+            text = try Self.parseElevenLabsTranscript(from: data)
         }
         return TranscriptionResult(
             rawTranscript: text,
@@ -433,6 +538,20 @@ public struct CloudSpeechEngine: SpeechEngine {
             throw CloudSpeechError.malformedResponse
         }
         return try nonempty(text)
+    }
+
+    public static func parseElevenLabsTranscript(from data: Data) throws -> String {
+        guard let object = try? JSONSerialization.jsonObject(with: data)
+                as? [String: Any] else {
+            throw CloudSpeechError.malformedResponse
+        }
+        if let text = object["text"] as? String {
+            return try nonempty(text)
+        }
+        if let text = object["transcript"] as? String {
+            return try nonempty(text)
+        }
+        throw CloudSpeechError.malformedResponse
     }
 
     public static func parseGeminiTranscript(from data: Data) throws -> String {
