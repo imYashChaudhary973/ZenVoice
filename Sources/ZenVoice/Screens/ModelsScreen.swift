@@ -83,8 +83,7 @@ struct ModelsScreen: View {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
                     Text(
                         "After you stop, ZenVoice uploads the clip once. "
-                            + "Local engines never send audio. Grok has no public "
-                            + "speech API yet."
+                            + "Local engines never send audio."
                     )
                     .font(ZenDesign.Typography.body)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -106,6 +105,15 @@ struct ModelsScreen: View {
                         draft: $viewModel.geminiSpeechKeyDraft,
                         save: viewModel.saveGeminiSpeechKey,
                         delete: viewModel.deleteGeminiSpeechKey
+                    )
+                    ZenPanelDivider()
+                    cloudKeyRow(
+                        title: "Scribe v2",
+                        placeholder: "Paste your ElevenLabs API key",
+                        hasKey: viewModel.hasElevenLabsSpeechKey,
+                        draft: $viewModel.elevenLabsSpeechKeyDraft,
+                        save: viewModel.saveElevenLabsSpeechKey,
+                        delete: viewModel.deleteElevenLabsSpeechKey
                     )
                 }
                 .padding(ZenDesign.Spacing.md)

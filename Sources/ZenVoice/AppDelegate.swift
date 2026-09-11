@@ -605,6 +605,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         engines.append(
             CloudSpeechEngine.gemini(keyStore: makeGeminiSpeechKeyStore())
         )
+        engines.append(
+            CloudSpeechEngine.elevenLabs(keyStore: makeElevenLabsSpeechKeyStore())
+        )
         let temporary = EngineRegistry(engines: engines)
         let fallbackOrder = EngineRecommendationEngine.fallbackOrder(
             for: LanguagePreferences.load(),
@@ -790,6 +793,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func makeGeminiSpeechKeyStore() -> CloudAIKeyStoring {
         cloudSpeechKeyStore(account: "cloud-speech-gemini-api-key")
+    }
+
+    private func makeElevenLabsSpeechKeyStore() -> CloudAIKeyStoring {
+        cloudSpeechKeyStore(account: "cloud-speech-elevenlabs-api-key")
     }
 
     private func cloudSpeechKeyStore(account: String) -> CloudAIKeyStoring {
@@ -1252,7 +1259,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.engineRegistry
             },
             openAISpeechKeyStore: makeOpenAISpeechKeyStore(),
-            geminiSpeechKeyStore: makeGeminiSpeechKeyStore()
+            geminiSpeechKeyStore: makeGeminiSpeechKeyStore(),
+            elevenLabsSpeechKeyStore: makeElevenLabsSpeechKeyStore()
         )
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,

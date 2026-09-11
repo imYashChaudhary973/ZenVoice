@@ -3293,6 +3293,33 @@ guard EngineIdentifiers.isCloudSpeech(
 ) else {
     failEngineCheck("gemini engine id was not classified as cloud speech")
 }
+let scribeRequest = ElevenLabsSpeechRequest(
+    audio: speechAudio,
+    boundary: "testboundary"
+)
+let scribeBody = String(decoding: scribeRequest.encodedBody(), as: UTF8.self)
+guard scribeBody.contains("scribe_v2"),
+      scribeBody.contains("model_id"),
+      !scribeBody.contains("bundleIdentifier") else {
+    failEngineCheck("elevenlabs speech request shape is wrong")
+}
+let scribeAuthorized = scribeRequest.urlRequest(apiKey: "el-test-key")
+guard scribeAuthorized.value(forHTTPHeaderField: "xi-api-key")
+        == "el-test-key",
+      scribeAuthorized.url?.host == "api.elevenlabs.io" else {
+    failEngineCheck("elevenlabs speech URLRequest was not built correctly")
+}
+guard let parsedScribe = try? CloudSpeechEngine.parseElevenLabsTranscript(
+    from: Data("{\"text\":\" Hello Scribe. \"}".utf8)
+),
+parsedScribe == "Hello Scribe." else {
+    failEngineCheck("elevenlabs speech transcript was not parsed")
+}
+guard EngineIdentifiers.isCloudSpeech(
+    EngineIdentifiers.elevenLabsScribe
+) else {
+    failEngineCheck("elevenlabs engine id was not classified as cloud speech")
+}
 print("ZenVoiceCoreChecks: cloud speech request passed")
 
 // MARK: - Anthropic request shape checks
