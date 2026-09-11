@@ -158,16 +158,27 @@ jobs:
           rm -f "$key_path"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@7b4da11513bf3f43f9999e90eabced41ab8bb048 # v2.2.0
-        with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: ZenVoice ${{ github.event.inputs.version }}
-          body_path: build/RELEASE_NOTES.md
-          make_latest: true
-          files: |
-            build/ZenVoice.dmg
-            build/appcast.xml
-          fail_on_unmatched_files: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          tag="v$VERSION"
+          notes=build/RELEASE_NOTES.md
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" \
+              --title "ZenVoice $VERSION" \
+              --notes-file "$notes" \
+              --latest
+          else
+            gh release create "$tag" \
+              --title "ZenVoice $VERSION" \
+              --notes-file "$notes" \
+              --latest
+          fi
+          # Upload sequentially. Parallel uploads via action-gh-release failed
+          # with a content-length mismatch on Node 24 runners.
+          gh release upload "$tag" build/ZenVoice.dmg --clobber
+          gh release upload "$tag" build/appcast.xml --clobber
 
       - name: Prepare Homebrew cask update
         env:
