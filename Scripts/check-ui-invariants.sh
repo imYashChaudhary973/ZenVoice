@@ -20,11 +20,11 @@ fail() { echo "FAIL  $1" >&2; failures=$((failures + 1)) }
 
 # 1. Screens rendered as tabs must not carry their own ZenScreen scaffold.
 tab_children=(
-    ShortcutsScreen AudioScreen OverlayScreen
+    ShortcutsScreen AudioScreen
     LanguagesScreen ModelsScreen
     CommandModeScreen CommandsScreen WriteModeScreen FormattingScreen
-    VoiceProfileScreen AppProfilesScreen
-    HistoryScreen AudioHistoryScreen LecturesScreen InsightsScreen
+    VoiceProfileScreen
+    HistoryScreen AudioHistoryScreen InsightsScreen
     HelpScreen UpdatesScreen
 )
 for screen in $tab_children; do
@@ -167,16 +167,6 @@ else
     pass "History uses copy and kebab; Privacy uses hold-to-delete"
 fi
 
-lectures="$screens/LecturesScreen.swift"
-if ! grep -q "ZenSecondaryButtonStyle" "$lectures" \
-    || ! grep -q "frame(minHeight: 44)" "$lectures" \
-    || ! grep -q "ZenHoldToDeleteButton" "$lectures" \
-    || ! grep -q "accessibilityReduceMotion" "$settings_view" \
-    || ! grep -q "accessibilityReduceMotion" "$components"; then
-    fail "lecture controls lost 44pt targets or shared Reduce Motion handling"
-else
-    pass "lecture controls keep 44pt targets and shared Reduce Motion handling"
-fi
 
 if ! grep -q "wrappedModelID" "$screens/ModelsScreen.swift" \
     || ! grep -q "only loads" "$screens/ModelsScreen.swift" \

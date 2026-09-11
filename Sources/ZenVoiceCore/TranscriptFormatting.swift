@@ -95,7 +95,7 @@ public enum TranscriptFormattingMode: String, Codable, CaseIterable, Sendable {
 
     /// Builds a formatting mode from the old independent toggles.
     ///
-    /// Used while per-application profiles still store the legacy fields.
+    /// Used to migrate stored independent toggles into one formatting mode.
     public static func from(
         instantRefine: InstantRefineMode,
         zenIntelligence: ZenIntelligenceMode?

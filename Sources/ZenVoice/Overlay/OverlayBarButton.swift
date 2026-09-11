@@ -49,3 +49,44 @@ struct OverlayBarButton: View {
         .accessibilityLabel(title)
     }
 }
+
+/// Circular outline control used by the compact recording HUD.
+///
+/// The listening bar is a single drawing: two stroked circles and a
+/// voiceprint. Labels do not fit that silhouette, so the action is the icon
+/// and VoiceOver / the tooltip carry the name.
+struct OverlayCircleButton: View {
+    let systemImage: String
+    let label: String
+    var tint: Color = ZenDesign.Semantic.textPrimary
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    private static let visualSize: CGFloat = 28
+    private static let lineWidth: CGFloat = 1.4
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: Self.visualSize, height: Self.visualSize)
+                .background {
+                    Circle()
+                        .fill(tint.opacity(hovering ? 0.10 : 0))
+                }
+                .overlay {
+                    Circle()
+                        .strokeBorder(tint, lineWidth: Self.lineWidth)
+                }
+                .contentShape(Circle())
+        }
+        .buttonStyle(
+            ZenPressButtonStyle(cornerRadius: Self.visualSize / 2)
+        )
+        .onHover { hovering = $0 }
+        .help(label)
+        .accessibilityLabel(label)
+    }
+}

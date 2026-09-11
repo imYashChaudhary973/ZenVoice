@@ -27,6 +27,8 @@ public enum EngineIdentifiers {
     public static let whisperDistilLargeV3 = "whisper-distil-large-v3"
     public static let hinglishApex = "hindi2hinglish-apex"
     public static let parakeetTDTv3 = "parakeet-tdt-v3"
+    public static let openaiTranscribe = "openai-transcribe"
+    public static let geminiTranscribe = "gemini-transcribe"
 
     public static func canonical(_ engineID: String) -> String {
         engineID == whisper ? whisperLargeV3Turbo : engineID
@@ -35,7 +37,14 @@ public enum EngineIdentifiers {
     public static func isKnown(_ engineID: String) -> Bool {
         let id = canonical(engineID)
         return id == parakeetTDTv3
+            || id == openaiTranscribe
+            || id == geminiTranscribe
             || VerifiedModelCatalog.model(id: id) != nil
+    }
+
+    public static func isCloudSpeech(_ engineID: String) -> Bool {
+        let id = canonical(engineID)
+        return id == openaiTranscribe || id == geminiTranscribe
     }
 
     public static func isWhisperFamily(_ engineID: String) -> Bool {

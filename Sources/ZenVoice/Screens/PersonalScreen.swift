@@ -18,17 +18,16 @@ import ZenVoiceStorage
 
 /// Phase 6 consolidated Personal surface.
 ///
-/// Your Words (vocabulary and corrections) and Per-App Rules (overrides by
-/// application) are different concepts that were easy to confuse when they
-/// shared the word "Profile". They now live under one clearly named screen.
+/// Formatting and vocabulary share one screen because they both change how
+/// spoken words become text. Per-app rules used to live here and have been
+/// removed.
 struct PersonalScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
-    @ObservedObject var applicationProfileViewModel: ApplicationProfileViewModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case formatting, vocabulary, appRules
+        case formatting, vocabulary
 
         var id: String { rawValue }
 
@@ -38,8 +37,6 @@ struct PersonalScreen: View {
                 return "Formatting"
             case .vocabulary:
                 return "Vocabulary"
-            case .appRules:
-                return "App Rules"
             }
         }
     }
@@ -50,7 +47,7 @@ struct PersonalScreen: View {
         ZenScreen(
             icon: "text.badge.star",
             title: "Personalisation",
-            subtitle: "Formatting, vocabulary, and per-app rules.",
+            subtitle: "Formatting and vocabulary.",
             tabs: {
                 ZenTabStrip(
                     items: Tab.allCases.map { tab in
@@ -69,11 +66,6 @@ struct PersonalScreen: View {
                 )
             case .vocabulary:
                 VoiceProfileScreen(viewModel: voiceProfileViewModel)
-            case .appRules:
-                AppProfilesScreen(
-                    viewModel: viewModel,
-                    applicationProfileViewModel: applicationProfileViewModel
-                )
             }
         }
     }

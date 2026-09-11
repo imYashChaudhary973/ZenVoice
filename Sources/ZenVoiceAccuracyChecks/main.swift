@@ -392,6 +392,8 @@ private func describeUnavailability(
         return "model download required"
     case .requiresInternet:
         return "internet required"
+    case .requiresAPIKey:
+        return "API key required"
     case .runtimeNotReady(let detail):
         return detail
     case .platformNotSupported:

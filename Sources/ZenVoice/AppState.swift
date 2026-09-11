@@ -27,13 +27,22 @@ import ZenVoiceCore
 @MainActor
 final class AudioLevelModel: ObservableObject {
     @Published private(set) var level: Double = 0
+    @Published private(set) var bands: [Double] = Array(
+        repeating: 0,
+        count: AudioSpectrumMeter.barCount
+    )
 
     func update(_ value: Double) {
         level = max(0, min(1, value))
     }
 
+    func updateBands(_ value: [Double]) {
+        bands = value.map { max(0, min(1, $0)) }
+    }
+
     func reset() {
         level = 0
+        bands = Array(repeating: 0, count: AudioSpectrumMeter.barCount)
     }
 }
 
@@ -131,16 +140,23 @@ final class AppState: ObservableObject {
         audioLevel.update(level)
     }
 
+    func appendAudioSpectrum(_ bands: [Double]) {
+        audioLevel.updateBands(bands)
+    }
+
     func recordSuccessfulDictation(
         transcript: String,
         durationSeconds: TimeInterval,
-        runawayWordsCut: Int = 0
+        runawayWordsCut: Int = 0,
+        decodeWarning: String? = nil
     ) {
         lastTranscript = transcript
-        lastDecodeWarning =
-            runawayWordsCut >= TranscriptRepetition.wordsCutBeforeDistrust
-            ? "the decoder looped — check the inserted text"
-            : nil
+        if runawayWordsCut >= TranscriptRepetition.wordsCutBeforeDistrust {
+            lastDecodeWarning =
+                "the decoder looped — check the inserted text"
+        } else {
+            lastDecodeWarning = decodeWarning
+        }
         let wordCount = transcript.split(whereSeparator: \.isWhitespace).count
         guard wordCount > 0, durationSeconds > 0 else {
             lastInsertionSummary = nil

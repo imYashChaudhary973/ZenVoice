@@ -496,6 +496,10 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var engineAvailabilities: [EngineAvailability] = []
     @Published private(set) var installedEngineIDs: Set<String> = []
     @Published var errorMessage: String?
+    @Published var openAISpeechKeyDraft = ""
+    @Published var geminiSpeechKeyDraft = ""
+    @Published private(set) var hasOpenAISpeechKey = false
+    @Published private(set) var hasGeminiSpeechKey = false
 
     private let downloader: VerifiedModelDownloader
     private let fileManager: FileManager
@@ -503,6 +507,8 @@ final class ModelManagerViewModel: ObservableObject {
         (VerifiedModel, LanguageProfile) -> Result<Void, Error>
     private let selectionInvalidated: () -> Void
     private let engineRegistryProvider: () -> EngineRegistry?
+    private let openAISpeechKeyStore: any CloudAIKeyStoring
+    private let geminiSpeechKeyStore: any CloudAIKeyStoring
     private var downloadTask: Task<Void, Never>?
     private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
@@ -515,18 +521,91 @@ final class ModelManagerViewModel: ObservableObject {
         applySelection: @escaping
             (VerifiedModel, LanguageProfile) -> Result<Void, Error>,
         selectionInvalidated: @escaping () -> Void,
-        engineRegistryProvider: @escaping () -> EngineRegistry? = { nil }
+        engineRegistryProvider: @escaping () -> EngineRegistry? = { nil },
+        openAISpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore(),
+        geminiSpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore()
     ) {
         self.downloader = downloader
         self.fileManager = fileManager
         self.applySelection = applySelection
         self.selectionInvalidated = selectionInvalidated
         self.engineRegistryProvider = engineRegistryProvider
+        self.openAISpeechKeyStore = openAISpeechKeyStore
+        self.geminiSpeechKeyStore = geminiSpeechKeyStore
         hardwareProfile = HardwareProfile.current(fileManager: fileManager)
         selectedModelID = ModelSelectionPreferences.load()?.id
+        refreshCloudSpeechKeys()
         refreshBenchmarks()
         refreshEngineSelection()
         refresh()
+    }
+
+    func refreshCloudSpeechKeys() {
+        hasOpenAISpeechKey = hasKey(openAISpeechKeyStore)
+        hasGeminiSpeechKey = hasKey(geminiSpeechKeyStore)
+    }
+
+    func saveOpenAISpeechKey() {
+        saveKey(
+            openAISpeechKeyDraft,
+            store: openAISpeechKeyStore,
+            clearDraft: { openAISpeechKeyDraft = "" }
+        )
+    }
+
+    func saveGeminiSpeechKey() {
+        saveKey(
+            geminiSpeechKeyDraft,
+            store: geminiSpeechKeyStore,
+            clearDraft: { geminiSpeechKeyDraft = "" }
+        )
+    }
+
+    func deleteOpenAISpeechKey() {
+        deleteKey(store: openAISpeechKeyStore)
+    }
+
+    func deleteGeminiSpeechKey() {
+        deleteKey(store: geminiSpeechKeyStore)
+    }
+
+    private func hasKey(_ store: any CloudAIKeyStoring) -> Bool {
+        let key = (try? store.loadKey()) ?? nil
+        return !(key?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty ?? true)
+    }
+
+    private func saveKey(
+        _ draft: String,
+        store: any CloudAIKeyStoring,
+        clearDraft: () -> Void
+    ) {
+        let trimmed = draft.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        do {
+            try store.saveKey(trimmed)
+            clearDraft()
+            refreshCloudSpeechKeys()
+            refreshEngineSelection()
+            selectionInvalidated()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteKey(store: any CloudAIKeyStoring) {
+        do {
+            try store.deleteKey()
+            refreshCloudSpeechKeys()
+            refreshEngineSelection()
+            selectionInvalidated()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func refresh() {
@@ -729,7 +808,6 @@ final class ModelManagerViewModel: ObservableObject {
 
     func isSelectedEngine(_ engineID: String) -> Bool {
         activeEngineID == EngineIdentifiers.canonical(engineID)
-            || selectedEngineID == EngineIdentifiers.canonical(engineID)
     }
 
     private func unavailabilityLabel(for availability: EngineAvailability)
@@ -745,6 +823,8 @@ final class ModelManagerViewModel: ObservableObject {
             return "\(engineName) needs its model downloaded first."
         case .requiresInternet:
             return "\(engineName) needs an internet connection."
+        case .requiresAPIKey:
+            return "Add an API key below to use \(engineName)."
         case .runtimeNotReady:
             return "\(engineName) is not ready on this Mac."
         case .platformNotSupported:

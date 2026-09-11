@@ -65,14 +65,11 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
-    @ObservedObject var lectureViewModel: LectureViewModel
     @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var updatesViewModel: UpdatesViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
-    @ObservedObject var applicationProfileViewModel:
-        ApplicationProfileViewModel
     @ObservedObject var onboardingViewModel:
         OnboardingViewModel
     @ObservedObject var appState: AppState
@@ -204,9 +201,9 @@ struct ZenVoiceSettingsView: View {
         case .models:
             return "model engine whisper parakeet distil"
         case .personalisation:
-            return "formatting vocabulary app rules corrections cloud"
+            return "formatting vocabulary corrections cloud"
         case .history:
-            return "transcripts recordings lectures insights audio search export"
+            return "transcripts recordings insights audio search export"
         case .updates:
             return "update check version release feed"
         case .settings:
@@ -448,15 +445,12 @@ struct ZenVoiceSettingsView: View {
             PersonalScreen(
                 viewModel: viewModel,
                 cloudAIViewModel: cloudAIViewModel,
-                voiceProfileViewModel: voiceProfileViewModel,
-                applicationProfileViewModel: applicationProfileViewModel
+                voiceProfileViewModel: voiceProfileViewModel
             )
         case .history:
             HistoryContainerScreen(
                 historyViewModel: historyViewModel,
                 audioHistoryViewModel: audioHistoryViewModel,
-                lectureViewModel: lectureViewModel,
-                cloudAIViewModel: cloudAIViewModel,
                 insightsViewModel: insightsViewModel
             )
         case .updates:
@@ -471,7 +465,6 @@ struct ZenVoiceSettingsView: View {
             HelpAndAboutScreen(
                 viewModel: viewModel,
                 historyViewModel: historyViewModel,
-                lectureViewModel: lectureViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
                 openModels: { selection = .models },

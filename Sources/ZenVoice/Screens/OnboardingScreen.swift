@@ -200,7 +200,7 @@ struct OnboardingScreen: View {
                 ("network.slash", "No account, no subscription, no cloud transcription"),
                 ("bolt.fill", "One shortcut everywhere: Mail, Slack, Xcode, anything with a cursor"),
                 ("key.fill", "Saved transcripts are encrypted — unreadable without this Mac's key"),
-                ("eye.slash", "Private Dictation stores nothing at all")
+                ("pause.circle", "Pause history anytime in Privacy")
             ]
         )
     }
@@ -270,7 +270,7 @@ struct OnboardingScreen: View {
                 icon: "globe",
                 title: "What will you speak?",
                 detail:
-                    "You can change this anytime, or set a different language per app in App Profiles."
+                    "You can change this anytime in Language."
             )
             VStack(spacing: ZenDesign.Spacing.xs) {
                 languageChoice(

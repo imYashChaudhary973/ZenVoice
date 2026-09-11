@@ -61,12 +61,6 @@ public struct HotKeyConfiguration: Codable, Equatable, Sendable {
         keyLabel: "V"
     )
 
-    public static let privateModeDefault = HotKeyConfiguration(
-        keyCode: 35,
-        modifiers: [.control, .option],
-        keyLabel: "P"
-    )
-
     public var displayName: String {
         var symbols: [String] = []
         if modifiers.contains(.control) {

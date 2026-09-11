@@ -24,7 +24,6 @@ final class SettingsViewModel: ObservableObject {
     enum ShortcutTarget {
         case dictation
         case pasteLast
-        case privateMode
     }
 
     /// State of a macOS privacy permission.
@@ -113,7 +112,6 @@ final class SettingsViewModel: ObservableObject {
 
     @Published private(set) var currentShortcut: HotKeyConfiguration
     @Published private(set) var pasteLastShortcut: HotKeyConfiguration
-    @Published private(set) var privateModeShortcut: HotKeyConfiguration
     @Published private(set) var holdToDictateEnabled: Bool
     @Published private(set) var holdKey: HoldKeyChoice
     @Published private(set) var isCapturingHoldKey = false
@@ -129,9 +127,8 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var selectedMicrophoneUID: String?
     @Published private(set) var audioDoctorState: AudioDoctorState = .idle
     @Published private(set) var audioDoctorLevel = 0.0
-    @Published private(set) var audioDoctorSamples =
-        Array(repeating: 0.0, count: 32)
-    @Published private(set) var audioDoctorRemainingSeconds = 3.0
+    let audioDoctorMeter = AudioLevelModel()
+    @Published private(set) var audioDoctorRemainingSeconds = 10.0
     @Published private(set) var livePreviewEnabled: Bool
     @Published private(set) var commitOnPauseEnabled: Bool
     @Published private(set) var voiceCommandsEnabled: Bool
@@ -150,8 +147,6 @@ final class SettingsViewModel: ObservableObject {
         (HotKeyConfiguration) -> Result<Void, Error>
     private let applyPasteLastShortcut:
         (HotKeyConfiguration) -> Result<Void, Error>
-    private let applyPrivateModeShortcut:
-        (HotKeyConfiguration) -> Result<Void, Error>
     private let applyHoldToDictate: (Bool, HoldKeyChoice) -> Void
     private let applyZenBarPreference: (Bool) -> Void
     private let applyLanguageProfile:
@@ -163,6 +158,8 @@ final class SettingsViewModel: ObservableObject {
     private var microphoneObserverTokens: [NSObjectProtocol] = []
     private var eventMonitor: Any?
     private var permissionWatchTimer: Timer?
+
+    static let audioDoctorDuration: TimeInterval = 10
 
     private static let accessibilityRequestedKey =
         "ZenVoice.permissions.accessibilityRequested"
@@ -186,15 +183,12 @@ final class SettingsViewModel: ObservableObject {
     init(
         currentShortcut: HotKeyConfiguration,
         pasteLastShortcut: HotKeyConfiguration,
-        privateModeShortcut: HotKeyConfiguration,
         holdToDictateEnabled: Bool,
         holdKey: HoldKeyChoice,
         showsZenVoiceAtAllTimes: Bool,
         applyShortcut: @escaping
             (HotKeyConfiguration) -> Result<Void, Error>,
         applyPasteLastShortcut: @escaping
-            (HotKeyConfiguration) -> Result<Void, Error>,
-        applyPrivateModeShortcut: @escaping
             (HotKeyConfiguration) -> Result<Void, Error>,
         applyHoldToDictate: @escaping (Bool, HoldKeyChoice) -> Void,
         applyZenBarPreference: @escaping (Bool) -> Void,
@@ -205,13 +199,11 @@ final class SettingsViewModel: ObservableObject {
     ) {
         self.currentShortcut = currentShortcut
         self.pasteLastShortcut = pasteLastShortcut
-        self.privateModeShortcut = privateModeShortcut
         self.holdToDictateEnabled = holdToDictateEnabled
         self.holdKey = holdKey
         self.showsZenVoiceAtAllTimes = showsZenVoiceAtAllTimes
         self.applyShortcut = applyShortcut
         self.applyPasteLastShortcut = applyPasteLastShortcut
-        self.applyPrivateModeShortcut = applyPrivateModeShortcut
         self.applyHoldToDictate = applyHoldToDictate
         self.applyZenBarPreference = applyZenBarPreference
         self.applyLanguageProfile = applyLanguageProfile
@@ -250,10 +242,6 @@ final class SettingsViewModel: ObservableObject {
 
     var isCapturingPasteLastShortcut: Bool {
         shortcutTarget == .pasteLast
-    }
-
-    var isCapturingPrivateModeShortcut: Bool {
-        shortcutTarget == .privateMode
     }
 
     var isAudioDoctorActive: Bool {
@@ -380,10 +368,6 @@ final class SettingsViewModel: ObservableObject {
         apply(.pasteLastDefault, to: .pasteLast)
     }
 
-    func resetPrivateModeShortcut() {
-        apply(.privateModeDefault, to: .privateMode)
-    }
-
     func resetHoldKey() {
         cancelShortcutCapture()
         setHoldKey(.default)
@@ -392,7 +376,6 @@ final class SettingsViewModel: ObservableObject {
     func resetDictationDefaults() {
         resetShortcut()
         resetPasteLastShortcut()
-        resetPrivateModeShortcut()
         resetHoldKey()
         setHoldToDictateEnabled(false)
     }
@@ -573,11 +556,8 @@ final class SettingsViewModel: ObservableObject {
         MicrophonePreferences.save(deviceUID: uid)
         audioDoctorState = .idle
         audioDoctorLevel = 0
-        audioDoctorSamples = Array(
-            repeating: 0,
-            count: audioDoctorSamples.count
-        )
-        audioDoctorRemainingSeconds = 3
+        audioDoctorMeter.reset()
+        audioDoctorRemainingSeconds = Self.audioDoctorDuration
     }
 
     func refreshMicrophones() {
@@ -613,26 +593,21 @@ final class SettingsViewModel: ObservableObject {
         }
 
         audioDoctorLevel = 0
-        audioDoctorSamples = Array(
-            repeating: 0,
-            count: audioDoctorSamples.count
-        )
-        audioDoctorRemainingSeconds = 3
+        audioDoctorMeter.reset()
+        audioDoctorRemainingSeconds = Self.audioDoctorDuration
         audioDoctorState = .running
         do {
             try audioDoctorRecorder.start(
                 selectedDeviceUID: selectedMicrophoneUID
-            ) { [weak self] level in
+            ) { [weak self] level, bands in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.audioDoctorLevel = max(
                         self.audioDoctorLevel,
                         level
                     )
-                    var samples = self.audioDoctorSamples
-                    samples.removeFirst()
-                    samples.append(max(0, min(1, level)))
-                    self.audioDoctorSamples = samples
+                    self.audioDoctorMeter.update(level)
+                    self.audioDoctorMeter.updateBands(bands)
                 }
             }
         } catch {
@@ -821,8 +796,6 @@ final class SettingsViewModel: ObservableObject {
             result = applyShortcut(configuration)
         case .pasteLast:
             result = applyPasteLastShortcut(configuration)
-        case .privateMode:
-            result = applyPrivateModeShortcut(configuration)
         }
 
         switch result {
@@ -832,8 +805,6 @@ final class SettingsViewModel: ObservableObject {
                 currentShortcut = configuration
             case .pasteLast:
                 pasteLastShortcut = configuration
-            case .privateMode:
-                privateModeShortcut = configuration
             }
             shortcutError = nil
         case .failure(let error):

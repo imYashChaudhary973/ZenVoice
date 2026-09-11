@@ -33,7 +33,6 @@ final class HistoryViewModel: ObservableObject {
     @Published private(set) var historyEnabled: Bool
     @Published private(set) var hasMadeHistoryChoice: Bool
     @Published private(set) var retainsFailedAudio: Bool
-    @Published private(set) var privateModeEnabled: Bool
     @Published var errorMessage: String?
 
     private let preferences: HistoryPreferences
@@ -55,7 +54,6 @@ final class HistoryViewModel: ObservableObject {
         historyEnabled = preferences.isHistoryEnabled
         hasMadeHistoryChoice = preferences.hasMadeHistoryChoice
         retainsFailedAudio = preferences.retainsFailedAudio
-        privateModeEnabled = preferences.isPrivateModeEnabled
         refresh()
     }
 
@@ -173,12 +171,6 @@ final class HistoryViewModel: ObservableObject {
         retainsFailedAudio = enabled
         errorMessage = nil
         await refreshNow()
-    }
-
-    func setPrivateModeEnabled(_ enabled: Bool) {
-        preferences.isPrivateModeEnabled = enabled
-        privateModeEnabled = enabled
-        privacyChanged()
     }
 
     func copy(_ record: DictationRecord) {

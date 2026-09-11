@@ -36,7 +36,7 @@ struct CommandModeScreen: View {
                             .font(ZenDesign.Typography.bodyStrong)
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         Text(
-                            "When on, dictation can launch apps, run Shortcuts, and adjust system settings. Per-app overrides live in App Profiles."
+                            "When on, dictation can launch apps, run Shortcuts, and adjust system settings."
                         )
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)

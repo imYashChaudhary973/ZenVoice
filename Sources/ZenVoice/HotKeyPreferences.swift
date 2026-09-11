@@ -18,7 +18,6 @@ import ZenVoiceCore
 enum HotKeyPreferences {
     private static let preferenceKey = "ZenVoice.dictationHotKey"
     private static let pasteLastPreferenceKey = "ZenVoice.pasteLastHotKey"
-    private static let privateModePreferenceKey = "ZenVoice.privateModeHotKey"
     private static let holdEnabledPreferenceKey = "ZenVoice.holdToDictate.enabled"
     private static let holdKeyPreferenceKey = "ZenVoice.holdToDictate.key"
 
@@ -63,23 +62,6 @@ enum HotKeyPreferences {
             return
         }
         defaults.set(data, forKey: pasteLastPreferenceKey)
-    }
-
-    static func loadPrivateMode(
-        defaults: UserDefaults = .standard
-    ) -> HotKeyConfiguration {
-        load(
-            key: privateModePreferenceKey,
-            fallback: .privateModeDefault,
-            defaults: defaults
-        )
-    }
-
-    static func savePrivateMode(
-        _ configuration: HotKeyConfiguration,
-        defaults: UserDefaults = .standard
-    ) {
-        save(configuration, key: privateModePreferenceKey, defaults: defaults)
     }
 
     static func isHoldToDictateEnabled(

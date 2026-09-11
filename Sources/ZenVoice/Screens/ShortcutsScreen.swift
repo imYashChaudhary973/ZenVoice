@@ -58,30 +58,6 @@ struct ShortcutsScreen: View {
                 }
                 ZenPanelDivider()
                 ZenRow(
-                    icon: "eye.slash",
-                    title: "Private dictation",
-                    subtitle: "Dictate without saving history or recovery audio",
-                    compact: true
-                ) {
-                    shortcutControls(
-                        displayName: viewModel.privateModeShortcut.displayName,
-                        isCapturing:
-                            viewModel.isCapturingPrivateModeShortcut,
-                        resetLabel: "Reset private dictation shortcut",
-                        capture: {
-                            if viewModel.isCapturingPrivateModeShortcut {
-                                viewModel.cancelShortcutCapture()
-                            } else {
-                                viewModel.beginShortcutCapture(
-                                    for: .privateMode
-                                )
-                            }
-                        },
-                        reset: viewModel.resetPrivateModeShortcut
-                    )
-                }
-                ZenPanelDivider()
-                ZenRow(
                     icon: "doc.on.doc",
                     title: "Paste latest dictation",
                     subtitle: "Re-insert the most recent transcript anywhere",

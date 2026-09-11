@@ -21,14 +21,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let viewModel: SettingsViewModel
     private let historyViewModel: HistoryViewModel
     private let audioHistoryViewModel: AudioHistoryViewModel
-    private let lectureViewModel: LectureViewModel
     private let cloudAIViewModel: CloudAIViewModel
     private let updatesViewModel: UpdatesViewModel
     private let insightsViewModel: InsightsViewModel
     private let voiceProfileViewModel: VoiceProfileViewModel
     private let modelManagerViewModel: ModelManagerViewModel
-    private let applicationProfileViewModel:
-        ApplicationProfileViewModel
     private let onboardingViewModel: OnboardingViewModel
     private var hasCenteredWindow = false
 
@@ -36,14 +33,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         viewModel: SettingsViewModel,
         historyViewModel: HistoryViewModel,
         audioHistoryViewModel: AudioHistoryViewModel,
-        lectureViewModel: LectureViewModel,
         cloudAIViewModel: CloudAIViewModel,
         updatesViewModel: UpdatesViewModel,
         insightsViewModel: InsightsViewModel,
         voiceProfileViewModel: VoiceProfileViewModel,
         modelManagerViewModel: ModelManagerViewModel,
-        applicationProfileViewModel:
-            ApplicationProfileViewModel,
         onboardingViewModel: OnboardingViewModel,
         appState: AppState,
         toggleRecording: @escaping () -> Void
@@ -51,14 +45,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.viewModel = viewModel
         self.historyViewModel = historyViewModel
         self.audioHistoryViewModel = audioHistoryViewModel
-        self.lectureViewModel = lectureViewModel
         self.cloudAIViewModel = cloudAIViewModel
         self.updatesViewModel = updatesViewModel
         self.insightsViewModel = insightsViewModel
         self.voiceProfileViewModel = voiceProfileViewModel
         self.modelManagerViewModel = modelManagerViewModel
-        self.applicationProfileViewModel =
-            applicationProfileViewModel
         self.onboardingViewModel = onboardingViewModel
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1_080, height: 720),
@@ -98,14 +89,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 viewModel: viewModel,
                 historyViewModel: historyViewModel,
                 audioHistoryViewModel: audioHistoryViewModel,
-                lectureViewModel: lectureViewModel,
                 cloudAIViewModel: cloudAIViewModel,
                 updatesViewModel: updatesViewModel,
                 insightsViewModel: insightsViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
-                applicationProfileViewModel:
-                    applicationProfileViewModel,
                 onboardingViewModel: onboardingViewModel,
                 appState: appState,
                 toggleRecording: toggleRecording
@@ -120,7 +108,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         historyViewModel.refresh()
         insightsViewModel.refresh()
         voiceProfileViewModel.refresh()
-        applicationProfileViewModel.refresh()
         // Accessory apps can't enter native full screen; become a regular
         // app while the window is open so the green button works.
         NSApp.setActivationPolicy(.regular)

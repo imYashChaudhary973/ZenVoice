@@ -29,7 +29,7 @@ struct OverviewScreen: View {
             icon: "house.fill",
             title: "Overview",
             subtitle:
-                "Everything runs on this Mac. Nothing to sign into, nothing to sync."
+                "Local by default. Cloud speech is opt-in and uses your key."
         ) {
             homeGrid
         }

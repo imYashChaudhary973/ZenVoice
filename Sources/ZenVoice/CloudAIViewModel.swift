@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import AppKit
 import Combine
 import Foundation
 import ZenVoiceCore
@@ -27,26 +26,15 @@ final class CloudAIViewModel: ObservableObject {
     @Published private(set) var configuration: CloudAIConfiguration
     @Published private(set) var hasStoredKey: Bool
     @Published var apiKeyDraft = ""
-    @Published private(set) var isEnhancing = false
-    @Published private(set) var preview: CloudAIEnhancementResult?
     @Published var errorMessage: String?
     @Published var statusMessage: String?
 
     private let keyStore: CloudAIKeyStoring
-    private let engine: CloudAIEnhancementEngine
-    private let lastTranscript: () -> String
-    private let applyEnhanced: (String) -> Void
 
     init(
-        keyStore: CloudAIKeyStoring,
-        engine: CloudAIEnhancementEngine = CloudAIEnhancementEngine(),
-        lastTranscript: @escaping () -> String,
-        applyEnhanced: @escaping (String) -> Void
+        keyStore: CloudAIKeyStoring
     ) {
         self.keyStore = keyStore
-        self.engine = engine
-        self.lastTranscript = lastTranscript
-        self.applyEnhanced = applyEnhanced
         configuration = CloudAIPreferences.load()
         hasStoredKey = ((try? keyStore.loadKey()) ?? nil) != nil
     }
@@ -79,7 +67,6 @@ final class CloudAIViewModel: ObservableObject {
             // away a credential the user had to go and re-issue. Nothing is
             // sent while the feature is off, and "Remove" deletes the key
             // outright for anyone who wants it gone.
-            preview = nil
             statusMessage = hasStoredKey
                 ? "Cloud AI is off. Nothing is sent. Your key is still in the "
                     + "Keychain — use Remove to delete it."
@@ -117,15 +104,6 @@ final class CloudAIViewModel: ObservableObject {
         persist()
     }
 
-    func setPrompt(_ value: String) {
-        configuration.prompt = value
-        persist()
-    }
-
-    func applyTemplate(_ template: CloudAIPromptTemplate) {
-        setPrompt(template.text)
-    }
-
     private func persist() {
         CloudAIPreferences.save(configuration)
         objectWillChange.send()
@@ -157,67 +135,5 @@ final class CloudAIViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-
-    // MARK: - Preview
-
-    /// Enhances the most recent transcript and shows the result for comparison.
-    /// Nothing is applied until the user accepts.
-    func enhanceLastTranscript() {
-        let transcript = lastTranscript()
-        guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty else {
-            errorMessage = "Dictate something first, then try again."
-            return
-        }
-        guard let key = ((try? keyStore.loadKey()) ?? nil), !key.isEmpty else {
-            errorMessage = CloudAIEnhancementError.missingAPIKey
-                .localizedDescription
-            return
-        }
-
-        isEnhancing = true
-        errorMessage = nil
-        statusMessage = nil
-        preview = nil
-
-        let configuration = configuration
-        let engine = engine
-        Task { [weak self] in
-            do {
-                let result = try await engine.enhance(
-                    transcript: transcript,
-                    configuration: configuration,
-                    apiKey: key
-                )
-                await MainActor.run {
-                    self?.isEnhancing = false
-                    self?.preview = result
-                    if !result.isChanged {
-                        self?.statusMessage =
-                            "The provider returned the same text."
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self?.isEnhancing = false
-                    self?.errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    func acceptPreview() {
-        guard let preview else { return }
-        applyEnhanced(preview.enhanced)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(preview.enhanced, forType: .string)
-        self.preview = nil
-        statusMessage = "Enhanced text copied and set as the last transcript."
-    }
-
-    func discardPreview() {
-        preview = nil
-        statusMessage = "Kept the local transcript."
     }
 }

@@ -18,25 +18,15 @@ public enum LiveDictationPreferences {
     public static let previewKey = "ZenVoice.livePreviewEnabled"
     public static let commitOnPauseKey = "ZenVoice.commitOnPauseEnabled"
 
-    /// Off unless the user asks for it.
-    ///
-    /// Preview decodes every pause-delimited fragment with the selected model,
-    /// and the finished recording is then decoded again in one pass — the two
-    /// share a serial queue, so the accurate decode cannot even begin until the
-    /// last preview drains. That is twice the compute and twice the battery,
-    /// spent on fragments that are measurably *less* accurate than the whole
-    /// utterance: words either side of a cut lose their context, which is the
-    /// gap ``DictationCompletionStrategy`` exists to describe and
-    /// ZenVoiceAccuracyChecks exists to keep visible.
-    ///
-    /// Nothing depends on it being on. Crash recovery is served by the recovery
-    /// audio, which the recorder writes before it ever consults this preference.
+    /// Always off. Live transcript UI was removed; leftover `true` values in
+    /// defaults must not keep Whisper decoding in the background.
     public static func isPreviewEnabled(
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
-        defaults.object(forKey: previewKey) == nil
-            ? false
-            : defaults.bool(forKey: previewKey)
+        if defaults.object(forKey: previewKey) != nil {
+            defaults.set(false, forKey: previewKey)
+        }
+        return false
     }
 
     public static func isCommitOnPauseEnabled(
@@ -49,10 +39,7 @@ public enum LiveDictationPreferences {
         _ enabled: Bool,
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
-        defaults.set(enabled, forKey: previewKey)
-        if !enabled {
-            defaults.set(false, forKey: commitOnPauseKey)
-        }
+        defaults.set(false, forKey: previewKey)
     }
 
     public static func setCommitOnPauseEnabled(
@@ -60,9 +47,6 @@ public enum LiveDictationPreferences {
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         defaults.set(enabled, forKey: commitOnPauseKey)
-        if enabled {
-            defaults.set(true, forKey: previewKey)
-        }
     }
 }
 
