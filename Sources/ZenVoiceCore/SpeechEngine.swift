@@ -96,6 +96,7 @@ public extension SpeechEngine {
 public enum EngineFamily: String, Codable, CaseIterable, Sendable {
     case whisper
     case parakeetTDT
+    case cloud
 
     public var displayName: String {
         switch self {
@@ -103,6 +104,8 @@ public enum EngineFamily: String, Codable, CaseIterable, Sendable {
             return "Whisper"
         case .parakeetTDT:
             return "Parakeet TDT"
+        case .cloud:
+            return "Cloud"
         }
     }
 }
@@ -165,6 +168,7 @@ public enum EngineUnavailabilityReason: Equatable, Sendable {
     case unsupportedLanguage(String)
     case requiresDownload
     case requiresInternet
+    case requiresAPIKey
     case runtimeNotReady(String)
     case platformNotSupported
 }

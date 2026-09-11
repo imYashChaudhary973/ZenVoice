@@ -32,9 +32,15 @@ struct InsightsScreen: View {
 
             topMetricsGrid
 
-            HStack(alignment: .top, spacing: ZenDesign.Spacing.xl) {
-                desktopUsageCard
-                streakCard
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.xl) {
+                    desktopUsageCard
+                    streakCard
+                }
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+                    desktopUsageCard
+                    streakCard
+                }
             }
 
             HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
@@ -55,8 +61,7 @@ struct InsightsScreen: View {
                 .buttonStyle(ZenSecondaryButtonStyle(height: 60))
             }
         }
-        .padding(ZenDesign.Spacing.xl)
-        .frame(width: 920, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .onAppear(perform: viewModel.refresh)
         .sheet(isPresented: $showsShareCard) {
             ShareHighlightSheet(summary: shareSummary)
@@ -66,11 +71,23 @@ struct InsightsScreen: View {
     // MARK: top metrics
 
     private var topMetricsGrid: some View {
-        HStack(alignment: .top, spacing: ZenDesign.Spacing.xl) {
-            wpmCard
-            fixesCard
-            totalWordsCard
-            topAppCard
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: ZenDesign.Spacing.xl) {
+                wpmCard
+                fixesCard
+                totalWordsCard
+                topAppCard
+            }
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.xl) {
+                    wpmCard
+                    fixesCard
+                }
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.xl) {
+                    totalWordsCard
+                    topAppCard
+                }
+            }
         }
     }
 
@@ -193,7 +210,12 @@ struct InsightsScreen: View {
                 Spacer(minLength: 0)
             }
             .padding(ZenDesign.Spacing.lg)
-            .frame(minWidth: 206, minHeight: 180, maxHeight: .infinity, alignment: .topLeading)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: 180,
+                maxHeight: .infinity,
+                alignment: .topLeading
+            )
         }
     }
 
@@ -252,7 +274,7 @@ struct InsightsScreen: View {
                     .padding(.vertical, ZenDesign.Spacing.md)
                 }
             }
-            .frame(width: 448)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -369,7 +391,7 @@ struct InsightsScreen: View {
                 }
                 .padding(ZenDesign.Spacing.lg)
             }
-            .frame(width: 448)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

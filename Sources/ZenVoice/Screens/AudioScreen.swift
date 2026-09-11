@@ -23,13 +23,6 @@ struct AudioScreen: View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
             inputSection
             doctorSection
-
-            ZenBanner(
-                kind: .info,
-                icon: "bolt.horizontal",
-                text:
-                    "If a pinned microphone disconnects during dictation, ZenVoice stops safely — anything captured follows your recovery-audio privacy setting."
-            )
         }
         .onAppear {
             viewModel.refreshMicrophones()
@@ -156,23 +149,26 @@ struct AudioScreen: View {
     private var doctorSection: some View {
         ZenSection(
             title: "Audio Doctor",
-            caption: "3-second on-device check"
+            caption: "10-second on-device check"
         ) {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
                     HStack(spacing: ZenDesign.Spacing.sm) {
                         Image(systemName: "stethoscope")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(
-                                ZenDesign.Semantic.textSecondary
-                            )
-                            .frame(width: 28, height: 28)
-                            .background {
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            .frame(width: 36, height: 36)
+                            .overlay {
                                 RoundedRectangle(
-                                    cornerRadius: 8, style: .continuous
+                                    cornerRadius: 8,
+                                    style: .continuous
                                 )
-                                .fill(ZenDesign.Semantic.surfaceRaised)
+                                .strokeBorder(
+                                    ZenDesign.Semantic.textPrimary.opacity(0.55),
+                                    lineWidth: 1.4
+                                )
                             }
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Check signal and format")
                                 .font(ZenDesign.Typography.bodyStrong)
@@ -183,7 +179,7 @@ struct AudioScreen: View {
                                 .font(ZenDesign.Typography.caption)
                                 .foregroundStyle(audioDoctorTint)
                         }
-                        Spacer()
+                        Spacer(minLength: ZenDesign.Spacing.sm)
                         Button(audioDoctorButtonTitle) {
                             switch viewModel.audioDoctorState {
                             case .running, .paused:
@@ -200,51 +196,43 @@ struct AudioScreen: View {
                         )
                     }
 
-                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
-                        AudioDoctorWaveform(
-                            samples: viewModel.audioDoctorSamples,
-                            tint: audioDoctorTint
+                    GeometryReader { proxy in
+                        let barWidth: CGFloat = 2.5
+                        let spacing: CGFloat = 2
+                        let count = max(
+                            AudioSpectrumMeter.barCount,
+                            Int(
+                                (proxy.size.width + spacing)
+                                    / (barWidth + spacing)
+                            )
                         )
-                        .frame(height: 44)
-
-                        HStack {
-                            Text(audioDoctorTimingLabel)
-                            Spacer()
-                            Text("16 kHz · mono · local")
-                        }
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textTertiary
+                        WaveformView(
+                            model: viewModel.audioDoctorMeter,
+                            style: .voiceprint,
+                            voiceprintBarCount: count
+                        )
+                        .frame(
+                            maxWidth: .infinity,
+                            maxHeight: .infinity,
+                            alignment: .center
                         )
                     }
+                    .frame(height: 36)
                     .padding(.horizontal, ZenDesign.Spacing.sm)
                     .padding(.vertical, ZenDesign.Spacing.xs)
                     .background {
                         RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.small,
+                            cornerRadius: ZenDesign.Radius.large,
                             style: .continuous
                         )
-                        .fill(ZenDesign.Semantic.surfaceSunken)
-                        .overlay {
-                            RoundedRectangle(
-                                cornerRadius: ZenDesign.Radius.small,
-                                style: .continuous
-                            )
-                            .strokeBorder(ZenDesign.Semantic.border)
-                        }
+                        .strokeBorder(
+                            ZenDesign.Semantic.textPrimary.opacity(0.45),
+                            lineWidth: 1.4
+                        )
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Microphone waveform")
-                    .accessibilityValue(
-                        "\(Int((viewModel.audioDoctorLevel * 100).rounded())) percent"
-                    )
-
-                    Text(
-                        "Records three seconds locally, measures loudness, confirms the sample format, then deletes the clip. No test audio leaves this Mac."
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityValue(audioDoctorTimingLabel)
                 }
                 .padding(ZenDesign.Spacing.md)
             }
@@ -271,7 +259,7 @@ struct AudioScreen: View {
         case .analyzing:
             return "Checking…"
         case .idle, .passed, .quiet, .failed:
-            return "Run check"
+            return "Run Check"
         }
     }
 
@@ -285,7 +273,7 @@ struct AudioScreen: View {
         case .analyzing:
             return "Capture complete · validating"
         case .idle:
-            return "Ready · 3.0 s check"
+            return "Ready · 10 s check"
         case .passed:
             return "Signal and format passed"
         case .quiet:
@@ -293,53 +281,6 @@ struct AudioScreen: View {
         case .failed:
             return "Check could not complete"
         }
-    }
-}
-
-private struct AudioDoctorWaveform: View {
-    @Environment(\.accessibilityReduceMotion)
-    private var reduceMotion
-    let samples: [Double]
-    let tint: Color
-
-    var body: some View {
-        GeometryReader { proxy in
-            let spacing: CGFloat = 3
-            let count = max(1, samples.count)
-            let barWidth = max(
-                2,
-                (proxy.size.width - spacing * CGFloat(count - 1))
-                    / CGFloat(count)
-            )
-            HStack(alignment: .center, spacing: spacing) {
-                ForEach(
-                    Array(samples.enumerated()),
-                    id: \.offset
-                ) { _, sample in
-                    Capsule()
-                        .fill(
-                            tint.opacity(sample > 0.03 ? 0.95 : 0.24)
-                        )
-                        .frame(
-                            width: barWidth,
-                            height: max(
-                                3,
-                                proxy.size.height
-                                    * max(0.06, min(1, sample))
-                            )
-                        )
-                }
-            }
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: .infinity,
-                alignment: .center
-            )
-        }
-        .animation(
-            ZenDesign.Motion.waveform(reduceMotion),
-            value: samples
-        )
     }
 }
 

@@ -82,22 +82,6 @@ struct FormattingScreen: View {
                 ZenPanelDivider()
 
                 ZenRow(
-                    icon: "captions.bubble",
-                    title: "Live transcript",
-                    subtitle: "Show words while you speak"
-                ) {
-                    ZenSwitch(
-                        isOn: Binding(
-                            get: { viewModel.livePreviewEnabled },
-                            set: viewModel.setLivePreviewEnabled
-                        ),
-                        label: "Live transcript"
-                    )
-                }
-
-                ZenPanelDivider()
-
-                ZenRow(
                     icon: "pause.circle",
                     title: "Commit on pause",
                     subtitle: "Insert stable phrases during longer dictations"

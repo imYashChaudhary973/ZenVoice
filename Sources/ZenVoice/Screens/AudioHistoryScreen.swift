@@ -94,8 +94,7 @@ struct AudioHistoryScreen: View {
                     Text(
                         "Archived audio is stored unencrypted in ZenVoice's "
                         + "private Application Support folder, separate from "
-                        + "your encrypted transcripts. Private Dictation is "
-                        + "never archived."
+                        + "your encrypted transcripts."
                     )
                     .font(ZenDesign.Typography.body)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)

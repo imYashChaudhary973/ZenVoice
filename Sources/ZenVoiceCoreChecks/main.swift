@@ -933,92 +933,19 @@ guard unfinished == "Please refactor the middleware today." else {
 
 print("ZenVoiceCoreChecks: spoken structure passed")
 
-let applicationSuite =
-    "ZenVoiceCoreChecks.ApplicationProfiles.\(UUID().uuidString)"
+let voiceCommandSuite =
+    "ZenVoiceCoreChecks.VoiceCommands.\(UUID().uuidString)"
 guard let applicationDefaults =
-    UserDefaults(suiteName: applicationSuite) else {
+    UserDefaults(suiteName: voiceCommandSuite) else {
     FileHandle.standardError.write(
-        Data("FAIL: could not create application profile fixture\n".utf8)
+        Data("FAIL: could not create voice command fixture\n".utf8)
     )
     exit(1)
 }
 defer {
     applicationDefaults.removePersistentDomain(
-        forName: applicationSuite
+        forName: voiceCommandSuite
     )
-}
-let mailProfile = ApplicationProfile(
-    bundleIdentifier: "com.example.mail",
-    applicationName: "Example Mail",
-    languageProfile: LanguageProfile(
-        inputLanguageCode: "es",
-        outputMode: .spokenLanguage
-    ),
-    formattingMode: .clean,
-    voiceCommandsEnabled: true,
-    preferredEngineID: EngineIdentifiers.parakeetTDTv3,
-    preferredOutputMode: .englishTranslation
-)
-ApplicationProfilePreferences.save(
-    mailProfile,
-    defaults: applicationDefaults
-)
-guard ApplicationProfilePreferences.profile(
-    for: mailProfile.bundleIdentifier,
-    defaults: applicationDefaults
-) == mailProfile else {
-    FileHandle.standardError.write(
-        Data("FAIL: application profile did not persist\n".utf8)
-    )
-    exit(1)
-}
-guard let loadedProfile = ApplicationProfilePreferences.profile(
-    for: mailProfile.bundleIdentifier,
-    defaults: applicationDefaults
-),
-      loadedProfile.preferredEngineID == EngineIdentifiers.parakeetTDTv3,
-      loadedProfile.preferredOutputMode == .englishTranslation else {
-    FileHandle.standardError.write(
-        Data(
-            "FAIL: per-app engine or output mode did not persist\n".utf8
-        )
-    )
-    exit(1)
-}
-let encodedProfiles = try JSONEncoder().encode([mailProfile])
-guard var legacyProfiles = try JSONSerialization.jsonObject(
-    with: encodedProfiles
-) as? [[String: Any]] else {
-    FileHandle.standardError.write(
-        Data("FAIL: could not create legacy application profile\n".utf8)
-    )
-    exit(1)
-}
-legacyProfiles[0].removeValue(forKey: "customPromptHints")
-applicationDefaults.set(
-    try JSONSerialization.data(withJSONObject: legacyProfiles),
-    forKey: ApplicationProfilePreferences.preferenceKey
-)
-guard let migratedProfile = ApplicationProfilePreferences.profile(
-    for: mailProfile.bundleIdentifier,
-    defaults: applicationDefaults
-), migratedProfile.customPromptHints.isEmpty else {
-    FileHandle.standardError.write(
-        Data("FAIL: legacy application profile did not migrate\n".utf8)
-    )
-    exit(1)
-}
-ApplicationProfilePreferences.remove(
-    bundleIdentifier: mailProfile.bundleIdentifier,
-    defaults: applicationDefaults
-)
-guard ApplicationProfilePreferences.load(
-    defaults: applicationDefaults
-).isEmpty else {
-    FileHandle.standardError.write(
-        Data("FAIL: application profile was not removed\n".utf8)
-    )
-    exit(1)
 }
 guard !LocalVoiceCommandPreferences.isEnabled(
     defaults: applicationDefaults
@@ -1196,6 +1123,56 @@ guard AudioLevelMeter.normalize(decibels: -70) == 0,
 
 print("ZenVoiceCoreChecks: audio level response passed")
 
+func waveformTone(frequency: Double, amplitude: Float, count: Int = 1_024) -> [Float] {
+    (0..<count).map { index in
+        amplitude * sin(
+            Float(2 * Double.pi * frequency * Double(index) / 16_000)
+        )
+    }
+}
+
+func waveformBars(frequency: Double, amplitude: Float) -> [Double] {
+    var meter = AudioSpectrumMeter()
+    let tone = waveformTone(frequency: frequency, amplitude: amplitude)
+    var bars: [Double] = []
+    tone.withUnsafeBufferPointer { buffer in
+        guard let base = buffer.baseAddress else { return }
+        for _ in 0..<4 {
+            bars = meter.update(samples: base, count: buffer.count)
+        }
+    }
+    return bars
+}
+
+let silentBars = waveformBars(frequency: 800, amplitude: 0)
+let quietBars = waveformBars(frequency: 220, amplitude: 0.06)
+let loudBars = waveformBars(frequency: 220, amplitude: 0.45)
+
+guard silentBars.count == AudioSpectrumMeter.barCount,
+      silentBars.allSatisfy({ $0 < 0.08 }) else {
+    FileHandle.standardError.write(
+        Data("FAIL: silence must flatten the waveform bars\n".utf8)
+    )
+    exit(1)
+}
+
+guard loudBars.max() ?? 0 > quietBars.max() ?? 1 else {
+    FileHandle.standardError.write(
+        Data("FAIL: louder speech must raise waveform bars\n".utf8)
+    )
+    exit(1)
+}
+
+let activeBars = loudBars.filter { $0 > 0.18 }.count
+guard activeBars >= 12 else {
+    FileHandle.standardError.write(
+        Data("FAIL: speaking must move the whole waveform, not two bars\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: audio waveform response passed")
+
 let defaultHotKey = HotKeyConfiguration.dictationDefault
 guard defaultHotKey.isValid,
       defaultHotKey.displayName == "⌃ ⌥ Space" else {
@@ -1230,17 +1207,6 @@ guard pasteLastHotKey.isValid,
 }
 
 print("ZenVoiceCoreChecks: recovery hotkey configuration passed")
-
-let privateHotKey = HotKeyConfiguration.privateModeDefault
-guard privateHotKey.isValid,
-      privateHotKey.displayName == "⌃ ⌥ P",
-      privateHotKey != defaultHotKey,
-      privateHotKey != pasteLastHotKey else {
-    FileHandle.standardError.write(
-        Data("FAIL: private-mode hotkey configuration is invalid\n".utf8)
-    )
-    exit(1)
-}
 
 let unknownModifier = HotKeyConfiguration(
     keyCode: 49,
@@ -1315,7 +1281,7 @@ guard Set(HoldKeyChoice.allCases.map(\.keyCode)).count
     exit(1)
 }
 
-print("ZenVoiceCoreChecks: private and hold controls passed")
+print("ZenVoiceCoreChecks: hold controls passed")
 
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
@@ -1962,33 +1928,40 @@ DictationCompletionStrategy.resolve(
     )
     exit(1)
 }
+liveDefaults.set(true, forKey: LiveDictationPreferences.previewKey)
+guard !LiveDictationPreferences.isPreviewEnabled(
+    defaults: liveDefaults
+),
+!(liveDefaults.bool(forKey: LiveDictationPreferences.previewKey)) else {
+    FileHandle.standardError.write(
+        Data("FAIL: leftover live preview must stay off\n".utf8)
+    )
+    exit(1)
+}
 LiveDictationPreferences.setCommitOnPauseEnabled(
     true,
     defaults: liveDefaults
 )
-guard LiveDictationPreferences.isPreviewEnabled(
+guard !LiveDictationPreferences.isPreviewEnabled(
     defaults: liveDefaults
 ),
 LiveDictationPreferences.isCommitOnPauseEnabled(
     defaults: liveDefaults
 ) else {
     FileHandle.standardError.write(
-        Data("FAIL: commit-on-pause did not enable preview\n".utf8)
+        Data("FAIL: commit-on-pause must not turn live preview back on\n".utf8)
     )
     exit(1)
 }
 LiveDictationPreferences.setPreviewEnabled(
-    false,
+    true,
     defaults: liveDefaults
 )
 guard !LiveDictationPreferences.isPreviewEnabled(
     defaults: liveDefaults
-),
-!LiveDictationPreferences.isCommitOnPauseEnabled(
-    defaults: liveDefaults
 ) else {
     FileHandle.standardError.write(
-        Data("FAIL: disabling preview did not disable streaming\n".utf8)
+        Data("FAIL: live preview cannot be enabled\n".utf8)
     )
     exit(1)
 }
@@ -3108,25 +3081,6 @@ for token in forbiddenInBody where bodyText.contains(token) {
     failEngineCheck("the cloud request body leaked \(token)")
 }
 
-var lectureConfiguration = cloudConfiguration
-lectureConfiguration.prompt = CloudAIPromptTemplate.lecture.text
-let lectureRequest = try! cloudEngine.makeRequest(
-    transcript: "Topic one. What does gravity mean?",
-    configuration: lectureConfiguration
-)
-let lectureBody = String(
-    decoding: try! lectureRequest.encodedBody(),
-    as: UTF8.self
-)
-for heading in ["Outline", "Key terms", "Questions asked"]
-where !lectureBody.contains(heading) {
-    failEngineCheck("lecture prompt omitted \(heading)")
-}
-guard lectureBody.contains("Do not label speakers as teacher or student"),
-      lectureRequest.userContent == "Topic one. What does gravity mean?" else {
-    failEngineCheck("lecture summary prompt or transcript changed")
-}
-
 // The API key must never be part of the request value itself.
 let requestDescription = "\(cloudRequest)"
 guard !requestDescription.contains("sk-") else {
@@ -3259,6 +3213,87 @@ guard let autoApplyData = try? JSONEncoder().encode(autoApplyConfiguration),
 }
 
 print("ZenVoiceCoreChecks: cloud AI enhancement passed")
+
+let speechAudio = Data("RIFF....WAVE".utf8)
+let speechRequest = CloudSpeechRequest(
+    model: CloudSpeechEngine.defaultModel,
+    languageCode: "en",
+    audio: speechAudio,
+    boundary: "testboundary"
+)
+let speechBody = String(
+    decoding: speechRequest.encodedBody(),
+    as: UTF8.self
+)
+guard speechBody.contains("gpt-4o-mini-transcribe"),
+      speechBody.contains("language"),
+      speechBody.contains("en"),
+      speechBody.contains("speech.wav") else {
+    failEngineCheck("cloud speech request omitted model, language, or file")
+}
+for token in [
+    "bundleIdentifier", "deviceID", "installID", "voiceProfile", "sk-"
+] where speechBody.contains(token) {
+    failEngineCheck("cloud speech body leaked \(token)")
+}
+let speechAuthorized = speechRequest.urlRequest(apiKey: "sk-test-key")
+guard speechAuthorized.value(forHTTPHeaderField: "Authorization")
+        == "Bearer sk-test-key",
+      speechAuthorized.httpShouldHandleCookies == false else {
+    failEngineCheck("cloud speech URLRequest was not built correctly")
+}
+guard EngineIdentifiers.isCloudSpeech(
+    EngineIdentifiers.openaiTranscribe
+),
+!EngineIdentifiers.isCloudSpeech(
+    EngineIdentifiers.parakeetTDTv3
+) else {
+    failEngineCheck("cloud speech engine id classification is wrong")
+}
+guard let parsedSpeech = try? CloudSpeechEngine.parseTranscript(
+    from: Data("{\"text\":\" Hello there. \"}".utf8)
+),
+parsedSpeech == "Hello there." else {
+    failEngineCheck("cloud speech transcript was not parsed")
+}
+do {
+    _ = try CloudSpeechEngine.parseTranscript(from: Data("{}".utf8))
+    failEngineCheck("empty cloud speech JSON was accepted")
+} catch {
+    // Expected.
+}
+let geminiRequest = GeminiSpeechRequest(
+    languageCode: "en",
+    audio: speechAudio
+)
+let geminiBody = String(decoding: geminiRequest.encodedBody(), as: UTF8.self)
+guard geminiBody.contains("mime_type"),
+      geminiBody.contains("inline_data"),
+      geminiBody.contains("Transcribe this audio"),
+      !geminiBody.contains("bundleIdentifier"),
+      !geminiBody.contains("deviceID") else {
+    failEngineCheck("gemini speech request shape is wrong")
+}
+let geminiAuthorized = geminiRequest.urlRequest(apiKey: "test-gemini-key")
+guard geminiAuthorized.value(forHTTPHeaderField: "x-goog-api-key")
+        == "test-gemini-key" else {
+    failEngineCheck("gemini speech URLRequest was not built correctly")
+}
+guard let parsedGemini = try? CloudSpeechEngine.parseGeminiTranscript(
+    from: Data(
+        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" Hi. \"}]}}]}"
+            .utf8
+    )
+),
+parsedGemini == "Hi." else {
+    failEngineCheck("gemini speech transcript was not parsed")
+}
+guard EngineIdentifiers.isCloudSpeech(
+    EngineIdentifiers.geminiTranscribe
+) else {
+    failEngineCheck("gemini engine id was not classified as cloud speech")
+}
+print("ZenVoiceCoreChecks: cloud speech request passed")
 
 // MARK: - Anthropic request shape checks
 

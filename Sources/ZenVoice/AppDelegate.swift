@@ -161,14 +161,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var zenBarMenuItem: NSMenuItem!
     private var statusMessageMenuItem: NSMenuItem!
     private var todayUsageMenuItem: NSMenuItem!
-    private var livePreviewMenuItem: NSMenuItem!
     private var languageMenuItem: NSMenuItem!
     private var accessibilityMenuItem: NSMenuItem!
     private var zenBarController: OverlayPanelController!
     private var escapeMonitors: [Any] = []
     private var globalHotKey: GlobalHotKey?
     private var pasteLastGlobalHotKey: GlobalHotKey?
-    private var privateModeGlobalHotKey: GlobalHotKey?
     private var holdToDictateController: HoldToDictateController?
     private var engineRegistry: EngineRegistry?
     private var whisperEngine: WhisperSpeechEngine?
@@ -178,12 +176,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentHotKeyConfiguration = HotKeyPreferences.load()
     private var pasteLastHotKeyConfiguration =
         HotKeyPreferences.loadPasteLast()
-    private var privateModeHotKeyConfiguration =
-        HotKeyPreferences.loadPrivateMode()
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
     private var audioHistoryViewModel: AudioHistoryViewModel!
-    private var lectureViewModel: LectureViewModel!
     private var cloudAIViewModel: CloudAIViewModel!
     private var cloudPreviewWindowController:
         CloudAIPreviewWindowController?
@@ -418,8 +413,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
     private var modelManagerViewModel: ModelManagerViewModel!
-    private var applicationProfileViewModel:
-        ApplicationProfileViewModel!
     private let onboardingViewModel = OnboardingViewModel(
         showAtLaunch: OnboardingPreferences.shouldPresent()
     )
@@ -520,11 +513,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let processingHistoryID = transcribingHistoryID
         activeHistoryID = nil
         transcribingHistoryID = nil
-        lectureViewModel?.markIncompleteForTermination()
         let recordedAudio = recorder.stop()
         if let historyID {
             if nonPersistentHistoryIDs.contains(historyID)
-                || historyPreferences.isPrivateModeEnabled
                 || !historyPreferences.isHistoryEnabled {
                 try? await dictationVault?.discard(id: historyID)
             } else {
@@ -539,7 +530,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if let processingHistoryID,
            nonPersistentHistoryIDs.contains(processingHistoryID)
-            || historyPreferences.isPrivateModeEnabled
             || !historyPreferences.isHistoryEnabled {
             try? await dictationVault?.discard(id: processingHistoryID)
         }
@@ -609,6 +599,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let parakeetTDTv3 = makeParakeetTDTEngine(.v3) {
             engines.append(parakeetTDTv3)
         }
+        engines.append(
+            CloudSpeechEngine.openAI(keyStore: makeOpenAISpeechKeyStore())
+        )
+        engines.append(
+            CloudSpeechEngine.gemini(keyStore: makeGeminiSpeechKeyStore())
+        )
         let temporary = EngineRegistry(engines: engines)
         let fallbackOrder = EngineRecommendationEngine.fallbackOrder(
             for: LanguagePreferences.load(),
@@ -788,73 +784,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return CloudAIKeychainKeyStore(policy: policy)
     }
 
-    private func makeLectureViewModel() -> LectureViewModel {
-        let store: LectureStore
-        if let policy = try? RuntimeIdentity.policy(),
-           let live = try? LectureStore.live(policy: policy) {
-            store = live
-        } else {
-            store = LectureStore(
-                directoryURL: FileManager.default.temporaryDirectory
-                    .appendingPathComponent(
-                        "ZenVoiceLectures",
-                        isDirectory: true
-                    )
-            )
-        }
-        return LectureViewModel(
-            store: store,
-            isDictationRecording: { [weak self] in
-                self?.recorder.isRecording == true
-            },
-            keyProvider: (try? RuntimeIdentity.policy()).map {
-                KeychainVaultKeyProvider(policy: $0)
-            },
-            transcribeFile: { [weak self] url in
-                guard let self else {
-                    throw LectureStore.StoreError.io(
-                        "ZenVoice is no longer running."
-                    )
-                }
-                await self.waitForEngineConfiguration()
-                guard let registry = self.engineRegistry else {
-                    throw LectureStore.StoreError.io(
-                        "No speech engine is available."
-                    )
-                }
-                let result = try await registry.transcribe(
-                    audioURL: url,
-                    profile: LanguagePreferences.load(),
-                    defaults: RuntimeIdentity.userDefaults()
-                )
-                return (result.finalTranscript, result.modelID)
-            },
-            summarizeTranscript: { [weak self] transcript in
-                guard let self else {
-                    throw LectureStore.StoreError.io(
-                        "ZenVoice is no longer running."
-                    )
-                }
-                var configuration = CloudAIPreferences.load()
-                configuration.prompt = CloudAIPromptTemplate.lecture.text
-                let key = ((try? self.makeCloudAIKeyStore().loadKey()) ?? nil)
-                    ?? ""
-                let result = try await CloudAIEnhancementEngine().enhance(
-                    transcript: transcript,
-                    configuration: configuration,
-                    apiKey: key
-                )
-                return result.enhanced
-            }
-        )
+    private func makeOpenAISpeechKeyStore() -> CloudAIKeyStoring {
+        cloudSpeechKeyStore(account: "cloud-speech-openai-api-key")
     }
 
+    private func makeGeminiSpeechKeyStore() -> CloudAIKeyStoring {
+        cloudSpeechKeyStore(account: "cloud-speech-gemini-api-key")
+    }
+
+    private func cloudSpeechKeyStore(account: String) -> CloudAIKeyStoring {
+        guard let policy = try? RuntimeIdentity.policy() else {
+            return InMemoryCloudAIKeyStore()
+        }
+        return CloudAIKeychainKeyStore(policy: policy, account: account)
+    }
 
     /// Copies a completed recording into the Audio History archive.
     ///
     /// Archiving piggybacks on transcript persistence: the archive row is
     /// derived from the dictation row, so a dictation that is not persisted —
-    /// Private Dictation, paused history, a one-off suppression — is never
+    /// paused history, a one-off suppression — is never
     /// archived. Must run before the recovery audio is deleted, because that
     /// file is the archive's source.
     private func archiveRecordingIfEnabled(historyID: UUID) async {
@@ -962,16 +911,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         zenBarMenuItem.state =
             state.showsZenVoiceAtAllTimes ? .on : .off
         menu.addItem(zenBarMenuItem)
-
-        livePreviewMenuItem = NSMenuItem(
-            title: "Show Live Preview Overlay",
-            action: #selector(toggleLivePreviewOverlay),
-            keyEquivalent: ""
-        )
-        livePreviewMenuItem.target = self
-        livePreviewMenuItem.state =
-            OverlayPreferences.loadLivePreviewEnabled() ? .on : .off
-        menu.addItem(livePreviewMenuItem)
 
         statusMessageMenuItem = NSMenuItem(
             title: "Show Status Message",
@@ -1250,24 +1189,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
-        do {
-            privateModeGlobalHotKey = try makePrivateModeGlobalHotKey(
-                configuration: privateModeHotKeyConfiguration
-            )
-        } catch {
-            privateModeHotKeyConfiguration = .privateModeDefault
-            do {
-                privateModeGlobalHotKey = try makePrivateModeGlobalHotKey(
-                    configuration: privateModeHotKeyConfiguration
-                )
-                HotKeyPreferences.savePrivateMode(
-                    privateModeHotKeyConfiguration
-                )
-            } catch {
-                showError(error.localizedDescription)
-            }
-        }
-
         announceReplacedShortcutsIfNeeded()
     }
 
@@ -1329,13 +1250,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             engineRegistryProvider: { [weak self] in
                 self?.engineRegistry
-            }
+            },
+            openAISpeechKeyStore: makeOpenAISpeechKeyStore(),
+            geminiSpeechKeyStore: makeGeminiSpeechKeyStore()
         )
-        applicationProfileViewModel = ApplicationProfileViewModel()
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
             pasteLastShortcut: pasteLastHotKeyConfiguration,
-            privateModeShortcut: privateModeHotKeyConfiguration,
             holdToDictateEnabled:
                 HotKeyPreferences.isHoldToDictateEnabled(),
             holdKey: HotKeyPreferences.loadHoldKey(),
@@ -1360,16 +1281,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     )
                 }
                 return self.applyPasteLastHotKey(configuration)
-            },
-            applyPrivateModeShortcut: { [weak self] configuration in
-                guard let self else {
-                    return .failure(
-                        GlobalHotKey.HotKeyError.registrationFailed(
-                            configuration.displayName
-                        )
-                    )
-                }
-                return self.applyPrivateModeHotKey(configuration)
             },
             applyHoldToDictate: { [weak self] enabled, key in
                 self?.applyHoldToDictate(enabled: enabled, key: key)
@@ -1456,28 +1367,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         )
         cloudAIViewModel = CloudAIViewModel(
-            keyStore: makeCloudAIKeyStore(),
-            lastTranscript: { [weak self] in
-                self?.state.lastTranscript ?? ""
-            },
-            applyEnhanced: { [weak self] text in
-                self?.state.lastTranscript = text
-            }
+            keyStore: makeCloudAIKeyStore()
         )
         updatesViewModel = UpdatesViewModel()
-        lectureViewModel = makeLectureViewModel()
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
             audioHistoryViewModel: audioHistoryViewModel,
-            lectureViewModel: lectureViewModel,
             cloudAIViewModel: cloudAIViewModel,
             updatesViewModel: updatesViewModel,
             insightsViewModel: insightsViewModel,
             voiceProfileViewModel: voiceProfileViewModel,
             modelManagerViewModel: modelManagerViewModel,
-            applicationProfileViewModel:
-                applicationProfileViewModel,
             onboardingViewModel: onboardingViewModel,
             appState: state,
             toggleRecording: { [weak self] in
@@ -1502,20 +1403,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func makePrivateModeGlobalHotKey(
-        configuration: HotKeyConfiguration
-    ) throws -> GlobalHotKey {
-        try GlobalHotKey(configuration: configuration) { [weak self] in
-            self?.togglePrivateMode()
-        }
-    }
-
     private func applyHotKey(
         _ configuration: HotKeyConfiguration
     ) -> Result<Void, Error> {
         guard configuration.isValid,
-              configuration != pasteLastHotKeyConfiguration,
-              configuration != privateModeHotKeyConfiguration else {
+              configuration != pasteLastHotKeyConfiguration else {
             return .failure(
                 GlobalHotKey.HotKeyError.registrationFailed(
                     configuration.displayName
@@ -1545,8 +1437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         _ configuration: HotKeyConfiguration
     ) -> Result<Void, Error> {
         guard configuration.isValid,
-              configuration != currentHotKeyConfiguration,
-              configuration != privateModeHotKeyConfiguration else {
+              configuration != currentHotKeyConfiguration else {
             return .failure(
                 GlobalHotKey.HotKeyError.registrationFailed(
                     configuration.displayName
@@ -1564,35 +1455,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             pasteLastGlobalHotKey = replacement
             pasteLastHotKeyConfiguration = configuration
             HotKeyPreferences.savePasteLast(configuration)
-            return .success(())
-        } catch {
-            return .failure(error)
-        }
-    }
-
-    private func applyPrivateModeHotKey(
-        _ configuration: HotKeyConfiguration
-    ) -> Result<Void, Error> {
-        guard configuration.isValid,
-              configuration != currentHotKeyConfiguration,
-              configuration != pasteLastHotKeyConfiguration else {
-            return .failure(
-                GlobalHotKey.HotKeyError.registrationFailed(
-                    configuration.displayName
-                )
-            )
-        }
-        if configuration == privateModeHotKeyConfiguration {
-            return .success(())
-        }
-
-        do {
-            let replacement = try makePrivateModeGlobalHotKey(
-                configuration: configuration
-            )
-            privateModeGlobalHotKey = replacement
-            privateModeHotKeyConfiguration = configuration
-            HotKeyPreferences.savePrivateMode(configuration)
             return .success(())
         } catch {
             return .failure(error)
@@ -1738,12 +1600,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !state.isBusy else {
             return
         }
-        if lectureViewModel?.isSessionActive == true {
-            showError("Stop the lecture before dictating.")
-            return
-        }
-
-
         if whisperEngine == nil {
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -1818,8 +1674,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         state.languageProfile = dictationBehavior.languageProfile
 
         if !isDeterministicE2E,
-           historyPreferences.isHistoryEnabled,
-           !historyPreferences.isPrivateModeEnabled {
+           historyPreferences.isHistoryEnabled {
             do {
                 let vault = try await resolvedVault()
                 let id = UUID()
@@ -1852,9 +1707,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try recorder.start(
                 recordingURL: historyDraft?.recoveryAudioURL,
                 capturesLiveSamples: capturesLiveSamples
-            ) { [weak self] level in
+            ) { [weak self] level, bands in
                 DispatchQueue.main.async {
                     self?.state.appendAudioLevel(level)
+                    self?.state.appendAudioSpectrum(bands)
                 }
             }
             liveSamplesEnabledForRecording = capturesLiveSamples
@@ -1875,25 +1731,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func resolvedDictationBehavior(
-        targetBundleIdentifier: String?
+        targetBundleIdentifier _: String?
     ) async -> ActiveDictationBehavior? {
-        let profile = ApplicationProfilePreferences.profile(
-            for: targetBundleIdentifier
-        )
-        let baseLanguageProfile =
-            profile?.languageProfile ?? LanguagePreferences.load()
-        let languageProfile: LanguageProfile
-        if let preferredOutputMode = profile?.preferredOutputMode {
-            languageProfile = LanguageProfile(
-                inputLanguageCode: baseLanguageProfile.inputLanguageCode,
-                outputMode: preferredOutputMode
-            )
-        } else {
-            languageProfile = baseLanguageProfile
-        }
-        let selectedID =
-            profile?.preferredEngineID
-            ?? SelectedEnginePreferences.load(for: languageProfile)
+        let languageProfile = LanguagePreferences.load()
+        let selectedID = SelectedEnginePreferences.load(for: languageProfile)
         guard let resolvedEngine = engineRegistry?.resolve(
             for: languageProfile,
             selectedID: selectedID
@@ -1924,18 +1765,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             preferredVocabulary = []
         }
-        let profileFormattingMode = profile?.formattingMode
         return ActiveDictationBehavior(
             languageProfile: languageProfile,
             correctionScope: correctionScope,
             formattingMode:
                 isDeterministicE2E
                     ? .clean
-                    : profileFormattingMode
-                        ?? TranscriptFormattingPreferences.load(),
+                    : TranscriptFormattingPreferences.load(),
             voiceCommandsEnabled:
-                profile?.voiceCommandsEnabled
-                ?? LocalVoiceCommandPreferences.isEnabled(),
+                LocalVoiceCommandPreferences.isEnabled(),
             context:
                 NextDictationContext.combined(
                     context:
@@ -1992,18 +1830,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         transcribingHistoryID = historyID
 
         if let historyID {
-            do {
+            let mark: () async throws -> Void = { [self] in
                 try await resolvedVault().markTranscribing(
                     id: historyID,
                     durationSeconds: recordedAudio.durationSeconds
                 )
-            } catch {
-                handleTranscriptionFailure(
-                    error,
-                    recordedAudio: recordedAudio,
-                    historyID: historyID
-                )
-                return
+            }
+            if EngineIdentifiers.isCloudSpeech(
+                activeDictationBehavior.modelID
+            ) {
+                Task { try? await mark() }
+            } else {
+                do {
+                    try await mark()
+                } catch {
+                    handleTranscriptionFailure(
+                        error,
+                        recordedAudio: recordedAudio,
+                        historyID: historyID
+                    )
+                    return
+                }
             }
         }
 
@@ -2174,6 +2021,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             )
                             : nil
                 )
+                if EngineIdentifiers.isCloudSpeech(result.modelID) {
+                    await MainActor.run { [weak self] in
+                        self?.complete(
+                            processed: processed,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID,
+                            formattingMode: behavior.formattingMode,
+                            cloudDidApply: false
+                        )
+                    }
+                    return
+                }
                 let insertedBeforeCloud: String
                 if insertedPreview.isEmpty {
                     insertedBeforeCloud = await Task {
@@ -2717,8 +2576,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if let historyID = activeHistoryID,
            !nonPersistentHistoryIDs.contains(historyID),
-           historyPreferences.isHistoryEnabled,
-           !historyPreferences.isPrivateModeEnabled {
+           historyPreferences.isHistoryEnabled {
             let rawTranscript = liveStableRawTranscript
             let finalTranscript = liveStableFinalTranscript
             let correctionCount = liveStableCorrectionCount
@@ -2952,6 +2810,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         cloudDidApply: Bool
     ) async {
         let result = processed.result
+        let requestedEngineID = activeDictationBehavior.modelID
         let resolvedFormattingMode = formattingMode ?? activeDictationBehavior.formattingMode
         transcribingHistoryID = nil
         resetActiveDictationBehavior()
@@ -2964,7 +2823,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let shouldPersist = historyID.map {
             nonPersistentHistoryIDs.remove($0) == nil
                 && historyPreferences.isHistoryEnabled
-                && !historyPreferences.isPrivateModeEnabled
         } ?? false
         var historySaveError: Error?
         if let historyID, shouldPersist {
@@ -2998,10 +2856,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
 
+        let cloudFellBackToLocal =
+            EngineIdentifiers.isCloudSpeech(requestedEngineID)
+            && !EngineIdentifiers.isCloudSpeech(result.modelID)
         state.recordSuccessfulDictation(
             transcript: result.finalTranscript,
             durationSeconds: recordedAudio.durationSeconds,
-            runawayWordsCut: result.runawayWordsCut
+            runawayWordsCut: result.runawayWordsCut,
+            decodeWarning: cloudFellBackToLocal
+                ? "cloud speech failed — used the local engine"
+                : nil
         )
         state.phase = .inserting
 
@@ -3140,7 +3004,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let shouldPersist = historyID.map {
             nonPersistentHistoryIDs.remove($0) == nil
                 && historyPreferences.isHistoryEnabled
-                && !historyPreferences.isPrivateModeEnabled
         } ?? false
         if let historyID, shouldPersist {
             do {
@@ -3290,15 +3153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func activeWriteModeSubMode() -> WriteModeSubMode {
-        let global = WriteModePreferences.loadSubMode()
-        guard let bundleID = NSWorkspace.shared.frontmostApplication?
-            .bundleIdentifier,
-              let profile = ApplicationProfilePreferences.profile(
-                for: bundleID
-              ) else {
-            return global
-        }
-        return profile.writeModeDefault ?? global
+        WriteModePreferences.loadSubMode()
     }
 
     private func rewriteAndInsert(
@@ -3609,22 +3464,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         finishRecording()
     }
 
-    private func togglePrivateMode() {
-        let enabled = !historyPreferences.isPrivateModeEnabled
-        historyViewModel?.setPrivateModeEnabled(enabled)
-        if historyViewModel == nil {
-            historyPreferences.isPrivateModeEnabled = enabled
-            handlePrivacyChanged()
-        }
-        state.phase = enabled
-            ? .error("Private Dictation on — nothing will be saved.")
-            : .success
-        scheduleIdleReset(after: 2)
-    }
-
     private func handlePrivacyChanged() {
-        guard !historyPreferences.isHistoryEnabled
-                || historyPreferences.isPrivateModeEnabled else {
+        guard !historyPreferences.isHistoryEnabled else {
             return
         }
         if let activeHistoryID {
@@ -3636,7 +3477,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     )
                 } catch {
                     showError(
-                        "Private Dictation could not update local history: "
+                        "Could not update local history: "
                         + error.localizedDescription
                     )
                 }
@@ -3651,7 +3492,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     )
                 } catch {
                     showError(
-                        "Private Dictation could not update local history: "
+                        "Could not update local history: "
                         + error.localizedDescription
                     )
                 }
@@ -3760,14 +3601,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             context: "",
             preferredVocabulary: preferredVocabulary
         )
-        let applicationProfile = ApplicationProfilePreferences.profile(
-            for: record.targetBundleID
-        )
-        let formattingMode = applicationProfile?.formattingMode
-            ?? TranscriptFormattingPreferences.load()
+        let formattingMode = TranscriptFormattingPreferences.load()
         let voiceCommandsEnabled =
-            applicationProfile?.voiceCommandsEnabled
-            ?? LocalVoiceCommandPreferences.isEnabled()
+            LocalVoiceCommandPreferences.isEnabled()
         Task { [weak self] in
             do {
                 let result = try await registry.transcribe(
@@ -3827,11 +3663,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         modelManagerViewModel?.refreshBenchmarks()
         guard nonPersistentHistoryIDs.remove(historyID) == nil,
-              historyPreferences.isHistoryEnabled,
-              !historyPreferences.isPrivateModeEnabled else {
+              historyPreferences.isHistoryEnabled else {
             try? await resolvedVault().discard(id: historyID)
             try? FileManager.default.removeItem(at: recordedAudio.url)
-            showError("Private Dictation was enabled; this retry was not saved.")
+            showError("History is paused; this retry was not saved.")
             return
         }
         do {
@@ -3953,15 +3788,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.open(url)
     }
 
-    /// Menu-bar toggle for the live-preview overlay. Saving the preference
-    /// posts the change notification, which rebuilds the overlay panel.
-    @objc private func toggleLivePreviewOverlay() {
-        let enabled = !OverlayPreferences.loadLivePreviewEnabled()
-        OverlayPreferences.saveLivePreviewEnabled(enabled)
-        livePreviewMenuItem?.state = enabled ? .on : .off
-        settingsViewModel?.syncOverlayPreferences()
-    }
-
     @objc private func toggleStatusMessage() {
         state.toggleStatusMessage()
         statusMessageMenuItem.state = state.showsStatusMessage ? .on : .off
@@ -3989,13 +3815,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }
 
-    /// The overlay to present: the user's selection when live previews are
-    /// enabled, otherwise ZenBar.
+    /// ZenBar is the only overlay. Live-transcript overlays are no longer shown.
     private func resolvedOverlayKind() -> OverlayKind {
-        guard OverlayPreferences.loadLivePreviewEnabled() else {
-            return .zenBar
-        }
-        return OverlayPreferences.loadActiveOverlay()
+        .zenBar
     }
 
     @objc private func quit() {

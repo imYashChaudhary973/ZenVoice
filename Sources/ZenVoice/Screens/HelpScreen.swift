@@ -35,8 +35,8 @@ struct HelpScreen: View {
             id: 1,
             question: "Does my voice ever leave this Mac?",
             answer:
-                "No. Recording, transcription, refinement, history, and insights all run locally. ZenVoice has no accounts, no analytics, and no cloud transcription service. The only network use is downloading models you explicitly request — each one checksum-verified.",
-            tags: "privacy cloud offline network"
+                "By default, no. Local engines (Parakeet, Whisper) record, transcribe, and store everything on this Mac. If you tap Use on OpenAI Transcribe or Gemini Transcribe in Models, that clip is uploaded after you stop and billed to your key. Cloud formatting still sends text only, never audio.",
+            tags: "privacy cloud offline network openai gemini"
         ),
         ZenFAQ(
             id: 2,
@@ -47,13 +47,6 @@ struct HelpScreen: View {
         ),
         ZenFAQ(
             id: 3,
-            question: "What is Private Dictation?",
-            answer:
-                "Use the private dictation shortcut to dictate without saving anything: no history entry, no insights, no recovery audio.",
-            tags: "private incognito secret history"
-        ),
-        ZenFAQ(
-            id: 4,
             question: "Why does ZenVoice need Accessibility permission?",
             answer:
                 "macOS requires it to type the finished text into the active app. Without it, ZenVoice still works — the transcript is copied to your clipboard instead, and you paste manually.",
@@ -82,20 +75,27 @@ struct HelpScreen: View {
         ),
         ZenFAQ(
             id: 8,
+            question: "How do I use OpenAI or Gemini for dictation?",
+            answer:
+                "Open Models, paste your OpenAI or Google AI Studio key under Cloud speech, then tap Use on that engine. Speak as usual. After you stop, the wav is uploaded once and the text is inserted. If the API fails, ZenVoice decodes the same clip locally. Grok has no public speech API yet.",
+            tags: "openai gemini cloud transcribe key grok"
+        ),
+        ZenFAQ(
+            id: 9,
             question: "Which model should I download?",
             answer:
                 "Open Models — ZenVoice measures this Mac and marks a recommendation. Fast favors latency, Balanced is the best accuracy per second for most machines, High Accuracy is the multilingual pick.",
             tags: "model download recommend fast balanced accuracy"
         ),
         ZenFAQ(
-            id: 9,
+            id: 10,
             question: "Can I correct a word it keeps getting wrong?",
             answer:
                 "Yes. Voice Profile → correction rules: add \"what I said → what I meant\". Rules are encrypted and deletable one by one, independent of History.",
             tags: "correction wrong word fix rules dictionary"
         ),
         ZenFAQ(
-            id: 10,
+            id: 11,
             question: "How do I delete everything?",
             answer:
                 "Privacy shows a live inventory of everything stored — encrypted transcripts, recovery audio, correction rules, downloaded models — each with its own delete control. There is no hidden data.",
@@ -136,11 +136,6 @@ struct HelpScreen: View {
                 cheatRow(
                     "Start / stop dictation",
                     viewModel.currentShortcut.displayName
-                )
-                Divider().overlay(ZenDesign.Semantic.border)
-                cheatRow(
-                    "Private dictation",
-                    viewModel.privateModeShortcut.displayName
                 )
                 Divider().overlay(ZenDesign.Semantic.border)
                 cheatRow(

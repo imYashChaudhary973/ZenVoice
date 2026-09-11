@@ -19,7 +19,6 @@ import ZenVoiceStorage
 struct PrivacyScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
-    @ObservedObject var lectureViewModel: LectureViewModel
     @ObservedObject var voiceProfileViewModel:
         VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel:
@@ -44,7 +43,6 @@ struct PrivacyScreen: View {
         }
         .onAppear {
             historyViewModel.refresh()
-            lectureViewModel.refreshList()
             voiceProfileViewModel.refresh()
         }
 
@@ -60,7 +58,8 @@ struct PrivacyScreen: View {
                 icon: "network.slash",
                 text:
                     "Model downloads use pinned revisions and SHA-256 verification. "
-                    + "Audio, text, rules, and insights stay on this Mac."
+                    + "Local engines keep audio on this Mac. Cloud speech engines "
+                    + "upload the clip after you stop, using your own key."
             )
         }
     }
@@ -103,24 +102,6 @@ struct PrivacyScreen: View {
                     )
                     .disabled(!historyViewModel.historyEnabled)
                 }
-                ZenPanelDivider()
-                ZenRow(
-                    icon: "eye.slash",
-                    title: "Private Dictation mode",
-                    subtitle:
-                        "While enabled, nothing is saved — no history, no insights, no recovery. Toggle anytime with \(viewModel.privateModeShortcut.displayName)."
-                ) {
-                    ZenSwitch(
-                        isOn: Binding(
-                            get: {
-                                historyViewModel.privateModeEnabled
-                            },
-                            set:
-                                historyViewModel.setPrivateModeEnabled
-                        ),
-                        label: "Private Dictation"
-                    )
-                }
             }
         }
     }
@@ -147,13 +128,6 @@ struct PrivacyScreen: View {
                     }
                     .disabled(historyViewModel.savedTranscriptCount == 0)
                 }
-                ZenPanelDivider()
-                ZenRow(
-                    icon: "books.vertical",
-                    title: "Lecture recordings",
-                    subtitle:
-                        "\(lectureViewModel.lectureCountDisplayString) · \(lectureViewModel.lectureAudioDisplayString) audio · WAV files are not encrypted"
-                )
                 ZenPanelDivider()
                 ZenRow(
                     icon: "tray",

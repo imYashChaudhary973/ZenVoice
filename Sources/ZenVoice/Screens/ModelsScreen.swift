@@ -68,6 +68,86 @@ struct ModelsScreen: View {
                         }
                     }
                 }
+
+                cloudSpeechKeySection
+            }
+        }
+    }
+
+    private var cloudSpeechKeySection: some View {
+        ZenSection(
+            title: "Cloud speech",
+            caption: "Optional. Audio leaves this Mac and is billed to your key."
+        ) {
+            ZenPanel {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+                    Text(
+                        "After you stop, ZenVoice uploads the clip once. "
+                            + "Local engines never send audio. Grok has no public "
+                            + "speech API yet."
+                    )
+                    .font(ZenDesign.Typography.body)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    cloudKeyRow(
+                        title: "OpenAI",
+                        placeholder: "Paste your OpenAI API key",
+                        hasKey: viewModel.hasOpenAISpeechKey,
+                        draft: $viewModel.openAISpeechKeyDraft,
+                        save: viewModel.saveOpenAISpeechKey,
+                        delete: viewModel.deleteOpenAISpeechKey
+                    )
+                    ZenPanelDivider()
+                    cloudKeyRow(
+                        title: "Gemini",
+                        placeholder: "Paste your Google AI Studio key",
+                        hasKey: viewModel.hasGeminiSpeechKey,
+                        draft: $viewModel.geminiSpeechKeyDraft,
+                        save: viewModel.saveGeminiSpeechKey,
+                        delete: viewModel.deleteGeminiSpeechKey
+                    )
+                }
+                .padding(ZenDesign.Spacing.md)
+            }
+        }
+    }
+
+    private func cloudKeyRow(
+        title: String,
+        placeholder: String,
+        hasKey: Bool,
+        draft: Binding<String>,
+        save: @escaping () -> Void,
+        delete: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+            Text(title)
+                .font(ZenDesign.Typography.bodyStrong)
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            if hasKey {
+                HStack(spacing: ZenDesign.Spacing.xs) {
+                    Text("Key stored in Keychain.")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    Spacer(minLength: 0)
+                    Button("Remove", action: delete)
+                        .buttonStyle(ZenDestructiveButtonStyle())
+                }
+            } else {
+                HStack(spacing: ZenDesign.Spacing.xs) {
+                    SecureField(placeholder, text: draft)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Save", action: save)
+                        .buttonStyle(ZenPrimaryButtonStyle())
+                        .disabled(
+                            draft.wrappedValue
+                                .trimmingCharacters(
+                                    in: .whitespacesAndNewlines
+                                )
+                                .isEmpty
+                        )
+                }
             }
         }
     }
@@ -100,6 +180,8 @@ struct ModelsScreen: View {
                         viewModel.selectEngine(availability.engine.id)
                     }
                     .buttonStyle(ZenSecondaryButtonStyle())
+                } else if availability.reason == .requiresAPIKey {
+                    ZenBadge(text: "Needs key", kind: .warn)
                 } else if let downloadable,
                           availability.engine.requiresDownload {
                     if downloadingEngine {

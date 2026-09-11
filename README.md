@@ -44,12 +44,12 @@ Public GitHub beta. Apache-2.0.
 
 ## Features
 
-- **Global shortcut** — `⌃⌥Space` by default. Hold-to-dictate, paste-last (`⌃⌥V`), and Private Dictation (`⌃⌥P`) are configurable.
+- **Global shortcut** — `⌃⌥Space` by default. Hold-to-dictate and paste-last (`⌃⌥V`) are configurable.
 - **ZenBar** — a 108×36 capsule on the display you are working on. Controls appear on hover. An error is the one state that stays open.
 - **On-device engines** — Whisper and Parakeet TDT v3. Nothing is sent to a speech API.
 - **Live preview** — optional on-device Whisper preview while you speak. Final insert stays on TDT v3 or Whisper.
 - **Formatting** — Off, deterministic Clean, guarded on-device Smart (macOS 26+), or opt-in BYO-key Cloud. Cloud never sends audio.
-- **Encrypted history** — AES-GCM transcripts, search, copy, retry, delete, Recovery Inbox. Pause independently of Private Dictation.
+- **Encrypted history** — AES-GCM transcripts, search, copy, retry, delete, Recovery Inbox. Pause independently.
 - **Lecture Capture (v1)** — record long-form audio from the menu bar, transcribe it with your chosen on-device engine, and optionally summarize the text with your own API key. Audio stays on disk; only finished text is sent if you enable a cloud summary.
 - **Insights** — words, weighted WPM, streaks, apps, categories. All derived locally. Share cards carry numbers only.
 - **Voice profile** — recurring phrases and explicit correction rules, encrypted. Not a biometric voiceprint.
@@ -103,7 +103,7 @@ NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Int
 2. **Allow Microphone and Accessibility.** Without Accessibility, text still lands on the clipboard.
 3. **Finish setup** — language, then the recommended engine/model, then a test dictation.
 4. **Put the caret** in any editable field. Press `⌃⌥Space`, speak, press it again.
-5. **(Optional)** Hold-to-dictate, Private Dictation, live preview, and Cloud formatting live in Shortcuts / Personalisation. All of them stay off until you turn them on.
+5. **(Optional)** Hold-to-dictate and Cloud formatting live in Shortcuts / Personalisation. They stay off until you turn them on.
 
 ---
 

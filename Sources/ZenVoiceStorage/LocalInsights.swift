@@ -67,7 +67,7 @@ public struct DailyActivityInsight: Identifiable, Sendable {
 
 /// Usage for the current calendar day.
 ///
-/// Private Dictation never reaches this calculation: private recordings are
+/// Recordings that were not persisted never reach this calculation: they are
 /// discarded rather than persisted, so they are absent from the event list the
 /// snapshot is built from.
 public struct TodayUsageInsight: Sendable {

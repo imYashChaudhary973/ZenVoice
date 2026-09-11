@@ -17,8 +17,8 @@ import ZenVoiceCore
 
 /// Cloud AI controls without a screen wrapper.
 ///
-/// `FormattingScreen` inlines this directly so the provider, key, prompt, and
-/// preview live under the single Formatting title instead of nesting a second
+/// `FormattingScreen` inlines this directly so the provider, key, and apply
+/// controls live under the single Formatting title instead of nesting a second
 /// `ZenScreen` scaffold.
 struct CloudAIConfigurationView: View {
     @ObservedObject var viewModel: CloudAIViewModel
@@ -31,8 +31,6 @@ struct CloudAIConfigurationView: View {
                 providerSection
                 keySection
                 applySection
-                promptSection
-                previewSection
             }
             messageSection
         }
@@ -290,116 +288,6 @@ struct CloudAIConfigurationView: View {
             return known
         }
         return known + [current]
-    }
-
-    private var promptSection: some View {
-        ZenSection(title: "Prompt") {
-            ZenPanel {
-                VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                    ZenTextArea(
-                        label: "Prompt",
-                        text: Binding(
-                            get: { viewModel.configuration.prompt },
-                            set: { viewModel.setPrompt($0) }
-                        ),
-                        hint: "Sent with each enhancement.",
-                        maxLength: 2_000
-                    )
-
-                    HStack(spacing: ZenDesign.Spacing.xs) {
-                        ForEach(
-                            CloudAIPromptTemplate.builtIns,
-                            id: \.name
-                        ) { template in
-                            Button(template.name) {
-                                viewModel.applyTemplate(template)
-                            }
-                            .buttonStyle(ZenSecondaryButtonStyle())
-                        }
-                        Spacer()
-                    }
-                }
-                .padding(ZenDesign.Spacing.md)
-            }
-        }
-    }
-
-    private var previewSection: some View {
-        ZenSection(
-            title: "Preview",
-            caption: "Nothing is applied until you accept it."
-        ) {
-            ZenPanel {
-                VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                    HStack(spacing: ZenDesign.Spacing.xs) {
-                        Button("Enhance last transcript") {
-                            viewModel.enhanceLastTranscript()
-                        }
-                        .buttonStyle(ZenPrimaryButtonStyle())
-                        .disabled(!viewModel.isReady || viewModel.isEnhancing)
-
-                        if viewModel.isEnhancing {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                        Spacer()
-                    }
-
-                    if let preview = viewModel.preview {
-                        comparison(preview)
-                        HStack(spacing: ZenDesign.Spacing.xs) {
-                            Button("Accept") { viewModel.acceptPreview() }
-                                .buttonStyle(ZenPrimaryButtonStyle())
-                            Button("Discard") { viewModel.discardPreview() }
-                                .buttonStyle(ZenSecondaryButtonStyle())
-                            Spacer()
-                        }
-                    } else if !viewModel.isReady {
-                        Text(
-                            "Enable the feature and store a key to try it."
-                        )
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                    }
-                }
-                .padding(ZenDesign.Spacing.md)
-            }
-        }
-    }
-
-    private func comparison(
-        _ preview: CloudAIEnhancementResult
-    ) -> some View {
-        HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
-            previewColumn("Original", text: preview.original)
-            previewColumn("Enhanced", text: preview.enhanced)
-        }
-    }
-
-    private func previewColumn(
-        _ title: String,
-        text: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title.uppercased())
-                .font(ZenDesign.Typography.eyebrow)
-                .tracking(1.5)
-                .foregroundStyle(ZenDesign.Semantic.textTertiary)
-            ScrollView {
-                Text(text)
-                    .font(ZenDesign.Typography.body)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            }
-            .frame(maxHeight: 140)
-            .padding(ZenDesign.Spacing.xs)
-            .background {
-                RoundedRectangle(cornerRadius: ZenDesign.Radius.small)
-                    .fill(ZenDesign.Semantic.surfaceRaised)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

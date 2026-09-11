@@ -106,16 +106,7 @@ struct LivePreviewOverlayView: View {
             HStack(spacing: ZenDesign.Spacing.xs) {
                 WaveformView(model: state.audioLevel)
                     .frame(height: 24)
-                if !state.liveTranscriptPreview.isEmpty {
-                    Text(state.liveTranscriptPreview)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        .lineLimit(kind.lineCount)
-                        .truncationMode(.head)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Spacer()
-                }
+                Spacer()
             }
         }
     }

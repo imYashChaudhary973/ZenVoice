@@ -65,7 +65,8 @@ final class AudioRecorder: NSObject,
     private var recordingURL: URL?
     private var recordingStartedAt: Date?
     private var audioLevelMeter = AudioLevelMeter()
-    private var levelChanged: ((Double) -> Void)?
+    private var spectrumMeter = AudioSpectrumMeter()
+    private var levelChanged: ((Double, [Double]) -> Void)?
     private(set) var activeDeviceUID: String?
     private let sampleLock = NSLock()
     private var capturedSamples: [Float] = []
@@ -117,7 +118,7 @@ final class AudioRecorder: NSObject,
         selectedDeviceUID: String? =
             MicrophonePreferences.selectedDeviceUID(),
         capturesLiveSamples: Bool = false,
-        levelChanged: @escaping (Double) -> Void
+        levelChanged: @escaping (Double, [Double]) -> Void
     ) throws {
         let url = requestedURL
             ?? FileManager.default.temporaryDirectory
@@ -201,6 +202,7 @@ final class AudioRecorder: NSObject,
         recordingURL = url
         recordingStartedAt = Date()
         audioLevelMeter = AudioLevelMeter()
+        spectrumMeter = AudioSpectrumMeter()
         self.capturesLiveSamples = capturesLiveSamples
         sampleLock.withLock {
             capturedSamples.removeAll(keepingCapacity: true)
@@ -482,7 +484,11 @@ final class AudioRecorder: NSObject,
             averageDecibels: averageDecibels,
             peakDecibels: peakDecibels
         )
-        levelChanged?(level)
+        let bands = spectrumMeter.update(
+            samples: channel,
+            count: Int(frameLength)
+        )
+        levelChanged?(level, bands)
         return speechDetector.isSpeech(
             averageDecibels: averageDecibels,
             peakDecibels: peakDecibels
@@ -521,7 +527,7 @@ final class AudioRecorder: NSObject,
         sourceURL: URL,
         destinationURL: URL,
         capturesLiveSamples: Bool,
-        levelChanged: @escaping (Double) -> Void
+        levelChanged: @escaping (Double, [Double]) -> Void
     ) throws {
         let sourceFile: AVAudioFile
         do {
@@ -576,6 +582,7 @@ final class AudioRecorder: NSObject,
         deterministicFixtureDuration =
             Double(sourceBuffer.frameLength) / sourceFormat.sampleRate
         audioLevelMeter = AudioLevelMeter()
+        spectrumMeter = AudioSpectrumMeter()
         self.capturesLiveSamples = capturesLiveSamples
         sampleLock.withLock {
             capturedSamples.removeAll(keepingCapacity: true)

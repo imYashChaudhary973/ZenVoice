@@ -24,28 +24,12 @@ struct DictationScreen: View {
             icon: "mic",
             title: "Dictation",
             subtitle:
-                "The shortcut you press, the microphone it listens to, and "
-                + "what you see while you speak."
+                "The shortcut you press and the microphone it listens to."
         ) {
             VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
                 ShortcutsScreen(viewModel: viewModel)
                 AudioScreen(viewModel: viewModel)
-                OverlayScreen(viewModel: viewModel)
-                resetRow
             }
         }
-    }
-
-    private var resetRow: some View {
-        HStack {
-            Spacer(minLength: 0)
-            ZenIconButton(
-                systemImage: "arrow.counterclockwise",
-                label: "Reset dictation shortcuts"
-            ) {
-                viewModel.resetDictationDefaults()
-            }
-        }
-        .frame(maxWidth: .infinity)
     }
 }

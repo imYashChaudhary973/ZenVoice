@@ -42,7 +42,7 @@ public enum OverlayKind: String, Codable, CaseIterable, Sendable {
     public var detail: String {
         switch self {
         case .zenBar:
-            return "Compact dictation bar at the bottom of the screen."
+            return "Recording capsule at the bottom of the screen: cancel, voiceprint, finish."
         case .livePreviewPill:
             return "One-line transcription pill near the notch or menu bar."
         case .livePreviewMedium:

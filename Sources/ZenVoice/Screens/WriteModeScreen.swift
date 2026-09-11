@@ -79,7 +79,7 @@ struct WriteModeScreen: View {
     private var defaultPromptSection: some View {
         ZenSection(
             title: "Rewrite prompt",
-            caption: "Used when no per-app hints are set."
+            caption: "Used for every rewrite."
         ) {
             ZenPanel {
                 ZenTextArea(

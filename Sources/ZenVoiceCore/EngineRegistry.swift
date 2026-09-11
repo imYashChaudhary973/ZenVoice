@@ -243,10 +243,18 @@ public struct EngineRegistry: Sendable {
             )
         }
         if !engine.isAvailable(for: profile) {
+            let reason: EngineUnavailabilityReason
+            if engine.descriptor.requiresInternet {
+                reason = .requiresAPIKey
+            } else if engine.descriptor.requiresDownload {
+                reason = .requiresDownload
+            } else {
+                reason = .runtimeNotReady(engine.descriptor.id)
+            }
             return EngineAvailability(
                 engine: engine.descriptor,
                 isAvailable: false,
-                reason: .runtimeNotReady(engine.descriptor.id)
+                reason: reason
             )
         }
         return EngineAvailability(
@@ -292,6 +300,9 @@ public struct EngineRegistry: Sendable {
             }
         }
         for engine in engines {
+            if engine.descriptor.requiresInternet {
+                continue
+            }
             append(engine)
         }
         return ordered
