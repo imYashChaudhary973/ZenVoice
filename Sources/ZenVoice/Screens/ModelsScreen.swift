@@ -115,6 +115,15 @@ struct ModelsScreen: View {
                         save: viewModel.saveElevenLabsSpeechKey,
                         delete: viewModel.deleteElevenLabsSpeechKey
                     )
+                    ZenPanelDivider()
+                    cloudKeyRow(
+                        title: "Grok",
+                        placeholder: "Paste your xAI API key",
+                        hasKey: viewModel.hasGrokSpeechKey,
+                        draft: $viewModel.grokSpeechKeyDraft,
+                        save: viewModel.saveGrokSpeechKey,
+                        delete: viewModel.deleteGrokSpeechKey
+                    )
                 }
                 .padding(ZenDesign.Spacing.md)
             }

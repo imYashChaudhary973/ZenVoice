@@ -324,6 +324,81 @@ public struct ElevenLabsSpeechRequest: Equatable, Sendable {
     }
 }
 
+/// xAI Grok speech-to-text. File must be the last multipart field.
+public struct GrokSpeechRequest: Equatable, Sendable {
+    public static let defaultEndpoint = URL(string: "https://api.x.ai/v1/stt")!
+
+    public let endpoint: URL
+    public let languageCode: String?
+    public let filename: String
+    public let audio: Data
+    public let boundary: String
+    public let formatText: Bool
+
+    public init(
+        endpoint: URL = GrokSpeechRequest.defaultEndpoint,
+        languageCode: String? = nil,
+        filename: String = "speech.wav",
+        audio: Data,
+        boundary: String = "ZenVoiceBoundary",
+        formatText: Bool = true
+    ) {
+        self.endpoint = endpoint
+        self.languageCode = languageCode
+        self.filename = filename
+        self.audio = audio
+        self.boundary = boundary
+        self.formatText = formatText
+    }
+
+    public func urlRequest(apiKey: String) -> URLRequest {
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 12
+        request.httpShouldHandleCookies = false
+        request.setValue(
+            "Bearer \(apiKey)",
+            forHTTPHeaderField: "Authorization"
+        )
+        request.setValue(
+            "multipart/form-data; boundary=\(boundary)",
+            forHTTPHeaderField: "Content-Type"
+        )
+        request.httpBody = encodedBody()
+        return request
+    }
+
+    public func encodedBody() -> Data {
+        var body = Data()
+        func append(_ string: String) {
+            body.append(Data(string.utf8))
+        }
+        func field(_ name: String, _ value: String) {
+            append("--\(boundary)\r\n")
+            append(
+                "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n"
+            )
+            append("\(value)\r\n")
+        }
+        if formatText {
+            field("format", "true")
+        }
+        if let languageCode, !languageCode.isEmpty,
+           languageCode != LanguageProfile.automaticCode {
+            field("language", languageCode)
+        }
+        append("--\(boundary)\r\n")
+        append(
+            "Content-Disposition: form-data; name=\"file\"; "
+                + "filename=\"\(filename)\"\r\n"
+        )
+        append("Content-Type: audio/wav\r\n\r\n")
+        body.append(audio)
+        append("\r\n--\(boundary)--\r\n")
+        return body
+    }
+}
+
 public struct CloudSpeechEngine: SpeechEngine {
     public static let openAIModel = "gpt-4o-mini-transcribe"
     public static let geminiModel = GeminiSpeechRequest.defaultModel
@@ -333,6 +408,7 @@ public struct CloudSpeechEngine: SpeechEngine {
         case openAI
         case gemini
         case elevenLabs
+        case grok
     }
 
     public let descriptor: EngineDescriptor
@@ -431,6 +507,35 @@ public struct CloudSpeechEngine: SpeechEngine {
         )
     }
 
+    public static func grok(
+        keyStore: any CloudAIKeyStoring,
+        transport: any CloudSpeechTransport = SharedCloudSpeechTransport.shared
+    ) -> CloudSpeechEngine {
+        CloudSpeechEngine(
+            provider: .grok,
+            keyStore: keyStore,
+            transport: transport,
+            model: "grok-stt",
+            descriptor: EngineDescriptor(
+                id: EngineIdentifiers.grokTranscribe,
+                displayName: "Grok Transcribe",
+                family: .cloud,
+                supportedLanguages: [],
+                requiresDownload: false,
+                requiresInternet: true,
+                format: "xAI speech-to-text API",
+                publisher: "xAI",
+                license: "Provider terms",
+                licenseURL: "https://docs.x.ai",
+                attribution:
+                    "Grok speech-to-text via the user's xAI API key.",
+                privacyNote:
+                    "Audio leaves this Mac and is billed to your xAI account."
+            ),
+            warmURL: URL(string: "https://api.x.ai")!
+        )
+    }
+
     private init(
         provider: Provider,
         keyStore: any CloudAIKeyStoring,
@@ -498,6 +603,12 @@ public struct CloudSpeechEngine: SpeechEngine {
                 filename: audioURL.lastPathComponent,
                 audio: audio
             ).urlRequest(apiKey: key)
+        case .grok:
+            urlRequest = GrokSpeechRequest(
+                languageCode: language,
+                filename: audioURL.lastPathComponent,
+                audio: audio
+            ).urlRequest(apiKey: key)
         }
         let data: Data
         let response: URLResponse
@@ -521,6 +632,8 @@ public struct CloudSpeechEngine: SpeechEngine {
             text = try Self.parseGeminiTranscript(from: data)
         case .elevenLabs:
             text = try Self.parseElevenLabsTranscript(from: data)
+        case .grok:
+            text = try Self.parseGrokTranscript(from: data)
         }
         return TranscriptionResult(
             rawTranscript: text,
@@ -532,6 +645,15 @@ public struct CloudSpeechEngine: SpeechEngine {
     }
 
     public static func parseOpenAITranscript(from data: Data) throws -> String {
+        guard let object = try? JSONSerialization.jsonObject(with: data)
+                as? [String: Any],
+              let text = object["text"] as? String else {
+            throw CloudSpeechError.malformedResponse
+        }
+        return try nonempty(text)
+    }
+
+    public static func parseGrokTranscript(from data: Data) throws -> String {
         guard let object = try? JSONSerialization.jsonObject(with: data)
                 as? [String: Any],
               let text = object["text"] as? String else {
