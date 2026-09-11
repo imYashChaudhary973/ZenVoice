@@ -173,9 +173,22 @@ enum ZenDesign {
         /// Minimum hit target for anything clickable.
         static let hitTarget: CGFloat = 44
 
+        /// Painted size of a row icon chip. Matches Home microphone,
+        /// accessibility, and activity glyphs. Heading chips stay
+        /// `headingIcon`.
+        static let rowIcon: CGFloat = 30
+
+        /// Painted size of a card or page heading chip. Tall enough to sit
+        /// beside the title and one-line subtitle together.
+        static let headingIcon: CGFloat = 42
+
         /// Height for compact controls that sit inside a row which already
         /// meets `hitTarget`, such as paired buttons on a single line.
         static let control: CGFloat = 32
+
+        /// Painted height of a keyboard key chip. Glyph keys (⌘, P) and word
+        /// keys (Space, Fn) share this so labels sit on one baseline.
+        static let keycap: CGFloat = 20
 
         /// Painted height of a navigation row. It also meets the pointer and
         /// accessibility hit target without needing invisible overflow.

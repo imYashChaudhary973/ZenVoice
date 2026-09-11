@@ -159,7 +159,7 @@ struct ZenGlassContainer<Content: View>: View {
 /// Rounded-square tinted icon container that heads a card or a page.
 struct ZenIconChip: View {
     let systemImage: String
-    var size: CGFloat = 36
+    var size: CGFloat = ZenDesign.Layout.headingIcon
     var tint: Color = ZenDesign.Semantic.accent
     var background: Color?
 
@@ -185,16 +185,13 @@ struct ZenCardHeader<Trailing: View>: View {
     let title: String
     var subtitle: String?
     var titleFont: Font = ZenDesign.Typography.pageTitle
-    var iconSize: CGFloat = 36
+    var iconSize: CGFloat = ZenDesign.Layout.headingIcon
     var iconTint: Color = ZenDesign.Semantic.accent
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        // The chip aligns to the *title row*, not to the title-plus-subtitle
-        // block. Centring it against the whole block dropped it below the
-        // title whenever a subtitle wrapped, and left two cards side by side
-        // with their titles on different lines — the taller header pushed its
-        // own title up while the shorter one stayed centred.
+        // Chip top matches the title top. Height spans title + subtitle so
+        // the glyph sits in the middle of both lines, not only the title.
         HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
             ZenIconChip(
                 systemImage: systemImage,
@@ -210,9 +207,6 @@ struct ZenCardHeader<Trailing: View>: View {
                     Spacer(minLength: ZenDesign.Spacing.md)
                     trailing
                 }
-                // Pinned to the chip's height so every card's title sits on
-                // the same line regardless of what is below it.
-                .frame(minHeight: iconSize)
 
                 if let subtitle {
                     Text(subtitle)
@@ -233,7 +227,7 @@ extension ZenCardHeader where Trailing == EmptyView {
         title: String,
         subtitle: String? = nil,
         titleFont: Font = ZenDesign.Typography.pageTitle,
-        iconSize: CGFloat = 36,
+        iconSize: CGFloat = ZenDesign.Layout.headingIcon,
         iconTint: Color = ZenDesign.Semantic.accent
     ) {
         self.init(

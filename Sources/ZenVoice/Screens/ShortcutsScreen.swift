@@ -39,7 +39,8 @@ struct ShortcutsScreen: View {
                 ZenRow(
                     icon: "mic",
                     title: "Start / stop dictation",
-                    subtitle: "Press once to start, again to transcribe and insert"
+                    subtitle: "Press once to start, again to transcribe and insert",
+                    compact: true
                 ) {
                     shortcutControls(
                         displayName: viewModel.currentShortcut.displayName,
@@ -59,7 +60,8 @@ struct ShortcutsScreen: View {
                 ZenRow(
                     icon: "eye.slash",
                     title: "Private dictation",
-                    subtitle: "Dictate without saving history or recovery audio"
+                    subtitle: "Dictate without saving history or recovery audio",
+                    compact: true
                 ) {
                     shortcutControls(
                         displayName: viewModel.privateModeShortcut.displayName,
@@ -82,7 +84,8 @@ struct ShortcutsScreen: View {
                 ZenRow(
                     icon: "doc.on.doc",
                     title: "Paste latest dictation",
-                    subtitle: "Re-insert the most recent transcript anywhere"
+                    subtitle: "Re-insert the most recent transcript anywhere",
+                    compact: true
                 ) {
                     shortcutControls(
                         displayName: viewModel.pasteLastShortcut.displayName,
@@ -106,7 +109,8 @@ struct ShortcutsScreen: View {
                     icon: "keyboard.badge.ellipsis",
                     title: "Hold key",
                     subtitle:
-                        "Select Change, then press the modifier you want to hold"
+                        "Select Change, then press the modifier you want to hold",
+                    compact: true
                 ) {
                     shortcutControls(
                         displayName: viewModel.holdKey.displayName,
@@ -192,28 +196,17 @@ struct ShortcutsScreen: View {
         capture: @escaping () -> Void,
         reset: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ZenDesign.Spacing.xxs) {
             ShortcutCaptureButton(
                 displayName: displayName,
                 isCapturing: isCapturing,
                 action: capture
             )
-            Button(action: reset) {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .frame(
-                        width: ZenDesign.Layout.hitTarget,
-                        height: ZenDesign.Layout.hitTarget
-                    )
-                    .background {
-                        ZenKeycap(kind: .muted)
-                    }
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(ZenPressButtonStyle())
-            .accessibilityLabel(resetLabel)
-            .help(resetLabel)
+            ZenIconButton(
+                systemImage: "arrow.counterclockwise",
+                label: resetLabel,
+                action: reset
+            )
         }
     }
 
@@ -234,31 +227,32 @@ struct ShortcutCaptureButton: View {
                         .fill(ZenDesign.Semantic.textOnAccent)
                         .frame(width: 7, height: 7)
                     Text("Press keys…")
-                    Spacer(minLength: 0)
+                        .font(ZenDesign.Typography.button)
                     Text("Cancel")
+                        .font(ZenDesign.Typography.captionStrong)
                         .foregroundStyle(
                             ZenDesign.Semantic.textOnAccent.opacity(0.72)
                         )
                 } else {
                     ZenKbdGroup(combo: displayName)
-                    Spacer(minLength: 0)
                     Divider()
-                        .frame(height: 16)
+                        .frame(height: ZenDesign.Layout.keycap - 4)
                     Text("Change")
+                        .font(ZenDesign.Typography.captionStrong)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
             }
-            .font(ZenDesign.Typography.button)
             .foregroundStyle(
                 isCapturing
                     ? ZenDesign.Semantic.textOnAccent
                     : ZenDesign.Semantic.textPrimary
             )
-            .padding(.horizontal, 14)
-            .frame(width: 268, height: ZenDesign.Layout.hitTarget)
+            .padding(.horizontal, ZenDesign.Spacing.xs)
+            .frame(height: ZenDesign.Layout.control)
+            .fixedSize(horizontal: true, vertical: false)
             .background {
                 if isCapturing {
                     RoundedRectangle(
