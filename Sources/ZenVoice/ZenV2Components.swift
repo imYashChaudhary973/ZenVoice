@@ -398,7 +398,7 @@ struct ZenCard<Content: View, Trailing: View>: View {
                     title: title,
                     subtitle: subtitle,
                     titleFont: .system(size: 16, weight: .semibold),
-                    iconSize: 32,
+                    iconSize: ZenDesign.Layout.headingIcon,
                     trailing: { trailing }
                 )
                 content
@@ -472,8 +472,10 @@ struct ZenRow<Trailing: View>: View {
     var icon: String?
     var iconTint: Color?
     var iconBackground: Color?
+    var iconSize: CGFloat = ZenDesign.Layout.rowIcon
     let title: String
     var subtitle: String?
+    var compact: Bool = false
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
@@ -481,7 +483,7 @@ struct ZenRow<Trailing: View>: View {
             if let icon {
                 ZenIconChip(
                     systemImage: icon,
-                    size: ZenDesign.Layout.hitTarget,
+                    size: iconSize,
                     tint: iconTint ?? ZenDesign.Semantic.textSecondary
                 )
             }
@@ -505,8 +507,12 @@ struct ZenRow<Trailing: View>: View {
                 .layoutPriority(1)
         }
         .padding(.horizontal, ZenDesign.Spacing.md)
-        .padding(.vertical, ZenDesign.Spacing.sm)
-        .frame(minHeight: ZenDesign.Layout.hitTarget + 16)
+        .padding(.vertical, compact ? 4 : ZenDesign.Spacing.xs)
+        .frame(
+            minHeight: compact
+                ? nil
+                : ZenDesign.Layout.rowIcon + ZenDesign.Spacing.md
+        )
     }
 }
 
@@ -515,15 +521,19 @@ extension ZenRow where Trailing == EmptyView {
         icon: String? = nil,
         iconTint: Color? = nil,
         iconBackground: Color? = nil,
+        iconSize: CGFloat = ZenDesign.Layout.rowIcon,
         title: String,
-        subtitle: String? = nil
+        subtitle: String? = nil,
+        compact: Bool = false
     ) {
         self.init(
             icon: icon,
             iconTint: iconTint,
             iconBackground: iconBackground,
+            iconSize: iconSize,
             title: title,
             subtitle: subtitle,
+            compact: compact,
             trailing: { EmptyView() }
         )
     }
@@ -533,23 +543,24 @@ extension ZenRow where Trailing == EmptyView {
 struct ZenKbd: View {
     let text: String
 
-    private var isWord: Bool { text.count > 1 }
+    private var isGlyph: Bool { text.count == 1 }
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+            .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(ZenDesign.Semantic.textPrimary)
             .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, isWord ? 12 : 7)
+            .minimumScaleFactor(0.75)
             .frame(
-                minWidth: text.count > 8 ? 96 : isWord ? 48 : 26,
-                minHeight: 28
+                width: isGlyph ? ZenDesign.Layout.keycap : nil,
+                height: ZenDesign.Layout.keycap,
+                alignment: .center
             )
+            .padding(.horizontal, isGlyph ? 0 : ZenDesign.Spacing.xxs)
             .background {
                 ZenKeycap(
                     kind: .muted,
-                    cornerRadius: 6
+                    cornerRadius: ZenDesign.Radius.small
                 )
             }
     }
@@ -560,7 +571,7 @@ struct ZenKbdGroup: View {
     let combo: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 3) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 ZenKbd(text: key)
             }
@@ -1165,9 +1176,7 @@ struct ZenMenuPicker<Option: Hashable>: View {
             .padding(.horizontal, compact ? 10 : ZenDesign.Spacing.sm)
             .frame(
                 minWidth: minWidth,
-                minHeight: compact
-                    ? ZenDesign.Layout.control
-                    : ZenDesign.Layout.hitTarget
+                minHeight: ZenDesign.Layout.control
             )
             .background {
                 ZenKeycap(kind: .muted, isPressed: open)
@@ -1731,12 +1740,16 @@ struct ZenKebabMenu<Content: View>: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(ZenDesign.Semantic.textSecondary)
                 .frame(
-                    width: ZenDesign.Layout.hitTarget,
-                    height: ZenDesign.Layout.hitTarget
+                    width: ZenDesign.Layout.control,
+                    height: ZenDesign.Layout.control
                 )
                 .background {
                     ZenKeycap(kind: .muted)
                 }
+                .frame(
+                    minWidth: ZenDesign.Layout.hitTarget,
+                    minHeight: ZenDesign.Layout.hitTarget
+                )
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)

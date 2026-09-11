@@ -450,7 +450,7 @@ private struct HistoryRecordRow: View {
         HStack(alignment: .center, spacing: 13) {
             ZenIconChip(
                 systemImage: icon,
-                size: ZenDesign.Layout.hitTarget,
+                size: ZenDesign.Layout.rowIcon,
                 tint: iconTint
             )
 
@@ -518,19 +518,11 @@ private struct HistoryRecordRow: View {
                 }
 
                 if record.finalTranscript != nil {
-                    Button(action: copy) {
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                            .frame(
-                                width: ZenDesign.Layout.hitTarget,
-                                height: ZenDesign.Layout.hitTarget
-                            )
-                            .background { ZenKeycap(kind: .muted) }
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(ZenPressButtonStyle())
-                    .accessibilityLabel("Copy transcript")
+                    ZenIconButton(
+                        systemImage: "doc.on.doc",
+                        label: "Copy transcript",
+                        action: copy
+                    )
                 }
 
                 ZenKebabMenu(label: "More actions for this dictation") {

@@ -387,6 +387,7 @@ struct OverviewScreen: View {
         return ZenCard(
             icon: "clock.fill",
             title: "Recent activity",
+            subtitle: "Your latest dictations on this Mac.",
             trailing: {
                 Button("See all") { navigate(.history) }
                     .buttonStyle(ZenPressButtonStyle())
@@ -501,7 +502,11 @@ struct OverviewScreen: View {
         _ systemImage: String,
         tint: Color
     ) -> some View {
-        ZenIconChip(systemImage: systemImage, size: 30, tint: tint)
+        ZenIconChip(
+            systemImage: systemImage,
+            size: ZenDesign.Layout.rowIcon,
+            tint: tint
+        )
     }
 
     private var recoveryNote: some View {

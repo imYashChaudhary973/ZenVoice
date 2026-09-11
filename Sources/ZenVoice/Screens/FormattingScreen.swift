@@ -171,7 +171,7 @@ struct FormattingScreen: View {
                             HStack(spacing: ZenDesign.Spacing.sm) {
                                 ZenIconChip(
                                     systemImage: "wand.and.stars",
-                                    size: 30,
+                                    size: ZenDesign.Layout.rowIcon,
                                     tint: ZenDesign.Semantic.textSecondary
                                 )
                                 Text("\"\(rule.source)\"")

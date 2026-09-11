@@ -79,7 +79,7 @@ struct ModelsScreen: View {
         }
         let downloadingEngine = downloadable.map(viewModel.isEngineDownloading) ?? false
 
-        return VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+        return VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxs) {
             ZenRow(
                 icon: "waveform",
                 iconTint: selected ? ZenDesign.Semantic.accent : nil,
@@ -129,11 +129,14 @@ struct ModelsScreen: View {
                     .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
-                .padding(.leading, 50)
+                .padding(
+                    .leading,
+                    ZenDesign.Spacing.md
+                        + ZenDesign.Layout.rowIcon
+                        + ZenDesign.Spacing.sm
+                )
             }
         }
-        .padding(.horizontal, ZenDesign.Spacing.lg)
-        .padding(.vertical, ZenDesign.Spacing.md)
     }
 
 }

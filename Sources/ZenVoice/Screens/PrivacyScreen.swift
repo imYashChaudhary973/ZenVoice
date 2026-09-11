@@ -246,7 +246,7 @@ private struct PermissionRow: View {
         HStack(alignment: .center, spacing: ZenDesign.Spacing.md) {
             ZenIconChip(
                 systemImage: icon,
-                size: ZenDesign.Layout.hitTarget,
+                size: ZenDesign.Layout.rowIcon,
                 tint: ZenDesign.Semantic.textSecondary
             )
 
