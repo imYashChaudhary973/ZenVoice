@@ -96,8 +96,9 @@ fi
 
 model_manager="$project_dir/Sources/ZenVoice/ModelManagerViewModel.swift"
 overview="$project_dir/Sources/ZenVoice/Screens/OverviewScreen.swift"
-if ! grep -q "selectEngine(EngineIdentifiers.whisper)" "$model_manager"; then
-    fail "choosing a Whisper model does not select the Whisper engine"
+if ! grep -q "selectEngine(availability.engine.id)" "$screens/ModelsScreen.swift" \
+    || ! grep -q "EngineIdentifiers.whisper" "$model_manager"; then
+    fail "the Models picker no longer selects an engine"
 elif ! grep -q "activeEngineDisplayName" "$overview"; then
     fail "Overview reports a stored model instead of the resolved engine"
 else
@@ -168,14 +169,13 @@ else
 fi
 
 
-if ! grep -q "wrappedModelID" "$screens/ModelsScreen.swift" \
-    || ! grep -q "only loads" "$screens/ModelsScreen.swift" \
-    || ! grep -q 'Text("Models")' "$screens/ModelsScreen.swift" \
+if ! grep -q "engineRow" "$screens/ModelsScreen.swift" \
+    || ! grep -q "selectEngine" "$screens/ModelsScreen.swift" \
     || ! grep -q "ZenSystemAlert" "$screens/ModelsScreen.swift" \
     || ! grep -q "ModelMismatchToastOverlay" "$screens/ModelsScreen.swift"; then
-    fail "Models screen no longer lists engine-linked files or mismatch alerts"
+    fail "Models screen lost the engine picker or mismatch alerts"
 else
-    pass "Models screen lists engine files and blocks mismatches"
+    pass "Models screen lists engines and blocks mismatches"
 fi
 
 # 4. The cloud preview must never activate the app.
