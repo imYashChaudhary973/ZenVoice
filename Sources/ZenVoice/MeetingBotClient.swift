@@ -25,6 +25,9 @@ enum MeetingBotClient {
         case invalidURL
         case proxy(String)
         case missingWorker
+        case signInRequired
+        case invalidMeeting
+        case notJoined(String)
 
         var errorDescription: String? {
             switch self {
@@ -34,6 +37,12 @@ enum MeetingBotClient {
                 return message
             case .missingWorker:
                 return "Install the bot worker: cd Services/ZenVoiceProxy/bot && npm install && npx playwright install chromium"
+            case .signInRequired:
+                return "Sign into Google/Zoom in the bot window once (profile at ~/Library/Application Support/ZenVoice/BotProfile), then Join as bot again."
+            case .invalidMeeting:
+                return "That meeting link is invalid."
+            case .notJoined(let status):
+                return "Bot did not join (\(status))."
             }
         }
     }
@@ -46,7 +55,7 @@ enum MeetingBotClient {
         if let job = try await joinViaProxy(joinURL.absoluteString) {
             return job
         }
-        return try joinLocally(url: joinURL.absoluteString, name: name)
+        return try await joinLocally(url: joinURL.absoluteString, name: name)
     }
 
     static func leave(_ job: Job) async {
@@ -110,12 +119,13 @@ enum MeetingBotClient {
         }
     }
 
-    private static func joinLocally(url: String, name: String) throws -> Job {
+    private static func joinLocally(url: String, name: String) async throws -> Job {
         let script = scriptURL()
         guard FileManager.default.fileExists(atPath: script.path) else {
             throw BotError.missingWorker
         }
         let process = Process()
+        let pipe = Pipe()
         let node = [
             "/Users/yashchaudhary/.local/bin/node",
             "/usr/local/bin/node",
@@ -130,16 +140,45 @@ enum MeetingBotClient {
             process.arguments = [script.path, url, name]
         }
         process.currentDirectoryURL = script.deletingLastPathComponent()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
             throw BotError.missingWorker
         }
-        return Job(
-            id: "local-\(process.processIdentifier)",
-            url: url,
-            localProcess: process
-        )
+        let handle = pipe.fileHandleForReading
+        var buffer = Data()
+        let deadline = Date().addingTimeInterval(30)
+        while Date() < deadline {
+            if !process.isRunning && buffer.isEmpty {
+                throw BotError.notJoined("exited")
+            }
+            let chunk = handle.availableData
+            buffer.append(chunk)
+            if let text = String(data: buffer, encoding: .utf8),
+               let start = text.firstIndex(of: "{"),
+               let jsonData = String(text[start...])
+                .data(using: .utf8),
+               let object = try? JSONSerialization.jsonObject(with: jsonData)
+                as? [String: Any],
+               let status = object["status"] as? String {
+                if status == "joined" {
+                    return Job(
+                        id: "local-\(process.processIdentifier)",
+                        url: url,
+                        localProcess: process
+                    )
+                }
+                process.terminate()
+                if status == "sign_in_required" { throw BotError.signInRequired }
+                if status == "invalid_meeting" { throw BotError.invalidMeeting }
+                throw BotError.notJoined(status)
+            }
+            try await Task.sleep(nanoseconds: 200_000_000)
+        }
+        process.terminate()
+        throw BotError.notJoined("timed out")
     }
 
     private static func scriptURL() -> URL {

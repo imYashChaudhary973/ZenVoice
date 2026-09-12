@@ -1,8 +1,13 @@
 # ZenVoice Proxy
 
-Joins Zoom / Meet / Teams as a visible **ZenVoice Notetaker** guest via Playwright Chromium, then the Mac app records with ScreenCaptureKit.
+Joins Zoom / Meet / Teams as a visible **ZenVoice Notetaker** guest via
+Playwright Chromium. The Mac app then records with ScreenCaptureKit.
 
-`ZENVOICE_PROXY_TOKEN` is required.
+Meet requires a Google account. Sign in once in the bot window; the profile
+is `~/Library/Application Support/ZenVoice/BotProfile` (or `ZENVOICE_BOT_PROFILE`).
+`join.mjs` exits 1 on a sign-in wall or invalid meeting and does not claim joined.
+
+`ZENVOICE_PROXY_TOKEN` is required for the HTTP proxy.
 
 ## Bot worker
 
@@ -19,7 +24,6 @@ From the repo root:
 ```
 ZENVOICE_PROXY_TOKEN=dev swift run --package-path Services/ZenVoiceProxy
 ```
-
 `ZENVOICE_PROXY_PORT` defaults to 8787.
 `ZENVOICE_BOT_SCRIPT` overrides the path to `bot/join.mjs`.
 
