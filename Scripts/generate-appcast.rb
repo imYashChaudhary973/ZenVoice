@@ -3,13 +3,15 @@
 
 # Generates a Sparkle appcast.xml for a ZenVoice release.
 #
-# Usage:
 #   ./Scripts/generate-appcast.rb \
 #     --version 0.4.2 \
 #     --dmg build/ZenVoice.dmg \
 #     --feed-url https://example.com/zenvoice/appcast.xml \
 #     --private-key /secure/path/to/Sparkle-private-key.pem \
 #     --output build/appcast.xml
+#
+# sparkle:version is the integer CFBundleVersion. sparkle:shortVersionString
+# is the marketing version passed as --version.
 #
 # The script computes the DMG SHA-256, file size, and Sparkle Ed25519 signature
 # using Sparkle's sign_update tool, then emits a valid appcast.xml with one
@@ -26,6 +28,7 @@ require 'rexml/document'
 
 options = {
   version: nil,
+  build: nil,
   dmg: nil,
   feed_url: nil,
   private_key: nil,
@@ -33,8 +36,9 @@ options = {
 }
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: #{File.basename(__FILE__)} --version VERSION --dmg PATH --feed-url URL --private-key PATH [--output PATH]"
-  opts.on('--version VERSION', 'Release version (e.g. 0.4.2)') { |v| options[:version] = v }
+  opts.banner = "Usage: #{File.basename(__FILE__)} --version VERSION --dmg PATH --feed-url URL --private-key PATH [--build BUILD] [--output PATH]"
+  opts.on('--version VERSION', 'Marketing version (e.g. 0.4.2)') { |v| options[:version] = v }
+  opts.on('--build BUILD', 'Integer CFBundleVersion for sparkle:version') { |v| options[:build] = v }
   opts.on('--dmg PATH', 'Path to the release DMG') { |p| options[:dmg] = p }
   opts.on('--feed-url URL', 'Public URL where appcast.xml will be hosted') { |u| options[:feed_url] = u }
   opts.on('--private-key PATH', 'Path to the Sparkle Ed25519 private key file') { |p| options[:private_key] = p }
@@ -46,6 +50,18 @@ end.parse!
 end
 
 project_dir = File.expand_path('..', __dir__)
+plist_path = File.join(project_dir, 'Resources', 'Info.plist')
+build = options[:build]
+if build.nil?
+  raise "Info.plist not found: #{plist_path}" unless File.exist?(plist_path)
+  build = IO.popen(
+    ['/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleVersion', plist_path],
+    &:read
+  ).strip
+end
+# Sparkle compares sparkle:version to CFBundleVersion, not the marketing version.
+raise "CFBundleVersion must be an integer build number, got #{build.inspect}" unless build.match?(/\A[0-9]+\z/)
+
 dmg_path = File.expand_path(options[:dmg])
 key_path = File.expand_path(options[:private_key])
 output_path = File.expand_path(options[:output])
@@ -119,7 +135,7 @@ item << REXML::Element.new('title').tap { |e| e.text = "ZenVoice #{options[:vers
 item << REXML::Element.new('pubDate').tap { |e| e.text = Time.now.utc.strftime('%a, %d %b %Y %H:%M:%S GMT') }
 
 sparkle_version = REXML::Element.new('sparkle:version')
-sparkle_version.text = options[:version]
+sparkle_version.text = build
 item << sparkle_version
 
 sparkle_short_version = REXML::Element.new('sparkle:shortVersionString')
@@ -135,7 +151,7 @@ enclosure.add_attributes({
   'url' => "https://github.com/imYashChaudhary973/ZenVoice/releases/download/v#{options[:version]}/ZenVoice.dmg",
   'length' => length.to_s,
   'type' => 'application/octet-stream',
-  'sparkle:version' => options[:version],
+  'sparkle:version' => build,
   'sparkle:shortVersionString' => options[:version],
   'sparkle:edSignature' => signature,
   'sparkle:digest' => sha256

@@ -80,8 +80,10 @@ that window rather than the whole database.
 - New ciphertext is authenticated against its record identifier and field, so
   encrypted values cannot be swapped between records or columns.
 - Protected by a 256-bit key stored in the user's macOS Keychain.
-- Kept until the user deletes an item or chooses Delete All; ZenVoice does not
-  automatically expire transcript history.
+- Kept until the user deletes an item or deletes encrypted transcripts from
+  Privacy or History. That transcript Delete does not remove Audio History,
+  recovery recordings, or correction rules, and does not rotate the vault key.
+  ZenVoice does not automatically expire transcript history.
 - Never synced or uploaded by ZenVoice, except Cloud formatting after you opt
   in (finished text plus your prompt) or a selected cloud engine (the clip).
 
@@ -123,11 +125,15 @@ that window rather than the whole database.
   watch or infer later edits made in another application.
 - Correction usage increases only when the corrected transcript is saved to
   history. Unsaved dictations leave no correction-usage event.
-- Delete All removes correction rules before rotating the vault key.
+- The Privacy inventory Delete on Encrypted transcripts removes transcript
+  ciphertext only. Correction rules, recovery audio, and Audio History stay,
+  and the Keychain key is not rotated.
 - Personal rule application and saved-history pattern analysis can be paused
   independently. Pausing leaves existing encrypted data untouched.
 - Delete All Rules removes correction rules without deleting transcript
-  History. Full Delete All still removes both and rotates the vault key.
+  History. Privacy Reset local vault is the explicit full wipe: it removes
+  transcripts, recovery audio, audio archives, and correction rules, then
+  rotates the vault key.
 
 ### Recovery Inbox
 

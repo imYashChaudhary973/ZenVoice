@@ -169,4 +169,47 @@ public enum HoldKeyChoice: String, Codable, CaseIterable, Hashable, Sendable {
         }
         self = choice
     }
+
+    /// IOLLEvent.h `NX_DEVICE*` bits. Device-independent flags such as
+    /// `.command` are shared by both sides of the keyboard.
+    public var deviceModifierFlag: UInt {
+        switch self {
+        case .function: 1 << 23
+        case .leftCommand: 0x00000008
+        case .rightCommand: 0x00000010
+        case .leftOption: 0x00000020
+        case .rightOption: 0x00000040
+        case .leftControl: 0x00000001
+        case .rightControl: 0x00002000
+        case .leftShift: 0x00000002
+        case .rightShift: 0x00000004
+        }
+    }
+
+    public func isPressed(inModifierFlags flags: UInt) -> Bool {
+        flags & deviceModifierFlag != 0
+    }
+
+    /// `nil` if the event is not this physical key, or the press state is unchanged.
+    public func pressTransition(
+        eventKeyCode: UInt16,
+        flags: UInt,
+        currentlyPressed: Bool
+    ) -> Bool? {
+        guard eventKeyCode == keyCode else {
+            return nil
+        }
+        let pressed = isPressed(inModifierFlags: flags)
+        guard pressed != currentlyPressed else {
+            return nil
+        }
+        return pressed
+    }
+
+    public static func shouldOpenMicrophone(
+        startedByHold: Bool,
+        holdKeyPressed: Bool
+    ) -> Bool {
+        !startedByHold || holdKeyPressed
+    }
 }

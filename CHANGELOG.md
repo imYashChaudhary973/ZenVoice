@@ -4,6 +4,18 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Privacy has an explicit Reset local vault control for the full wipe.
+
+- Hold-to-dictate tracks the selected physical key, so releasing it stops
+  recording even if the other side of the keyboard is still down, and a
+  release during startup cancels the pending microphone open.
+- Deleting encrypted transcripts from Privacy no longer wipes Audio History,
+  recovery recordings, correction rules, or the vault key.
+- Sparkle `sparkle:version` now uses the integer `CFBundleVersion`, so a
+  marketing version such as 0.4.6 is not rejected as older than build 5.
+
 ## [0.4.5] - 2026-09-11
 
 ### Added

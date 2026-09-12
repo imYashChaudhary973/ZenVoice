@@ -308,6 +308,16 @@ final class HistoryViewModel: ObservableObject {
 
     private func deleteAllNow() async {
         do {
+            try await vaultProvider().deleteAllTranscripts()
+            await refreshNow()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func resetVault() async {
+        do {
             try await vaultProvider().deleteAll()
             records = []
             errorMessage = nil
