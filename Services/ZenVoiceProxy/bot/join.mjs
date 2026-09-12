@@ -1,20 +1,34 @@
 #!/usr/bin/env node
 // Joins Meet / Zoom web / Teams as "ZenVoice Notetaker" and stays until SIGTERM.
 // Persistent profile so Google/Zoom login survives. Refuses to claim joined
-// on a sign-in wall or invalid meeting.
+// on a sign-in wall, /wc/my/ interstitial, or invalid meeting.
 
 import { homedir } from "os";
 import { mkdirSync } from "fs";
 import { join } from "path";
 import { chromium } from "playwright";
 
-const url = process.argv[2];
+const rawUrl = process.argv[2];
 const name = process.argv[3] || "ZenVoice Notetaker";
-if (!url) {
+if (!rawUrl) {
   console.error("usage: join.mjs <url> [name]");
   process.exit(1);
 }
 
+function toWebJoin(raw) {
+  try {
+    const u = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    if (u.hostname.includes("zoom.us") && u.pathname.startsWith("/j/")) {
+      const id = u.pathname.slice(3).split("/")[0];
+      return `https://app.zoom.us/wc/${id}/join${u.search}`;
+    }
+  } catch {
+    return raw;
+  }
+  return raw;
+}
+
+const url = toWebJoin(rawUrl);
 const profile =
   process.env.ZENVOICE_BOT_PROFILE ||
   join(homedir(), "Library/Application Support/ZenVoice/BotProfile");
@@ -30,15 +44,29 @@ const context = await chromium.launchPersistentContext(profile, {
 });
 const page = context.pages()[0] || (await context.newPage());
 await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-await page.waitForTimeout(3_000);
+
+async function dismissNoise() {
+  for (const label of [
+    "Accept Cookies",
+    "Accept All Cookies",
+    "Accept",
+    "I Agree",
+    "Close",
+  ]) {
+    const button = page.getByRole("button", { name: label });
+    if ((await button.count()) > 0 && (await button.first().isVisible())) {
+      await button.first().click().catch(() => {});
+    }
+  }
+}
 
 async function fillName() {
   const selectors = [
     'input[aria-label="Your name"]',
     'input[placeholder="Your name"]',
     'input[placeholder*="name" i]',
-    "#inputname",
     "#input-for-name",
+    "#inputname",
     'input[data-tid="guest-name"]',
     'input[type="text"]',
   ];
@@ -52,40 +80,23 @@ async function fillName() {
   return false;
 }
 
-async function clickJoin() {
-  const labels = [
-    "Join now",
-    "Ask to join",
-    "Join from your browser",
-    "Join from browser",
-    "Launch meeting",
-    "Join as guest",
-    "Continue on this browser",
-    "Continue",
-    "Join",
-  ];
+async function clickLabeled(labels) {
   for (const label of labels) {
     const button = page.getByRole("button", { name: label });
-    if ((await button.count()) > 0) {
+    if ((await button.count()) > 0 && (await button.first().isVisible())) {
       await button.first().click({ timeout: 5_000 }).catch(() => {});
+      return true;
+    }
+    const link = page.getByRole("link", { name: label });
+    if ((await link.count()) > 0 && (await link.first().isVisible())) {
+      await link.first().click({ timeout: 5_000 }).catch(() => {});
       return true;
     }
   }
   return false;
 }
 
-await fillName().catch(() => false);
-await clickJoin().catch(() => false);
-await page.waitForTimeout(4_000);
-
-const finalURL = page.url();
-const title = await page.title();
-const body = (await page.locator("body").innerText().catch(() => "")).slice(
-  0,
-  800,
-);
-
-function outcome() {
+function outcome(finalURL, title, body) {
   const u = finalURL.toLowerCase();
   const t = title.toLowerCase();
   const b = body.toLowerCase();
@@ -96,13 +107,23 @@ function outcome() {
   ) {
     return "sign_in_required";
   }
-  if (b.includes("meeting link is invalid") || t === "error - zoom") {
-    return "invalid_meeting";
+  if (
+    b.includes("leave") &&
+    (b.includes("mute") ||
+      b.includes("join audio") ||
+      b.includes("participants") ||
+      b.includes("the meeting is at"))
+  ) {
+    return "joined";
   }
   if (/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/.test(u)) {
     return "joined";
   }
-  if (u.includes("zoom.us/wc/") && !t.includes("error")) {
+  if (
+    /zoom\.us\/wc\/\d+/.test(u) &&
+    !u.includes("/join") &&
+    !t.includes("error")
+  ) {
     return "joined";
   }
   if (u.includes("teams.microsoft.com") && !u.includes("login")) {
@@ -111,8 +132,55 @@ function outcome() {
   return "not_joined";
 }
 
-const status = outcome();
+let status = "not_joined";
+let finalURL = page.url();
+let title = await page.title();
+let body = "";
+
+for (let i = 0; i < 8; i++) {
+  await dismissNoise();
+  await clickLabeled([
+    "Join from your browser",
+    "Join from Browser",
+    "Launch Meeting",
+    "Join from a browser",
+    "OK",
+  ]);
+  await fillName();
+  await clickLabeled([
+    "Join now",
+    "Ask to join",
+    "Join from your browser",
+    "Join as guest",
+    "Continue on this browser",
+    "Continue",
+    "Join",
+  ]);
+  await page.waitForTimeout(3_000);
+  finalURL = page.url();
+  title = await page.title();
+  body = (await page.locator("body").innerText().catch(() => "")).slice(0, 4000);
+  status = outcome(finalURL, title, body);
+  if (status !== "not_joined") break;
+}
+
+if (status !== "joined") {
+  try {
+    await page.getByRole("button", { name: /leave/i }).waitFor({
+      timeout: 20_000,
+    });
+    status = "joined";
+    finalURL = page.url();
+    title = await page.title();
+  } catch {
+    /* still not in */
+  }
+}
+
 console.log(JSON.stringify({ status, url: finalURL, title, name }));
+await page
+  .screenshot({ path: `/tmp/zenvoice-bot-${status}.png`, fullPage: true })
+  .catch(() => {});
 if (status !== "joined") {
   await context.close().catch(() => {});
   process.exit(1);
