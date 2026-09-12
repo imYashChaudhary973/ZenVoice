@@ -11,7 +11,9 @@ All notable ZenVoice changes are recorded here.
   decode on Stop. Optional BYO-key recap. Dictation hotkey unchanged.
 - Meeting auto-detect (calendar + Zoom/Teams/Slack). Optional auto-record,
   You/Them rename-once, FTS search, speaker gallery, Gmail/Slack connectors,
-  and a stub join proxy under Services/ZenVoiceProxy.
+  Playwright guest join as ZenVoice Notetaker, enroll-from-You, and recap
+  commands (email, Slack, calendar).
+
 
 
 ### Fixed

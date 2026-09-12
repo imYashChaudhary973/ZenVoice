@@ -14,6 +14,7 @@
 
 import AppKit
 import Combine
+import EventKit
 import Foundation
 import ZenVoiceCore
 import ZenVoiceStorage
@@ -35,7 +36,11 @@ final class MeetingViewModel: ObservableObject {
     @Published var youName = ""
     @Published var themName = ""
     @Published var searchQuery = ""
+    @Published var joinURL = ""
+    @Published var gmailToken = ""
+    @Published var slackToken = ""
     @Published private(set) var searchHits: [(id: UUID, snippet: String)] = []
+    @Published private(set) var contextHits: [ConnectorHit] = []
     @Published private(set) var pendingDetection: MeetingWatcher.Detection?
     @Published var autoRecordEnabled: Bool {
         didSet {
@@ -56,6 +61,7 @@ final class MeetingViewModel: ObservableObject {
     private let recorder = AudioRecorder()
     private let systemAudio = MeetingSystemAudio()
     private var index: MeetingIndex?
+    private var botJob: MeetingBotClient.Job?
     private var accumulatedSeconds: TimeInterval = 0
     private var runningSince: Date?
     private var tick: Timer?
@@ -123,6 +129,7 @@ final class MeetingViewModel: ObservableObject {
         try? store.markIncompleteIfOpen()
         refreshList()
         loadLatest()
+        loadConnectorTokens()
         Task { [weak self] in
             self?.index = try? await MeetingIndex(
                 directoryURL: store.directoryURL
@@ -143,7 +150,11 @@ final class MeetingViewModel: ObservableObject {
 
     func handleDetection(_ detection: MeetingWatcher.Detection) {
         pendingDetection = detection
-        if autoRecordEnabled {
+        guard autoRecordEnabled else { return }
+        if case .calendar(_, let url?) = detection.kind, !url.isEmpty {
+            joinURL = url
+            joinAndRecord()
+        } else {
             start(title: detection.title)
         }
     }
@@ -167,7 +178,166 @@ final class MeetingViewModel: ObservableObject {
         }
     }
 
-    func start(title: String? = nil) {
+    func joinAndRecord() {
+        let raw = joinURL
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                self.botJob = try await MeetingBotClient.join(raw)
+                self.start(title: raw, source: "bot")
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func enrollMe() {
+        guard let id = record?.id, let keyProvider else {
+            errorMessage = "Open a meeting with You audio first."
+            return
+        }
+        let youURL = store.youAudioURL(for: id)
+        do {
+            let embedding = try SpeakerFingerprint.embedding(fromWav: youURL)
+            let speakers = store.directoryURL
+                .deletingLastPathComponent()
+                .appendingPathComponent("Speakers", isDirectory: true)
+            let registry = SpeakerRegistry(
+                directoryURL: speakers,
+                keyProvider: keyProvider
+            )
+            let name = youName.isEmpty ? "Me" : youName
+            _ = try registry.enroll(name: name, embedding: embedding)
+            errorMessage = nil
+            youName = name
+            saveSpeakerNames()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func saveConnectorTokens() {
+        guard let policy = try? RuntimeIdentity.policy() else { return }
+        try? CloudAIKeychainKeyStore(policy: policy, account: "gmail-oauth-token")
+            .saveKey(gmailToken)
+        try? CloudAIKeychainKeyStore(policy: policy, account: "slack-oauth-token")
+            .saveKey(slackToken)
+    }
+
+    func loadConnectorTokens() {
+        guard let policy = try? RuntimeIdentity.policy() else { return }
+        gmailToken = (try? CloudAIKeychainKeyStore(
+            policy: policy,
+            account: "gmail-oauth-token"
+        ).loadKey()) ?? ""
+        slackToken = (try? CloudAIKeychainKeyStore(
+            policy: policy,
+            account: "slack-oauth-token"
+        ).loadKey()) ?? ""
+    }
+
+    func loadContext() {
+        saveConnectorTokens()
+        let query = MeetingContextQuery(
+            attendeeEmails: [],
+            windowStart: record?.startedAt ?? Date().addingTimeInterval(-3600),
+            windowEnd: Date(),
+            title: record?.displayTitle ?? ""
+        )
+        Task { [weak self] in
+            guard let self else { return }
+            var hits: [ConnectorHit] = []
+            if !self.gmailToken.isEmpty {
+                hits += (try? await MailConnector(
+                    bearerToken: self.gmailToken
+                ).search(query)) ?? []
+            }
+            if !self.slackToken.isEmpty {
+                hits += (try? await SlackConnector(
+                    bearerToken: self.slackToken
+                ).search(query)) ?? []
+            }
+            self.contextHits = hits
+        }
+    }
+
+    func emailRecap() {
+        let body = [displayedTranscript, summary]
+            .compactMap { $0 }
+            .joined(separator: "\n\n")
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: record?.displayTitle ?? "Meeting recap"),
+            URLQueryItem(name: "body", value: body)
+        ]
+        if let url = components.url {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func slackPost() {
+        saveConnectorTokens()
+        let text = summary ?? displayedTranscript ?? ""
+        guard !slackToken.isEmpty, !text.isEmpty else {
+            errorMessage = "Save a Slack token and recap first."
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            var request = URLRequest(
+                url: URL(string: "https://slack.com/api/chat.postMessage")!
+            )
+            request.httpMethod = "POST"
+            request.setValue(
+                "Bearer \(self.slackToken)",
+                forHTTPHeaderField: "Authorization"
+            )
+            request.setValue(
+                "application/json",
+                forHTTPHeaderField: "Content-Type"
+            )
+            request.httpBody = try? JSONSerialization.data(
+                withJSONObject: [
+                    "channel": "general",
+                    "text": text
+                ]
+            )
+            do {
+                let (data, _) = try await URLSession.shared.data(for: request)
+                let object = try JSONSerialization.jsonObject(with: data)
+                    as? [String: Any]
+                if object?["ok"] as? Bool != true {
+                    self.errorMessage = object?["error"] as? String
+                        ?? "Slack post failed."
+                }
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func createCalendarEvent() {
+        let store = EKEventStore()
+        Task { [weak self] in
+            guard let self else { return }
+            _ = try? await store.requestFullAccessToEvents()
+            let event = EKEvent(eventStore: store)
+            event.title = self.record?.displayTitle ?? "Meeting follow-up"
+            event.notes = self.summary ?? self.displayedTranscript
+            event.startDate = Date().addingTimeInterval(86400)
+            event.endDate = event.startDate.addingTimeInterval(1800)
+            event.calendar = store.defaultCalendarForNewEvents
+            do {
+                try store.save(event, span: .thisEvent)
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+
+    func start(title: String? = nil, source: String = "local") {
         errorMessage = nil
         themCaptureFailed = false
         guard !isSessionActive, !isTranscribing else { return }
@@ -184,8 +354,9 @@ final class MeetingViewModel: ObservableObject {
         }
         if let title, !title.isEmpty {
             created.title = title
-            try? store.save(created)
         }
+        created.captureSource = source
+        try? store.save(created)
         pendingDetection = nil
         do {
             try recorder.start(
@@ -407,6 +578,11 @@ final class MeetingViewModel: ObservableObject {
         }
         systemAudioTask?.cancel()
         systemAudioTask = nil
+        if let botJob {
+            let job = botJob
+            self.botJob = nil
+            Task { await MeetingBotClient.leave(job) }
+        }
         let measuredElapsed = currentElapsed()
         let recordedAudio = recorder.stop()
         Task { try? await systemAudio.stop() }

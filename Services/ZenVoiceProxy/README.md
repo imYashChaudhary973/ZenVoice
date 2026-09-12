@@ -1,8 +1,16 @@
 # ZenVoice Proxy
 
-Local stub for meeting bots. Join is queued only — it does not join Zoom, Meet, or Teams.
+Joins Zoom / Meet / Teams as a visible **ZenVoice Notetaker** guest via Playwright Chromium, then the Mac app records with ScreenCaptureKit.
 
-`ZENVOICE_PROXY_TOKEN` is required. The process exits if it is missing. Listens on loopback.
+`ZENVOICE_PROXY_TOKEN` is required.
+
+## Bot worker
+
+```
+cd Services/ZenVoiceProxy/bot
+npm install
+npx playwright install chromium
+```
 
 ## Run
 
@@ -12,22 +20,18 @@ From the repo root:
 ZENVOICE_PROXY_TOKEN=dev swift run --package-path Services/ZenVoiceProxy
 ```
 
-Or:
-
-```
-cd Services/ZenVoiceProxy
-ZENVOICE_PROXY_TOKEN=dev swift run
-```
-
 `ZENVOICE_PROXY_PORT` defaults to 8787.
+`ZENVOICE_BOT_SCRIPT` overrides the path to `bot/join.mjs`.
+
+Without a running proxy, the Mac app joins locally with the same script (`ZENVOICE_BOT_SCRIPT` or `Services/ZenVoiceProxy/bot/join.mjs`).
 
 ## HTTP
 
 ```
 GET  /health
-POST /bot/join   Authorization: Bearer $ZENVOICE_PROXY_TOKEN  {"url":"..."}
-POST /bot/leave  Authorization: Bearer $ZENVOICE_PROXY_TOKEN  {"id":"..."}
+POST /bot/join   Authorization: Bearer $TOKEN  {"url":"..."}
+POST /bot/leave  Authorization: Bearer $TOKEN  {"id":"..."}
 ```
 
-`/health` is unauthenticated and returns `200` with body `ok`.
-`/bot/join` returns `202` `{ "id", "status": "queued", "url" }`.
+`/bot/join` spawns Chromium, returns `202` `{ id, status: joining, url, pid }`.
+`/bot/leave` SIGTERMs that process.

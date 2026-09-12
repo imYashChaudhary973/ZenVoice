@@ -41,7 +41,7 @@ public enum MeetingDetection {
 
     public static func kind(of text: String) -> MeetingURLKind {
         let lower = text.lowercased()
-        if lower.contains("zoom.us/j") {
+        if lower.contains("zoom.us/j") || lower.contains("zoom.us/wc") {
             return .zoom
         }
         if lower.contains("meet.google.com") {
@@ -53,6 +53,29 @@ public enum MeetingDetection {
             return .teams
         }
         return .unknown
+    }
+
+    /// Browser join URL so the bot is a guest, not the user's Zoom.app.
+    public static func webJoinURL(from raw: String) -> URL? {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return nil }
+        if !text.lowercased().hasPrefix("http") {
+            text = "https://\(text)"
+        }
+        guard let url = URL(string: text) else { return nil }
+        guard kind(of: text) == .zoom,
+              let host = url.host?.lowercased(),
+              host.contains("zoom.us"),
+              url.path.lowercased().hasPrefix("/j/") else {
+            return url
+        }
+        let rest = String(url.path.dropFirst(3))
+        let id = rest.split(separator: "/").first.map(String.init) ?? rest
+        var components = URLComponents(
+            string: "https://zoom.us/wc/join/\(id)"
+        )
+        components?.query = url.query
+        return components?.url ?? url
     }
 
     public static func meetingURL(in text: String) -> String? {

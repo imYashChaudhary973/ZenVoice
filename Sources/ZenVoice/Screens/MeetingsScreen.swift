@@ -42,6 +42,16 @@ struct MeetingsScreen: View {
                     .font(ZenDesign.Typography.body)
                     .tint(ZenDesign.Semantic.accentFill)
 
+                    HStack(spacing: ZenDesign.Spacing.sm) {
+                        TextField(
+                            "Zoom / Meet / Teams URL",
+                            text: $viewModel.joinURL
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        controlButton("Join as bot", action: viewModel.joinAndRecord)
+                            .disabled(viewModel.joinURL.isEmpty)
+                    }
+
                     if let pending = viewModel.pendingDetection,
                        !viewModel.isSessionActive {
                         HStack {
@@ -127,6 +137,40 @@ struct MeetingsScreen: View {
                         controlButton("Apply names", action: viewModel.saveSpeakerNames)
                             .disabled(viewModel.originalTranscript == nil)
                     }
+
+                    controlButton("Enroll me from You audio", action: viewModel.enrollMe)
+
+                    HStack(spacing: ZenDesign.Spacing.sm) {
+                        SecureField("Gmail token", text: $viewModel.gmailToken)
+                            .textFieldStyle(.roundedBorder)
+                        SecureField("Slack token", text: $viewModel.slackToken)
+                            .textFieldStyle(.roundedBorder)
+                        controlButton("Save tokens", action: viewModel.saveConnectorTokens)
+                        controlButton("Load context", action: viewModel.loadContext)
+                    }
+                    if !viewModel.contextHits.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(
+                                Array(viewModel.contextHits.enumerated()),
+                                id: \.offset
+                            ) { _, hit in
+                                Text("\(hit.source): \(hit.snippet)")
+                                    .font(ZenDesign.Typography.caption)
+                                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                                    .lineLimit(2)
+                            }
+                        }
+                    }
+
+                    HStack(spacing: ZenDesign.Spacing.sm) {
+                        controlButton("Email recap", action: viewModel.emailRecap)
+                        controlButton("Post to Slack", action: viewModel.slackPost)
+                        controlButton(
+                            "Create calendar event",
+                            action: viewModel.createCalendarEvent
+                        )
+                    }
+
 
                     HStack(spacing: ZenDesign.Spacing.sm) {
                         TextField(

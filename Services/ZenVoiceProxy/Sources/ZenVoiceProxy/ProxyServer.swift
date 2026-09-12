@@ -57,8 +57,7 @@ final class ProxyServer {
     private let port: NWEndpoint.Port
     private let queue = DispatchQueue(label: "zenvoice.proxy")
     private var listener: NWListener?
-    // ponytail: in-memory map; persist if bots must survive restart
-    private var jobs: [String: String] = [:]
+    private var jobs: [String: BotJob] = [:]
 
     init(token: String, port: UInt16) {
         self.token = token
@@ -125,15 +124,29 @@ final class ProxyServer {
                 json(connection, status: 400, reason: "Bad Request", object: ["error": "url required"])
                 return
             }
-            let id = UUID().uuidString
-            jobs[id] = url
-            // ponytail: queued stub only; real Zoom/Meet/Teams join when the bot worker exists
-            json(
-                connection,
-                status: 202,
-                reason: "Accepted",
-                object: ["id": id, "status": "queued", "url": url]
-            )
+            do {
+                let process = try BotProcess.join(url: url)
+                let id = UUID().uuidString
+                jobs[id] = BotJob(id: id, url: url, process: process)
+                json(
+                    connection,
+                    status: 202,
+                    reason: "Accepted",
+                    object: [
+                        "id": id,
+                        "status": "joining",
+                        "url": url,
+                        "pid": "\(process.processIdentifier)"
+                    ]
+                )
+            } catch {
+                json(
+                    connection,
+                    status: 500,
+                    reason: "Error",
+                    object: ["error": error.localizedDescription]
+                )
+            }
         case ("POST", "/bot/leave"):
             guard authorized(request) else {
                 unauthorized(connection)
@@ -143,7 +156,9 @@ final class ProxyServer {
                 json(connection, status: 400, reason: "Bad Request", object: ["error": "id required"])
                 return
             }
-            jobs.removeValue(forKey: id)
+            if let job = jobs.removeValue(forKey: id) {
+                BotProcess.leave(job.process)
+            }
             json(connection, status: 200, reason: "OK", object: ["id": id, "status": "left"])
         default:
             json(connection, status: 404, reason: "Not Found", object: ["error": "not found"])
