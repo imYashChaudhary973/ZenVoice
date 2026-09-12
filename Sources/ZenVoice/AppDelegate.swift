@@ -374,6 +374,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func enhanceWithoutPrompting(
         _ transcript: String
     ) async -> String? {
+        let configuration = CloudAIPreferences.load()
+        guard configuration.credentialsBoundToCurrentDestination else {
+            showError(cloudNotReadyMessage())
+            return nil
+        }
         guard let key = ((try? makeCloudAIKeyStore().loadKey()) ?? nil),
               !key.isEmpty else {
             showError(cloudNotReadyMessage())
@@ -382,7 +387,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let result = try await CloudAIEnhancementEngine().enhance(
                 transcript: transcript,
-                configuration: CloudAIPreferences.load(),
+                configuration: configuration,
                 apiKey: key
             )
             return result.enhanced
@@ -404,6 +409,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if ((try? makeCloudAIKeyStore().loadKey()) ?? nil)?.isEmpty ?? true {
             return "Formatting is set to Cloud but no API key is stored — "
                 + "used local formatting. Add a key in Formatting."
+        }
+        if !configuration.credentialsBoundToCurrentDestination {
+            return "Formatting is set to Cloud but the saved key belongs to "
+                + "another provider or endpoint — used local formatting. "
+                + "Save a key for this destination in Formatting."
         }
         return "Formatting is set to Cloud but the provider endpoint is "
             + "invalid — used local formatting. Check it in Formatting."
@@ -836,8 +846,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Runs at launch and after each archived recording, so the archive cannot
     /// grow past what the user allowed even if the app is never quit.
     private func enforceAudioHistoryBudgets() async {
-        guard audioHistoryPreferences.isEnabled,
-              let vault = dictationVault else {
+        guard let vault = dictationVault else {
             return
         }
         let cutoff = Calendar.current.date(
@@ -1622,11 +1631,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ) else {
             return
         }
-        if whisperEngine == nil {
+        if engineRegistry == nil {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 await self.waitForEngineConfiguration()
-                guard self.whisperEngine != nil else { return }
+                guard self.engineRegistry != nil else { return }
                 self.beginRecording(startedByHold: startedByHold)
             }
             return
@@ -1678,6 +1687,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !recorder.isRecording, !state.isBusy else {
             return
         }
+        state.isStartingRecording = true
+        defer { state.isStartingRecording = false }
         guard HoldKeyChoice.shouldOpenMicrophone(
             startedByHold: startedByHold,
             holdKeyPressed: holdKeyPressed
@@ -1866,6 +1877,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let historyID = activeHistoryID
         activeHistoryID = nil
         transcribingHistoryID = historyID
+        let behavior = activeDictationBehavior
+        state.phase = .transcribing
+        updateStartStopMenuTitle()
 
         if let historyID {
             let mark: () async throws -> Void = { [self] in
@@ -1875,7 +1889,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 )
             }
             if EngineIdentifiers.isCloudSpeech(
-                activeDictationBehavior.modelID
+                behavior.modelID
             ) {
                 Task { try? await mark() }
             } else {
@@ -1892,12 +1906,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
-        state.phase = .transcribing
-        updateStartStopMenuTitle()
         let correctionVault = dictationVault
         let appliesCorrectionRules =
             learningPreferences.appliesCorrectionRules
-        let behavior = activeDictationBehavior
 
         if completesFromSegments {
             // Preview text is already on screen, but it was decoded from
@@ -2851,6 +2862,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let requestedEngineID = activeDictationBehavior.modelID
         let resolvedFormattingMode = formattingMode ?? activeDictationBehavior.formattingMode
         transcribingHistoryID = nil
+        let insertionTarget = dictationTargetProcessIdentifier
         resetActiveDictationBehavior()
         ModelBenchmarkStore.record(
             modelID: result.modelID,
@@ -2954,6 +2966,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             guard let self else { return }
+            let frontmost = NSWorkspace.shared.frontmostApplication?
+                .processIdentifier
+            if !TextInserter.shouldPaste(
+                intoFrontmost: frontmost,
+                originalTarget: insertionTarget
+            ) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(
+                    textToInsert,
+                    forType: .string
+                )
+                if let historyID, shouldPersist, historySaveError == nil {
+                    Task {
+                        try? await self.resolvedVault().markInsertion(
+                            id: historyID,
+                            outcome: .copiedOnly
+                        )
+                    }
+                }
+                self.showError(
+                    "Copied—switched apps during dictation."
+                )
+                self.historyViewModel?.refresh()
+                self.insightsViewModel?.refresh()
+                self.voiceProfileViewModel?.refresh()
+                return
+            }
             os_signpost(
                 .event,
                 log: Self.dictationPerformanceLog,

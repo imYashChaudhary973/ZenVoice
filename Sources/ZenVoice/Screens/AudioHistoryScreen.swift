@@ -55,10 +55,8 @@ struct AudioHistoryScreen: View {
                 text: "Stored only on this Mac. Recordings never leave your device and are removed by the limits below."
             )
             enableSection
-            if viewModel.isEnabled {
-                recordingsSection
-                budgetSection
-            }
+            recordingsSection
+            budgetSection
             messageSection
         }
         .onAppear {
@@ -101,7 +99,7 @@ struct AudioHistoryScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                     Toggle(
-                        "Keep recordings",
+                        "Keep new recordings",
                         isOn: Binding(
                             get: { viewModel.isEnabled },
                             set: { viewModel.setEnabled($0) }

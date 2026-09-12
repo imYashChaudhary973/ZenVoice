@@ -6,6 +6,19 @@ All notable ZenVoice changes are recorded here.
 
 ### Fixed
 
+
+- Cloud AI keys are bound to provider and endpoint origin; changing either
+  requires saving a key for the new destination.
+- Final insertion stays in the app that was frontmost when dictation started;
+  a switch copies instead of pasting.
+- Dictation can start with only Parakeet or a cloud engine installed.
+- Overlapping start/stop no longer shares one recording session.
+- Parakeet is limited to its 25 spoken languages and does not claim
+  translation or auto-detect.
+- History Delete all deletes every matching database row, not just the 500
+  loaded in the UI.
+- Turning Audio History off stops new archives but still shows existing
+  recordings and enforces age/size cleanup.
 - Privacy has an explicit Reset local vault control for the full wipe.
 
 - Hold-to-dictate tracks the selected physical key, so releasing it stops

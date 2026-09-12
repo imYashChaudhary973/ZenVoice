@@ -205,11 +205,11 @@ struct CloudAIConfigurationView: View {
     private var keySection: some View {
         ZenSection(
             title: "API key",
-            caption: viewModel.hasStoredKey ? "Stored in Keychain" : "Not set"
+            caption: keyCaption
         ) {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                    if viewModel.hasStoredKey && !isReplacingKey {
+                    if viewModel.hasUsableKey && !isReplacingKey {
                         HStack(spacing: ZenDesign.Spacing.xs) {
                             Text("A provider key is stored on this Mac.")
                                 .font(ZenDesign.Typography.body)
@@ -271,6 +271,16 @@ struct CloudAIConfigurationView: View {
                 .padding(ZenDesign.Spacing.md)
             }
         }
+    }
+
+    private var keyCaption: String {
+        if viewModel.hasUsableKey {
+            return "Stored in Keychain"
+        }
+        if viewModel.hasStoredKey {
+            return "Saved key is for another destination"
+        }
+        return "Not set"
     }
 
     /// The provider's known models, plus whatever is currently stored.

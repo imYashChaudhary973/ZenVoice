@@ -2194,7 +2194,8 @@ struct FakeSpeechEngine: SpeechEngine {
     let descriptor: EngineDescriptor
     let languageCapability: ModelLanguageCapability
     let isAvailable: Bool
-
+    var transformsSpokenLanguage: Bool = true
+    var detectsLanguageAutomatically: Bool = true
     func prepare() async throws {}
 
     func transcribe(
@@ -2277,7 +2278,9 @@ func fakeEngine(
     id: String,
     capability: ModelLanguageCapability,
     supportedLanguages: [SupportedLanguage] = [],
-    available: Bool = true
+    available: Bool = true,
+    transformsSpokenLanguage: Bool = true,
+    detectsLanguageAutomatically: Bool = true
 ) -> FakeSpeechEngine {
     FakeSpeechEngine(
         descriptor: fakeEngineDescriptor(
@@ -2287,7 +2290,9 @@ func fakeEngine(
             available: available
         ),
         languageCapability: capability,
-        isAvailable: available
+        isAvailable: available,
+        transformsSpokenLanguage: transformsSpokenLanguage,
+        detectsLanguageAutomatically: detectsLanguageAutomatically
     )
 }
 
@@ -2540,6 +2545,58 @@ guard !SelectedEnginePreferences.migrateLegacyWhisperSelectionIfNeeded(
     defaults: migrationDefaults
 ) == EngineIdentifiers.parakeetTDTv3 else {
     failEngineCheck("engine migration overwrote an explicit preference")
+}
+
+guard let frenchLanguage = LanguageCatalog.language(code: "fr") else {
+    failEngineCheck("missing French language")
+}
+_ = frenchLanguage
+let parakeetLike = fakeEngine(
+    id: "parakeet-like",
+    capability: .multilingual,
+    supportedLanguages: LanguageProfile.parakeetTDTv3Languages,
+    transformsSpokenLanguage: false,
+    detectsLanguageAutomatically: false
+)
+let parakeetRegistry = EngineRegistry(
+    engines: [parakeetLike],
+    fallbackOrder: [parakeetLike.descriptor.id]
+)
+let frenchSpoken = LanguageProfile(
+    inputLanguageCode: "fr",
+    outputMode: .spokenLanguage
+)
+let frenchToEnglish = LanguageProfile(
+    inputLanguageCode: "fr",
+    outputMode: .englishTranslation
+)
+let hindiSpoken = LanguageProfile(
+    inputLanguageCode: "hi",
+    outputMode: .spokenLanguage
+)
+guard parakeetRegistry.resolve(
+    for: frenchSpoken,
+    selectedID: parakeetLike.descriptor.id
+)?.descriptor.id == parakeetLike.descriptor.id else {
+    failEngineCheck("Parakeet rejected a supported spoken language")
+}
+guard parakeetRegistry.resolve(
+    for: frenchToEnglish,
+    selectedID: parakeetLike.descriptor.id
+) == nil else {
+    failEngineCheck("Parakeet accepted French → English")
+}
+guard parakeetRegistry.resolve(
+    for: hindiSpoken,
+    selectedID: parakeetLike.descriptor.id
+) == nil else {
+    failEngineCheck("Parakeet accepted Hindi")
+}
+guard parakeetRegistry.resolve(
+    for: autoProfile,
+    selectedID: parakeetLike.descriptor.id
+) == nil else {
+    failEngineCheck("Parakeet accepted automatic detection")
 }
 
 print("ZenVoiceCoreChecks: engine registry passed")
@@ -3273,6 +3330,32 @@ guard let autoApplyData = try? JSONEncoder().encode(autoApplyConfiguration),
       ),
       autoApplyDecoded.autoApply else {
     failEngineCheck("autoApply did not survive an encode/decode round trip")
+}
+
+var boundCloud = CloudAIConfiguration(isEnabled: true)
+boundCloud.bindStoredKey()
+guard boundCloud.credentialsBoundToCurrentDestination else {
+    failEngineCheck("a newly bound cloud key was not usable")
+}
+let originalOrigin = boundCloud.endpointOrigin
+boundCloud.provider = .anthropic
+if let anthropicURL = CloudAIProvider.anthropic.defaultBaseURL {
+    boundCloud.baseURL = anthropicURL
+}
+guard !boundCloud.credentialsBoundToCurrentDestination,
+      boundCloud.endpointOrigin != originalOrigin else {
+    failEngineCheck("changing provider still used the previous destination's key")
+}
+boundCloud.provider = .openAI
+boundCloud.baseURL = CloudAIProvider.openAI.defaultBaseURL ?? boundCloud.baseURL
+guard boundCloud.credentialsBoundToCurrentDestination else {
+    failEngineCheck("switching back to the bound provider rejected the key")
+}
+
+guard !TextInserter.shouldPaste(intoFrontmost: 2, originalTarget: 1),
+      TextInserter.shouldPaste(intoFrontmost: 1, originalTarget: 1),
+      TextInserter.shouldPaste(intoFrontmost: 9, originalTarget: nil) else {
+    failEngineCheck("dictation paste did not stay on the original target")
 }
 
 print("ZenVoiceCoreChecks: cloud AI enhancement passed")

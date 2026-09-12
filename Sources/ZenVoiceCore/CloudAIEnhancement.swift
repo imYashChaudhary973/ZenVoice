@@ -223,6 +223,7 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
 public enum CloudAIEnhancementError: LocalizedError, Equatable {
     case disabled
     case missingAPIKey
+    case keyNotBoundToDestination
     case missingBaseURL
     case missingModel
     case insecureBaseURL(String)
@@ -238,6 +239,8 @@ public enum CloudAIEnhancementError: LocalizedError, Equatable {
             return "Cloud AI Enhancement is off."
         case .missingAPIKey:
             return "Add your provider API key to use Cloud AI Enhancement."
+        case .keyNotBoundToDestination:
+            return "The saved key belongs to a different provider or endpoint. Save a key for this destination."
         case .missingBaseURL:
             return "Set the provider's base URL."
         case .missingModel:
@@ -281,6 +284,10 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
     /// reviewable; `CloudAIPreferences` upgrades old stored configurations to
     /// `false` rather than failing to decode them.
     public var autoApply: Bool
+    /// Provider the Keychain key was last saved for. Nil on legacy configs.
+    public var boundKeyProvider: CloudAIProvider?
+    /// `scheme://host[:port]` the Keychain key was last saved for.
+    public var boundKeyOrigin: String?
 
     public init(
         isEnabled: Bool = false,
@@ -288,7 +295,9 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
         baseURL: String = CloudAIProvider.openAI.defaultBaseURL ?? "",
         model: String = CloudAIProvider.openAI.defaultModel ?? "",
         prompt: String = CloudAIPromptTemplate.cleanUp.text,
-        autoApply: Bool = false
+        autoApply: Bool = false,
+        boundKeyProvider: CloudAIProvider? = nil,
+        boundKeyOrigin: String? = nil
     ) {
         self.isEnabled = isEnabled
         self.provider = provider
@@ -296,6 +305,8 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
         self.model = model
         self.prompt = prompt
         self.autoApply = autoApply
+        self.boundKeyProvider = boundKeyProvider
+        self.boundKeyOrigin = boundKeyOrigin
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -305,6 +316,8 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
         case model
         case prompt
         case autoApply
+        case boundKeyProvider
+        case boundKeyOrigin
     }
 
     /// Decoded field by field so that adding a preference never invalidates a
@@ -333,6 +346,12 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
         autoApply = try container.decodeIfPresent(
             Bool.self, forKey: .autoApply
         ) ?? false
+        boundKeyProvider = try container.decodeIfPresent(
+            CloudAIProvider.self, forKey: .boundKeyProvider
+        )
+        boundKeyOrigin = try container.decodeIfPresent(
+            String.self, forKey: .boundKeyOrigin
+        )
     }
 
     /// Validates the configuration and returns the endpoint to POST to.
@@ -374,6 +393,45 @@ public struct CloudAIConfiguration: Codable, Equatable, Sendable {
         return lowered == "localhost"
             || lowered == "127.0.0.1"
             || lowered == "::1"
+    }
+
+    /// `scheme://host[:port]` used to bind a Keychain key to this destination.
+    public var endpointOrigin: String {
+        Self.origin(of: baseURL)
+    }
+
+    public static func origin(of baseURL: String) -> String {
+        let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: trimmed),
+              let host = components.host, !host.isEmpty else {
+            return trimmed.lowercased()
+        }
+        let scheme = (components.scheme ?? "https").lowercased()
+        let port = components.port.map { ":\($0)" } ?? ""
+        return "\(scheme)://\(host.lowercased())\(port)"
+    }
+
+    /// Local Ollama does not send a third-party credential. Hosted providers
+    /// may use the Keychain key only when it was saved for this provider and origin.
+    public var credentialsBoundToCurrentDestination: Bool {
+        if !provider.requiresAPIKey {
+            return true
+        }
+        guard let boundKeyProvider, let boundKeyOrigin else {
+            return false
+        }
+        return boundKeyProvider == provider
+            && boundKeyOrigin == endpointOrigin
+    }
+
+    public mutating func bindStoredKey() {
+        boundKeyProvider = provider
+        boundKeyOrigin = endpointOrigin
+    }
+
+    public mutating func unbindStoredKey() {
+        boundKeyProvider = nil
+        boundKeyOrigin = nil
     }
 
 }
@@ -554,6 +612,9 @@ public struct CloudAIEnhancementEngine: Sendable {
         configuration: CloudAIConfiguration,
         apiKey: String
     ) async throws -> CloudAIEnhancementResult {
+        guard configuration.credentialsBoundToCurrentDestination else {
+            throw CloudAIEnhancementError.keyNotBoundToDestination
+        }
         let resolvedKey =
             apiKey.isEmpty && !configuration.provider.requiresAPIKey
             ? "ollama"

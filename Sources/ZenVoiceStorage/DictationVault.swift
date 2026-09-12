@@ -575,6 +575,26 @@ public actor DictationVault {
         return deletedCount
     }
 
+    /// Deletes every matching row, not just IDs currently loaded in the UI.
+    @discardableResult
+    public func deleteStandardHistory() throws -> Int {
+        try deleteRecordsMatching(
+            "status != '\(DictationStatus.failed.rawValue)' AND is_partial = 0"
+        )
+    }
+
+    @discardableResult
+    public func deleteRecoveryHistory() throws -> Int {
+        try deleteRecordsMatching(
+            "status = '\(DictationStatus.failed.rawValue)' OR is_partial = 1"
+        )
+    }
+
+    private func deleteRecordsMatching(_ clause: String) throws -> Int {
+        let ids = try recordIDs(whereClause: clause)
+        return try deleteRecords(ids: ids)
+    }
+
     /// Removes transcript ciphertext and dictation rows that are not holding
     /// recovery audio. Leaves Audio History, recovery files, correction rules,
     /// and the vault key untouched.

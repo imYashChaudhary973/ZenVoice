@@ -594,6 +594,81 @@ private func checkScopedHistoryDeletion() async throws {
     )
 }
 
+private func checkDeleteAllByScopeClearsUnloadedRecords() async throws {
+    let fixture = try await VaultFixture()
+    defer { fixture.cleanup() }
+
+    func saved(app: String) async throws -> UUID {
+        let id = UUID()
+        let audio = await fixture.vault.recoveryAudioURL(for: id)
+        try Data("audio".utf8).write(to: audio)
+        try await fixture.vault.begin(
+            DictationDraft(
+                id: id,
+                language: "en",
+                modelID: "whisper-base.en",
+                targetBundleID: nil,
+                targetAppName: app,
+                recoveryAudioURL: audio
+            )
+        )
+        try await fixture.vault.storeTranscript(
+            id: id,
+            rawTranscript: "saved",
+            finalTranscript: "Saved."
+        )
+        try await fixture.vault.markInsertion(id: id, outcome: .inserted)
+        try await fixture.vault.deleteRecoveryAudio(id: id)
+        return id
+    }
+
+    let first = try await saved(app: "Notes")
+    let second = try await saved(app: "Mail")
+    let recoveryID = UUID()
+    let recoveryAudio = await fixture.vault.recoveryAudioURL(for: recoveryID)
+    try Data("recovery".utf8).write(to: recoveryAudio)
+    try await fixture.vault.begin(
+        DictationDraft(
+            id: recoveryID,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: "Safari",
+            recoveryAudioURL: recoveryAudio
+        )
+    )
+    try await fixture.vault.markFailed(
+        id: recoveryID,
+        message: "Interrupted",
+        retainAudio: true
+    )
+
+    try await require(
+        try await fixture.vault.deleteStandardHistory() == 2,
+        "standard delete-all did not remove every saved transcript"
+    )
+    try await require(
+        try await fixture.vault.record(id: first) == nil,
+        "standard delete-all left an unloaded saved transcript"
+    )
+    try await require(
+        try await fixture.vault.record(id: second) == nil,
+        "standard delete-all left a second unloaded saved transcript"
+    )
+    try await require(
+        try await fixture.vault.record(id: recoveryID) != nil,
+        "standard delete-all removed Recovery Inbox data"
+    )
+    try await require(
+        try await fixture.vault.deleteRecoveryHistory() == 1,
+        "recovery delete-all did not remove the failed record"
+    )
+    try await require(
+        try await fixture.vault.record(id: recoveryID) == nil,
+        "recovery delete-all left the failed record"
+    )
+}
+
 private func checkHistoryPreferencesDefaults() async throws {
     let suiteName = "ZenVoiceStorageChecks.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -1823,6 +1898,7 @@ do {
     try await checkDeleteAllRotatesVault()
     try await checkDeleteAllTranscriptsPreservesIndependentData()
     try await checkScopedHistoryDeletion()
+    try await checkDeleteAllByScopeClearsUnloadedRecords()
     try await checkHistoryPreferencesDefaults()
     try await checkVersionTwoMigration()
     try await checkVersionFourCorrectionMigration()
@@ -1841,7 +1917,7 @@ do {
     try await checkAudioHistoryPreferenceDefaults()
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
-    print("ZenVoiceStorageChecks: 24 checks passed")
+    print("ZenVoiceStorageChecks: 25 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

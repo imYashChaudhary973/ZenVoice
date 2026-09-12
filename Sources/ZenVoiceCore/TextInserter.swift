@@ -218,6 +218,18 @@ public final class TextInserter {
         ) == .success
     }
 
+    /// Final insertion must stay in the app that was frontmost when dictation
+    /// started. A nil original target means we never captured one.
+    public static func shouldPaste(
+        intoFrontmost frontmost: pid_t?,
+        originalTarget: pid_t?
+    ) -> Bool {
+        guard let originalTarget else {
+            return true
+        }
+        return frontmost == originalTarget
+    }
+
     public func insert(_ text: String) -> InsertResult {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()

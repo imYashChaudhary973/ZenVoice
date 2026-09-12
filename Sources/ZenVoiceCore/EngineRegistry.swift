@@ -312,16 +312,23 @@ public struct EngineRegistry: Sendable {
         engine: any SpeechEngine,
         profile: LanguageProfile
     ) -> Bool {
+        if (profile.shouldTranslateToEnglish
+            || profile.shouldTransliterateToLatin),
+           !engine.transformsSpokenLanguage {
+            return false
+        }
         let supported = engine.descriptor.supportedLanguages
         if !supported.isEmpty {
-            // Built-in engines list the concrete locales they support.
             if profile.inputLanguageCode == LanguageProfile.automaticCode {
-                return supported.contains { $0.code == "en" }
+                return engine.detectsLanguageAutomatically
+                    && supported.contains { $0.code == "en" }
             }
             return supported.contains { $0.code == profile.inputLanguageCode }
         }
-        // Download-based engines declare no concrete locale list; they rely
-        // on the broad language capability instead.
+        if profile.inputLanguageCode == LanguageProfile.automaticCode,
+           !engine.detectsLanguageAutomatically {
+            return false
+        }
         return profile.isCompatible(with: engine.languageCapability)
     }
 }

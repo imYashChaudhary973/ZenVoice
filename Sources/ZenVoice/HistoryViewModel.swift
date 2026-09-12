@@ -286,16 +286,14 @@ final class HistoryViewModel: ObservableObject {
     }
 
     private func deleteAllNow(in scope: Scope) async {
-        let recordsToDelete =
-            scope == .recovery ? recoveryRecords : standardRecords
-        let ids = recordsToDelete.map(\.id)
-        guard !ids.isEmpty else {
-            return
-        }
         do {
-            _ = try await vaultProvider().deleteRecords(ids: ids)
-            let deletedIDs = Set(ids)
-            records.removeAll { deletedIDs.contains($0.id) }
+            let vault = try await vaultProvider()
+            if scope == .recovery {
+                _ = try await vault.deleteRecoveryHistory()
+            } else {
+                _ = try await vault.deleteStandardHistory()
+            }
+            await refreshNow()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

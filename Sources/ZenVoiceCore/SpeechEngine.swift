@@ -30,6 +30,13 @@ public protocol SpeechEngine: Sendable {
     /// model file.
     var languageCapability: ModelLanguageCapability { get }
 
+    /// Whether the engine can translate or transliterate. Parakeet returns
+    /// spoken-language text only.
+    var transformsSpokenLanguage: Bool { get }
+
+    /// Whether automatic language detection is in this engine's contract.
+    var detectsLanguageAutomatically: Bool { get }
+
     /// Whether the engine can be used right now for its supported languages.
     ///
     /// This is a synchronous snapshot. Engines that need an expensive check
@@ -87,6 +94,10 @@ public extension SpeechEngine {
     }
 
     func release() async {}
+
+    var transformsSpokenLanguage: Bool { true }
+
+    var detectsLanguageAutomatically: Bool { true }
 }
 
 /// The family a transcription engine belongs to.
