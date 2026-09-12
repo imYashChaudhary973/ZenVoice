@@ -141,6 +141,13 @@ public enum CloudAIProvider: String, Codable, CaseIterable, Sendable {
         self != .ollama
     }
 
+    public func acceptsAPIKey(_ key: String) -> Bool {
+        if !requiresAPIKey {
+            return true
+        }
+        return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     fileprivate var usesChatCompletions: Bool {
         self != .anthropic
     }
