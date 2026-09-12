@@ -18,10 +18,15 @@ if (!rawUrl) {
 function toWebJoin(raw) {
   try {
     const u = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    if (u.hostname.includes("zoom.us") && u.pathname.startsWith("/j/")) {
-      const id = u.pathname.slice(3).split("/")[0];
-      return `https://app.zoom.us/wc/${id}/join${u.search}`;
+    if (!u.hostname.includes("zoom.us")) return raw;
+    let id = null;
+    if (u.pathname.startsWith("/j/")) {
+      id = u.pathname.slice(3).split("/")[0];
+    } else {
+      const wc = u.pathname.match(/^\/wc\/join\/(\d+)/);
+      if (wc) id = wc[1];
     }
+    if (id) return `https://app.zoom.us/wc/${id}/join${u.search}`;
   } catch {
     return raw;
   }
@@ -82,12 +87,13 @@ async function fillName() {
 
 async function clickLabeled(labels) {
   for (const label of labels) {
-    const button = page.getByRole("button", { name: label });
+    const button = page.getByRole("button", { name: label, exact: true });
     if ((await button.count()) > 0 && (await button.first().isVisible())) {
       await button.first().click({ timeout: 5_000 }).catch(() => {});
       return true;
     }
-    const link = page.getByRole("link", { name: label });
+    if (label === "Join") continue;
+    const link = page.getByRole("link", { name: label, exact: true });
     if ((await link.count()) > 0 && (await link.first().isVisible())) {
       await link.first().click({ timeout: 5_000 }).catch(() => {});
       return true;
@@ -106,6 +112,9 @@ function outcome(finalURL, title, body) {
     t.includes("sign in")
   ) {
     return "sign_in_required";
+  }
+  if (t.includes("joining") || b.includes("joining meeting")) {
+    return "not_joined";
   }
   if (
     b.includes("leave") &&
@@ -146,6 +155,10 @@ for (let i = 0; i < 8; i++) {
     "Join from a browser",
     "OK",
   ]);
+  const browserJoin = page.getByText(/join from (your |a )?browser/i).first();
+  if ((await browserJoin.count()) > 0 && (await browserJoin.isVisible())) {
+    await browserJoin.click({ timeout: 5_000 }).catch(() => {});
+  }
   await fillName();
   await clickLabeled([
     "Join now",
@@ -160,18 +173,21 @@ for (let i = 0; i < 8; i++) {
   finalURL = page.url();
   title = await page.title();
   body = (await page.locator("body").innerText().catch(() => "")).slice(0, 4000);
-  status = outcome(finalURL, title, body);
+  const spinning =
+    (await page.getByText(/joining meeting/i).count()) > 0;
+  status = spinning ? "not_joined" : outcome(finalURL, title, body);
   if (status !== "not_joined") break;
 }
 
 if (status !== "joined") {
   try {
-    await page.getByRole("button", { name: /leave/i }).waitFor({
-      timeout: 20_000,
+    await page.getByRole("button", { name: /^leave$/i }).waitFor({
+      timeout: 40_000,
     });
-    status = "joined";
     finalURL = page.url();
     title = await page.title();
+    body = (await page.locator("body").innerText().catch(() => "")).slice(0, 4000);
+    status = outcome(finalURL, title, body);
   } catch {
     /* still not in */
   }

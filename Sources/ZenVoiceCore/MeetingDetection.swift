@@ -72,7 +72,7 @@ public enum MeetingDetection {
         let rest = String(url.path.dropFirst(3))
         let id = rest.split(separator: "/").first.map(String.init) ?? rest
         var components = URLComponents(
-            string: "https://zoom.us/wc/join/\(id)"
+            string: "https://app.zoom.us/wc/\(id)/join"
         )
         components?.query = url.query
         return components?.url ?? url

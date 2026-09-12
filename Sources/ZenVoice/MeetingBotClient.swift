@@ -149,7 +149,7 @@ enum MeetingBotClient {
         }
         let handle = pipe.fileHandleForReading
         var buffer = Data()
-        let deadline = Date().addingTimeInterval(30)
+        let deadline = Date().addingTimeInterval(90)
         while Date() < deadline {
             if !process.isRunning && buffer.isEmpty {
                 throw BotError.notJoined("exited")
