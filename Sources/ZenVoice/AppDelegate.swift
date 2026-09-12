@@ -17,6 +17,7 @@ import AVFoundation
 import Combine
 import Foundation
 import os
+import UserNotifications
 import ZenVoiceCore
 import ZenVoiceRuntime
 import ZenVoiceStorage
@@ -180,6 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var historyViewModel: HistoryViewModel!
     private var audioHistoryViewModel: AudioHistoryViewModel!
     private var meetingViewModel: MeetingViewModel!
+    private var meetingWatcher: MeetingWatcher?
     private var cloudAIViewModel: CloudAIViewModel!
     private var cloudPreviewWindowController:
         CloudAIPreviewWindowController?
@@ -526,6 +528,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activeHistoryID = nil
         transcribingHistoryID = nil
         meetingViewModel?.markIncompleteForTermination()
+        meetingWatcher?.stop()
         let recordedAudio = recorder.stop()
         if let historyID {
             if nonPersistentHistoryIDs.contains(historyID)
@@ -873,6 +876,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         )
     }
+
+    private func notifyMeetingDetected(
+        _ detection: MeetingWatcher.Detection
+    ) {
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
+            if settings.authorizationStatus == .notDetermined {
+                _ = try? await center.requestAuthorization(
+                    options: [.alert, .sound]
+                )
+            }
+            let content = UNMutableNotificationContent()
+            content.title = "Meeting detected"
+            if meetingViewModel.autoRecordEnabled {
+                content.body =
+                    "\(detection.title) — recording started. Tell everyone on the call."
+            } else {
+                content.body =
+                    "\(detection.title) — Start notes in History → Meetings."
+            }
+            let request = UNNotificationRequest(
+                identifier: "meeting-\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            )
+            try? await center.add(request)
+        }
+    }
+
 
     private func makeOpenAISpeechKeyStore() -> CloudAIKeyStoring {
         cloudSpeechKeyStore(account: "cloud-speech-openai-api-key")
@@ -1470,6 +1503,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         updatesViewModel = UpdatesViewModel()
         meetingViewModel = makeMeetingViewModel()
+        let watcher = MeetingWatcher()
+        watcher.onDetected = { [weak self] detection in
+            self?.meetingViewModel.handleDetection(detection)
+            self?.notifyMeetingDetected(detection)
+        }
+        watcher.start()
+        meetingWatcher = watcher
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,

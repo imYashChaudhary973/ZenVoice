@@ -35,6 +35,27 @@ struct MeetingsScreen: View {
         ) {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+                    Toggle(
+                        "Auto-record detected meetings",
+                        isOn: $viewModel.autoRecordEnabled
+                    )
+                    .font(ZenDesign.Typography.body)
+                    .tint(ZenDesign.Semantic.accentFill)
+
+                    if let pending = viewModel.pendingDetection,
+                       !viewModel.isSessionActive {
+                        HStack {
+                            Text(pending.title)
+                                .font(ZenDesign.Typography.bodyStrong)
+                                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                                .lineLimit(2)
+                            Spacer()
+                            controlButton("Start notes") {
+                                viewModel.start(title: pending.title)
+                            }
+                        }
+                    }
+
                     HStack(alignment: .firstTextBaseline) {
                         Text(viewModel.elapsedLabel)
                             .font(ZenDesign.Typography.display)
@@ -63,7 +84,7 @@ struct MeetingsScreen: View {
                                 .font(ZenDesign.Typography.bodyStrong)
                                 .foregroundStyle(ZenDesign.Semantic.textPrimary)
                         } else if !viewModel.isSessionActive {
-                            controlButton("Start", action: viewModel.start)
+                            controlButton("Start") { viewModel.start() }
                         } else if viewModel.isRecording {
                             controlButton("Pause", action: viewModel.pause)
                             controlButton("Stop", action: viewModel.stop)
@@ -96,7 +117,40 @@ struct MeetingsScreen: View {
                         .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    if let original = viewModel.originalTranscript,
+                    HStack(spacing: ZenDesign.Spacing.sm) {
+                        TextField("You", text: $viewModel.youName)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { viewModel.saveSpeakerNames() }
+                        TextField("Them", text: $viewModel.themName)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { viewModel.saveSpeakerNames() }
+                        controlButton("Apply names", action: viewModel.saveSpeakerNames)
+                            .disabled(viewModel.originalTranscript == nil)
+                    }
+
+                    HStack(spacing: ZenDesign.Spacing.sm) {
+                        TextField(
+                            "Search meetings",
+                            text: $viewModel.searchQuery
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { viewModel.searchMeetings() }
+                        controlButton("Search", action: viewModel.searchMeetings)
+                    }
+                    if !viewModel.searchHits.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(viewModel.searchHits, id: \.id) { hit in
+                                Button(hit.snippet) {
+                                    viewModel.open(hit.id)
+                                }
+                                .buttonStyle(.plain)
+                                .font(ZenDesign.Typography.caption)
+                                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                            }
+                        }
+                    }
+
+                    if let original = viewModel.displayedTranscript,
                        !original.isEmpty {
                         HStack(alignment: .top, spacing: ZenDesign.Spacing.md) {
                             transcriptColumn(

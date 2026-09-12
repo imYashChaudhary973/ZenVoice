@@ -904,6 +904,28 @@ guard youOnly == "solo" else {
 }
 print("ZenVoiceCoreChecks: meeting transcript merge passed")
 
+guard MeetingDetection.kind(of: "https://zoom.us/j/123") == .zoom,
+      MeetingDetection.kind(of: "https://meet.google.com/abc-defg") == .meet,
+      MeetingDetection.kind(of: "https://teams.microsoft.com/l/meetup-join/x")
+        == .teams,
+      MeetingDetection.kind(of: "https://zoom.us/pricing") == .unknown else {
+    FileHandle.standardError.write(
+        Data("FAIL: meeting URL detection is incorrect\n".utf8)
+    )
+    exit(1)
+}
+let relabeled = SpeakerLabeling.applying(
+    SpeakerNameMap(you: "Ada", them: "Ben"),
+    to: "You: hello\nThem: hi"
+)
+guard relabeled == "Ada: hello\nBen: hi" else {
+    FileHandle.standardError.write(
+        Data("FAIL: speaker rename-once is incorrect\n".utf8)
+    )
+    exit(1)
+}
+print("ZenVoiceCoreChecks: meeting detection and speaker labels passed")
+
 // Paragraph structure from the speaker's pauses.
 //
 // The silences are supplied rather than measured here, because the point

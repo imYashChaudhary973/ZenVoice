@@ -9,6 +9,10 @@ All notable ZenVoice changes are recorded here.
 - Meeting capture (Phase 1): History → Meetings start / pause / resume / stop.
   Microphone is You; ScreenCaptureKit system audio is Them. Whole-file local
   decode on Stop. Optional BYO-key recap. Dictation hotkey unchanged.
+- Meeting auto-detect (calendar + Zoom/Teams/Slack). Optional auto-record,
+  You/Them rename-once, FTS search, speaker gallery, Gmail/Slack connectors,
+  and a stub join proxy under Services/ZenVoiceProxy.
+
 
 ### Fixed
 

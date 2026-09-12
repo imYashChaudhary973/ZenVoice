@@ -45,6 +45,8 @@ public struct MeetingStore {
         public var title: String?
         public var engineID: String?
         public var captureSource: String
+        public var youName: String?
+        public var themName: String?
         public var originalTranscriptCiphertext: Data?
         public var summaryCiphertext: Data?
 
@@ -56,6 +58,8 @@ public struct MeetingStore {
             title: String? = nil,
             engineID: String? = nil,
             captureSource: String = "local",
+            youName: String? = nil,
+            themName: String? = nil,
             originalTranscriptCiphertext: Data? = nil,
             summaryCiphertext: Data? = nil
         ) {
@@ -66,6 +70,8 @@ public struct MeetingStore {
             self.title = title
             self.engineID = engineID
             self.captureSource = captureSource
+            self.youName = youName
+            self.themName = themName
             self.originalTranscriptCiphertext = originalTranscriptCiphertext
             self.summaryCiphertext = summaryCiphertext
         }

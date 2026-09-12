@@ -32,7 +32,21 @@ final class MeetingViewModel: ObservableObject {
     @Published private(set) var isSummarizing = false
     @Published private(set) var themCaptureFailed = false
     @Published private(set) var errorMessage: String?
+    @Published var youName = ""
+    @Published var themName = ""
+    @Published var searchQuery = ""
+    @Published private(set) var searchHits: [(id: UUID, snippet: String)] = []
+    @Published private(set) var pendingDetection: MeetingWatcher.Detection?
+    @Published var autoRecordEnabled: Bool {
+        didSet {
+            RuntimeIdentity.userDefaults().set(
+                autoRecordEnabled,
+                forKey: Self.autoRecordKey
+            )
+        }
+    }
 
+    private static let autoRecordKey = "ZenVoice.meetingAutoRecord"
     private let store: MeetingStore
     private let isDictationRecording: () -> Bool
     private let keyProvider: VaultKeyProviding?
@@ -41,6 +55,7 @@ final class MeetingViewModel: ObservableObject {
     private let summarizeTranscript: ((String) async throws -> String)?
     private let recorder = AudioRecorder()
     private let systemAudio = MeetingSystemAudio()
+    private var index: MeetingIndex?
     private var accumulatedSeconds: TimeInterval = 0
     private var runningSince: Date?
     private var tick: Timer?
@@ -102,12 +117,57 @@ final class MeetingViewModel: ObservableObject {
         self.keyProvider = keyProvider
         self.transcribeFile = transcribeFile
         self.summarizeTranscript = summarizeTranscript
+        autoRecordEnabled = RuntimeIdentity.userDefaults().bool(
+            forKey: Self.autoRecordKey
+        )
         try? store.markIncompleteIfOpen()
         refreshList()
         loadLatest()
+        Task { [weak self] in
+            self?.index = try? await MeetingIndex(
+                directoryURL: store.directoryURL
+            )
+        }
     }
 
-    func start() {
+    var displayedTranscript: String? {
+        guard let originalTranscript else { return nil }
+        return SpeakerLabeling.applying(
+            SpeakerNameMap(
+                you: youName.isEmpty ? nil : youName,
+                them: themName.isEmpty ? nil : themName
+            ),
+            to: originalTranscript
+        )
+    }
+
+    func handleDetection(_ detection: MeetingWatcher.Detection) {
+        pendingDetection = detection
+        if autoRecordEnabled {
+            start(title: detection.title)
+        }
+    }
+
+    func saveSpeakerNames() {
+        guard var current = record else { return }
+        current.youName = youName.isEmpty ? nil : youName
+        current.themName = themName.isEmpty ? nil : themName
+        record = current
+        try? store.save(current)
+    }
+
+    func searchMeetings() {
+        let query = searchQuery
+        Task { [weak self] in
+            guard let self else { return }
+            self.searchHits = (try? await self.index?.search(
+                query: query,
+                limit: 8
+            )) ?? []
+        }
+    }
+
+    func start(title: String? = nil) {
         errorMessage = nil
         themCaptureFailed = false
         guard !isSessionActive, !isTranscribing else { return }
@@ -115,13 +175,18 @@ final class MeetingViewModel: ObservableObject {
             errorMessage = "Stop dictation before starting a meeting."
             return
         }
-        let created: MeetingStore.Record
+        var created: MeetingStore.Record
         do {
             created = try store.createRecording()
         } catch {
             errorMessage = error.localizedDescription
             return
         }
+        if let title, !title.isEmpty {
+            created.title = title
+            try? store.save(created)
+        }
+        pendingDetection = nil
         do {
             try recorder.start(
                 recordingURL: store.youAudioURL(for: created.id),
@@ -250,6 +315,11 @@ final class MeetingViewModel: ObservableObject {
                 )
                 self.record = try self.store.load(id: id)
                 self.summary = value
+                self.indexMeeting(
+                    id: id,
+                    original: originalTranscript,
+                    recap: value
+                )
             } catch is CancellationError {
                 return
             } catch {
@@ -267,6 +337,8 @@ final class MeetingViewModel: ObservableObject {
             record = opened
             elapsedSeconds = opened.elapsedSeconds
         }
+        youName = opened.youName ?? ""
+        themName = opened.themName ?? ""
         if let keyProvider {
             originalTranscript = try? store.originalTranscript(
                 for: id,
@@ -284,6 +356,7 @@ final class MeetingViewModel: ObservableObject {
         if isSessionActive && record?.id == id { return }
         if isTranscribing && record?.id == id { return }
         try? store.removeRecordingArtifacts(id: id)
+        Task { try? await index?.delete(id: id) }
         if openedID == id {
             openedID = nil
             if record?.id == id {
@@ -393,6 +466,7 @@ final class MeetingViewModel: ObservableObject {
                 )
                 self.record = try self.store.load(id: id)
                 self.originalTranscript = merged
+                self.indexMeeting(id: id, original: merged, recap: "")
                 self.updateStatus(
                     self.completionStatus,
                     elapsed: self.record?.elapsedSeconds ?? self.elapsedSeconds
@@ -411,6 +485,16 @@ final class MeetingViewModel: ObservableObject {
             }
             self.isTranscribing = false
             self.refreshList()
+        }
+    }
+
+    private func indexMeeting(id: UUID, original: String, recap: String) {
+        Task { [weak self] in
+            try? await self?.index?.upsert(
+                id: id,
+                original: original,
+                recap: recap
+            )
         }
     }
 
