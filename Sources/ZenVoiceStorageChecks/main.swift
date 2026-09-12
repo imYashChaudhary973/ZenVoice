@@ -1990,6 +1990,67 @@ private func checkMeetingStore() async throws {
     )
 }
 
+private func checkCallWavEnroll() async throws {
+    let wav = URL(fileURLWithPath: "/tmp/zenvoice-you.wav")
+    guard FileManager.default.fileExists(atPath: wav.path) else {
+        print("ZenVoiceStorageChecks: call-wav enroll skipped (no /tmp/zenvoice-you.wav)")
+        return
+    }
+    let samples = try pcm16Mono(wav)
+    try await require(!samples.isEmpty, "call wav had no samples")
+    let embedding = rmsBands(samples, count: 16)
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("zenvoice-enroll-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let registry = SpeakerRegistry(
+        directoryURL: directory,
+        keyProvider: StaticKeyProvider()
+    )
+    let enrolled = try registry.enroll(
+        name: "ZenVoice Notetaker",
+        embedding: embedding
+    )
+    let matched = try registry.match(embedding: embedding)
+    try await require(
+        matched?.id == enrolled.id,
+        "call-wav embedding did not match the enrolled speaker"
+    )
+    print(
+        "ZenVoiceStorageChecks: enrolled call wav as \(enrolled.displayName)"
+    )
+}
+
+private func pcm16Mono(_ url: URL) throws -> [Float] {
+    let data = try Data(contentsOf: url)
+    guard data.count > 44 else { return [] }
+    return data.dropFirst(44).withUnsafeBytes { raw in
+        (0..<(raw.count / 2)).map { index in
+            let value = raw.load(fromByteOffset: index * 2, as: Int16.self)
+            return Float(Int16(littleEndian: value)) / 32768
+        }
+    }
+}
+
+private func rmsBands(_ samples: [Float], count: Int) -> [Float] {
+    let hop = max(1, samples.count / count)
+    var bands = [Float](repeating: 0, count: count)
+    for band in 0..<count {
+        let start = band * hop
+        let end = min(samples.count, start + hop)
+        guard end > start else { continue }
+        var sum: Float = 0
+        for i in start..<end {
+            sum += samples[i] * samples[i]
+        }
+        bands[band] = (sum / Float(end - start)).squareRoot()
+    }
+    let norm = bands.reduce(Float(0)) { $0 + $1 * $1 }.squareRoot()
+    if norm > 0 {
+        for i in 0..<count { bands[i] /= norm }
+    }
+    return bands
+}
+
 do {
     try await checkEncryptedStorage()
     try await checkRecoveryExpiry()
@@ -2018,7 +2079,8 @@ do {
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
     try await checkMeetingStore()
-    print("ZenVoiceStorageChecks: 26 checks passed")
+    try await checkCallWavEnroll()
+    print("ZenVoiceStorageChecks: 27 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)
