@@ -59,7 +59,10 @@ that window rather than the whole database.
   storage, table, budgets, and delete controls.
 - Two budgets bound the archive, both user-configurable: total size (default
   2 GB, minimum 100 MB) and age (default 30 days, minimum 1 day). Cleanup runs
-  at launch and after each archived recording, deleting the oldest first.
+  at launch and after each archived recording, deleting the oldest first, even
+  when "Keep new recordings" is off.
+- Turning the archive off stops new copies. Existing recordings stay visible
+  and remain subject to the budgets until deleted.
 - Archiving follows transcript persistence, so paused history and suppressed
   dictations are never archived.
 - Recordings can be played back, deleted individually, or deleted all at once.

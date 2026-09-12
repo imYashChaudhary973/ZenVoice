@@ -140,10 +140,15 @@ public struct LanguageProfile:
         "sv", "uk", "ru"
     ]
 
+    public static var parakeetTDTv3Languages: [SupportedLanguage] {
+        parakeetTDTv3LanguageCodes.compactMap(LanguageCatalog.language(code:))
+    }
+
     public var prefersParakeetTDTv3: Bool {
         !isHinglish
             && inputLanguageCode != Self.automaticCode
             && Self.parakeetTDTv3LanguageCodes.contains(inputLanguageCode)
+            && outputMode == .spokenLanguage
     }
 
     public var requiresMultilingualModel: Bool {

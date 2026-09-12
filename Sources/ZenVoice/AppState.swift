@@ -93,6 +93,10 @@ final class AppState: ObservableObject {
     }
 
     @Published var phase: Phase = .idle
+    /// Set before the first `await` of start/stop so a second request cannot
+    /// pass the idle guard while configuration or history work is in flight.
+    var isStartingRecording = false
+    var isStoppingRecording = false
     /// Deliberately not `@Published` — see ``AudioLevelModel``.
     let audioLevel = AudioLevelModel()
     @Published private(set) var showsZenVoiceAtAllTimes: Bool
@@ -124,6 +128,9 @@ final class AppState: ObservableObject {
     }
 
     var isBusy: Bool {
+        if isStartingRecording || isStoppingRecording {
+            return true
+        }
         switch phase {
         case .transcribing, .inserting:
             return true

@@ -41,8 +41,12 @@ final class CloudAIViewModel: ObservableObject {
 
     var isReady: Bool {
         configuration.isEnabled
-            && (hasStoredKey || !configuration.provider.requiresAPIKey)
+            && (hasUsableKey || !configuration.provider.requiresAPIKey)
             && (try? configuration.resolvedEndpoint()) != nil
+    }
+
+    var hasUsableKey: Bool {
+        hasStoredKey && configuration.credentialsBoundToCurrentDestination
     }
 
     var providerDetail: String {
@@ -92,11 +96,13 @@ final class CloudAIViewModel: ObservableObject {
             configuration.model = model
         }
         persist()
+        noteKeyBinding()
     }
 
     func setBaseURL(_ value: String) {
         configuration.baseURL = value
         persist()
+        noteKeyBinding()
     }
 
     func setModel(_ value: String) {
@@ -115,9 +121,13 @@ final class CloudAIViewModel: ObservableObject {
         do {
             try keyStore.saveKey(apiKeyDraft)
             hasStoredKey = ((try? keyStore.loadKey()) ?? nil) != nil
+            if hasStoredKey {
+                configuration.bindStoredKey()
+                persist()
+            }
             apiKeyDraft = ""
             statusMessage = hasStoredKey
-                ? "Key saved to the Keychain."
+                ? "Key saved to the Keychain for \(configuration.provider.displayName)."
                 : "Key cleared."
             errorMessage = nil
         } catch {
@@ -129,11 +139,23 @@ final class CloudAIViewModel: ObservableObject {
         do {
             try keyStore.deleteKey()
             hasStoredKey = false
+            configuration.unbindStoredKey()
+            persist()
             apiKeyDraft = ""
             statusMessage = "Key removed from the Keychain."
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func noteKeyBinding() {
+        guard hasStoredKey,
+              !configuration.credentialsBoundToCurrentDestination else {
+            return
+        }
+        statusMessage =
+            "Saved key is bound to another provider or endpoint. "
+            + "Save a key for this destination."
     }
 }

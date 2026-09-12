@@ -52,7 +52,7 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
             id: configuration.engineID,
             displayName: configuration.displayName,
             family: .parakeetTDT,
-            supportedLanguages: [],
+            supportedLanguages: LanguageProfile.parakeetTDTv3Languages,
             requiresDownload: true,
             requiresInternet: false,
             format: "GGUF (parakeet.cpp v0.5.0)",
@@ -64,6 +64,10 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
                 "Runs entirely on this Mac. No audio leaves the device."
         )
     }
+
+    public var transformsSpokenLanguage: Bool { false }
+
+    public var detectsLanguageAutomatically: Bool { false }
 
     public var isAvailable: Bool {
         FileManager.default.fileExists(atPath: modelURL.path)

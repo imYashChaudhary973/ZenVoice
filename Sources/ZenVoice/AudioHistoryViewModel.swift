@@ -93,17 +93,10 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
     }
 
     private func refreshNow() async {
-        guard isEnabled else {
-            records = []
-            totalSizeBytes = 0
-            selection = []
-            return
-        }
         do {
             let vault = try await vaultProvider()
             records = try await vault.audioArchiveRecent()
             totalSizeBytes = try await vault.audioArchiveTotalSize()
-            // Drop selections whose records are gone.
             let ids = Set(records.map(\.id))
             selection = selection.intersection(ids)
             errorMessage = nil
@@ -118,7 +111,6 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
     }
 
     private func applyBudgetsNow() async {
-        guard isEnabled else { return }
         do {
             let vault = try await vaultProvider()
             let cutoff = Calendar.current.date(

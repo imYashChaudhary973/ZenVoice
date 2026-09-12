@@ -111,7 +111,7 @@ public enum VerifiedEngineCatalog {
                 id: EngineIdentifiers.parakeetTDTv3,
                 displayName: "Parakeet TDT v3",
                 family: .parakeetTDT,
-                supportedLanguages: [],
+                supportedLanguages: LanguageProfile.parakeetTDTv3Languages,
                 requiresDownload: true,
                 requiresInternet: false,
                 format: "GGUF (parakeet.cpp v0.5.0)",
