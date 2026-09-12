@@ -30,6 +30,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ZenVoice records your speech so it can transcribe it locally on this Mac.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>ZenVoice captures meeting audio from Zoom, Meet, Teams, or Slack so it can label Them separately from You. Video is not recorded.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>ZenVoice uses Apple Speech to turn your recordings into text when you select the Apple Speech engine.</string>
 	<key>SUEnableAutomaticChecks</key>

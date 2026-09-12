@@ -1940,6 +1940,56 @@ private func checkAgenticTaskPersistence() async throws {
     )
 }
 
+private func checkMeetingStore() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("zenvoice-meetings-\(UUID().uuidString)")
+    let store = MeetingStore(directoryURL: directory)
+    let key = StaticKeyProvider()
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    var record = try store.createRecording(availableBytes: MeetingStore.reservedAudioBytes)
+    record.elapsedSeconds = 15 * 60
+    record.status = .complete
+    try store.save(record)
+    try store.setOriginalTranscript(
+        "You: fifteen minute meeting\nThem: acknowledged",
+        for: record.id,
+        engineID: "whisper-large-v3-turbo",
+        keyProvider: key
+    )
+    do {
+        try store.setOriginalTranscript(
+            "should not replace",
+            for: record.id,
+            keyProvider: key
+        )
+        throw CheckError.failed("original meeting transcript was replaced")
+    } catch MeetingStore.StoreError.originalTranscriptLocked {
+    }
+    try Data("you".utf8).write(to: store.youAudioURL(for: record.id))
+    try Data("them".utf8).write(to: store.themAudioURL(for: record.id))
+    try store.setSummary("Topics: none.", for: record.id, keyProvider: key)
+    let inventory = try store.inventory()
+    try await require(
+        inventory.meetingCount == 1 && inventory.audioBytes == 7,
+        "meeting inventory count or audio bytes is wrong"
+    )
+    try store.removeRecordingArtifacts(id: record.id)
+    try await require(
+        (try store.all()).isEmpty,
+        "delete left a meeting row"
+    )
+    try await require(
+        !FileManager.default.fileExists(
+            atPath: store.youAudioURL(for: record.id).path
+        )
+            && !FileManager.default.fileExists(
+                atPath: store.themAudioURL(for: record.id).path
+            ),
+        "delete left meeting audio"
+    )
+}
+
 do {
     try await checkEncryptedStorage()
     try await checkRecoveryExpiry()
@@ -1967,7 +2017,8 @@ do {
     try await checkAudioHistoryPreferenceDefaults()
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
-    print("ZenVoiceStorageChecks: 25 checks passed")
+    try await checkMeetingStore()
+    print("ZenVoiceStorageChecks: 26 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

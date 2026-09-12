@@ -856,6 +856,54 @@ guard preparedMarker == "prepared",
 
 print("ZenVoiceCoreChecks: atomic model/profile transitions passed")
 
+let mergedMeeting = MeetingTranscript.merging(
+    you: TranscriptionResult(
+        rawTranscript: "hello there",
+        finalTranscript: "hello there",
+        correctionCount: 0,
+        segments: [
+            TranscriptSegment(
+                text: "hello there",
+                startSeconds: 0,
+                endSeconds: 1
+            )
+        ]
+    ),
+    them: TranscriptionResult(
+        rawTranscript: "hi",
+        finalTranscript: "hi",
+        correctionCount: 0,
+        segments: [
+            TranscriptSegment(
+                text: "hi",
+                startSeconds: 0.4,
+                endSeconds: 1
+            )
+        ]
+    )
+)
+guard mergedMeeting == "You: hello there\nThem: hi" else {
+    FileHandle.standardError.write(
+        Data("FAIL: meeting You/Them merge is incorrect\n".utf8)
+    )
+    exit(1)
+}
+let youOnly = MeetingTranscript.merging(
+    you: TranscriptionResult(
+        rawTranscript: "solo",
+        finalTranscript: "solo",
+        correctionCount: 0
+    ),
+    them: nil
+)
+guard youOnly == "solo" else {
+    FileHandle.standardError.write(
+        Data("FAIL: meeting You-only merge is incorrect\n".utf8)
+    )
+    exit(1)
+}
+print("ZenVoiceCoreChecks: meeting transcript merge passed")
+
 // Paragraph structure from the speaker's pauses.
 //
 // The silences are supplied rather than measured here, because the point

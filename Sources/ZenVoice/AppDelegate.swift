@@ -179,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
     private var audioHistoryViewModel: AudioHistoryViewModel!
+    private var meetingViewModel: MeetingViewModel!
     private var cloudAIViewModel: CloudAIViewModel!
     private var cloudPreviewWindowController:
         CloudAIPreviewWindowController?
@@ -524,6 +525,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let processingHistoryID = transcribingHistoryID
         activeHistoryID = nil
         transcribingHistoryID = nil
+        meetingViewModel?.markIncompleteForTermination()
         let recordedAudio = recorder.stop()
         if let historyID {
             if nonPersistentHistoryIDs.contains(historyID)
@@ -799,6 +801,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return InMemoryCloudAIKeyStore()
         }
         return CloudAIKeychainKeyStore(policy: policy)
+    }
+
+    private func makeMeetingViewModel() -> MeetingViewModel {
+        let store: MeetingStore
+        if let policy = try? RuntimeIdentity.policy(),
+           let live = try? MeetingStore.live(policy: policy) {
+            store = live
+        } else {
+            store = MeetingStore(
+                directoryURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent(
+                        "ZenVoiceMeetings",
+                        isDirectory: true
+                    )
+            )
+        }
+        return MeetingViewModel(
+            store: store,
+            isDictationRecording: { [weak self] in
+                self?.recorder.isRecording == true
+            },
+            keyProvider: (try? RuntimeIdentity.policy()).map {
+                KeychainVaultKeyProvider(policy: $0)
+            },
+            transcribeFile: { [weak self] url in
+                guard let self else {
+                    throw MeetingStore.StoreError.io(
+                        "ZenVoice is no longer running."
+                    )
+                }
+                await self.waitForEngineConfiguration()
+                guard let registry = self.engineRegistry else {
+                    throw MeetingStore.StoreError.io(
+                        "No speech engine is available."
+                    )
+                }
+                let profile = LanguagePreferences.load()
+                let selected = SelectedEnginePreferences.load(
+                    for: profile,
+                    defaults: RuntimeIdentity.userDefaults()
+                )
+                let localID: String?
+                if let selected, EngineIdentifiers.isCloudSpeech(selected) {
+                    localID = EngineIdentifiers.whisperLargeV3Turbo
+                } else {
+                    localID = selected
+                }
+                return try await registry.transcribe(
+                    audioURL: url,
+                    profile: profile,
+                    selectedID: localID
+                )
+            },
+            summarizeTranscript: { [weak self] transcript in
+                guard let self else {
+                    throw MeetingStore.StoreError.io(
+                        "ZenVoice is no longer running."
+                    )
+                }
+                var configuration = CloudAIPreferences.load()
+                configuration.prompt = CloudAIPromptTemplate.meeting.text
+                let key = ((try? self.makeCloudAIKeyStore().loadKey()) ?? nil)
+                    ?? ""
+                let result = try await CloudAIEnhancementEngine().enhance(
+                    transcript: transcript,
+                    configuration: configuration,
+                    apiKey: key
+                )
+                return result.enhanced
+            }
+        )
     }
 
     private func makeOpenAISpeechKeyStore() -> CloudAIKeyStoring {
@@ -1396,10 +1469,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             keyStore: makeCloudAIKeyStore()
         )
         updatesViewModel = UpdatesViewModel()
+        meetingViewModel = makeMeetingViewModel()
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
             audioHistoryViewModel: audioHistoryViewModel,
+            meetingViewModel: meetingViewModel,
             cloudAIViewModel: cloudAIViewModel,
             updatesViewModel: updatesViewModel,
             insightsViewModel: insightsViewModel,
@@ -1624,6 +1699,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func beginRecording(startedByHold: Bool = false) {
         guard !state.isBusy else {
+            return
+        }
+        if meetingViewModel?.isSessionActive == true {
+            showError("Stop the meeting before dictating.")
             return
         }
         guard HoldKeyChoice.shouldOpenMicrophone(

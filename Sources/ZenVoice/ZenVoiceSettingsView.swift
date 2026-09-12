@@ -65,6 +65,7 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
+    @ObservedObject var meetingViewModel: MeetingViewModel
     @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var updatesViewModel: UpdatesViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
@@ -203,7 +204,7 @@ struct ZenVoiceSettingsView: View {
         case .personalisation:
             return "formatting vocabulary corrections cloud"
         case .history:
-            return "transcripts recordings insights audio search export"
+            return "transcripts meetings recordings insights audio search export"
         case .updates:
             return "update check version release feed"
         case .settings:
@@ -451,7 +452,9 @@ struct ZenVoiceSettingsView: View {
             HistoryContainerScreen(
                 historyViewModel: historyViewModel,
                 audioHistoryViewModel: audioHistoryViewModel,
-                insightsViewModel: insightsViewModel
+                insightsViewModel: insightsViewModel,
+                meetingViewModel: meetingViewModel,
+                cloudAIViewModel: cloudAIViewModel
             )
         case .updates:
             ZenScreen(
@@ -467,6 +470,7 @@ struct ZenVoiceSettingsView: View {
                 historyViewModel: historyViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
+                meetingViewModel: meetingViewModel,
                 openModels: { selection = .models },
                 openShortcuts: { selection = .dictation }
             )

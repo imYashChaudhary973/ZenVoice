@@ -4,6 +4,12 @@ All notable ZenVoice changes are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Meeting capture (Phase 1): History → Meetings start / pause / resume / stop.
+  Microphone is You; ScreenCaptureKit system audio is Them. Whole-file local
+  decode on Stop. Optional BYO-key recap. Dictation hotkey unchanged.
+
 ### Fixed
 
 
