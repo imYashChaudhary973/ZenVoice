@@ -214,10 +214,11 @@ public enum AudioArchiveExporter {
             error: &coordinatorError
         ) { zippedURL in
             do {
-                if fileManager.fileExists(atPath: destinationURL.path) {
-                    try fileManager.removeItem(at: destinationURL)
-                }
-                try fileManager.copyItem(at: zippedURL, to: destinationURL)
+                try replaceFile(
+                    from: zippedURL,
+                    to: destinationURL,
+                    fileManager: fileManager
+                )
             } catch {
                 copyError = error
             }
@@ -232,6 +233,35 @@ public enum AudioArchiveExporter {
             throw AudioArchiveExportError.archiveFailed(
                 copyError.localizedDescription
             )
+        }
+    }
+
+    /// Copies `source` over `destination` without deleting the existing file
+    /// first. A failed copy leaves the previous destination intact.
+    public static func replaceFile(
+        from source: URL,
+        to destination: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        let tempURL = destination.deletingLastPathComponent()
+            .appendingPathComponent(
+                ".\(destination.lastPathComponent).\(UUID().uuidString)"
+            )
+        do {
+            try fileManager.copyItem(at: source, to: tempURL)
+            if fileManager.fileExists(atPath: destination.path) {
+                _ = try fileManager.replaceItemAt(
+                    destination,
+                    withItemAt: tempURL,
+                    backupItemName: nil,
+                    options: .usingNewMetadataOnly
+                )
+            } else {
+                try fileManager.moveItem(at: tempURL, to: destination)
+            }
+        } catch {
+            try? fileManager.removeItem(at: tempURL)
+            throw error
         }
     }
 }

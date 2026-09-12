@@ -1346,6 +1346,50 @@ do {
 
 print("ZenVoiceCoreChecks: hold controls passed")
 
+do {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let partA = directory.appendingPathComponent("a.part")
+    let partB = directory.appendingPathComponent("b.part")
+    let assembled = directory.appendingPathComponent("out.download")
+    try Data("A".utf8).write(to: partA)
+    try Data("B".utf8).write(to: partB)
+    try Data("partial".utf8).write(to: assembled)
+    let reaper = TemporaryFileReaper()
+    reaper.retain(partA)
+    reaper.retain(partB)
+    reaper.retain(assembled)
+    reaper.forget(assembled)
+    reaper.removeAll()
+    guard !FileManager.default.fileExists(atPath: partA.path),
+          !FileManager.default.fileExists(atPath: partB.path),
+          FileManager.default.fileExists(atPath: assembled.path) else {
+        FileHandle.standardError.write(
+            Data("FAIL: canceled multipart download leaked retained parts\n".utf8)
+        )
+        exit(1)
+    }
+    let late = directory.appendingPathComponent("late.part")
+    try Data("L".utf8).write(to: late)
+    reaper.retain(late)
+    guard !FileManager.default.fileExists(atPath: late.path) else {
+        FileHandle.standardError.write(
+            Data("FAIL: a late part survived after multipart cleanup\n".utf8)
+        )
+        exit(1)
+    }
+} catch {
+    FileHandle.standardError.write(
+        Data("FAIL: multipart cleanup check threw \(error)\n".utf8)
+    )
+    exit(1)
+}
+
+print("ZenVoiceCoreChecks: multipart download cleanup passed")
+
+
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
 let verifiedModels = VerifiedModelCatalog.allModels
@@ -3165,6 +3209,10 @@ guard let ollamaEndpoint = try? cloudConfiguration.resolvedEndpoint(),
     failEngineCheck("a local Ollama endpoint was rejected")
 }
 guard CloudAIProvider.ollama.requiresAPIKey == false,
+      CloudAIProvider.ollama.acceptsAPIKey(""),
+      CloudAIProvider.ollama.acceptsAPIKey("   "),
+      !CloudAIProvider.openAI.acceptsAPIKey(""),
+      CloudAIProvider.openAI.acceptsAPIKey("sk-test"),
       CloudAIProvider.openRouter.displayName == "OpenRouter",
       CloudAIProvider.ollamaCloud.defaultBaseURL
         == "https://ollama.com/v1" else {

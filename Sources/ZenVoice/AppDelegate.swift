@@ -375,12 +375,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         _ transcript: String
     ) async -> String? {
         let configuration = CloudAIPreferences.load()
-        guard configuration.credentialsBoundToCurrentDestination else {
+        let key = (try? makeCloudAIKeyStore().loadKey()) ?? ""
+        guard configuration.provider.acceptsAPIKey(key) else {
             showError(cloudNotReadyMessage())
             return nil
         }
-        guard let key = ((try? makeCloudAIKeyStore().loadKey()) ?? nil),
-              !key.isEmpty else {
+        guard configuration.credentialsBoundToCurrentDestination else {
             showError(cloudNotReadyMessage())
             return nil
         }
@@ -406,7 +406,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return "Formatting is set to Cloud but Cloud AI is off — used "
                 + "local formatting. Turn it on in Formatting."
         }
-        if ((try? makeCloudAIKeyStore().loadKey()) ?? nil)?.isEmpty ?? true {
+        let key = (try? makeCloudAIKeyStore().loadKey()) ?? ""
+        if !configuration.provider.acceptsAPIKey(key) {
             return "Formatting is set to Cloud but no API key is stored — "
                 + "used local formatting. Add a key in Formatting."
         }

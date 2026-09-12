@@ -51,6 +51,7 @@ enum VerifiedModelDownloadPhase: Sendable {
 private final class MultiPartDownloadHandle: @unchecked Sendable {
     private let lock = NSLock()
     private var tasks: [URLSessionDownloadTask] = []
+    private let parts = TemporaryFileReaper()
     private var wasCancelled = false
     private var exceededExpectedSize = false
     private var finished = false
@@ -60,6 +61,15 @@ private final class MultiPartDownloadHandle: @unchecked Sendable {
         lock.lock()
         finished = true
         lock.unlock()
+        parts.removeAll()
+    }
+
+    func retain(_ url: URL) {
+        parts.retain(url)
+    }
+
+    func forget(_ url: URL) {
+        parts.forget(url)
     }
 
     var isFinished: Bool {
@@ -278,8 +288,10 @@ struct VerifiedModelDownloader {
                 byteRange: ranges[0],
                 handle: handle
             )
+            handle.retain(first.url)
             guard let httpResponse = first.response as? HTTPURLResponse,
                   httpResponse.statusCode == 206 else {
+                handle.forget(first.url)
                 return (first.url, first.response)
             }
             var byIndex = [URL?](repeating: nil, count: ranges.count)
@@ -303,6 +315,7 @@ struct VerifiedModelDownloader {
                             == range.upperBound - range.lowerBound else {
                             throw VerifiedModelDownloadError.unexpectedSize
                         }
+                        handle.retain(part.url)
                         return (index, part.url)
                     }
                 }
@@ -316,7 +329,7 @@ struct VerifiedModelDownloader {
                 }
                 return url
             }
-            let assembledURL = try assemble(partURLs)
+            let assembledURL = try assemble(partURLs, handle: handle)
             return (assembledURL, first.response)
         } onCancel: {
             handle.cancel()
@@ -377,16 +390,19 @@ struct VerifiedModelDownloader {
         }
     }
 
-    private func assemble(_ partURLs: [URL]) throws -> URL {
+    private func assemble(
+        _ partURLs: [URL],
+        handle: MultiPartDownloadHandle
+    ) throws -> URL {
         // The first part is renamed into place; the rest append in order
         // and are deleted as they are consumed, so peak disk use stays
         // close to one copy of the file.
         let assembledURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("ZenVoice-\(UUID().uuidString).download")
+        handle.retain(assembledURL)
         try FileManager.default.moveItem(at: partURLs[0], to: assembledURL)
+        handle.forget(partURLs[0])
         let destination = try FileHandle(forWritingTo: assembledURL)
-        // FileHandle(forWritingTo:) opens at position 0; without this seek
-        // the first appended part overwrites part 0 instead of extending.
         try destination.seekToEnd()
         defer { try? destination.close() }
         for part in partURLs.dropFirst() {
@@ -398,11 +414,13 @@ struct VerifiedModelDownloader {
                 }
                 try? source.close()
                 try FileManager.default.removeItem(at: part)
+                handle.forget(part)
             } catch {
                 try? source.close()
                 throw error
             }
         }
+        handle.forget(assembledURL)
         return assembledURL
     }
 
