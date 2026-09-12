@@ -52,7 +52,7 @@ final class CloudAIDictationPreviewViewModel: ObservableObject {
 
     var isReady: Bool {
         configuration.isEnabled
-            && !key.isEmpty
+            && configuration.provider.acceptsAPIKey(key)
             && (try? configuration.resolvedEndpoint()) != nil
     }
 

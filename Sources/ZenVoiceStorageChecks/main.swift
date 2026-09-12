@@ -1608,6 +1608,55 @@ private func checkAudioArchiveExport() async throws {
     }
 }
 
+private final class DiskFullFileManager: FileManager, @unchecked Sendable {
+    override func copyItem(at src: URL, to dst: URL) throws {
+        throw NSError(
+            domain: NSPOSIXErrorDomain,
+            code: Int(ENOSPC),
+            userInfo: [
+                NSLocalizedDescriptionKey: "No space left on device"
+            ]
+        )
+    }
+}
+
+private func checkExportReplacePreservesPrevious() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+        at: directory,
+        withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let previous = directory.appendingPathComponent("export.zip")
+    let source = directory.appendingPathComponent("new.zip")
+    let previousBytes = Data("PREVIOUS-EXPORT".utf8)
+    try previousBytes.write(to: previous)
+    try Data("NEW-EXPORT".utf8).write(to: source)
+
+    do {
+        try AudioArchiveExporter.replaceFile(
+            from: source,
+            to: previous,
+            fileManager: DiskFullFileManager()
+        )
+        throw CheckError.failed("disk-full export replace succeeded")
+    } catch let checkError as CheckError {
+        throw checkError
+    } catch {
+        // Expected.
+    }
+
+    let remaining = try Data(contentsOf: previous)
+    guard remaining == previousBytes else {
+        throw CheckError.failed(
+            "failed export replace destroyed the previous export"
+        )
+    }
+}
+
+
 private func checkAudioHistoryPreferenceDefaults() async throws {
     let suiteName = "ZenVoiceChecks.audioHistory.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -1838,10 +1887,11 @@ do {
     try await checkAudioArchiveLifecycle()
     try await checkAudioArchiveBudgets()
     try await checkAudioArchiveExport()
+    try checkExportReplacePreservesPrevious()
     try await checkAudioHistoryPreferenceDefaults()
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
-    print("ZenVoiceStorageChecks: 24 checks passed")
+    print("ZenVoiceStorageChecks: 25 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

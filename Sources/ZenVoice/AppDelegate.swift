@@ -374,15 +374,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func enhanceWithoutPrompting(
         _ transcript: String
     ) async -> String? {
-        guard let key = ((try? makeCloudAIKeyStore().loadKey()) ?? nil),
-              !key.isEmpty else {
+        let configuration = CloudAIPreferences.load()
+        let key = (try? makeCloudAIKeyStore().loadKey()) ?? ""
+        guard configuration.provider.acceptsAPIKey(key) else {
             showError(cloudNotReadyMessage())
             return nil
         }
         do {
             let result = try await CloudAIEnhancementEngine().enhance(
                 transcript: transcript,
-                configuration: CloudAIPreferences.load(),
+                configuration: configuration,
                 apiKey: key
             )
             return result.enhanced
@@ -401,7 +402,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return "Formatting is set to Cloud but Cloud AI is off — used "
                 + "local formatting. Turn it on in Formatting."
         }
-        if ((try? makeCloudAIKeyStore().loadKey()) ?? nil)?.isEmpty ?? true {
+        let key = (try? makeCloudAIKeyStore().loadKey()) ?? ""
+        if !configuration.provider.acceptsAPIKey(key) {
             return "Formatting is set to Cloud but no API key is stored — "
                 + "used local formatting. Add a key in Formatting."
         }

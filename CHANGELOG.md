@@ -6,6 +6,10 @@ All notable ZenVoice changes are recorded here.
 
 ### Fixed
 
+
+- Canceled multipart model downloads delete retained .part files.
+- Keyless local Ollama can enhance; empty-key rejection is only for providers that need a key.
+- A failed Audio History export no longer deletes the previous ZIP.
 - Privacy has an explicit Reset local vault control for the full wipe.
 
 - Hold-to-dictate tracks the selected physical key, so releasing it stops
