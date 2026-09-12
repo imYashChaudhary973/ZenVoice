@@ -57,11 +57,14 @@ final class HoldToDictateController {
     }
 
     private func handle(_ event: NSEvent) {
-        guard isEnabled, event.keyCode == key.keyCode else {
+        guard isEnabled else {
             return
         }
-        let pressed = isModifierPressed(in: event.modifierFlags)
-        guard pressed != isPressed else {
+        guard let pressed = key.pressTransition(
+            eventKeyCode: event.keyCode,
+            flags: event.modifierFlags.rawValue,
+            currentlyPressed: isPressed
+        ) else {
             return
         }
         isPressed = pressed
@@ -69,26 +72,6 @@ final class HoldToDictateController {
             onPress?()
         } else {
             onRelease?()
-        }
-    }
-
-    private func isModifierPressed(
-        in flags: NSEvent.ModifierFlags
-    ) -> Bool {
-        let flags = flags.intersection(
-            .deviceIndependentFlagsMask
-        )
-        switch key {
-        case .function:
-            return flags.contains(.function)
-        case .leftCommand, .rightCommand:
-            return flags.contains(.command)
-        case .leftOption, .rightOption:
-            return flags.contains(.option)
-        case .leftControl, .rightControl:
-            return flags.contains(.control)
-        case .leftShift, .rightShift:
-            return flags.contains(.shift)
         }
     }
 

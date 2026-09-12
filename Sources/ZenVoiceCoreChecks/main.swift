@@ -1281,6 +1281,69 @@ guard Set(HoldKeyChoice.allCases.map(\.keyCode)).count
     exit(1)
 }
 
+// Left Command is configured. Press left, press right, release left, release
+// right. Combined `.command` would stay set; the physical-key bit must not.
+do {
+    let key = HoldKeyChoice.leftCommand
+    let command = UInt(1 << 20)
+    let left = key.deviceModifierFlag
+    let right = HoldKeyChoice.rightCommand.deviceModifierFlag
+    var isPressed = false
+    var starts = 0
+    var stops = 0
+
+    func handle(keyCode: UInt16, flags: UInt) {
+        guard let pressed = key.pressTransition(
+            eventKeyCode: keyCode,
+            flags: flags,
+            currentlyPressed: isPressed
+        ) else {
+            return
+        }
+        isPressed = pressed
+        if pressed {
+            starts += 1
+        } else {
+            stops += 1
+        }
+    }
+
+    handle(keyCode: key.keyCode, flags: command | left)
+    handle(
+        keyCode: HoldKeyChoice.rightCommand.keyCode,
+        flags: command | left | right
+    )
+    handle(keyCode: key.keyCode, flags: command | right)
+    handle(keyCode: HoldKeyChoice.rightCommand.keyCode, flags: 0)
+
+    guard starts == 1, stops == 1, isPressed == false else {
+        FileHandle.standardError.write(
+            Data(
+                "FAIL: hold-to-dictate stayed pressed after releasing the configured key (starts=\(starts), stops=\(stops), stuckPressed=\(isPressed))\n".utf8
+            )
+        )
+        exit(1)
+    }
+
+    guard HoldKeyChoice.shouldOpenMicrophone(
+        startedByHold: true,
+        holdKeyPressed: false
+    ) == false,
+          HoldKeyChoice.shouldOpenMicrophone(
+            startedByHold: true,
+            holdKeyPressed: true
+          ),
+          HoldKeyChoice.shouldOpenMicrophone(
+            startedByHold: false,
+            holdKeyPressed: false
+          ) else {
+        FileHandle.standardError.write(
+            Data("FAIL: hold-to-dictate opened the microphone after release\n".utf8)
+        )
+        exit(1)
+    }
+}
+
 print("ZenVoiceCoreChecks: hold controls passed")
 
 // Metadata is checked across offered *and* retired models, because a retired

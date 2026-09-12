@@ -575,6 +575,28 @@ public actor DictationVault {
         return deletedCount
     }
 
+    /// Removes transcript ciphertext and dictation rows that are not holding
+    /// recovery audio. Leaves Audio History, recovery files, correction rules,
+    /// and the vault key untouched.
+    public func deleteAllTranscripts() throws {
+        try execute("DELETE FROM dictations WHERE recovery_audio_path IS NULL;")
+        try execute(
+            """
+            UPDATE dictations
+            SET raw_transcript = NULL,
+                final_transcript = NULL,
+                word_count = 0,
+                words_per_minute = 0,
+                correction_count = 0,
+                is_partial = 0;
+            """
+        )
+        try execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        HistoryPreferences().vaultNeedsVacuum = true
+    }
+
+    /// Full vault reset: transcripts, recovery audio, audio archives,
+    /// correction rules, and a new encryption key.
     public func deleteAll() throws {
         let existingRecovery = try recoveryEntries(whereClause: "1 = 1")
         for entry in existingRecovery {

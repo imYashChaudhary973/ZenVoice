@@ -25,6 +25,18 @@ cd "$project_dir"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $new_version" \
     "$project_dir/Resources/Info.plist"
 
+# Sparkle compares sparkle:version to CFBundleVersion. Bump the build number
+# with every marketing release so the feed is never older than the install.
+current_build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" \
+    "$project_dir/Resources/Info.plist")
+if [[ "$current_build" != <-> ]]; then
+    echo "Error: CFBundleVersion must be an integer, got: $current_build" >&2
+    exit 1
+fi
+new_build=$((current_build + 1))
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $new_build" \
+    "$project_dir/Resources/Info.plist"
+
 # CHANGELOG.md - add a new release section if the Unreleased block is empty.
 changelog="$project_dir/CHANGELOG.md"
 if grep -q "^## \[Unreleased\]$" "$changelog" 2>/dev/null; then
@@ -38,5 +50,5 @@ if grep -q "^## \[Unreleased\]$" "$changelog" 2>/dev/null; then
     fi
 fi
 
-echo "Version bumped to $new_version"
+echo "Version bumped to $new_version (CFBundleVersion $new_build)"
 echo "Review the diff, then commit and open a PR."

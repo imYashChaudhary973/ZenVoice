@@ -1616,6 +1616,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !state.isBusy else {
             return
         }
+        guard HoldKeyChoice.shouldOpenMicrophone(
+            startedByHold: startedByHold,
+            holdKeyPressed: holdKeyPressed
+        ) else {
+            return
+        }
         if whisperEngine == nil {
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -1672,6 +1678,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !recorder.isRecording, !state.isBusy else {
             return
         }
+        guard HoldKeyChoice.shouldOpenMicrophone(
+            startedByHold: startedByHold,
+            holdKeyPressed: holdKeyPressed
+        ) else {
+            return
+        }
         resetWorkItem?.cancel()
         state.resetAudioSamples()
         var historyDraft: DictationDraft?
@@ -1717,8 +1729,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
         }
-
         dictationTargetProcessIdentifier = targetApplication?.processIdentifier
+        guard HoldKeyChoice.shouldOpenMicrophone(
+            startedByHold: startedByHold,
+            holdKeyPressed: holdKeyPressed
+        ) else {
+            if let historyID = historyDraft?.id {
+                try? await dictationVault?.discard(id: historyID)
+                activeHistoryID = nil
+            }
+            dictationTargetProcessIdentifier = nil
+            return
+        }
         do {
             try recorder.start(
                 recordingURL: historyDraft?.recoveryAudioURL,

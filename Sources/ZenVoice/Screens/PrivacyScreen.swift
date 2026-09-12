@@ -173,6 +173,23 @@ struct PrivacyScreen: View {
                             ZenPrimaryButtonStyle(minWidth: 108)
                         )
                 }
+                ZenPanelDivider()
+                ZenRow(
+                    icon: "trash",
+                    title: "Reset local vault",
+                    subtitle:
+                        "Deletes transcripts, recovery audio, audio history, and correction rules, then rotates the encryption key."
+                ) {
+                    ZenHoldToDeleteButton(
+                        label: "Reset",
+                        minWidth: 108
+                    ) {
+                        Task {
+                            await historyViewModel.resetVault()
+                            voiceProfileViewModel.refresh()
+                        }
+                    }
+                }
             }
         }
     }

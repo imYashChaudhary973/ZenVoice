@@ -112,7 +112,8 @@ Example usage:
 
 Required arguments:
 
-- `--version VERSION` — the release version, e.g. `0.4.2`.
+- `--version VERSION` — the marketing version, e.g. `0.4.2`. Written to
+  `sparkle:shortVersionString`.
 - `--dmg PATH` — path to the notarized and stapled release DMG.
 - `--feed-url URL` — public HTTPS URL where `appcast.xml` will be hosted.
 - `--private-key PATH` — path to the Ed25519 private key file used by
@@ -120,6 +121,10 @@ Required arguments:
 
 Optional arguments:
 
+- `--build BUILD` — integer `CFBundleVersion` written to `sparkle:version`.
+  Defaults to `Resources/Info.plist`. Sparkle compares this to the installed
+  app's `CFBundleVersion`; a marketing string such as `0.4.6` is treated as
+  older than build `5`.
 - `--output PATH` — where to write `appcast.xml` (defaults to `appcast.xml` in
   the working directory).
 
@@ -181,7 +186,7 @@ A generated feed for version `0.4.2` looks like this (signature is shortened):
     <item>
       <title>ZenVoice 0.4.2</title>
       <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
-      <sparkle:version>0.4.2</sparkle:version>
+      <sparkle:version>4</sparkle:version>
       <sparkle:shortVersionString>0.4.2</sparkle:shortVersionString>
       <description>
         <![CDATA[
@@ -193,7 +198,7 @@ A generated feed for version `0.4.2` looks like this (signature is shortened):
         url="https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.2/ZenVoice.dmg"
         length="12345678"
         type="application/octet-stream"
-        sparkle:version="0.4.2"
+        sparkle:version="4"
         sparkle:shortVersionString="0.4.2"
         sparkle:edSignature="MEYCIQ...=="
       />
