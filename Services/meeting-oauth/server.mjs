@@ -83,7 +83,7 @@ const server = http.createServer(async (request, response) => {
       flows.set(serverState, { provider, state, challenge, redirect, expires: Date.now() + 600_000 });
       const target = new URL(config.authorize);
       target.search = new URLSearchParams({ client_id: config.id, redirect_uri: redirect, state: serverState,
-        ...(provider !== 'slack' ? { response_type: 'code', scope: config.scope, access_type: 'offline', prompt: 'consent',
+        ...(provider !== 'slack' ? { response_type: 'code', scope: config.scope, access_type: 'offline', prompt: 'consent select_account',
           code_challenge: challenge, code_challenge_method: 'S256' } : { user_scope: config.scope }) });
       response.writeHead(302, { Location: target.href, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
       return response.end();
