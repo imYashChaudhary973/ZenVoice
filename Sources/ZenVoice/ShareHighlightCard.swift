@@ -124,13 +124,13 @@ struct ShareHighlightSheet: View {
         guard let data = ShareHighlightCardRenderer.pngData(
             for: summary
         ) else {
-            errorMessage = "ZenVoice could not render the highlight image."
+            errorMessage = "BuilderHelm Voice could not render the highlight image."
             return
         }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "ZenVoice-Highlights.png"
+        panel.nameFieldStringValue = "BuilderHelm Voice-Highlights.png"
         guard panel.runModal() == .OK, let url = panel.url else {
             return
         }
@@ -148,7 +148,7 @@ struct ShareHighlightSheet: View {
             for: summary
         ),
               let view = NSApp.keyWindow?.contentView else {
-            errorMessage = "ZenVoice could not open the macOS Share menu."
+            errorMessage = "BuilderHelm Voice could not open the macOS Share menu."
             return
         }
         errorMessage = nil
@@ -250,7 +250,7 @@ private struct ShareHighlightCard: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "ZenVoice highlights: \(summary.totalWordCount) words, "
+            "BuilderHelm Voice highlights: \(summary.totalWordCount) words, "
                 + "\(summary.weightedWordsPerMinute) words per minute, "
                 + "\(summary.currentStreakDays) day streak, "
                 + "\(summary.distinctApplicationCount) apps."

@@ -28,7 +28,7 @@ enum VerifiedModelDownloadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidSource:
-            "ZenVoice blocked an unapproved model source."
+            "BuilderHelm Voice blocked an unapproved model source."
         case .invalidResponse:
             "The approved model server returned an invalid response."
         case .unexpectedSize:
@@ -363,7 +363,7 @@ struct VerifiedModelDownloader {
                             let retainedURL =
                                 FileManager.default.temporaryDirectory
                                 .appendingPathComponent(
-                                    "ZenVoice-\(UUID().uuidString).part"
+                                    "BuilderHelm Voice-\(UUID().uuidString).part"
                                 )
                             try FileManager.default.moveItem(
                                 at: temporaryURL,
@@ -398,7 +398,7 @@ struct VerifiedModelDownloader {
         // and are deleted as they are consumed, so peak disk use stays
         // close to one copy of the file.
         let assembledURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ZenVoice-\(UUID().uuidString).download")
+            .appendingPathComponent("BuilderHelm Voice-\(UUID().uuidString).download")
         handle.retain(assembledURL)
         try FileManager.default.moveItem(at: partURLs[0], to: assembledURL)
         handle.forget(partURLs[0])
@@ -449,7 +449,7 @@ struct VerifiedModelDownloader {
                             let retainedURL =
                                 FileManager.default.temporaryDirectory
                                 .appendingPathComponent(
-                                    "ZenVoice-\(UUID().uuidString).download"
+                                    "BuilderHelm Voice-\(UUID().uuidString).download"
                                 )
                             try FileManager.default.moveItem(
                                 at: temporaryURL,
@@ -683,7 +683,7 @@ final class ModelManagerViewModel: ObservableObject {
                           ),
                           // Listing variant: this runs over every catalogue
                           // entry each time the window opens. Nothing is
-                          // loaded on its answer — `ZenVoiceConfiguration`
+                          // loaded on its answer — `BuilderHelm VoiceConfiguration`
                           // hashes for real before a model is used.
                           (try? VerifiedModelCatalog.verifyForListing(
                             url,
@@ -1011,7 +1011,7 @@ final class ModelManagerViewModel: ObservableObject {
             installedModels: installed,
             recommendedModelID: recommendedID
         ) else {
-            let error = ZenVoiceConfiguration.ConfigurationError
+            let error = BuilderHelm VoiceConfiguration.ConfigurationError
                 .incompatibleProfile(
                     ModelProfileTransition.unavailableMessage(for: profile)
                 )

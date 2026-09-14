@@ -3,7 +3,7 @@
 Status: implementation review complete; public release remains blocked by the
 manual gates in [Release Readiness](RELEASE_READINESS.md).
 
-This is an engineering review, not a claim that ZenVoice is vulnerability-free.
+This is an engineering review, not a claim that BuilderHelm Voice is vulnerability-free.
 Automated checks and Semgrep supplement code review; they do not replace
 permission, privacy, signing, or release testing.
 
@@ -21,8 +21,8 @@ permission, privacy, signing, or release testing.
 | Boundary | Primary risk | Current control | Residual risk |
 | --- | --- | --- | --- |
 | Microphone → temporary WAV | sensitive audio survives unexpectedly | cancellation cleanup, successful cleanup, private Application Support recovery, capture-bounded 24-hour expiry | forced termination can leave an OS temporary file when recovery is disabled |
-| Transcript → SQLite | plaintext disclosure or record swapping | AES-GCM, Keychain key, record-and-field authenticated data | an unlocked local account can open ZenVoice and view decrypted history |
-| Transcript → clipboard | another process reads dictated text | explicit clipboard fallback documented; no background upload | clipboard remains outside ZenVoice until another app replaces it |
+| Transcript → SQLite | plaintext disclosure or record swapping | AES-GCM, Keychain key, record-and-field authenticated data | an unlocked local account can open BuilderHelm Voice and view decrypted history |
+| Transcript → clipboard | another process reads dictated text | explicit clipboard fallback documented; no background upload | clipboard remains outside BuilderHelm Voice until another app replaces it |
 | Accessibility paste | synthetic events affect the wrong target | paste only after an explicit dictation lifecycle; denial falls back to copy | focus can change before insertion |
 | Whisper model download | tampered or substituted weights | fixed HTTPS allowlist, revision, size, SHA-256, atomic install, user-only permissions | a newly approved model still requires human provenance and licence review |
 | Runtime dependency | compromised binary framework | fixed release URL and SwiftPM checksum; embedded framework signed with the app | upstream binary is trusted after checksum and source review, not reproduced locally |
@@ -37,7 +37,7 @@ permission, privacy, signing, or release testing.
 - Semgrep Community Edition scans Swift and supporting files on pull requests
   and `main`;
 - workflow permissions are `contents: read`;
-- the release-readiness script rejects missing notices, ZenVoice licensing,
+- the release-readiness script rejects missing notices, BuilderHelm Voice licensing,
   a non-Developer-ID signature, an unstapled app, secrets found in tracked
   files, or unfinished manual checklist items.
 
@@ -48,8 +48,8 @@ automatic publishing, or updater is present. Those are intentionally outside
 M9 and require a new threat review before implementation.
 
 The current build is appropriate for personal use, development testing, and
-open-source contribution. ZenVoice is licensed under the Apache License, Version
-2.0. Public distribution is deferred while ZenVoice is refined for internal use;
+open-source contribution. BuilderHelm Voice is licensed under the Apache License, Version
+2.0. Public distribution is deferred while BuilderHelm Voice is refined for internal use;
 see [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md). The build
 targets macOS 14 or newer, but only the macOS versions recorded in the release
 QA record are certified; the deployment target is a floor, not evidence.
@@ -72,7 +72,7 @@ Both ship off by default; the updater ships inert entirely.
 
 ### Cloud AI Enhancement
 
-The only feature in ZenVoice that can send user content off-device. See
+The only feature in BuilderHelm Voice that can send user content off-device. See
 [ADR 0011](decisions/0011-cloud-ai-enhancement.md).
 
 | Concern | Control |
@@ -86,10 +86,10 @@ The only feature in ZenVoice that can send user content off-device. See
 | Request reuse | Ephemeral `URLSession`, no cookie storage, no URL cache, cache policy `reloadIgnoringLocalAndRemoteCacheData`. |
 
 **Residual risk, accepted:** once the user opts in, their transcript text is
-governed by the chosen provider's retention policy, which ZenVoice cannot
+governed by the chosen provider's retention policy, which BuilderHelm Voice cannot
 observe or constrain. This is stated in the UI rather than mitigated, because it
-is inherent to the feature. There is no ZenVoice-operated proxy, so there is no
-ZenVoice-side log of user content.
+is inherent to the feature. There is no BuilderHelm Voice-operated proxy, so there is no
+BuilderHelm Voice-side log of user content.
 
 ### Auto-updates
 
@@ -111,7 +111,7 @@ binary. See [ADR 0012](decisions/0012-auto-updates.md).
 surface needed is small and CryptoKit provides Ed25519 directly; taking Sparkle
 would add a large dependency, a second update UI, and its own historical CVE
 surface for features (delta updates, installer scripts) this product does not
-want. The trade-off is that ZenVoice owns this code and its defects.
+want. The trade-off is that BuilderHelm Voice owns this code and its defects.
 
 **Residual risk, accepted:** the signing key is a single point of failure for
 update delivery. Losing it means no further updates to existing installs;
@@ -177,7 +177,7 @@ the build.
 
 **Residual risk, accepted:** an approved Codex or Claude step is a delegation to
 a separate product with its own credentials and its own network behaviour.
-ZenVoice can bound *where* it runs, *what* it was asked, and *when* it is
+BuilderHelm Voice can bound *where* it runs, *what* it was asked, and *when* it is
 killed; it cannot bound what that tool then does within those limits. This is
 why the feature is off by default, why the plan is shown verbatim before
 execution, and why approval is never voice-only.

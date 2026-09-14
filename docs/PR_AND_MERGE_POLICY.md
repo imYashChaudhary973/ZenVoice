@@ -1,7 +1,7 @@
-# ZenVoice Pull Request and Merge Policy
+# BuilderHelm Voice Pull Request and Merge Policy
 
 Every code, legal, documentation, or CI change must follow this policy. The
-policy is a living record of how ZenVoice stays reviewable, safe, and
+policy is a living record of how BuilderHelm Voice stays reviewable, safe, and
 releasable. Updates to this file require a PR and are not exempt from the
 rules below.
 
@@ -54,7 +54,7 @@ A PR is **never** merged if any of the following are true:
 
 ## Concerns and vertical slices
 
-ZenVoice PRs are organized by **concern**, not by file count. The PR template
+BuilderHelm Voice PRs are organized by **concern**, not by file count. The PR template
 asks which concerns are touched. If more than three are checked, the author
 must either split the PR or explain why the concerns are inseparable in a
 single vertical slice.
@@ -107,7 +107,7 @@ The PR description must answer:
 
 Evidence belongs in the PR body or linked from it. Acceptable evidence:
 
-- Terminal output of `swift build` and `swift run ZenVoice*Checks`.
+- Terminal output of `swift build` and `swift run BuilderHelm Voice*Checks`.
 - Output of `./Scripts/check-release-readiness.sh`.
 - Manual QA notes with macOS version and scenario numbers.
 - A link to a related issue, milestone, or prior PR.

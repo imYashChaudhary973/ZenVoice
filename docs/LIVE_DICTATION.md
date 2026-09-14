@@ -12,7 +12,7 @@ default path decodes the recording once, at the end.
 
 ## Stability boundary
 
-ZenVoice does not treat every changing token as final. It waits for:
+BuilderHelm Voice does not treat every changing token as final. It waits for:
 
 - at least 450 milliseconds of detected speech; and
 - at least 700 milliseconds of following silence.
@@ -25,20 +25,20 @@ audio and is handled at the next pause or final stop.
 ## Commit on pause
 
 **Paste stable phrases on pause is experimental and off by default.** When the
-user enables it, ZenVoice pastes a stable phrase only if:
+user enables it, BuilderHelm Voice pastes a stable phrase only if:
 
 1. Accessibility permission is still available.
 2. The application active at dictation start is still the active application.
 3. The session has not already hit a streaming-insertion safety failure.
 
-If any guard fails, ZenVoice stops incremental insertion for that dictation and
+If any guard fails, BuilderHelm Voice stops incremental insertion for that dictation and
 holds the remaining text for final stop. It never redirects a stable phrase to
 a different foreground app.
 
 ## Final stop and recovery
 
 Final stop invalidates any in-flight preview and transcribes all samples after
-the last accepted phrase. ZenVoice combines stable and remaining text for the
+the last accepted phrase. BuilderHelm Voice combines stable and remaining text for the
 authoritative History record. Text already inserted during stable commits is
 not inserted again.
 

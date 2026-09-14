@@ -1,6 +1,6 @@
 # Hinglish spelling personalization
 
-ZenVoice keeps Hinglish Apex as the speech model and improves recurring
+BuilderHelm Voice keeps Hinglish Apex as the speech model and improves recurring
 spellings with user-approved, local correction rules. It does not apply a
 general English spell-checker to Romanized Hindi.
 
@@ -9,7 +9,7 @@ general English spell-checker to Romanized Hindi.
 1. Open **History**.
 2. Open a saved dictation's `…` menu.
 3. Select **Correct spelling…**.
-4. Enter the spelling ZenVoice produced and the spelling you prefer.
+4. Enter the spelling BuilderHelm Voice produced and the spelling you prefer.
 5. Confirm the Hinglish-only scope and save.
 
 The source and replacement are encrypted in the local vault. The preferred
@@ -28,7 +28,7 @@ ignored if a local corpus is temporarily placed inside the repository.
 Collect 30–50 representative cases:
 
 ```text
-~/ZenVoice-Hinglish-Spelling/
+~/BuilderHelm Voice-Hinglish-Spelling/
 ├── 001.wav
 ├── 001.txt
 ├── 001.raw.txt
@@ -60,10 +60,10 @@ line, to measure Whisper prompt bias:
 
 ```bash
 .build/release/ZenVoiceLanguageBench \
-  --model "$HOME/Library/Application Support/ZenVoice/Models/ggml-hindi2hinglish-apex-q8_0.bin" \
+  --model "$HOME/Library/Application Support/BuilderHelm Voice/Models/ggml-hindi2hinglish-apex-q8_0.bin" \
   --suite hinglish \
-  --corpus "$HOME/ZenVoice-Hinglish-Spelling" \
-  --vocabulary "$HOME/ZenVoice-Hinglish-Spelling/preferred-terms.txt" \
+  --corpus "$HOME/BuilderHelm Voice-Hinglish-Spelling" \
+  --vocabulary "$HOME/BuilderHelm Voice-Hinglish-Spelling/preferred-terms.txt" \
   --limit 50 \
   --clean
 ```
@@ -71,9 +71,9 @@ line, to measure Whisper prompt bias:
 Use the deterministic app harness for an individual end-to-end insertion:
 
 ```bash
-ZENVOICE_E2E_AUDIO_FILE="$HOME/ZenVoice-Hinglish-Spelling/001.wav" \
+ZENVOICE_E2E_AUDIO_FILE="$HOME/BuilderHelm Voice-Hinglish-Spelling/001.wav" \
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
-swift run ZenVoice
+swift run BuilderHelm Voice
 ```
 
 Track:

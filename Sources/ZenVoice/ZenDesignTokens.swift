@@ -15,7 +15,7 @@
 import AppKit
 import SwiftUI
 
-/// ZenVoice design tokens translated from the supplied graphite/violet system.
+/// BuilderHelm Voice design tokens translated from the supplied graphite/violet system.
 enum ZenDesign {
     enum Primitive {
         static let base = Color(nsColor: NSColor(red: 0.094, green: 0.094, blue: 0.106, alpha: 1))

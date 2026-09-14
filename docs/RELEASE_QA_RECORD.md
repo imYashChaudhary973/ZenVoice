@@ -4,7 +4,7 @@ Copy this file for each release candidate, name the copy with the version and
 date, and retain the completed copy with the protected release approval or
 release assets. Do not modify the tested source commit only to add results. Run
 every test against the app extracted from the exact post-staple
-`ZenVoice-distribution.zip` produced by `Scripts/notarize-app.sh`, not the
+`BuilderHelm Voice-distribution.zip` produced by `Scripts/notarize-app.sh`, not the
 pre-staple notarization upload or a later development build.
 
 Use only `Pass`, `Fail`, `Blocked`, `Not run`, or `Not applicable` for results.
@@ -22,9 +22,9 @@ contact details, or unrelated personal data in this record or its attachments.
 | Minimum supported version (deployment target) | Apple Silicon, macOS 14 or newer |
 | macOS versions actually certified by this sweep | |
 | Source commit reported by `Scripts/build-app.sh` | |
-| Notarization upload archive | `ZenVoice-notarization-upload.zip` |
+| Notarization upload archive | `BuilderHelm Voice-notarization-upload.zip` |
 | Notarization request ID | |
-| Distribution artifact | `ZenVoice-distribution.zip` |
+| Distribution artifact | `BuilderHelm Voice-distribution.zip` |
 | Distribution SHA-256 printed by `Scripts/notarize-app.sh` | |
 | Test date | |
 | Tester name, initials, or role | |
@@ -92,7 +92,7 @@ count, or an issue link. Do not paste the dictated sentence into this record.
 
 ## Model-runtime evidence
 
-Perform these transitions while ZenVoice is idle on Apple Silicon with at
+Perform these transitions while BuilderHelm Voice is idle on Apple Silicon with at
 least two current models installed (for example Whisper Turbo and Whisper
 Small, or Whisper Turbo and Hinglish Apex). A row passes only after the target
 shows **In use**, **Home → Model** shows the target, and a new non-sensitive

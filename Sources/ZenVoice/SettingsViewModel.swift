@@ -57,9 +57,9 @@ final class SettingsViewModel: ObservableObject {
             case .allowed:
                 return nil
             case .notRequested:
-                return "ZenVoice will ask macOS for permission."
+                return "BuilderHelm Voice will ask macOS for permission."
             case .denied:
-                return "Turn ZenVoice on in System Settings, then come back."
+                return "Turn BuilderHelm Voice on in System Settings, then come back."
             case .restricted:
                 return "A device policy blocks this. Contact whoever manages "
                     + "this Mac."
@@ -164,7 +164,7 @@ final class SettingsViewModel: ObservableObject {
     private static let accessibilityRequestedKey =
         "ZenVoice.permissions.accessibilityRequested"
 
-    /// Whether ZenVoice has ever shown the Accessibility prompt.
+    /// Whether BuilderHelm Voice has ever shown the Accessibility prompt.
     ///
     /// macOS reports only trusted/not-trusted, so this is the only way to tell
     /// "we have not asked yet" from "the user has seen the prompt and not
@@ -385,7 +385,7 @@ final class SettingsViewModel: ObservableObject {
         applyHoldToDictate(enabled, holdKey)
         if enabled, accessibilityStatus != .allowed {
             shortcutError =
-                "Hold to dictate needs Accessibility permission to detect the key outside ZenVoice."
+                "Hold to dictate needs Accessibility permission to detect the key outside BuilderHelm Voice."
             requestAccessibilityAccess()
         } else {
             shortcutError = nil

@@ -1,15 +1,15 @@
 # Design
 
-The ZenVoice interface is one native macOS window: a `NavigationSplitView`
+The BuilderHelm Voice interface is one native macOS window: a `NavigationSplitView`
 sidebar, a unified titlebar toolbar, and a scrolling preference pane. The
 graphite/violet identity stays intact, while navigation, toolbar placement,
 segmented controls, focus, and window behavior follow familiar Apple patterns.
 
 This document is the contract for the visual system. It describes what the
 tokens mean and when to reach for each component, not every pixel — the pixels
-live in [`ZenDesignTokens.swift`](../Sources/ZenVoice/ZenDesignTokens.swift),
-[`ZenChrome.swift`](../Sources/ZenVoice/ZenChrome.swift), and
-[`ZenV2Components.swift`](../Sources/ZenVoice/ZenV2Components.swift).
+live in [`ZenDesignTokens.swift`](../Sources/BuilderHelm Voice/ZenDesignTokens.swift),
+[`ZenChrome.swift`](../Sources/BuilderHelm Voice/ZenChrome.swift), and
+[`ZenV2Components.swift`](../Sources/BuilderHelm Voice/ZenV2Components.swift).
 
 ## Principles
 
@@ -59,7 +59,7 @@ Using the sampled violet for both is the specific mistake this split prevents:
 small foreground on graphite. Nothing should use a raw violet without first
 choosing the foreground or fill role.
 
-`accentStrong` is the pressed state for a filled control. ZenVoice follows the
+`accentStrong` is the pressed state for a filled control. BuilderHelm Voice follows the
 system appearance instead of forcing Dark Aqua. Semantic AppKit colours provide
 the canvas, surfaces, labels, and separators; violet remains the single product
 tint in both light and dark appearances.
@@ -137,7 +137,7 @@ every assistive technology that targets by frame.
 ┌──────────────── unified macOS toolbar ─────────────┐
 │ ◫                ● Ready      ⌘      Dictate       │
 ├──────────────┬─────────────────────────────────────┤
-│ ZenVoice     │ [chip]  Preference title            │
+│ BuilderHelm Voice     │ [chip]  Preference title            │
 │ Overview     │         Supporting context           │
 │ Configure    │  [native segmented control]         │
 │  Dictation   │  ┌───────────────────────────────┐  │
@@ -197,7 +197,7 @@ must construct exactly one and carry a tab strip.
 
 ## The menu bar
 
-ZenVoice installs a real `NSApp.mainMenu` — App, Edit, Window — in
+BuilderHelm Voice installs a real `NSApp.mainMenu` — App, Edit, Window — in
 `AppDelegate.configureMainMenu()`.
 
 It had none. Running as an accessory with only a status-item menu is fine while

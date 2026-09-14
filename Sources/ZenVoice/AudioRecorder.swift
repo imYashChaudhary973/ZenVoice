@@ -41,9 +41,9 @@ final class AudioRecorder: NSObject,
         var errorDescription: String? {
             switch self {
             case .unableToCreateRecorder:
-                return "ZenVoice could not open the microphone."
+                return "BuilderHelm Voice could not open the microphone."
             case .unableToStart:
-                return "ZenVoice could not start recording."
+                return "BuilderHelm Voice could not start recording."
             case .invalidInputFormat:
                 return "The selected microphone returned an unsupported audio format."
             case .invalidDeterministicFixture:
@@ -576,7 +576,7 @@ final class AudioRecorder: NSObject,
         audioFile = outputFile
         targetFormat = sourceFormat
         self.levelChanged = levelChanged
-        activeDeviceUID = "ZenVoice deterministic E2E fixture"
+        activeDeviceUID = "BuilderHelm Voice deterministic E2E fixture"
         recordingURL = destinationURL
         recordingStartedAt = Date()
         deterministicFixtureDuration =

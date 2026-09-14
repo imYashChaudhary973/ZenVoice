@@ -2,7 +2,7 @@
 
 **Status:** In progress — 2026-08-06.
 
-**Goal:** Make ZenVoice look and behave like a product rather than a pile of
+**Goal:** Make BuilderHelm Voice look and behave like a product rather than a pile of
 features. Consolidate overlapping capabilities, replace the visual system, and
 finish the two features that are currently shells.
 
@@ -136,7 +136,7 @@ The chrome the design system sits in, rebuilt to match the approved reference.
       capsule cluster of global actions on the right.
 - [x] Appearance moves from a sidebar-footer segmented control to a single
       cycling toolbar button that names its current and next value.
-- [x] The window opens on launch. ZenVoice keeps its menu-bar presence and its
+- [x] The window opens on launch. BuilderHelm Voice keeps its menu-bar presence and its
       global hotkey, and closing the window drops the activation policy back to
       `.accessory`.
 

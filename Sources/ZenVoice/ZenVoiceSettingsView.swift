@@ -278,7 +278,7 @@ struct ZenVoiceSettingsView: View {
             HStack(spacing: 10) {
                 ZenBrandMark(size: 30)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("ZenVoice")
+                    Text("BuilderHelm Voice")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     Text("On-device dictation")
@@ -423,7 +423,7 @@ struct ZenVoiceSettingsView: View {
             ZenScreen(
                 icon: "globe",
                 title: "Language",
-                subtitle: "Choose what you speak and how ZenVoice writes it."
+                subtitle: "Choose what you speak and how BuilderHelm Voice writes it."
             ) {
                 LanguagesScreen(viewModel: viewModel)
             }

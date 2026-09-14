@@ -17,7 +17,7 @@ import ApplicationServices
 import SwiftUI
 import ZenVoiceCore
 
-/// A generic container for any ZenVoice overlay.
+/// A generic container for any BuilderHelm Voice overlay.
 ///
 /// Phase 4 extends the original ZenBar panel into a family of overlays:
 /// ZenBar (bottom-center), and live-preview variants sized for the notch or
@@ -428,7 +428,7 @@ final class OverlayPanelController {
     /// The list order also cannot distinguish an app's focused window from any
     /// other window it happens to have open.
     ///
-    /// The Accessibility API answers the question directly. ZenVoice already
+    /// The Accessibility API answers the question directly. BuilderHelm Voice already
     /// requires that permission in order to type into other applications, so
     /// this costs no new prompt; when it is not granted the call simply fails
     /// and the caller falls through to the pointer.

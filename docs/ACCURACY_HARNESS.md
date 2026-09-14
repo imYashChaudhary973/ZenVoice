@@ -86,7 +86,7 @@ The script check above is necessary but nowhere near sufficient. It is passed
 equally by both of these:
 
 ```
-kampyutara par kama kara raha hum     ← what ZenVoice produces today
+kampyutara par kama kara raha hum     ← what BuilderHelm Voice produces today
 computer par kaam kar raha hoon       ← what a person would write
 ```
 

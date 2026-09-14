@@ -47,9 +47,9 @@ struct HelpScreen: View {
         ),
         ZenFAQ(
             id: 3,
-            question: "Why does ZenVoice need Accessibility permission?",
+            question: "Why does BuilderHelm Voice need Accessibility permission?",
             answer:
-                "macOS requires it to type the finished text into the active app. Without it, ZenVoice still works — the transcript is copied to your clipboard instead, and you paste manually.",
+                "macOS requires it to type the finished text into the active app. Without it, BuilderHelm Voice still works — the transcript is copied to your clipboard instead, and you paste manually.",
             tags: "accessibility permission paste insert"
         ),
         ZenFAQ(
@@ -77,14 +77,14 @@ struct HelpScreen: View {
             id: 8,
             question: "How do I use cloud speech for dictation?",
             answer:
-                "Open Models, paste your OpenAI, Google AI Studio, ElevenLabs, or xAI key under Cloud speech, then tap Use on that engine. Speak as usual. After you stop, the wav is uploaded once and the text is inserted. If the API fails, ZenVoice decodes the same clip locally.",
+                "Open Models, paste your OpenAI, Google AI Studio, ElevenLabs, or xAI key under Cloud speech, then tap Use on that engine. Speak as usual. After you stop, the wav is uploaded once and the text is inserted. If the API fails, BuilderHelm Voice decodes the same clip locally.",
             tags: "openai gemini scribe elevenlabs grok cloud transcribe key"
         ),
         ZenFAQ(
             id: 9,
             question: "Which model should I download?",
             answer:
-                "Open Models — ZenVoice measures this Mac and marks a recommendation. Fast favors latency, Balanced is the best accuracy per second for most machines, High Accuracy is the multilingual pick.",
+                "Open Models — BuilderHelm Voice measures this Mac and marks a recommendation. Fast favors latency, Balanced is the best accuracy per second for most machines, High Accuracy is the multilingual pick.",
             tags: "model download recommend fast balanced accuracy"
         ),
         ZenFAQ(
@@ -260,7 +260,7 @@ struct HelpScreen: View {
             HStack(spacing: ZenDesign.Spacing.sm) {
                 ZenBrandMark(size: 24)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("ZenVoice")
+                    Text("BuilderHelm Voice")
                         .font(ZenDesign.Typography.bodyStrong)
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     Text(aboutDetail)

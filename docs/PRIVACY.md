@@ -79,29 +79,29 @@ that window rather than the whole database.
 - Written to the macOS clipboard before insertion.
 - Remain on the clipboard until another application replaces them.
 - Successful and usable partial transcripts are saved locally by default.
-- Encrypted with AES-GCM before being written to the ZenVoice SQLite database.
+- Encrypted with AES-GCM before being written to the BuilderHelm Voice SQLite database.
 - New ciphertext is authenticated against its record identifier and field, so
   encrypted values cannot be swapped between records or columns.
 - Protected by a 256-bit key stored in the user's macOS Keychain.
 - Kept until the user deletes an item or deletes encrypted transcripts from
   Privacy or History. That transcript Delete does not remove Audio History,
   recovery recordings, or correction rules, and does not rotate the vault key.
-  ZenVoice does not automatically expire transcript history.
-- Never synced or uploaded by ZenVoice, except Cloud formatting after you opt
+  BuilderHelm Voice does not automatically expire transcript history.
+- Never synced or uploaded by BuilderHelm Voice, except Cloud formatting after you opt
   in (finished text plus your prompt) or a selected cloud engine (the clip).
 
 ### Application context
 
-- When history is enabled, ZenVoice stores the target application's bundle
+- When history is enabled, BuilderHelm Voice stores the target application's bundle
   identifier and display name.
 - The optional next-dictation context is bounded to 500 characters, held only
   in memory, and cleared when recording starts. It is not stored in History,
   preferences, logs, or analytics.
 - That temporary context is provided only to the selected local speech runtime.
-- ZenVoice uses that application identity for a conservative local category;
+- BuilderHelm Voice uses that application identity for a conservative local category;
   unknown applications remain **Other**, and the user can change a record's
   category in History.
-- ZenVoice does not store window titles, browser URLs, surrounding text,
+- BuilderHelm Voice does not store window titles, browser URLs, surrounding text,
   recipients, document contents, or geographic location.
 
 ### Insights
@@ -113,18 +113,18 @@ that window rather than the whole database.
 - A streak day requires at least one completed dictation containing five final
   words.
 - Unsaved dictations never contribute to insights.
-- ZenVoice does not send insight data, app identity, or category data to a
+- BuilderHelm Voice does not send insight data, app identity, or category data to a
   server.
 
 ### Voice profile and corrections
 
 - The Voice Profile is a local language-usage profile, not a biometric
   voiceprint.
-- ZenVoice analyzes up to 500 recent saved transcripts in-process for frequent
+- BuilderHelm Voice analyzes up to 500 recent saved transcripts in-process for frequent
   words, recurring phrases, and the most active hour.
 - Personal correction source and replacement phrases are encrypted in the
   local vault with the same Keychain-protected key as transcripts.
-- Only rules explicitly saved inside ZenVoice are applied. ZenVoice does not
+- Only rules explicitly saved inside BuilderHelm Voice are applied. BuilderHelm Voice does not
   watch or infer later edits made in another application.
 - Correction usage increases only when the corrected transcript is saved to
   history. Unsaved dictations leave no correction-usage event.
@@ -161,7 +161,7 @@ that window rather than the whole database.
 - The lexical and semantic guards reject invention, deletion, paraphrasing,
   changed quantities, and changed negations before model output can replace the
   local transcript.
-- The former downloadable Qwen/llama.cpp path remains removed; ZenVoice
+- The former downloadable Qwen/llama.cpp path remains removed; BuilderHelm Voice
   downloads and loads no refinement weights.
 
 ### Cloud AI Enhancement
@@ -175,8 +175,8 @@ that window rather than the whole database.
   insights, voice-profile data, correction rules, and any device or install
   identifier.
 - Requests go directly from your Mac to the provider you chose, authenticated
-  with your key. ZenVoice operates no proxy and holds no vendor account, so
-  there is no ZenVoice-side record of the request or its content.
+  with your key. BuilderHelm Voice operates no proxy and holds no vendor account, so
+  there is no BuilderHelm Voice-side record of the request or its content.
 - The endpoint must be HTTPS. Choosing the custom provider lets you point at a
   self-hosted or local model so the text stays on infrastructure you control.
 - Your API key is stored in the macOS Keychain, never in preferences and never
@@ -184,13 +184,13 @@ that window rather than the whole database.
 - Enhanced text is shown next to the original and is applied only when you
   accept it. A failed request leaves the local transcript untouched.
 - Once you opt in, your transcript text is subject to the chosen provider's
-  retention and training policies, which ZenVoice cannot control or promise
+  retention and training policies, which BuilderHelm Voice cannot control or promise
   anything about.
 - Full rationale in [ADR 0011](decisions/0011-cloud-ai-enhancement.md).
 
 ### Updates
 
-- ZenVoice is distributed directly rather than through the Mac App Store, so
+- BuilderHelm Voice is distributed directly rather than through the Mac App Store, so
   updates are verified against a signed release feed.
 - The signed GitHub Releases appcast is configured (`SUFeedURL`). Checks run
   when automatic checking is on or you ask explicitly.
@@ -234,8 +234,8 @@ that window rather than the whole database.
 - Agentic Mode is off by default and is reached only after Command Mode's
   deterministic phrase matching declines a transcript.
 - Planning is local: deterministic templates first, then Apple's on-device
-  system model. No transcript, plan, or goal is sent to a ZenVoice server, and
-  ZenVoice has no cloud planner.
+  system model. No transcript, plan, or goal is sent to a BuilderHelm Voice server, and
+  BuilderHelm Voice has no cloud planner.
 - Nothing runs until you approve the exact steps shown. High-risk steps require
   their own approval, and only an unchanged low-risk step can be remembered.
 - The plan, every approval decision, and captured step output are stored in the
@@ -244,16 +244,16 @@ that window rather than the whole database.
   step, and the plan validator refuses commands that contain secret-shaped
   strings.
 - Approved steps spawn local command-line tools (`codex`, `claude`, `zsh`,
-  `shortcuts`) with a minimal environment that contains no ZenVoice keychain
+  `shortcuts`) with a minimal environment that contains no BuilderHelm Voice keychain
   material and no provider API keys. **Those tools are separate products with
   their own accounts, credentials, and network behaviour: when you approve a
   Codex or Claude step, that tool contacts its own provider under its own
-  configuration.** ZenVoice neither supplies nor inspects those credentials.
+  configuration.** BuilderHelm Voice neither supplies nor inspects those credentials.
 - Network egress in the agentic path is only whatever an approved step does
   itself, and any step whose command surface implies egress or writes outside
   the working directory is classified high risk and approved individually.
 - Cancelling from ZenBar signals the whole child process group; relaunching
-  ZenVoice never resumes an interrupted step.
+  BuilderHelm Voice never resumes an interrupted step.
 
 ### Write Mode
 
@@ -286,17 +286,17 @@ that window rather than the whole database.
   current streak days, and distinct application count.
 - Transcript text, application names, bundle identifiers, profile terms, and
   correction rules cannot enter the card payload.
-- ZenVoice shows the exact preview before any action.
+- BuilderHelm Voice shows the exact preview before any action.
 - Saving opens the macOS save panel. Sharing opens the macOS Share menu.
-- ZenVoice never selects a destination, uploads, or publishes automatically.
+- BuilderHelm Voice never selects a destination, uploads, or publishes automatically.
 
 ### Models and configuration
 
 - Whisper GGML files remain in the user's local Application Support directory.
 - A developer can override the selected model with a local environment
-  variable; ZenVoice does not execute a model-supplied program.
+  variable; BuilderHelm Voice does not execute a model-supplied program.
 - Model downloads are fixed to reviewed HTTPS sources, immutable revisions,
-  expected sizes, and SHA-256 digests before installation. ZenVoice constructs
+  expected sizes, and SHA-256 digests before installation. BuilderHelm Voice constructs
   every download URL itself and installs only after the whole download verifies.
 - The `whisper.cpp` XCFramework is checksum-pinned; it runs in process.
 - Local engines require no API key. Cloud engines need a key you paste in
@@ -308,20 +308,20 @@ that window rather than the whole database.
 - **Accessibility** is required to place the transcript into the focused
   application. That is normally a simulated `Command + V`, but it also covers
   two narrower uses of the same permission:
-  - when macOS secure input is active, ZenVoice writes the transcript into the
+  - when macOS secure input is active, BuilderHelm Voice writes the transcript into the
     focused control directly instead of synthesizing a keystroke; and
   - when it replaces an already-inserted transcript with a refined version, it
     reads the focused control's text and caret range to find the span it wrote,
     then overwrites just that span.
   Text read this way is used in memory for that comparison only. It is not
   stored in History, preferences, insights, or logs.
-- ZenVoice refuses to insert into a field macOS marks as a secure text field,
+- BuilderHelm Voice refuses to insert into a field macOS marks as a secure text field,
   and refuses text fields it cannot positively identify while secure input is
   active. In those cases the transcript is copied to the clipboard instead and
   ZenBar says so.
 
 The signed app includes the Hardened Runtime audio-input entitlement. This
-permits ZenVoice to ask macOS for microphone access; it does not bypass the
+permits BuilderHelm Voice to ask macOS for microphone access; it does not bypass the
 user's explicit Microphone approval.
 
 If Accessibility permission is denied, transcription still works and the result
@@ -332,7 +332,7 @@ is copied to the clipboard.
 Local-first does not mean risk-free:
 
 - Other applications may be able to inspect clipboard contents.
-- Anyone able to use the unlocked macOS account may be able to open ZenVoice
+- Anyone able to use the unlocked macOS account may be able to open BuilderHelm Voice
   and view decrypted history.
 - Secure deletion on SSD storage has platform limitations; Delete All removes
   records, recovery audio, and rotates the encryption key.

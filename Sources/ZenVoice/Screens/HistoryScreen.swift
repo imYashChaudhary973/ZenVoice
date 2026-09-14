@@ -184,7 +184,7 @@ struct HistoryScreen: View {
                                 ZenDesign.Semantic.textPrimary
                             )
                         Text(
-                            "ZenVoice can save encrypted transcripts so an interrupted paste never loses your words."
+                            "BuilderHelm Voice can save encrypted transcripts so an interrupted paste never loses your words."
                         )
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
@@ -306,7 +306,7 @@ private struct SpellingCorrectionSheet: View {
                         .font(ZenDesign.Typography.pageTitle)
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
                     Text(
-                        "Approve only the spelling you want ZenVoice to remember."
+                        "Approve only the spelling you want BuilderHelm Voice to remember."
                     )
                     .font(ZenDesign.Typography.caption)
                     .foregroundStyle(ZenDesign.Semantic.textSecondary)

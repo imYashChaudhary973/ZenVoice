@@ -52,7 +52,7 @@ struct LanguagesScreen: View {
                 ZenRow(
                     icon: "globe",
                     title: "Primary language",
-                    subtitle: "The language ZenVoice expects when dictation begins"
+                    subtitle: "The language BuilderHelm Voice expects when dictation begins"
                 ) {
                     ZenMenuPicker(
                         label: "Primary language",

@@ -223,7 +223,7 @@ private actor UserNotificationGoalExecutor: GoalExecutor {
                 _ = try await center.requestAuthorization(options: [.alert, .sound])
             }
             let content = UNMutableNotificationContent()
-            content.title = "ZenVoice goal complete"
+            content.title = "BuilderHelm Voice goal complete"
             content.body = step.command
             content.sound = .default
             let request = UNNotificationRequest(

@@ -1,6 +1,6 @@
 # Sparkle Automatic Updates
 
-ZenVoice uses [Sparkle](https://sparkle-project.org/) to deliver automatic updates
+BuilderHelm Voice uses [Sparkle](https://sparkle-project.org/) to deliver automatic updates
 on macOS. This document describes how the Ed25519 keypair is generated, where the
 keys live, and how the `appcast.xml` feed is produced for each release.
 
@@ -158,7 +158,7 @@ release is created:
   uses: softprops/action-gh-release@c95fe14e0d0d351b72f4a6a93d6f7980c3bf4b1c # v2.2.0
   with:
     tag_name: v${{ github.event.inputs.version }}
-    name: ZenVoice ${{ github.event.inputs.version }}
+    name: BuilderHelm Voice ${{ github.event.inputs.version }}
     body_path: build/RELEASE_NOTES.md
     make_latest: true
     files: |
@@ -179,12 +179,12 @@ A generated feed for version `0.4.2` looks like this (signature is shortened):
 ```xml
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
-    <title>ZenVoice</title>
+    <title>BuilderHelm Voice</title>
     <link>https://example.com/zenvoice/appcast.xml</link>
-    <description>ZenVoice release feed</description>
+    <description>BuilderHelm Voice release feed</description>
     <language>en</language>
     <item>
-      <title>ZenVoice 0.4.2</title>
+      <title>BuilderHelm Voice 0.4.2</title>
       <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
       <sparkle:version>4</sparkle:version>
       <sparkle:shortVersionString>0.4.2</sparkle:shortVersionString>
@@ -195,7 +195,7 @@ A generated feed for version `0.4.2` looks like this (signature is shortened):
         ]]>
       </description>
       <enclosure
-        url="https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.2/ZenVoice.dmg"
+        url="https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.2/ZenVoice.dmg"
         length="12345678"
         type="application/octet-stream"
         sparkle:version="4"

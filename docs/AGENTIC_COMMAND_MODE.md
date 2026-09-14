@@ -20,7 +20,7 @@
 
 ## 1. Goal
 
-Let the user speak a multi-step natural-language goal and have ZenVoice turn
+Let the user speak a multi-step natural-language goal and have BuilderHelm Voice turn
 it into an **explicitly approved, observable, cancellable** plan executed by
 local tools and coding agents:
 
@@ -89,10 +89,10 @@ never intercepts a phrase v1 already resolves. If agentic mode is disabled
 | `CommandRouter` | v1-first dispatch, goal detection | `ZenVoiceCore` |
 | `AgenticPlanner` | transcript → `GoalPlan` (hybrid tiers) | `ZenVoiceCore` (parsing) + `ZenVoiceRuntime` (LLM runtime) |
 | `PlanValidator` | schema, agent whitelist, dependency lint, risk recomputation | `ZenVoiceCore` |
-| `ApprovalGate` | risk policy, approval UI model, decision records | `ZenVoiceCore` (policy) + `ZenVoice` (UI) |
-| `GoalOrchestrator` | state machine, process spawning, cancellation, persistence | `ZenVoice` (process) + `ZenVoiceCore` (model) |
-| Executors | codex / claude / shell / shortcut / notification adapters | `ZenVoice` (imp), protocols in `ZenVoiceCore` |
-| Status stream | event construction and fan-out | `ZenVoiceCore` (schema) + `ZenVoice` (HUD) |
+| `ApprovalGate` | risk policy, approval UI model, decision records | `ZenVoiceCore` (policy) + `BuilderHelm Voice` (UI) |
+| `GoalOrchestrator` | state machine, process spawning, cancellation, persistence | `BuilderHelm Voice` (process) + `ZenVoiceCore` (model) |
+| Executors | codex / claude / shell / shortcut / notification adapters | `BuilderHelm Voice` (imp), protocols in `ZenVoiceCore` |
+| Status stream | event construction and fan-out | `ZenVoiceCore` (schema) + `BuilderHelm Voice` (HUD) |
 | Task store | encrypted records of plans, decisions, outputs | `ZenVoiceStorage` (vault reuse) |
 
 Module rule (matches existing architecture): **`ZenVoiceCore` never spawns
@@ -191,11 +191,11 @@ before any coding-agent integration.
 | Orchestrator, queue, approval flow, low-risk memory | `Sources/ZenVoiceCore/GoalOrchestrator.swift` |
 | `codex` / `claude` / shell / shortcut process adapters | `Sources/ZenVoiceCore/AgenticExecutors.swift` |
 | Encrypted `agentic_tasks` store (schema v7) | `Sources/ZenVoiceStorage/DictationVault.swift` |
-| Planning, approval, status coordination, notifications | `Sources/ZenVoice/AgenticModeCoordinator.swift` |
-| Approval and step-approval panel | `Sources/ZenVoice/AgenticApprovalWindowController.swift` |
-| Settings surface (Commands → Agentic Mode) | `Sources/ZenVoice/Screens/AgenticModeScreen.swift` |
-| Live status row and Stop control | `Sources/ZenVoice/ZenBarView.swift` |
-| Router from transcript to plan, fail-toward-text | `Sources/ZenVoice/AppDelegate.swift` |
+| Planning, approval, status coordination, notifications | `Sources/BuilderHelm Voice/AgenticModeCoordinator.swift` |
+| Approval and step-approval panel | `Sources/BuilderHelm Voice/AgenticApprovalWindowController.swift` |
+| Settings surface (Commands → Agentic Mode) | `Sources/BuilderHelm Voice/Screens/AgenticModeScreen.swift` |
+| Live status row and Stop control | `Sources/BuilderHelm Voice/ZenBarView.swift` |
+| Router from transcript to plan, fail-toward-text | `Sources/BuilderHelm Voice/AppDelegate.swift` |
 | Checks | `Sources/ZenVoiceCoreChecks/AgenticChecks.swift`, `Sources/ZenVoiceStorageChecks/main.swift` |
 
 ### Deltas from the Phase 1 design

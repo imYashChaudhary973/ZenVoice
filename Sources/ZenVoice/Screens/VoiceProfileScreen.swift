@@ -39,7 +39,7 @@ struct VoiceProfileScreen: View {
                         Text("Personal Vocabulary")
                             .font(ZenDesign.Typography.sectionTitle)
                             .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        Text("Names, jargon, and phrases ZenVoice should always recognize.")
+                        Text("Names, jargon, and phrases BuilderHelm Voice should always recognize.")
                             .font(ZenDesign.Typography.body)
                             .foregroundStyle(ZenDesign.Semantic.textSecondary)
                     }
@@ -55,7 +55,7 @@ struct VoiceProfileScreen: View {
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: ZenDesign.Spacing.sm) {
-                        vocabularyField("ZenVoice heard…", text: $heardPhrase)
+                        vocabularyField("BuilderHelm Voice heard…", text: $heardPhrase)
                         Image(systemName: "arrow.right")
                             .foregroundStyle(ZenDesign.Semantic.textTertiary)
                         vocabularyField("It should write…", text: $replacementPhrase)
@@ -63,7 +63,7 @@ struct VoiceProfileScreen: View {
                         addButton
                     }
                     VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                        vocabularyField("ZenVoice heard…", text: $heardPhrase)
+                        vocabularyField("BuilderHelm Voice heard…", text: $heardPhrase)
                         vocabularyField("It should write…", text: $replacementPhrase)
                         HStack {
                             scopePicker

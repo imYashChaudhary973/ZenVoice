@@ -82,7 +82,7 @@ struct ModelsScreen: View {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
                     Text(
-                        "After you stop, ZenVoice uploads the clip once. "
+                        "After you stop, BuilderHelm Voice uploads the clip once. "
                             + "Local engines never send audio."
                     )
                     .font(ZenDesign.Typography.body)

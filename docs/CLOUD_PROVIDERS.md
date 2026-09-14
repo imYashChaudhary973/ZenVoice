@@ -50,7 +50,7 @@ Design rules the coding agent must preserve:
    model + prompt + transcript appear in the body) without a live endpoint.
 2. **The API key is applied at send time only** and is never part of an
    `Equatable` value that could be logged or diffed.
-3. **One network seam.** `CloudAITransport` is the only protocol ZenVoice
+3. **One network seam.** `CloudAITransport` is the only protocol BuilderHelm Voice
    uses for cloud calls; checks inject a fake. Do not add a second.
 4. **The local transcript always survives.** Dismiss, cancel, timeout,
    transport error, provider error, and empty provider result all resolve to
@@ -64,7 +64,7 @@ Design rules the coding agent must preserve:
 | Path | `/chat/completions` | `/chat/completions` | `/messages` | `/chat/completions` | `/chat/completions` | `/chat/completions` | `/chat/completions` |
 | Wire shape | Chat Completions | Chat Completions | Messages API | Chat Completions | Chat Completions | Chat Completions | Chat Completions |
 | Auth | Bearer | Bearer | `x-api-key` | Bearer | Bearer | Bearer (`ollama` if empty) | Bearer |
-| Extra headers | — | — | `anthropic-version` | `X-Title: ZenVoice` | — | — | — |
+| Extra headers | — | — | `anthropic-version` | `X-Title: BuilderHelm Voice` | — | — | — |
 | Known models | curated picker | curated picker | curated picker | curated picker | typed | typed | typed |
 
 HTTPS is required except loopback (`localhost`, `127.0.0.1`, `::1`) so local Ollama can stay on HTTP.

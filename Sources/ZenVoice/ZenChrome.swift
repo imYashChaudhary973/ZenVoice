@@ -28,7 +28,7 @@ struct ZenVisualEffect: NSViewRepresentable {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blending
-        // ZenVoice frequently loses key status while dictating into another
+        // BuilderHelm Voice frequently loses key status while dictating into another
         // app. Keeping the material active avoids a distracting value jump.
         view.state = .active
         return view

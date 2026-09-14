@@ -35,7 +35,7 @@ struct PrivacyScreen: View {
                 ZenScreen(
                     icon: "lock.shield.fill",
                     title: "Privacy & Data",
-                    subtitle: "What ZenVoice keeps, and where."
+                    subtitle: "What BuilderHelm Voice keeps, and where."
                 ) {
                     privacyContent
                 }
@@ -111,7 +111,7 @@ struct PrivacyScreen: View {
     private var inventory: some View {
         ZenSection(
             title: "What's on this Mac right now",
-            caption: "Live inventory · ZenVoice \(appVersion)"
+            caption: "Live inventory · BuilderHelm Voice \(appVersion)"
         ) {
             ZenPanel {
                 ZenRow(

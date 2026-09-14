@@ -124,7 +124,7 @@ struct ShortcutsScreen: View {
                 ZenPanelDivider()
                 ZenRow(
                     icon: "rectangle.bottomthird.inset.filled",
-                    title: "Show ZenVoice at all times",
+                    title: "Show BuilderHelm Voice at all times",
                     subtitle:
                         "When off, the bar appears when dictation starts and hides after your text is inserted"
                 ) {
@@ -133,7 +133,7 @@ struct ShortcutsScreen: View {
                             get: { viewModel.showsZenVoiceAtAllTimes },
                             set: viewModel.setShowsZenVoiceAtAllTimes
                         ),
-                        label: "Show ZenVoice at all times"
+                        label: "Show BuilderHelm Voice at all times"
                     )
                 }
             }

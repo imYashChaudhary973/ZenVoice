@@ -161,7 +161,7 @@ struct UpdatesScreen: View {
                     )
                     bullet(
                         "Verification is fail-closed: any failure rejects the "
-                        + "update and leaves ZenVoice untouched. There is no "
+                        + "update and leaves BuilderHelm Voice untouched. There is no "
                         + "option to install an unverified update."
                     )
                     bullet("Feed and download are HTTPS only.")

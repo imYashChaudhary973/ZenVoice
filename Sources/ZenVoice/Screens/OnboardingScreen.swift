@@ -146,7 +146,7 @@ struct OnboardingScreen: View {
 
                 Button(
                     step == .test
-                        ? "Start using ZenVoice"
+                        ? "Start using BuilderHelm Voice"
                         : "Continue"
                 ) {
                     if step == .test {
@@ -174,14 +174,14 @@ struct OnboardingScreen: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
-            "ZenVoice setup, step \(step.rawValue + 1) of \(Step.allCases.count)"
+            "BuilderHelm Voice setup, step \(step.rawValue + 1) of \(Step.allCases.count)"
         )
     }
 
     private var brand: some View {
         HStack(spacing: ZenDesign.Spacing.xs) {
             ZenBrandMark(size: 28)
-            Text("ZenVoice")
+            Text("BuilderHelm Voice")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(
                     ZenDesign.Semantic.textPrimary
@@ -195,7 +195,7 @@ struct OnboardingScreen: View {
             icon: "waveform.badge.mic",
             title: "Speak. It types. Nothing leaves your Mac.",
             detail:
-                "ZenVoice turns speech into text on this Mac and inserts it wherever your cursor is — in any app. Audio, transcripts, correction rules, and model inference all stay here; the only network use is a model download you ask for.",
+                "BuilderHelm Voice turns speech into text on this Mac and inserts it wherever your cursor is — in any app. Audio, transcripts, correction rules, and model inference all stay here; the only network use is a model download you ask for.",
             facts: [
                 ("network.slash", "No account, no subscription, no cloud transcription"),
                 ("bolt.fill", "One shortcut everywhere: Mail, Slack, Xcode, anything with a cursor"),
@@ -227,7 +227,7 @@ struct OnboardingScreen: View {
                     settingsViewModel.requestAccessibilityAccess
             )
             Text(
-                "Both are required before you can continue. ZenVoice cannot hear or insert text without them."
+                "Both are required before you can continue. BuilderHelm Voice cannot hear or insert text without them."
             )
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(
@@ -248,7 +248,7 @@ struct OnboardingScreen: View {
                 icon: "command",
                 title: "Your dictation shortcut.",
                 detail:
-                    "Press it once to start, again to finish. Keep the default or record your own — ZenVoice checks for conflicts before saving."
+                    "Press it once to start, again to finish. Keep the default or record your own — BuilderHelm Voice checks for conflicts before saving."
             )
             ZenPanel(padding: ZenDesign.Spacing.lg) {
                 onboardingShortcutEditor
@@ -375,7 +375,7 @@ struct OnboardingScreen: View {
                 icon: "cpu",
                 title: "One verified download.",
                 detail:
-                    "ZenVoice measured this Mac and picked the best fit. Every download is pinned to an exact revision and SHA-256 checked before use."
+                    "BuilderHelm Voice measured this Mac and picked the best fit. Every download is pinned to an exact revision and SHA-256 checked before use."
             )
             if let model = featuredModel {
                 ZenPanel(padding: ZenDesign.Spacing.lg) {
@@ -539,7 +539,7 @@ struct OnboardingScreen: View {
                     settingsViewModel.isLocalModelReady
             )
             Text(
-                "Replay this setup anytime from Help & FAQ. ZenVoice lives in your menu bar after you close this window."
+                "Replay this setup anytime from Help & FAQ. BuilderHelm Voice lives in your menu bar after you close this window."
             )
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(

@@ -25,7 +25,7 @@ struct AgenticModeScreen: View {
                     VStack(spacing: 0) {
                         settingRow(
                             title: "Run approved multi-step goals",
-                            detail: "After Command Mode phrases are checked, ZenVoice can turn a spoken goal into a reviewable plan for Codex or Claude.",
+                            detail: "After Command Mode phrases are checked, BuilderHelm Voice can turn a spoken goal into a reviewable plan for Codex or Claude.",
                             isOn: Binding(
                                 get: { viewModel.agenticModeEnabled },
                                 set: viewModel.setAgenticModeEnabled
@@ -80,7 +80,7 @@ struct AgenticModeScreen: View {
             ZenBanner(
                 kind: .warn,
                 icon: "exclamationmark.shield",
-                text: "Agentic Mode can edit files and run tools after you approve a plan. It remains off by default and never receives provider API keys from ZenVoice."
+                text: "Agentic Mode can edit files and run tools after you approve a plan. It remains off by default and never receives provider API keys from BuilderHelm Voice."
             )
         }
     }

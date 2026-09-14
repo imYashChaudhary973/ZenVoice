@@ -14,7 +14,7 @@
 
 import SwiftUI
 
-/// Reusable ZenVoice brand logo used by overlay views.
+/// Reusable BuilderHelm Voice brand logo used by overlay views.
 struct BrandLogo: View {
     let size: CGFloat
 

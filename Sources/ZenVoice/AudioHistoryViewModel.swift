@@ -303,7 +303,7 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
-        return "ZenVoice-Audio-\(formatter.string(from: Date())).zip"
+        return "BuilderHelm Voice-Audio-\(formatter.string(from: Date())).zip"
     }
 }
 

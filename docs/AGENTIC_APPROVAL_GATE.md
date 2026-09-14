@@ -4,7 +4,7 @@
 > [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md). Extends the
 > non-coercion principle of [ADR 0008](decisions/0008-command-mode.md)
 > (first-run approvals for AppleScript/shell/URL) to multi-step plans. Code:
-> `Sources/ZenVoice/AgenticApprovalWindowController.swift` for the panel and
+> `Sources/BuilderHelm Voice/AgenticApprovalWindowController.swift` for the panel and
 > `GoalOrchestrator`/`AgenticApprovalPreferences` for decision records and the
 > exact-match low-risk memory.
 

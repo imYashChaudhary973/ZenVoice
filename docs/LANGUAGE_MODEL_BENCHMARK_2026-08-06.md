@@ -90,5 +90,5 @@ swift build -c release --product ZenVoiceAccuracyChecks
 ```
 
 The harness discovers installed GGUF and ONNX files in
-`$HOME/Library/Application Support/ZenVoice/Models/` and reports WER and latency
+`$HOME/Library/Application Support/BuilderHelm Voice/Models/` and reports WER and latency
 for each engine that loads successfully.

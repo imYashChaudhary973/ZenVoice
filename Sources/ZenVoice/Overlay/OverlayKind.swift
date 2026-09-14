@@ -15,7 +15,7 @@
 import Foundation
 import SwiftUI
 
-/// The kind of on-screen overlay ZenVoice can show.
+/// The kind of on-screen overlay BuilderHelm Voice can show.
 ///
 /// `.zenBar` preserves the existing compact dictation bar. The live-preview
 /// variants are new in Phase 4 and provide larger, notch-aware transcription

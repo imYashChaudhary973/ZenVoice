@@ -1,4 +1,4 @@
-# ZenVoice vs FluidVoice Gap Analysis Report
+# BuilderHelm Voice vs FluidVoice Gap Analysis Report
 
 **Status:** Updated 2026-08-19. The previous version of this file was stale
 and told agents to add engines that already exist. Do not re-implement
@@ -6,7 +6,7 @@ Nemotron, Cohere, Apple Speech, Parakeet Flash/v2, or FluidAudio.
 
 ## Executive Summary
 
-FluidVoice ships a wide model catalog and polished live preview. ZenVoice
+FluidVoice ships a wide model catalog and polished live preview. BuilderHelm Voice
 already has the same local ASR engines. Competing by adding more weights
 loses. The product sentence that is true today:
 
@@ -14,7 +14,7 @@ loses. The product sentence that is true today:
 > else is fallback. Hindi-English: Apex. Privacy: on-device, encrypted
 > history, no telemetry.
 
-## 1. Engines already in ZenVoice
+## 1. Engines already in BuilderHelm Voice
 
 Do **not** rebuild these. They live in `VerifiedEngineCatalog` and
 `ZenVoiceRuntime`.
@@ -71,7 +71,7 @@ These are still real. They are UX and evidence, not missing models.
 |---|---|
 | Consented session 001 | Zero recordings. Public WER is a floor, not dictation. Cycle forbids fabricating consent. |
 | Live preview polish | Overlay kinds exist; Flash/Nemotron can preview. Notch UX still thinner than FluidVoice. |
-| Rewrite-selected-text | FluidVoice has it. ZenVoice does not. |
+| Rewrite-selected-text | FluidVoice has it. BuilderHelm Voice does not. |
 | Meeting / file transcription | Not built. |
 | Cohere CoreML EP | Broken on ORT 1.24 external-data. Today Cohere is a slow CPU 3 GB model. |
 | Apple Speech WER | Unmeasured. Treat as convenience. |
@@ -90,7 +90,7 @@ These are still real. They are UX and evidence, not missing models.
 
 Out-default them. Do not out-catalogue them.
 
-| Their move | ZenVoice counter |
+| Their move | BuilderHelm Voice counter |
 |---|---|
 | 10-model picker | 3 defaults + advanced. WER table on the Models screen. |
 | Nemotron Ultra Fast as hero | 23.8% WER. Preview only. |

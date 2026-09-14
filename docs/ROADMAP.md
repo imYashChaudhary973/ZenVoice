@@ -14,7 +14,7 @@ in [Phased Plan](PHASED_PLAN.md).
 
 ## Strategic direction
 
-ZenVoice is being built first for our own daily use. Quality, reliability,
+BuilderHelm Voice is being built first for our own daily use. Quality, reliability,
 latency, and language accuracy are the current priorities. Public shipping is
 deferred until the product has matured through regular personal use and a
 deliberate future shipping decision is made. The release checklist and signing
@@ -108,7 +108,7 @@ Decided on 2026-08-05:
 Still deferred:
 
 - Whether non-macOS platforms belong in scope.
-- When, if ever, ZenVoice resumes active public shipping. That decision
+- When, if ever, BuilderHelm Voice resumes active public shipping. That decision
   requires a fresh review of [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md),
   the state of personal-use evidence, and the release checklist in
   [Release Readiness](RELEASE_READINESS.md).

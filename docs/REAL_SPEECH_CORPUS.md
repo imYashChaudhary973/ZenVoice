@@ -25,7 +25,7 @@ program uses four tiers, in increasing order of product relevance:
 | Public meetings | AMI Meeting Corpus (headset audio) | Long-form spontaneous experiment (cycle rejected) |
 | Consented dictation | `consented-dictation/cohort-v1` (pre-registered) | **The only representative corpus** — not yet recorded |
 
-No public corpus is treated as representative ZenVoice dictation. The machine
+No public corpus is treated as representative BuilderHelm Voice dictation. The machine
 `representative_zenvoice_dictation` gate exists precisely so a public-data
 candidate can never be promoted.
 

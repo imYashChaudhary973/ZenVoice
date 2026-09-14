@@ -1,6 +1,6 @@
 # Release Secrets Setup
 
-The [`.github/workflows/release.yml`](../.github/workflows/release.yml) workflow builds, signs, notarizes, and publishes ZenVoice releases from GitHub Actions. It reads all signing and notarization material from repository secrets, so the private keys never need to be checked into git.
+The [`.github/workflows/release.yml`](../.github/workflows/release.yml) workflow builds, signs, notarizes, and publishes BuilderHelm Voice releases from GitHub Actions. It reads all signing and notarization material from repository secrets, so the private keys never need to be checked into git.
 
 This guide lists each required secret, explains how to extract it from your local Mac, and gives the exact `gh secret set` command to upload it. The manual v0.4.1 release was performed locally; future releases should use this workflow after these secrets are configured.
 
@@ -62,11 +62,11 @@ A base64-encoded `.p12` file containing your **Developer ID Application** certif
 
 1. Open **Keychain Access** and select **My Certificates**.
 2. Select your **Developer ID Application** certificate and its private key together.
-3. Choose **File > Export Items…**, select `.p12`, set a strong password, and save it to a temporary location such as `~/Desktop/ZenVoiceSigningCert.p12`.
+3. Choose **File > Export Items…**, select `.p12`, set a strong password, and save it to a temporary location such as `~/Desktop/BuilderHelm VoiceSigningCert.p12`.
 4. Base64-encode the file:
 
 ```zsh
-base64 -i ~/Desktop/ZenVoiceSigningCert.p12 -o ~/Desktop/ZenVoiceSigningCert.p12.base64
+base64 -i ~/Desktop/BuilderHelm VoiceSigningCert.p12 -o ~/Desktop/BuilderHelm VoiceSigningCert.p12.base64
 ```
 
 The `.base64` file is safe to pipe into `gh secret set`, but treat it as a secret file and delete it after uploading.
@@ -74,7 +74,7 @@ The `.base64` file is safe to pipe into `gh secret set`, but treat it as a secre
 ### Upload
 
 ```zsh
-gh secret set ZENVOICE_SIGNING_CERTIFICATE < ~/Desktop/ZenVoiceSigningCert.p12.base64
+gh secret set ZENVOICE_SIGNING_CERTIFICATE < ~/Desktop/BuilderHelm VoiceSigningCert.p12.base64
 ```
 
 ---
@@ -166,7 +166,7 @@ export ZENVOICE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAM_ID)"
 export ZENVOICE_SIGNING_CERTIFICATE_PASSWORD="..."
 export ZENVOICE_NOTARY_KEY_ID="..."
 export ZENVOICE_NOTARY_ISSUER_ID="..."
-export ZENVOICE_SIGNING_CERTIFICATE_PATH="/path/to/ZenVoiceSigningCert.p12.base64"
+export ZENVOICE_SIGNING_CERTIFICATE_PATH="/path/to/BuilderHelm VoiceSigningCert.p12.base64"
 export ZENVOICE_NOTARY_KEY_PATH="/path/to/AuthKey_KEYID.p8.base64"
 
 ./Scripts/prepare-release-secrets.sh

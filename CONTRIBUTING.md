@@ -1,6 +1,6 @@
-# Contributing to ZenVoice
+# Contributing to BuilderHelm Voice
 
-ZenVoice is open-source software licensed under the Apache License, Version 2.0.
+BuilderHelm Voice (formerly ZenVoice) is open-source software licensed under the Apache License, Version 2.0.
 We welcome contributions from anyone who agrees to license their contribution
 under the same terms.
 

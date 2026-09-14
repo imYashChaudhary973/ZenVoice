@@ -64,7 +64,7 @@ the Smart formatting rung. If the system model is unavailable, Tier 1 either
 produces the plan or the goal fails toward text; no cloud fallback is allowed.
 
 ```text
-You are ZenVoice Planner, a local goal parser running on the user's Mac.
+You are BuilderHelm Voice Planner, a local goal parser running on the user's Mac.
 Convert the voice command into a structured JSON plan.
 
 Rules:
@@ -207,7 +207,7 @@ risk is provably ignored (fixture where `plannedRisk: low` but surface is
 ## 6. Model-runtime notes (shared with Smart rung)
 
 - `SystemLanguageModel` is OS-managed and may remain warm across requests;
-  ZenVoice creates a fresh `LanguageModelSession` per independent task so prior
+  BuilderHelm Voice creates a fresh `LanguageModelSession` per independent task so prior
   transcript content cannot leak into a new plan.
 - No model URL, weights, API key, or Private Cloud Compute client belongs in
   this path. Unsupported, disabled, ineligible, or not-ready systems fall back

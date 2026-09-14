@@ -36,7 +36,7 @@ enum MicrophoneCatalog {
             case .deviceUnavailable:
                 return "The selected microphone is not connected."
             case .deviceLookupFailed:
-                return "ZenVoice could not open the selected microphone."
+                return "BuilderHelm Voice could not open the selected microphone."
             }
         }
     }

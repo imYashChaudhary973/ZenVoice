@@ -1,7 +1,7 @@
 # Release Readiness
 
-ZenVoice's M9 release controls are implemented. Public distribution is
-deliberately deferred while ZenVoice is refined for internal use; see
+BuilderHelm Voice's M9 release controls are implemented. Public distribution is
+deliberately deferred while BuilderHelm Voice is refined for internal use; see
 [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md). This checklist
 records the gates that must be completed before any future public distribution
 decision, not a current blocker list. Decisions and source changes must be
@@ -24,7 +24,7 @@ a project gate, not legal advice.
 
 ## Founder and legal decisions
 
-- [x] Select and add the ZenVoice project licence as `LICENSE` — Apache License,
+- [x] Select and add the BuilderHelm Voice project licence as `LICENSE` — Apache License,
   Version 2.0, decided 2026-08-01; updated to Apache-2.0 for open-source
   distribution.
 - [x] Decide whether the first distributed build is free, paid, or private beta
@@ -51,7 +51,7 @@ a project gate, not legal advice.
   release commit.
 - [x] Re-review every model or runtime artifact in the catalogue — completed
   2026-08-05. The closed-source FluidAudio runtime and its transitive
-  components have been removed. ZenVoice now uses only the checksum-pinned
+  components have been removed. BuilderHelm Voice now uses only the checksum-pinned
   `whisper.cpp` XCFramework and `whisper.cpp` GGML models. The retired Parakeet
   entry remains resolvable for users who previously installed it, but is no
   longer downloaded or executed.
@@ -79,7 +79,7 @@ $ plutil -extract CFBundleShortVersionString raw /Applications/ZenVoice.app/Cont
 com.zenvoice.app
 
 $ codesign -dv --verbose=4 /Applications/ZenVoice.app 2>&1 | head -12
-Executable=/Applications/ZenVoice.app/Contents/MacOS/ZenVoice
+Executable=/Applications/ZenVoice.app/Contents/MacOS/BuilderHelm Voice
 Identifier=com.zenvoice.app
 Format=app bundle with Mach-O thin (arm64)
 CodeDirectory v=20500 size=84828 flags=0x10000(runtime) hashes=2640+7 location=embedded
@@ -106,7 +106,7 @@ $ codesign -d --entitlements :- /Applications/ZenVoice.app 2>&1
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>com.apple.security.device.audio-input</key><true/></dict></plist>
 
 $ find /Applications/ZenVoice.app \( -type f -perm +111 \) -o -name "*.dylib" -o -name "*.framework" | xargs -I{} sh -c 'codesign -dv --verbose=2 "$1" 2>&1 | grep -E "^(Executable|Identifier|Authority)" | head -3' _ {} 2>&1 | head -80
-Executable=/Applications/ZenVoice.app/Contents/MacOS/ZenVoice
+Executable=/Applications/ZenVoice.app/Contents/MacOS/BuilderHelm Voice
 Identifier=com.zenvoice.app
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
 Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Sparkle
@@ -137,22 +137,22 @@ Executable=/Applications/ZenVoice.app/Contents/Frameworks/libparakeet.dylib
 Identifier=libparakeet
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
 
-$ lipo -archs /Applications/ZenVoice.app/Contents/MacOS/ZenVoice
+$ lipo -archs /Applications/ZenVoice.app/Contents/MacOS/BuilderHelm Voice
 arm64
 
-$ curl -sL https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.4/ZenVoice.dmg -o /tmp/ZenVoice-published-0.4.4.dmg && shasum -a 256 /tmp/ZenVoice-published-0.4.4.dmg
-8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2  /tmp/ZenVoice-published-0.4.4.dmg
+$ curl -sL https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/ZenVoice.dmg -o /tmp/BuilderHelm Voice-published-0.4.4.dmg && shasum -a 256 /tmp/BuilderHelm Voice-published-0.4.4.dmg
+8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2  /tmp/BuilderHelm Voice-published-0.4.4.dmg
 
 $ grep -E "version|sha256|url" Casks/zenvoice.rb
   version "0.4.4"
   sha256 "8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2"
-  url "https://github.com/imYashChaudhary973/ZenVoice/releases/download/v#{version}/ZenVoice.dmg"
+  url "https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v#{version}/ZenVoice.dmg"
 
-$ xcrun stapler validate /tmp/ZenVoice-published-0.4.4.dmg 2>&1
+$ xcrun stapler validate /tmp/BuilderHelm Voice-published-0.4.4.dmg 2>&1
 The validate action worked!
 
-$ hdiutil verify /tmp/ZenVoice-published-0.4.4.dmg 2>&1 | tail -5
-hdiutil verify: checksum of "/tmp/ZenVoice-published-0.4.4.dmg" is VALID
+$ hdiutil verify /tmp/BuilderHelm Voice-published-0.4.4.dmg 2>&1 | tail -5
+hdiutil verify: checksum of "/tmp/BuilderHelm Voice-published-0.4.4.dmg" is VALID
 ```
 
 Summary of automated checks for v0.4.4:

@@ -1,4 +1,4 @@
-# ZenVoice Build Order
+# BuilderHelm Voice Build Order
 
 This document records the approved implementation sequence. Each milestone must
 pass its verification gate before dependent work begins.
@@ -33,7 +33,7 @@ pass its verification gate before dependent work begins.
   source, licence, checksum, format, and compatibility.
 - Analytics remain blocked until M1 provides durable and correctly migrated
   records.
-- Public distribution remains deferred while ZenVoice is internal-use-first. The
+- Public distribution remains deferred while BuilderHelm Voice is internal-use-first. The
   M9 manual release gates must be evidenced and approved before any future
   shipping decision; see [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md).
 

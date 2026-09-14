@@ -90,7 +90,7 @@ struct AudioHistoryScreen: View {
             ZenPanel {
                 VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
                     Text(
-                        "Archived audio is stored unencrypted in ZenVoice's "
+                        "Archived audio is stored unencrypted in BuilderHelm Voice's "
                         + "private Application Support folder, separate from "
                         + "your encrypted transcripts."
                     )

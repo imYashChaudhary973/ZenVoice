@@ -1,9 +1,9 @@
 <p align="center">
-  <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:303033,50:543EF5,100:39393B&height=190&section=header&text=ZenVoice&fontSize=52&fontColor=FEFEFF&animation=fadeIn&fontAlignY=36&desc=Private%20local-first%20voice%20dictation%20for%20macOS&descAlignY=60&descSize=18" alt="ZenVoice — private local-first voice dictation for macOS" />
+  <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:303033,50:543EF5,100:39393B&height=190&section=header&text=BuilderHelm%20Voice&fontSize=42&fontColor=FEFEFF&animation=fadeIn&fontAlignY=36&desc=Private%20local-first%20voice%20dictation%20for%20macOS&descAlignY=60&descSize=18" alt="BuilderHelm Voice — private local-first voice dictation for macOS" />
 </p>
 
 <p align="center">
-  <img src="Resources/Brand/ZenLogo.png" width="88" alt="ZenVoice logo">
+  <img src="Resources/Brand/ZenLogo.png" width="88" alt="BuilderHelm Voice logo">
 </p>
 
 <p align="center">
@@ -25,20 +25,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/imYashChaudhary973/ZenVoice/releases/latest">
-    <img src="https://img.shields.io/badge/Download-GitHub%20Releases-543EF5?style=for-the-badge&logo=github&logoColor=white" alt="Download from GitHub Releases" />
-  </a>
+  <img src="docs/images/hero.jpg" width="920" alt="BuilderHelm Voice — Your voice, written. Private, local-first dictation for macOS.">
 </p>
 
-<p align="center">
-  <img src="docs/images/hero.jpg" width="920" alt="ZenVoice — Your voice, written. Private, local-first dictation for macOS.">
-</p>
-
-ZenVoice is a native macOS menu-bar app. Press a shortcut, speak, press it again. The transcript is typed into whichever app has focus.
+**BuilderHelm Voice** (formerly ZenVoice) is a native macOS menu-bar app in the BuilderHelm suite. Press a shortcut, speak, press it again. The transcript is typed into whichever app has focus.
 
 Local engines record, decode, clean, and paste on this Mac. There is no account, no subscription, and no analytics. Cloud speech is off until you tap Use on OpenAI Transcribe, Gemini Transcribe, Scribe v2, or Grok Transcribe — then that clip is uploaded and billed to your key. Optional BYO-key Cloud formatting still sends finished text only, never audio.
 
-Public GitHub beta, 0.4.5. Apache-2.0.
+Private GitHub beta, 0.4.5. Apache-2.0.
 
 ---
 
@@ -51,7 +45,7 @@ Public GitHub beta, 0.4.5. Apache-2.0.
 - **Formatting** — Off, deterministic Clean, guarded on-device Smart (macOS 26+), or opt-in BYO-key Cloud. Cloud formatting never sends audio.
 - **Encrypted history** — AES-GCM transcripts, search, copy, retry, delete, Recovery Inbox.
 - **Insights** — WPM gauge, total words, fixes, app usage, and a GitHub-style contribution calendar. All derived locally. Share cards carry numbers only.
-- **Voice commands** — on-device phrase matching. Off until you turn it on.
+- **Voice commands** — on-device phrase matching. Off until you turn them on.
 - **Voice profile** — recurring phrases and explicit correction rules, encrypted. Not a biometric voiceprint.
 - **Audio Doctor** — three-second local mic check. Pin a microphone or follow System Default.
 - **Menu bar + main menu** — status item stays after you close the window. **⌘W** closes; **⌘Q** quits.
@@ -98,7 +92,7 @@ NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Int
 
 ## Quick start
 
-1. **Download** `ZenVoice.dmg` from [Releases](https://github.com/imYashChaudhary973/ZenVoice/releases/latest). Open the DMG and drag `ZenVoice.app` to `/Applications`.
+1. **Build** from this private repository (see below) or install a signed build when one is issued. Drag `ZenVoice.app` to `/Applications` — the display name is **BuilderHelm Voice**.
 2. **Allow Microphone and Accessibility.** Without Accessibility, text still lands on the clipboard.
 3. **Finish setup** — language, then the recommended engine/model, then a test dictation.
 4. **Put the caret** in any editable field. Press `⌃⌥Space`, speak, press it again.
@@ -229,14 +223,10 @@ Start at the [documentation index](docs/README.md).
 
 ## Status
 
-Public GitHub beta. Apache-2.0. Auto-updates and Homebrew are off. Passing CI is not a 1.0 claim.
+Private GitHub beta. Apache-2.0. Auto-updates and Homebrew are off. Passing CI is not a 1.0 claim. BuilderHelm Voice is the product name; Swift targets and `com.zenvoice.app` are unchanged in this cut.
 
 [File a bug](https://github.com/imYashChaudhary973/ZenVoice/issues/new?template=bug_report.md) if something breaks. Do not paste private transcripts.
 
 <p align="center">
   <em>Speak. It types. Local by default.</em>
-</p>
-
-<p align="center">
-  <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=0:543EF5,50:39393B,100:303033&height=120&section=footer" alt="" />
 </p>

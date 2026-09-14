@@ -193,7 +193,7 @@ struct OverviewScreen: View {
         }
     }
 
-    /// Whether ZenVoice can actually do the thing this screen promises.
+    /// Whether BuilderHelm Voice can actually do the thing this screen promises.
     ///
     /// Without Microphone there is nothing to transcribe; without
     /// Accessibility the text cannot be typed into the app the user is in and
@@ -314,20 +314,20 @@ struct OverviewScreen: View {
         ZenCard(
             icon: "checkmark.shield.fill",
             title: "Permissions",
-            subtitle: "What macOS has to allow before ZenVoice can type."
+            subtitle: "What macOS has to allow before BuilderHelm Voice can type."
         ) {
             VStack(spacing: ZenDesign.Spacing.xs) {
                 permissionRow(
                     icon: "mic.fill",
                     title: "Microphone",
-                    detail: "So ZenVoice can hear you.",
+                    detail: "So BuilderHelm Voice can hear you.",
                     status: viewModel.microphoneStatus,
                     action: viewModel.requestMicrophoneAccess
                 )
                 permissionRow(
                     icon: "accessibility",
                     title: "Accessibility",
-                    detail: "So ZenVoice can type into other apps.",
+                    detail: "So BuilderHelm Voice can type into other apps.",
                     status: viewModel.accessibilityStatus,
                     action: viewModel.requestAccessibilityAccess
                 )

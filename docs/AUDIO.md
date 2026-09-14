@@ -1,6 +1,6 @@
 # Microphones and Audio Doctor
 
-ZenVoice can follow the current macOS input or stay pinned to one connected
+BuilderHelm Voice can follow the current macOS input or stay pinned to one connected
 microphone. The choice is stored locally as the device identifier; no audio or
 device inventory is sent anywhere.
 
@@ -10,7 +10,7 @@ device inventory is sent anywhere.
 - **Pinned microphone** keeps using the chosen connected device until the user
   selects another input or returns to System Default.
 
-ZenVoice records through `AVCaptureSession` with the selected
+BuilderHelm Voice records through `AVCaptureSession` with the selected
 `AVCaptureDevice`. `AVCaptureAudioDataOutput` supplies ordered 16 kHz mono
 floating-point PCM buffers for the waveform, live preview, and local Whisper
 runtime.
@@ -21,7 +21,7 @@ Audio Doctor runs an explicit three-second local test. It checks that:
 
 1. Microphone permission is available.
 2. The selected device is still connected.
-3. ZenVoice can start the selected input.
+3. BuilderHelm Voice can start the selected input.
 4. The microphone produces a measurable signal.
 5. The result is a nonempty 16 kHz mono file accepted by the local runtime.
 
@@ -30,7 +30,7 @@ not create a History record and does not send audio over the network.
 
 ## Disconnection behavior
 
-When the active device disconnects during dictation, ZenVoice stops the
+When the active device disconnects during dictation, BuilderHelm Voice stops the
 recording instead of silently switching microphones. If failed-audio recovery
 is enabled, the partial recording follows the existing encrypted recovery
 policy and expires within 24 hours. Otherwise it is removed. The user can

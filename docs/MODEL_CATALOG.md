@@ -1,6 +1,6 @@
 # Verified Model Catalogue
 
-ZenVoice downloads only entries compiled into `VerifiedModelCatalog`. A
+BuilderHelm Voice downloads only entries compiled into `VerifiedModelCatalog`. A
 catalogue entry is accepted only after its publisher, source, pinned revision,
 file size, format, language coverage, licence, attribution, and SHA-256 have
 been reviewed.
@@ -77,7 +77,7 @@ send discovery down its legacy fallback path. Anything already installed keeps
 working, and the Models screen offers to reclaim the disk.
 
 The Parakeet Unified EN CoreML model was retired because it required the
-closed-source FluidAudio runtime. ZenVoice now uses `whisper.cpp` and
+closed-source FluidAudio runtime. BuilderHelm Voice now uses `whisper.cpp` and
 `parakeet.cpp` as its local speech runtimes.
 
 The catalogue metadata was verified against the official Hugging Face API on
@@ -139,7 +139,7 @@ See [REAL_SPEECH_CORPUS.md](REAL_SPEECH_CORPUS.md) §5 and
 
 Smart text formatting can use Apple's OS-managed on-device
 `SystemLanguageModel` for punctuation and layout. It is not a downloadable
-ZenVoice model and therefore does not appear in this catalogue. The former
+BuilderHelm Voice model and therefore does not appear in this catalogue. The former
 Qwen/llama.cpp refinement path remains removed after human-annotated evaluation
 found no correction-accuracy gain beyond the rule engine.
 
@@ -148,19 +148,19 @@ found no correction-accuracy gain beyond the rule engine.
 This contract describes the `whisper.cpp` GGML path:
 
 1. The user explicitly starts a download.
-2. ZenVoice accepts only the catalogue-generated HTTPS URL.
+2. BuilderHelm Voice accepts only the catalogue-generated HTTPS URL.
 3. The response must be successful and remain on HTTPS.
 4. The temporary file must be a regular file with the exact approved size.
-5. ZenVoice streams the file through SHA-256 and compares the full digest.
+5. BuilderHelm Voice streams the file through SHA-256 and compares the full digest.
 6. Only a verified file is atomically moved into private Application Support.
 7. Model files receive user-only filesystem permissions.
 
 Deleting a model removes only its catalogue-derived file path. Model downloads
-contain data weights only; ZenVoice never executes them.
+contain data weights only; BuilderHelm Voice never executes them.
 
 ## Hardware recommendations
 
-Language capability and performance tier are separate choices. ZenVoice uses
+Language capability and performance tier are separate choices. BuilderHelm Voice uses
 physical memory only to choose the default tier:
 
 | Memory | Default tier |
@@ -173,7 +173,7 @@ Available storage must also leave installation headroom. A model that does not
 fit is not downloadable until the user frees space. Other compatible tiers
 remain available as a manual override.
 
-After a successful local transcription, ZenVoice stores only model ID, audio
+After a successful local transcription, BuilderHelm Voice stores only model ID, audio
 duration, processing duration, and timestamp as a local benchmark sample. It
 does not duplicate the transcript or audio. The Models screen reports weighted
 real-time factor from up to 50 recent samples so recommendations can be judged
@@ -187,7 +187,7 @@ multiple voices, speaking rates, memory, and real Hinglish is recorded in
 
 ### whisper.cpp
 
-ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
+BuilderHelm Voice uses the official `whisper.cpp` v1.9.1 XCFramework release:
 
 - Source: [`ggml-org/whisper.cpp`](https://github.com/ggml-org/whisper.cpp)
 - Release: `v1.9.1`
@@ -199,7 +199,7 @@ ZenVoice uses the official `whisper.cpp` v1.9.1 XCFramework release:
 
 ### parakeet.cpp
 
-ZenVoice vendors `parakeet.cpp` v0.5.0 as a binary XCFramework for Parakeet
+BuilderHelm Voice vendors `parakeet.cpp` v0.5.0 as a binary XCFramework for Parakeet
 TDT v3:
 
 - Source: [`mudler/parakeet.cpp`](https://github.com/mudler/parakeet.cpp)
@@ -209,5 +209,5 @@ TDT v3:
 - Build: universal `libparakeet.dylib` packaged with `xcodebuild -create-xcframework`
 
 Swift Package Manager exposes the `parakeet` binary target from
-`Package.swift`. The app embeds and signs the framework. ZenVoice calls its flat
+`Package.swift`. The app embeds and signs the framework. BuilderHelm Voice calls its flat
 C API in-process through `Sources/ZenVoiceRuntime/ParakeetBridge.swift`.

@@ -14,7 +14,7 @@
 
 import SwiftUI
 
-// MARK: - ZenVoice v2 component vocabulary
+// MARK: - BuilderHelm Voice v2 component vocabulary
 // Every redesigned screen is composed from these shared native components so
 // the interface vocabulary stays consistent across the app.
 
@@ -1321,7 +1321,7 @@ struct ZenChoiceCard: View {
 }
 
 /// Native switch. Motion uses the same critically damped spring as the rest
-/// of ZenVoice — no glass wrapper around the control.
+/// of BuilderHelm Voice — no glass wrapper around the control.
 struct ZenSwitch: View {
     @Binding var isOn: Bool
     let label: String

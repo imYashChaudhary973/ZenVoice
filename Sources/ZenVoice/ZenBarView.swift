@@ -155,7 +155,7 @@ struct ZenBarView: View {
         .buttonStyle(
             ZenPressButtonStyle(cornerRadius: Self.barHeight / 2)
         )
-        .accessibilityLabel("Start ZenVoice \(state.mode.displayName)")
+        .accessibilityLabel("Start BuilderHelm Voice \(state.mode.displayName)")
         .accessibilityHint(
             "Press \(HotKeyPreferences.load().displayName) or activate this button."
         )
@@ -180,7 +180,7 @@ struct ZenBarView: View {
         }
         .padding(.horizontal, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityLabel("ZenVoice is listening")
+        .accessibilityLabel("BuilderHelm Voice is listening")
     }
 
     private func workingContent(

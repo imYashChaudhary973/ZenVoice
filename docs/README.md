@@ -1,6 +1,6 @@
-# ZenVoice documentation
+# BuilderHelm Voice documentation
 
-The index below points to documents that describe ZenVoice as it is now.
+The index below points to documents that describe BuilderHelm Voice as it is now.
 Delivery plans for finished phases and superseded R&D are removed rather than
 archived: git history keeps them, and a document that no longer describes the
 product is a liability in a directory people read for current guidance.
@@ -21,7 +21,7 @@ runtime truth lives in the code and executable checks.
 | Document | What it covers |
 | --- | --- |
 | [Languages](LANGUAGES.md) | Language profiles and why English is the default. |
-| [Model catalogue](MODEL_CATALOG.md) | Every model ZenVoice will download, with pinned revisions and hashes. |
+| [Model catalogue](MODEL_CATALOG.md) | Every model BuilderHelm Voice will download, with pinned revisions and hashes. |
 | [Instant Refine](INSTANT_REFINE.md) | The local text stage between transcription and insertion. |
 | [Live dictation](LIVE_DICTATION.md) | Stable-phrase preview and commit-on-pause. |
 | [Transcription accuracy](TRANSCRIPTION_ACCURACY.md) | Where remaining errors come from, and what has been ruled out. |
@@ -30,7 +30,7 @@ runtime truth lives in the code and executable checks.
 | [Hinglish spelling](HINGLISH_SPELLING.md) | Romanized-Hindi spelling personalization. |
 | [Sharing](SHARING.md) | Private highlight cards. |
 
-## Working on ZenVoice
+## Working on BuilderHelm Voice
 
 | Document | What it covers |
 | --- | --- |

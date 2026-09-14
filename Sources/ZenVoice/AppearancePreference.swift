@@ -15,7 +15,7 @@
 import AppKit
 import SwiftUI
 
-/// ZenVoice follows the system appearance. Brand identity comes from the
+/// BuilderHelm Voice follows the system appearance. Brand identity comes from the
 /// violet tint and materials, not by forcing every window into Dark Aqua.
 enum ZenAppearance {
     static let colorScheme: ColorScheme? = nil

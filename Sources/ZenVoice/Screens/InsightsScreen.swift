@@ -48,7 +48,7 @@ struct InsightsScreen: View {
                     kind: .info,
                     icon: "lock",
                     text:
-                        "Insights are calculated locally. ZenVoice stores app identity — never window titles, URLs, recipients, or surrounding text."
+                        "Insights are calculated locally. BuilderHelm Voice stores app identity — never window titles, URLs, recipients, or surrounding text."
                 )
                 Button {
                     showsShareCard = true
@@ -111,7 +111,7 @@ struct InsightsScreen: View {
     private var fixesCard: some View {
         metricCard(
             icon: "wand.and.stars",
-            label: "Fixes made by ZenVoice",
+            label: "Fixes made by BuilderHelm Voice",
             value: viewModel.snapshot.correctionCount.formatted()
         ) {
             Text("Corrections applied across all dictations.")

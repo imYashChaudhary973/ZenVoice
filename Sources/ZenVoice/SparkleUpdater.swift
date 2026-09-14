@@ -28,7 +28,7 @@ import ZenVoiceCore
 /// repository.
 ///
 /// `SPUStandardUserDriver` presents "up to date" / error UI with
-/// `NSAlert.runModal()`. A nested modal session against ZenVoice's SwiftUI
+/// `NSAlert.runModal()`. A nested modal session against BuilderHelm Voice's SwiftUI
 /// settings window locks the main thread, so those alerts are shown as
 /// sheets instead. User-initiated checks are also scheduled in the default
 /// run-loop mode so they do not start during SwiftUI event tracking.
@@ -213,7 +213,7 @@ final class SparkleUpdater: NSObject, ObservableObject, SPUUpdaterDelegate,
 
 /// Standard Sparkle UI, except "up to date" / error alerts are sheets.
 ///
-/// The stock driver uses `NSAlert.runModal()`, which freezes ZenVoice's
+/// The stock driver uses `NSAlert.runModal()`, which freezes BuilderHelm Voice's
 /// SwiftUI settings window.
 private final class ZenSparkleUserDriver: SPUStandardUserDriver {
     override func showUpdateNotFoundWithError(
@@ -258,7 +258,7 @@ private final class ZenSparkleUserDriver: SPUStandardUserDriver {
         }
         let alert = NSAlert()
         alert.messageText = "Update Installed"
-        alert.informativeText = "ZenVoice has been updated."
+        alert.informativeText = "BuilderHelm Voice has been updated."
         alert.addButton(withTitle: "OK")
         SparkleUpdater.shared.presentSparkleAlert(
             alert,

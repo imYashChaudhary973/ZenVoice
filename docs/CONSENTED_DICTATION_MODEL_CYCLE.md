@@ -5,7 +5,7 @@ Started: 2026-08-14
 
 ## Goal
 
-Produce a smaller English Q5 model that improves representative ZenVoice
+Produce a smaller English Q5 model that improves representative BuilderHelm Voice
 dictation without changing quantities, negations, or clean transcripts. Model
 promotion is allowed only after every accuracy, safety, performance, provenance,
 and redistribution gate passes.
@@ -13,7 +13,7 @@ and redistribution gate passes.
 ## Completed
 
 - Added a fail-closed semantic guard to `ZenVoiceCore`. If refinement changes
-  the multiset of number words, digit-bearing tokens, or negations, ZenVoice
+  the multiset of number words, digit-bearing tokens, or negations, BuilderHelm Voice
   returns the original ASR transcript with `wasRejected = true`.
 - Protected both direct `InstantRefineEngine` use and the complete
   `TranscriptRefinement` pipeline.
@@ -71,7 +71,7 @@ and redistribution gate passes.
   rows, converts audio to 16 kHz mono PCM, verifies Mozilla's speaker-disjoint
   splits, and checksum-locks the resulting manifests. It deliberately labels
   the corpus as a public spontaneous-speech supplement rather than claiming it
-  is representative ZenVoice dictation.
+  is representative BuilderHelm Voice dictation.
 - Prepared the reviewed English archive into 1,618 retained clips (4.557
   hours) from 278 disjoint speakers: 1,023 train, 333 validation, and 262 test.
   The exact archive, manifests, review, provenance, and summary are bound by
@@ -86,7 +86,7 @@ and redistribution gate passes.
   was rejected. Checkpoint 318 also failed the clean and long-form gates.
 - Converted the base and both candidates to English-labelled Q5_0 artifacts.
   Each file is 175,222,905 bytes. The runtime-facing `.en.` filename marker is
-  mandatory so ZenVoice does not misclassify an English-only artifact as a
+  mandatory so BuilderHelm Voice does not misclassify an English-only artifact as a
   multilingual model.
 
 ## Current authorization boundary
@@ -103,7 +103,7 @@ consent permissions set to false, participant-controlled timestamps and
 recording metadata left as placeholders, zero recordings, and the same locked
 60-prompt pack.
 
-ZenVoice must not mark the form as accepted, fabricate transcripts, reuse
+BuilderHelm Voice must not mark the form as accepted, fabricate transcripts, reuse
 private History recordings without selection, or upload any session. The person
 recorded must choose the contributed clips and personally accept the consent
 statement.
@@ -120,13 +120,13 @@ Datasets/zenvoice-training/.venv/bin/python \
 
 Mozilla Common Voice Spontaneous Speech 4.0 English exceeds the initial numeric
 floor for clips, decoded hours, and speakers. It improves domain proximity over
-read speech, but it does not guarantee coverage of ZenVoice punctuation
+read speech, but it does not guarantee coverage of BuilderHelm Voice punctuation
 commands, coding terms, numbers, negations, names, or corrections. Keep its
 Mozilla validation/dev/test partitions held out from one another, and retain a
-separate ZenVoice product-safety test set.
+separate BuilderHelm Voice product-safety test set.
 
 A person signed in to Mozilla Data Collective, accepted its current terms, and
-downloaded the English 4.0 archive. ZenVoice did not automate account creation
+downloaded the English 4.0 archive. BuilderHelm Voice did not automate account creation
 or terms acceptance. The retained local archive is:
 
 `Datasets/incoming/sps-corpus-4.0-2026-06-12-en.tar.gz`
@@ -164,7 +164,7 @@ Datasets/zenvoice-training/.venv/bin/python \
 Preparation requires at least 500 retained clips, 3 decoded hours, 300/100/100
 train/validation/test clips, and at least 5/2/2 speaker IDs. These are minimum
 coverage checks. They do not transform spontaneous answers into validated
-ZenVoice task coverage.
+BuilderHelm Voice task coverage.
 
 ## Collect the first session
 
@@ -173,7 +173,7 @@ ZenVoice task coverage.
 2. Open that slot's `consent.json` and `session.json`. The participant must
    personally review consent; complete timestamps and recording metadata
    truthfully. Keep the pre-registered pseudonymous IDs unchanged.
-3. In ZenVoice, enable Audio History and make intentional test dictations from
+3. In BuilderHelm Voice, enable Audio History and make intentional test dictations from
    `prompts.jsonl`. Avoid real secrets and personal information.
 4. Export only the selected test recordings with transcripts enabled.
 5. Copy each contributed WAV into the session's `recordings/` directory and
@@ -252,7 +252,7 @@ swift run ZenVoiceAccuracyChecks
 ## Public-supplement exploratory cycle
 
 The frozen Common Voice test gives an honest public spontaneous-speech
-comparison, not a ZenVoice product-acceptance result. The base Hugging Face
+comparison, not a BuilderHelm Voice product-acceptance result. The base Hugging Face
 model scored 8.109% WER on its 262 clips. A two-epoch LoRA run mixed the 1,023
 public training clips with 1,519 LibriSpeech regularizer clips:
 

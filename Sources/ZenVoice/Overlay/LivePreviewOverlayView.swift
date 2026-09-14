@@ -22,7 +22,7 @@ import ZenVoiceCore
 struct LivePreviewOverlayView: View {
     let kind: OverlayKind
     @ObservedObject var state: AppState
-    /// ZenVoice's own overlay Reduce Motion preference, which defaults to the
+    /// BuilderHelm Voice's own overlay Reduce Motion preference, which defaults to the
     /// system setting and can override it.
     let reduceMotion: Bool
     let cancelRecording: () -> Void
@@ -30,7 +30,7 @@ struct LivePreviewOverlayView: View {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
-    /// Motion is reduced when either the system or ZenVoice asks for it.
+    /// Motion is reduced when either the system or BuilderHelm Voice asks for it.
     private var motionReduced: Bool { reduceMotion || systemReduceMotion }
 
     var body: some View {
@@ -125,7 +125,7 @@ struct LivePreviewOverlayView: View {
             if state.phase == .transcribing {
                 Spacer()
                 // IndeterminateBar already stills itself for the system
-                // setting; this covers ZenVoice's own preference too.
+                // setting; this covers BuilderHelm Voice's own preference too.
                 if motionReduced {
                     Capsule()
                         .fill(ZenDesign.Semantic.accent.opacity(0.45))

@@ -1,6 +1,6 @@
 # Language Profiles
 
-ZenVoice keeps language choice explicit. The default profile is **English**,
+BuilderHelm Voice keeps language choice explicit. The default profile is **English**,
 even when a multilingual model is selected. This prevents short English
 phrases from being guessed as Hindi, Urdu, or another language simply because
 automatic detection is available.
@@ -30,20 +30,20 @@ Translation is not transliteration. For example, Hindi “नमस्ते द
 
 English works with either an English-only or Multilingual model. Hinglish uses
 the Hinglish Apex specialist. Automatic detection and every other non-English
-language require a Multilingual model. ZenVoice refuses an incompatible
+language require a Multilingual model. BuilderHelm Voice refuses an incompatible
 model/profile combination rather than silently falling back to a different
 language.
 
 The catalogue currently exposes 64 Whisper language codes. Recommended
 languages have the strongest initial product focus; Preview languages are
 available but still need broader real-microphone validation. The label is a
-ZenVoice release-readiness classification, not a claim that all listed
+BuilderHelm Voice release-readiness classification, not a claim that all listed
 languages have equal accuracy.
 
 ## Privacy
 
 Language selection, transcription, translation, and transliteration stay on
-the Mac. ZenVoice does not send speech or text to a language service.
+the Mac. BuilderHelm Voice does not send speech or text to a language service.
 
 ## Known limitations
 

@@ -145,7 +145,7 @@ struct FormattingScreen: View {
                     }
 
                     if voiceProfileViewModel.snapshot.correctionRules.isEmpty {
-                        Text("No replacements yet. Add the phrases ZenVoice should rewrite every time.")
+                        Text("No replacements yet. Add the phrases BuilderHelm Voice should rewrite every time.")
                             .font(ZenDesign.Typography.caption)
                             .foregroundStyle(ZenDesign.Semantic.textTertiary)
                             .padding(.vertical, ZenDesign.Spacing.sm)

@@ -9,7 +9,7 @@
   (`libSwiftUIMacros.dylib`) is only shipped with Xcode
 - Internet access on the first build so Swift Package Manager can fetch the
   pinned `whisper.cpp` XCFramework
-- A verified, compatible model downloaded from ZenVoice's **Models** screen
+- A verified, compatible model downloaded from BuilderHelm Voice's **Models** screen
 
 If `xcode-select -p` points at `/Library/Developer/CommandLineTools`, the
 SwiftUI macro plugin is missing and `swift build` fails on valid code with
@@ -34,12 +34,12 @@ an explicit message when none is installed.
 
 ## Configuration
 
-ZenVoice normally resolves the selected model from its verified catalogue of
-`whisper.cpp` GGML files. For development overrides, ZenVoice searches for:
+BuilderHelm Voice normally resolves the selected model from its verified catalogue of
+`whisper.cpp` GGML files. For development overrides, BuilderHelm Voice searches for:
 
-1. the model selected in ZenVoice's verified catalogue;
+1. the model selected in BuilderHelm Voice's verified catalogue;
 2. `ZENVOICE_MODEL_PATH` as a developer override; then
-   `~/Library/Application Support/ZenVoice/Models/ggml-base.en.bin`.
+   `~/Library/Application Support/BuilderHelm Voice/Models/ggml-base.en.bin`.
 
 The only runtime dependency is the checksum-pinned `whisper.cpp` v1.9.1
 XCFramework declared in `Package.swift`. `ZENVOICE_MODEL_PATH` is most useful
@@ -98,7 +98,7 @@ Because the build enables Hardened Runtime, the signature also embeds
 access.
 After switching from an ad-hoc build:
 
-1. Remove the old ZenVoice entry from **System Settings → Privacy & Security →
+1. Remove the old BuilderHelm Voice entry from **System Settings → Privacy & Security →
    Accessibility** if it remains listed.
 2. Launch the newly built `build/ZenVoice.app`.
 3. Start and finish one dictation.
@@ -172,7 +172,7 @@ and has read-only repository permission.
 
 ## Measuring memory
 
-ZenVoice's memory is dominated by one thing: a resident speech model, 600 MB to
+BuilderHelm Voice's memory is dominated by one thing: a resident speech model, 600 MB to
 940 MB depending on the engine, nearly all of it GPU buffers. See
 [Architecture](ARCHITECTURE.md#memory) for how that is bounded.
 
@@ -180,7 +180,7 @@ Use `phys_footprint`, not `ps`'s RSS — RSS counts shared and file-backed pages
 and reads far higher than what the app actually costs:
 
 ```sh
-PID=$(pgrep -f "ZenVoice.app/Contents/MacOS/ZenVoice" | head -1)
+PID=$(pgrep -f "ZenVoice.app/Contents/MacOS/BuilderHelm Voice" | head -1)
 footprint -p "$PID" | grep phys_footprint   # steady and peak
 footprint -p "$PID" | head -30              # by category
 heap "$PID" | head -30                      # live allocations, by class
@@ -208,7 +208,7 @@ unreliable speaker-to-microphone loop used by acoustic tests.
 ```bash
 ZENVOICE_E2E_AUDIO_FILE=/absolute/path/to/fixture.wav \
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
-swift run ZenVoice
+swift run BuilderHelm Voice
 ```
 
 Start and stop dictation normally. Each recording uses the fixture instead of
@@ -254,7 +254,7 @@ including private transcript text. Run the scenarios against that artifact;
 development builds can use the same list without creating a release record.
 
 1. For development QA, launch `build/ZenVoice.app`. For release QA, extract the
-   recorded `ZenVoice-distribution.zip` and launch that exact app.
+   recorded `BuilderHelm Voice-distribution.zip` and launch that exact app.
 2. Confirm the settings window opens and the Zen logo appears in the menu bar
    and ZenBar.
 3. Open **History** and confirm the encrypted-history state is available by
@@ -266,7 +266,7 @@ development builds can use the same list without creating a release record.
 6. Repeat for **Paste last dictation** and **Private Dictation**.
 7. Enable hold-to-dictate, hold Fn, speak, and release. Confirm release stops
    recording and inserts the result.
-8. Quit and relaunch ZenVoice. Confirm all shortcut choices persisted.
+8. Quit and relaunch BuilderHelm Voice. Confirm all shortcut choices persisted.
 9. Open **Privacy** and confirm Microphone, Accessibility, local-history, and local-model
    status match System Settings and the local installation.
 10. Open **Insights** and confirm totals match History. Change one record's
@@ -278,7 +278,7 @@ development builds can use the same list without creating a release record.
 12. Enable Private Dictation, use the same phrase, and confirm the correction
     can still apply but its saved usage count does not change. Disable Private
     Dictation and delete the temporary rule before continuing.
-13. On Apple Silicon, while ZenVoice is idle, install a current multilingual
+13. On Apple Silicon, while BuilderHelm Voice is idle, install a current multilingual
     Whisper model, then complete two consecutive non-sensitive dictations
     through ZenBar without changing the model or relaunching. Selection state
     alone is not runtime evidence; the model must decode successfully.
@@ -287,7 +287,7 @@ development builds can use the same list without creating a release record.
     application name appears.
 15. Select **Save PNG**, cancel the save panel, then select **Share…** and
     cancel the macOS Share menu. Confirm neither action happens automatically.
-16. Close the settings window and reopen it from **Open ZenVoice…** in the
+16. Close the settings window and reopen it from **Open BuilderHelm Voice…** in the
    menu-bar menu.
 17. Open TextEdit and place the cursor in a document.
 18. Press the configured shortcut.
@@ -318,7 +318,7 @@ development builds can use the same list without creating a release record.
       Dictation and voice commands, install a compatible model, and select the
       profile being tested.
     - Dictate non-sensitive speech that includes “new paragraph,” stop, and
-      force-quit ZenVoice while ZenBar shows **transcribing…**. Relaunch and
+      force-quit BuilderHelm Voice while ZenBar shows **transcribing…**. Relaunch and
       confirm the interrupted item appears under **History → Recovery** with
       **Retry**. Use a longer recording or slower compatible model if the decode
       finishes before the force-quit.
@@ -328,7 +328,7 @@ development builds can use the same list without creating a release record.
       preference by turning “new paragraph” into a paragraph break.
     - Delete the temporary recovery item, disable voice commands, and repeat for
       the next profile. Do not include the dictated text in the QA record.
-33. Focus a password field, start dictation, and confirm ZenVoice copies the
+33. Focus a password field, start dictation, and confirm BuilderHelm Voice copies the
     transcript instead of writing through the secure-input fallback.
 34. Enter and leave a native full-screen space, then start dictation and
     confirm ZenBar follows the active space.

@@ -247,7 +247,7 @@ struct CloudAIDictationPreviewView: View {
 /// choice is load-bearing. The transcript is inserted into whichever
 /// application was frontmost when dictation ended, and accepting an
 /// enhancement replaces that text in place. An ordinary window would activate
-/// ZenVoice, make *it* frontmost, and the accessibility call that swaps the
+/// BuilderHelm Voice, make *it* frontmost, and the accessibility call that swaps the
 /// text would then aim at the wrong process — dropping the replacement or
 /// leaving the local transcript and the enhanced one both on screen.
 /// A `.nonactivatingPanel` takes clicks without stealing focus, so the target

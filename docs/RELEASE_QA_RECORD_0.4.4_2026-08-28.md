@@ -1,4 +1,4 @@
-# Release QA Record — ZenVoice 0.4.4
+# Release QA Record — BuilderHelm Voice 0.4.4
 
 Generated 2026-08-28 from commit `4a996f468500c3a77e5782946a5bf2beef3506a3`.
 Automatable evidence collected by agent; manual rows are marked **Requires human tester**.
@@ -12,9 +12,9 @@ Automatable evidence collected by agent; manual rows are marked **Requires human
 | Minimum supported version (deployment target) | Apple Silicon, macOS 14 or newer |
 | macOS versions actually certified by this sweep | macOS 27.0 (26A5421a) — in-progress; manual rows pending |
 | Source commit reported by `Scripts/build-app.sh` | `4a996f468500c3a77e5782946a5bf2beef3506a3` |
-| Notarization upload archive | `ZenVoice-notarization-upload.zip` (SHA-256: `df98a7e557a697c20fedc3ccc03f21fdd162b807f64e146155c1d1a6234b575b`) |
+| Notarization upload archive | `BuilderHelm Voice-notarization-upload.zip` (SHA-256: `df98a7e557a697c20fedc3ccc03f21fdd162b807f64e146155c1d1a6234b575b`) |
 | Notarization request ID | captured by `notarytool` at build time; retained with release assets |
-| Distribution artifact | `ZenVoice-distribution.zip` |
+| Distribution artifact | `BuilderHelm Voice-distribution.zip` |
 | Distribution SHA-256 printed by `Scripts/notarize-app.sh` | `f2cb618d33c831d9c9d84107355e6f03d531da2a8b21b6b8eb3cba8faf839027` |
 | Published DMG SHA-256 | `8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2` |
 | Test date | 2026-08-28 |
@@ -41,7 +41,7 @@ $ plutil -extract CFBundleIdentifier raw /Applications/ZenVoice.app/Contents/Inf
 com.zenvoice.app
 
 $ codesign -dv --verbose=4 /Applications/ZenVoice.app 2>&1 | head -12
-Executable=/Applications/ZenVoice.app/Contents/MacOS/ZenVoice
+Executable=/Applications/ZenVoice.app/Contents/MacOS/BuilderHelm Voice
 Identifier=com.zenvoice.app
 Format=app bundle with Mach-O thin (arm64)
 CodeDirectory v=20500 size=84828 flags=0x10000(runtime) hashes=2640+7 location=embedded
@@ -67,14 +67,14 @@ $ codesign -d --entitlements :- /Applications/ZenVoice.app 2>&1
 ```
 
 Nested executables signed with the same Developer ID:
-- `ZenVoice.app/Contents/MacOS/ZenVoice`
+- `ZenVoice.app/Contents/MacOS/BuilderHelm Voice`
 - `whisper.framework`
 - `libparakeet.dylib`
 - `Sparkle.framework` and embedded XPC services
 
 Entitlement surface is `audio-input` only; `get-task-allow` is absent.
 Published DMG on GitHub Releases matches local artifact exactly:
-- `https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.4/ZenVoice.dmg`
+- `https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/ZenVoice.dmg`
 - SHA-256: `8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2`
 - `hdiutil verify`: VALID
 - `stapler validate`: accepted
@@ -88,7 +88,7 @@ Published DMG on GitHub Releases matches local artifact exactly:
 | Hinglish Apex | `hindi2hinglish-apex` | whisper.cpp | pinned v1.9.1 | Not installed in this sweep |
 | Whisper Medium | `whisper-medium-multilingual` | whisper.cpp | pinned v1.9.1 | Not installed in this sweep |
 
-Note: only `whisper-small-multilingual` is present in `~/Library/Application Support/ZenVoice/Models/`. Runtime checks in CI use `ZENVOICE_RUNTIME_REQUIRED=1` with a model installed in the CI workspace.
+Note: only `whisper-small-multilingual` is present in `~/Library/Application Support/BuilderHelm Voice/Models/`. Runtime checks in CI use `ZENVOICE_RUNTIME_REQUIRED=1` with a model installed in the CI workspace.
 
 ## Automated verification
 
@@ -113,7 +113,7 @@ Run every numbered scenario in `docs/DEVELOPMENT.md#manual-qa`. Rows marked **Re
 | 4 | Requires human tester | Open Shortcuts, select current shortcut, record a temporary two-modifier combination. |
 | 5 | Requires human tester | Repeat for Paste last dictation and Private Dictation shortcuts. |
 | 6 | Requires human tester | Enable hold-to-dictate, hold Fn, speak, release; confirm release stops recording and inserts result. |
-| 7 | Requires human tester | Quit and relaunch ZenVoice; confirm all shortcut choices persisted. |
+| 7 | Requires human tester | Quit and relaunch BuilderHelm Voice; confirm all shortcut choices persisted. |
 | 8 | Requires human tester | Open Privacy; confirm Microphone, Accessibility, local-history, and local-model status match System Settings. |
 | 9 | Requires human tester | Open Insights; confirm totals match History. Change one record's category, confirm Insights updates. |
 | 10 | Requires human tester | Open Voice Profile, add temporary correction `zen pens` → `ZenPense`, dictate phrase, confirm correction and usage count. |
@@ -121,7 +121,7 @@ Run every numbered scenario in `docs/DEVELOPMENT.md#manual-qa`. Rows marked **Re
 | 12 | Requires human tester | On Apple Silicon, install current multilingual Whisper model, complete two consecutive dictations through ZenBar without relaunching. |
 | 13 | Requires human tester | Open Insights → Share Highlights; verify preview contains only words, WPM, streak, app count. No transcript or app names. |
 | 14 | Requires human tester | Save PNG (cancel), then Share… (cancel); confirm neither action happens automatically. |
-| 15 | Requires human tester | Close settings window and reopen from Open ZenVoice… in menu bar. |
+| 15 | Requires human tester | Close settings window and reopen from Open BuilderHelm Voice… in menu bar. |
 | 16 | Requires human tester | Open TextEdit, place cursor, press shortcut. |
 | 17 | Requires human tester | Speak quietly; confirm ZenBar shows shorter waveform bars. |
 | 18 | Requires human tester | Speak loudly; confirm ZenBar shows taller waveform bars. |
@@ -136,7 +136,7 @@ Run every numbered scenario in `docs/DEVELOPMENT.md#manual-qa`. Rows marked **Re
 | 27 | Requires human tester | Choose Off; repeat a filler or word; confirm Instant Refine makes no additional change. |
 | 28 | Requires human tester | Start a model download; confirm percentage progress. Cancel, start another download, confirm cancelled task does not clear new progress. |
 | 29 | Requires human tester | Recovery Inbox: create and retry English, Hindi, and Hinglish items per `docs/DEVELOPMENT.md` scenario 32. |
-| 30 | Requires human tester | Focus a password field, start dictation; confirm ZenVoice copies transcript instead of writing through secure-input fallback. |
+| 30 | Requires human tester | Focus a password field, start dictation; confirm BuilderHelm Voice copies transcript instead of writing through secure-input fallback. |
 | 31 | Requires human tester | Enter and leave native full-screen space, start dictation; confirm ZenBar follows active space. |
 
 ### Helper scripts for manual rows
@@ -170,9 +170,9 @@ Run every numbered scenario in `docs/DEVELOPMENT.md#manual-qa`. Rows marked **Re
 
 | Scenario | Result | Evidence, issue, or notes |
 |---|---|---|
-| Denied microphone permission | Requires human tester | Deny in System Settings; confirm ZenVoice shows permission error and dictation does not start. |
+| Denied microphone permission | Requires human tester | Deny in System Settings; confirm BuilderHelm Voice shows permission error and dictation does not start. |
 | Shortcut without a modifier | Pass (automated) | `ZenVoiceCoreChecks: option-only shortcuts remain valid` |
-| Shortcut reserved by macOS or another app | Requires human tester | Set shortcut to `⌘Space` or similar; confirm ZenVoice warns and does not steal system shortcut. |
+| Shortcut reserved by macOS or another app | Requires human tester | Set shortcut to `⌘Space` or similar; confirm BuilderHelm Voice warns and does not steal system shortcut. |
 | Silence-only recording | Requires human tester | Start dictation without speaking; confirm graceful stop and no transcript inserted. |
 | Repeated hotkey presses during transcription | Requires human tester | Press shortcut multiple times while transcribing; confirm no duplicate insertions or stuck state. |
 | App relaunch | Requires human tester | Quit and relaunch; confirm settings and shortcuts persist. |
@@ -227,7 +227,7 @@ Automated review of source and binary:
 
 ### How to finish this QA
 
-1. Download the published DMG from `https://github.com/imYashChaudhary973/ZenVoice/releases/download/v0.4.4/ZenVoice.dmg` and verify its SHA-256 matches `8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2`.
+1. Download the published DMG from `https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/ZenVoice.dmg` and verify its SHA-256 matches `8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2`.
 2. Drag `ZenVoice.app` to `/Applications` on a clean Mac (or run `./Scripts/reset-zenvoice-state.sh` to simulate clean install).
 3. Launch the app and approve Microphone and Accessibility when prompted.
 4. Complete onboarding and download the recommended model.

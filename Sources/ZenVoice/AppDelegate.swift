@@ -461,7 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var anticipatoryEventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // The approved graphite/violet reference is ZenVoice's one appearance
+        // The approved graphite/violet reference is BuilderHelm Voice's one appearance
         // for now. Set it at the application boundary so settings, approval
         // windows, cloud review panels, menus, and native controls agree.
         NSApp.appearance = ZenAppearance.appKitAppearance
@@ -478,7 +478,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configureSettingsWindow()
         SparkleUpdater.shared.start()
         // The main window is the app. Opening it on launch is what the
-        // approved design specifies: ZenVoice keeps its menu-bar presence and
+        // approved design specifies: BuilderHelm Voice keeps its menu-bar presence and
         // its global hotkey, but starting it shows you the app rather than
         // leaving you to hunt for a status item. Closing the window drops the
         // activation policy back to `.accessory`, so it still gets out of the
@@ -532,7 +532,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } else {
                 try? await dictationVault?.markFailed(
                     id: historyID,
-                    message: "ZenVoice closed before this dictation completed.",
+                    message: "BuilderHelm Voice closed before this dictation completed.",
                     retainAudio: historyPreferences.retainsFailedAudio
                 )
             }
@@ -585,13 +585,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let configuration = try await Task.detached(
                 priority: .userInitiated
             ) {
-                try ZenVoiceConfiguration.discover()
+                try BuilderHelm VoiceConfiguration.discover()
             }.value
             let whisper = WhisperSpeechEngine(configuration: configuration)
             whisperEngine = whisper
             engineRegistry = makeEngineRegistry(whisper: whisper)
             warmUpEngines()
-        } catch ZenVoiceConfiguration.ConfigurationError.modelMissing {
+        } catch BuilderHelm VoiceConfiguration.ConfigurationError.modelMissing {
             // TDT v3 can still run when no Whisper file is installed yet.
             whisperEngine = nil
             engineRegistry = makeEngineRegistry(whisper: nil)
@@ -872,7 +872,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             statusItem.button?.image = NSImage(
                 systemSymbolName: "z.circle.fill",
-                accessibilityDescription: "ZenVoice"
+                accessibilityDescription: "BuilderHelm Voice"
             )
         }
 
@@ -891,7 +891,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         let openItem = NSMenuItem(
-            title: "Open ZenVoice…",
+            title: "Open BuilderHelm Voice…",
             action: #selector(openSettings),
             keyEquivalent: ","
         )
@@ -927,7 +927,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         zenBarMenuItem = NSMenuItem(
-            title: "Show ZenVoice at all times",
+            title: "Show BuilderHelm Voice at all times",
             action: #selector(toggleZenBar),
             keyEquivalent: ""
         )
@@ -980,7 +980,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: "Quit ZenVoice",
+            title: "Quit BuilderHelm Voice",
             action: #selector(quit),
             keyEquivalent: "q"
         )
@@ -992,7 +992,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Installs the application menu bar.
     ///
-    /// ZenVoice had none. It ran as an accessory with only a status-item menu,
+    /// BuilderHelm Voice had none. It ran as an accessory with only a status-item menu,
     /// which is fine while it is invisible — but the window flips the app to
     /// `.regular`, and AppKit routes the standard key equivalents through
     /// `NSApp.mainMenu`. With no main menu there was nothing to route to, so
@@ -1010,7 +1010,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "About ZenVoice",
+            withTitle: "About BuilderHelm Voice",
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
             keyEquivalent: ""
         )
@@ -1024,7 +1024,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Hide ZenVoice",
+            withTitle: "Hide BuilderHelm Voice",
             action: #selector(NSApplication.hide(_:)),
             keyEquivalent: "h"
         )
@@ -1042,7 +1042,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         appMenu.addItem(.separator())
         let quitItem = NSMenuItem(
-            title: "Quit ZenVoice",
+            title: "Quit BuilderHelm Voice",
             action: #selector(quit),
             keyEquivalent: "q"
         )
@@ -1091,7 +1091,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let windowItem = NSMenuItem()
         let windowMenu = NSMenu(title: "Window")
-        // Closing the window is not quitting. ZenVoice keeps its status item
+        // Closing the window is not quitting. BuilderHelm Voice keeps its status item
         // and its global shortcut, and `windowWillClose` drops the app back to
         // `.accessory` — so ⌘W puts it away and ⌘Q ends it, which is the
         // distinction a menu-bar app needs and could not previously express.
@@ -1261,7 +1261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             applySelection: { [weak self] model, profile in
                 guard let self else {
                     return .failure(
-                        ZenVoiceConfiguration.ConfigurationError.modelMissing
+                        BuilderHelm VoiceConfiguration.ConfigurationError.modelMissing
                     )
                 }
                 return self.applyConfiguration(
@@ -1317,7 +1317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             applyLanguageProfile: { [weak self] profile in
                 guard let self else {
                     return .failure(
-                        ZenVoiceConfiguration.ConfigurationError.modelMissing
+                        BuilderHelm VoiceConfiguration.ConfigurationError.modelMissing
                     )
                 }
                 return self.applyLanguageProfile(profile)
@@ -1342,7 +1342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             vaultProvider: { [weak self] in
                 guard let self else {
                     throw DictationVaultError.database(
-                        "ZenVoice is no longer running."
+                        "BuilderHelm Voice is no longer running."
                     )
                 }
                 return try await self.resolvedVault()
@@ -1351,7 +1351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else {
                     return .failure(
                         DictationVaultError.database(
-                            "ZenVoice is no longer running."
+                            "BuilderHelm Voice is no longer running."
                         )
                     )
                 }
@@ -1365,7 +1365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             vaultProvider: { [weak self] in
                 guard let self else {
                     throw DictationVaultError.database(
-                        "ZenVoice is no longer running."
+                        "BuilderHelm Voice is no longer running."
                     )
                 }
                 return try await self.resolvedVault()
@@ -1375,7 +1375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             vaultProvider: { [weak self] in
                 guard let self else {
                     throw DictationVaultError.database(
-                        "ZenVoice is no longer running."
+                        "BuilderHelm Voice is no longer running."
                     )
                 }
                 return try await self.resolvedVault()
@@ -1386,7 +1386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             vaultProvider: { [weak self] in
                 guard let self else {
                     throw DictationVaultError.database(
-                        "ZenVoice is no longer running."
+                        "BuilderHelm Voice is no longer running."
                     )
                 }
                 return try await self.resolvedVault()
@@ -1554,7 +1554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 model: model,
                 profile: languageProfile
             ) {
-                let configuration = try ZenVoiceConfiguration.verified(
+                let configuration = try BuilderHelm VoiceConfiguration.verified(
                     model: model,
                     languageProfile: languageProfile
                 )
@@ -2318,7 +2318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Esc cancels an active dictation from anywhere. The ZenBar panel is
     /// non-activating, so the key lands in whichever app has focus — a local
-    /// monitor covers ZenVoice's own windows, a global one covers the rest.
+    /// monitor covers BuilderHelm Voice's own windows, a global one covers the rest.
     /// The global monitor only observes; the frontmost app still receives
     /// its Esc.
     private func updateEscapeToCancel(phase: AppState.Phase) {
@@ -3039,7 +3039,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     }
                 }
                 // Naming the cause matters: nothing the user can change in
-                // ZenVoice fixes this, and without an explanation the app
+                // BuilderHelm Voice fixes this, and without an explanation the app
                 // simply looks broken in one app and fine in the next.
                 self.showError(
                     "Copied—\(self.secureInputAdvice())"
@@ -3439,7 +3439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             _ = try RuntimeIdentity.policy()
         } catch {
             let alert = NSAlert()
-            alert.messageText = "ZenVoice cannot start"
+            alert.messageText = "BuilderHelm Voice cannot start"
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .critical
             alert.addButton(withTitle: "Quit")
@@ -3850,7 +3850,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let today = (try? await dictationVault?.insights().today) ?? nil
         let summary = (today ?? .empty).pillSummary
         todayUsageMenuItem?.title = summary
-        statusItem?.button?.toolTip = "ZenVoice — \(summary)"
+        statusItem?.button?.toolTip = "BuilderHelm Voice — \(summary)"
     }
 
     @objc private func requestAccessibilityPermission() {

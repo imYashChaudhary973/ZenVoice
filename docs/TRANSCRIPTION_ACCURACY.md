@@ -8,7 +8,7 @@ error rate from 23.2% to 7.2%, and nothing further has meaningful headroom
 rules). What remains in a
 finished transcript is *misheard words*, which is a transcription problem.
 
-This is the first measurement of ZenVoice against real human speech rather
+This is the first measurement of BuilderHelm Voice against real human speech rather
 than synthesized fixtures.
 
 ## The corpus

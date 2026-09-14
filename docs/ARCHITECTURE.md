@@ -2,7 +2,7 @@
 
 ## Purpose
 
-ZenVoice is a local-first macOS dictation application. Its first responsibility
+BuilderHelm Voice is a local-first macOS dictation application. Its first responsibility
 is dependable transcription without sending microphone audio or transcripts to
 an external service.
 
@@ -40,7 +40,7 @@ AudioRecorder ──────► local WAV ──────► ZenVoiceRunt
 
 ## Modules
 
-### `ZenVoice`
+### `BuilderHelm Voice`
 
 The native application target owns macOS-specific behavior:
 
@@ -104,7 +104,7 @@ application:
   level. `LanguagePreferences` persists the explicit input/output profile.
 - `LocalTransliterator` converts supported native scripts to Latin characters
   after transcription without a network service.
-- `ZenVoiceConfiguration` discovers the selected verified model and rejects
+- `BuilderHelm VoiceConfiguration` discovers the selected verified model and rejects
   incompatible language/model combinations.
 - `VerifiedModelCatalog` is the signed allowlist for model publisher, source,
   revision, size, format, language capability, licence, and SHA-256.
@@ -138,7 +138,7 @@ while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
   dedicated serial queue, preventing concurrent access to model state.
 
 The previous Parakeet/CoreML path, which required the closed-source FluidAudio
-runtime, has been removed. ZenVoice now uses `whisper.cpp` as its only local
+runtime, has been removed. BuilderHelm Voice now uses `whisper.cpp` as its only local
 speech engine.
 
 ### `ZenVoiceStorage`
@@ -260,7 +260,7 @@ asynchronous and bounded by a timeout, so it cannot block ZenBar indefinitely.
 
 ## Memory
 
-A loaded speech model is the dominant term in ZenVoice's memory use — measured
+A loaded speech model is the dominant term in BuilderHelm Voice's memory use — measured
 at **600 MB** for Whisper Turbo and **940 MB** for Nemotron, almost all of it
 GPU buffers allocated in 128 MB regions. With no model resident the app sits at
 about **50 MB**.
@@ -319,7 +319,7 @@ filesystem's timestamp resolution is indistinguishable from no edit at all,
 which is exactly what `ZenVoiceCoreChecks` demonstrates by rewriting a fixture
 in place and demanding a rejection. The worst a stale listing answer can do is
 leave a badge wrong in a list; nothing is loaded on its say-so, because
-`ZenVoiceConfiguration.discover` calls `verify` and hashes the bytes.
+`BuilderHelm VoiceConfiguration.discover` calls `verify` and hashes the bytes.
 
 ## Current trade-offs
 

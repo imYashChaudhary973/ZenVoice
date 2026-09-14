@@ -1,11 +1,16 @@
 # Changelog
 
-All notable ZenVoice changes are recorded here.
+All notable BuilderHelm Voice changes are recorded here.
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
+- Product name is **BuilderHelm Voice** (formerly ZenVoice). Display name,
+  README, and GitHub-facing docs use the new name. Swift targets and
+  `com.zenvoice.app` are unchanged.
+
+### Fixed
 
 - Cloud AI keys are bound to provider and endpoint origin; changing either
   requires saving a key for the new destination.
@@ -176,7 +181,7 @@ force-disabled on launch and not exposed in settings.
 - Fixed fast process-exit status races and Link transport handshake, replay
   ordering, timeout, and subscriber teardown failures. Core, Link, runtime, UI,
   and deterministic app checks now form the behavioral release gate.
-- Re-licensed ZenVoice under the Apache License, Version 2.0.
+- Re-licensed BuilderHelm Voice under the Apache License, Version 2.0.
 - Removed the closed-source FluidAudio dependency and the Parakeet Unified
   CoreML runtime. NVIDIA engines now run on open `parakeet.cpp` v0.5.0.
   Active local engines: Whisper (`whisper.cpp` v1.9.1), Apple Speech,
@@ -259,11 +264,11 @@ but no earlier version has been tested; see
 
 ### Added
 
-- Added a native ZenVoice window with Overview, Shortcuts, and Privacy screens
+- Added a native BuilderHelm Voice window with Overview, Shortcuts, and Privacy screens
 - Added a recorder for choosing a custom global dictation shortcut
 - Persisted the chosen shortcut locally and applied it without an app restart
 - Added live Microphone, Accessibility, and local-model status
-- Added an **Open ZenVoice…** command to the menu-bar menu
+- Added an **Open BuilderHelm Voice…** command to the menu-bar menu
 - Added explicit opt-in encrypted transcript history backed by native SQLite,
   AES-GCM, and a Keychain-protected key
 - Added crash and failed-transcription recovery with optional 24-hour audio
@@ -314,7 +319,7 @@ but no earlier version has been tested; see
 - Added controls to pause correction rules, pause history pattern analysis,
   and delete all correction rules without deleting transcripts
 - Added a Recovery Inbox filter for failed and usable partial dictations
-- Added first-run onboarding that existing ZenVoice installs can reopen from
+- Added first-run onboarding that existing BuilderHelm Voice installs can reopen from
   Overview without being forced through setup again
 - Added a local privacy inventory with confirmed recovery-audio deletion
 - Added Reduce Motion support and explicit success announcements to ZenBar
@@ -357,7 +362,7 @@ but no earlier version has been tested; see
 - Displayed the active dictation shortcut in the menu-bar action
 - Reduced ZenBar to a compact bottom-edge control strip
 - Added cancel and finish controls during dictation
-- Added an optional “Dictating with ZenVoice” message
+- Added an optional “Dictating with BuilderHelm Voice” message
 - Refined the microphone-responsive waveform
 - Positioned ZenBar on the display containing the active application
 - Signed local builds with a stable Apple Development identity so macOS privacy

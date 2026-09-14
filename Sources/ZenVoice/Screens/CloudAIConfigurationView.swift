@@ -64,7 +64,7 @@ struct CloudAIConfigurationView: View {
                             ? "Enhanced text replaces your local transcript as "
                                 + "soon as it arrives. Nothing interrupts you "
                                 + "after you finish speaking."
-                            : "After each dictation, ZenVoice shows the local "
+                            : "After each dictation, BuilderHelm Voice shows the local "
                                 + "and enhanced text side by side and waits "
                                 + "for you to accept or discard."
                     )

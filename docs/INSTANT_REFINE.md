@@ -61,7 +61,7 @@ Private Dictation uses the same in-memory refinement but stores no transcript.
 
 An application profile is keyed only by the target app's bundle identifier.
 It can choose a language profile, an Instant Refine mode, and whether local
-voice commands are enabled. ZenVoice resolves the profile when recording
+voice commands are enabled. BuilderHelm Voice resolves the profile when recording
 starts and keeps that choice fixed for the entire recording, including stable
 phrase previews.
 
@@ -89,14 +89,14 @@ The built-in engine is deterministic:
 - personal correction rules run afterward, so user-approved names and
   technical terms remain explicit and encrypted.
 
-If the guard rejects a candidate, ZenVoice uses the original cleaned speech
+If the guard rejects a candidate, BuilderHelm Voice uses the original cleaned speech
 transcript.
 
 ## Model responsibilities
 
 Speech models convert audio into text. Smart formatting is a separate,
 post-transcription stage backed by Apple's OS-managed on-device language model.
-ZenVoice supplies no model URL, stores no refinement weights, sends no API key,
+BuilderHelm Voice supplies no model URL, stores no refinement weights, sends no API key,
 and does not use Private Cloud Compute. The model's output is untrusted until
 both formatting guards pass.
 
@@ -113,7 +113,7 @@ remain in the [Verified Model Catalogue](MODEL_CATALOG.md).
 5. Keep live commit-on-pause opt-in until duplicate-free insertion is proven
    across supported target applications.
 
-ZenVoice will not continuously replace text inside another application until
+BuilderHelm Voice will not continuously replace text inside another application until
 focus changes, cursor movement, undo behavior, and application compatibility
 have reliable tests.
 

@@ -1,7 +1,7 @@
-# ZenVoice Phased Development Plan
+# BuilderHelm Voice Phased Development Plan
 
 **Status:** Draft — 2026-08-06  
-**Scope:** All new features and speech models requested for ZenVoice, organized into implementation phases.  
+**Scope:** All new features and speech models requested for BuilderHelm Voice, organized into implementation phases.  
 **Guiding principles:**
 
 - Build for our own daily use first; public shipping remains deferred per [ADR 0004](decisions/0004-internal-use-first-defer-shipping.md).
@@ -11,7 +11,7 @@
 
 ## Feature inventory
 
-The list below combines the feature requests from 2026-08-06 with the current ZenVoice capabilities.
+The list below combines the feature requests from 2026-08-06 with the current BuilderHelm Voice capabilities.
 
 ### Existing capabilities (keep, polish, extend)
 

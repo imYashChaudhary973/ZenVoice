@@ -65,7 +65,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         )
         super.init()
 
-        window.title = "ZenVoice"
+        window.title = "BuilderHelm Voice"
         window.titleVisibility = .hidden
         // Let the split view's sidebar material continue through the unified
         // titlebar. An opaque titlebar calculated its sidebar edge separately

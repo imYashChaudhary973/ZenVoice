@@ -1,6 +1,6 @@
 # Voice Profile and Corrections
 
-ZenVoice's Voice Profile summarizes language use from local encrypted history.
+BuilderHelm Voice's Voice Profile summarizes language use from local encrypted history.
 It is not a voiceprint and does not identify, authenticate, or compare people
 by their voice.
 
@@ -14,7 +14,7 @@ record:
 - recurring phrases are repeated two- or three-word sequences with at least
   two meaningful words;
 - most-active time is the local calendar hour containing the most records;
-- correction rankings use only explicit ZenVoice rule usage.
+- correction rankings use only explicit BuilderHelm Voice rule usage.
 
 The bounded window keeps profile refresh predictable as history grows. Profile
 terms and phrases are calculated when the screen refreshes and are not written
@@ -27,7 +27,7 @@ A correction rule has a heard phrase and a replacement phrase. Both fields:
 - are chosen explicitly by the user;
 - are limited to 120 characters;
 - are encrypted with field-bound AES-GCM in the local vault;
-- never leave the Mac through ZenVoice.
+- never leave the Mac through BuilderHelm Voice.
 
 Exact matching is case-insensitive and requires Unicode word boundaries around
 the entire heard phrase. For example, `zen pens` can become `ZenPense`, while
@@ -38,8 +38,8 @@ are suggestions that require explicit acceptance.
 
 Usage counts are committed only after the corrected transcript is saved to
 history. Private Dictation can use the rules without producing a transcript or
-usage event. ZenVoice does not monitor changes made later in the destination
-application, so those edits are never represented as ZenVoice corrections.
+usage event. BuilderHelm Voice does not monitor changes made later in the destination
+application, so those edits are never represented as BuilderHelm Voice corrections.
 
 Rules may apply to all languages or only to Hinglish. Hinglish-only rules also
 bias Whisper with approved replacement vocabulary before decoding. See

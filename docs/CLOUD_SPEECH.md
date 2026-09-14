@@ -29,7 +29,7 @@ ephemeral `URLSession` (12 s request / 18 s resource), TLS warmed with a
 stop → POST wav → insert text
 ```
 
-If the API fails, ZenVoice decodes the **same clip** with the local engine
+If the API fails, BuilderHelm Voice decodes the **same clip** with the local engine
 and ZenBar says so. There is no silent cloud fallback the other way: a local
 engine never uploads.
 
@@ -50,7 +50,7 @@ Cookies are never stored. The session is ephemeral.
 ## Privacy
 
 Off by default. Once you tap Use, that clip is subject to the provider's
-retention and training policies, which ZenVoice cannot control.
+retention and training policies, which BuilderHelm Voice cannot control.
 
 Cloud **formatting** is a separate opt-in and still sends finished text only,
 never audio. See [Privacy](PRIVACY.md).
