@@ -34,7 +34,12 @@ let windowStart = Date.now();
 let requests = 0;
 const waitMs = () => Number(process.env.MCP_WAIT_MS ?? 20_000);
 
-const html = (title, body) => `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${body}</body></html>`;
+const html = (title, body) =>
+  '<!doctype html><html><head><meta charset="utf-8"><title>' +
+  escape(title) +
+  '</title></head><body>' +
+  body +
+  '</body></html>';
 const escape = value => String(value).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
 function json(response, status, value, extra = {}) {
@@ -291,14 +296,18 @@ async function handle(request, response) {
     const state = url.searchParams.get('state') || '';
     const ticket = nonce();
     codes.set(ticket, { clientId, deviceId, challenge, redirect, state, expires: Date.now() + 600_000, kind: 'consent' });
-    const page = html('ZenVoice', `
-      <h1>Allow ${escape(client.name)} to read Notetaker meetings?</h1>
-      <p>Meetings stay on your Mac. This grant sends meeting text to ${escape(client.name)}. Dictation is not included. Audio is not included. ZenVoice does not keep a copy.</p>
-      <form method="post" action="/authorize">
-        <input type="hidden" name="ticket" value="${ticket}">
-        <button name="decision" value="deny" type="submit">Deny</button>
-        <button name="decision" value="approve" type="submit">Approve</button>
-      </form>`);
+    const name = escape(client.name);
+    const page = html(
+      'ZenVoice',
+      '<h1>Allow ' + name + ' to read Notetaker meetings?</h1>' +
+        '<p>Meetings stay on your Mac. This grant sends meeting text to ' + name +
+        '. Dictation is not included. Audio is not included. ZenVoice does not keep a copy.</p>' +
+        '<form method="post" action="/authorize">' +
+        '<input type="hidden" name="ticket" value="' + escape(ticket) + '">' +
+        '<button name="decision" value="deny" type="submit">Deny</button>' +
+        '<button name="decision" value="approve" type="submit">Approve</button>' +
+        '</form>'
+    );
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     return response.end(page);
   }
