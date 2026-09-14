@@ -94,11 +94,11 @@ def verify_lock(directory: Path) -> tuple[dict[str, Any], str, bool]:
         summary = read_json(directory / "summary.json")
         if (
             provenance.get("representative_dictation") is not False
-            or summary.get("representative_zenvoice_dictation") is not False
+            or summary.get("representative_buildervoice_dictation") is not False
         ):
             raise ValueError("public corpus must be explicitly non-representative")
         return lock, "public_spontaneous_supplement", False
-    return lock, "private_zenvoice_dictation", True
+    return lock, "private_buildervoice_dictation", True
 
 
 def verify_bound_artifacts(
@@ -200,7 +200,7 @@ def validate_baseline(
         raise ValueError("baseline used the wrong frozen test manifest")
     if baseline.get("locked_dataset_kind") != locked_dataset_kind:
         raise ValueError("baseline used the wrong locked dataset kind")
-    if baseline.get("representative_zenvoice_dictation") is not representative:
+    if baseline.get("representative_buildervoice_dictation") is not representative:
         raise ValueError("baseline representativeness does not match the lock")
     verify_bound_artifacts(path, baseline, frozen_test_sha256, repo_root)
     for key in (
@@ -271,7 +271,7 @@ def evaluate_candidate(
         )
     if evidence.get("locked_dataset_kind") != locked_dataset_kind:
         raise ValueError(f"candidate used the wrong locked dataset kind: {evidence_path}")
-    if evidence.get("representative_zenvoice_dictation") is not representative:
+    if evidence.get("representative_buildervoice_dictation") is not representative:
         raise ValueError(
             f"candidate representativeness does not match the lock: {evidence_path}"
         )
@@ -383,7 +383,7 @@ def evaluate_candidate(
     )
 
     gates = {
-        "representative_zenvoice_dictation": representative,
+        "representative_buildervoice_dictation": representative,
         "dictation_improvement": dictation_wer <= required_wer,
         "clean_whole_regression": (
             clean_whole - baseline_clean_whole <= maximum_clean_regression
@@ -575,7 +575,7 @@ def main() -> int:
         "locked_dataset": str(dataset.relative_to(repo_root)),
         "frozen_test_sha256": lock["frozen_test_sha256"],
         "locked_dataset_kind": locked_dataset_kind,
-        "representative_zenvoice_dictation": representative,
+        "representative_buildervoice_dictation": representative,
         "baseline_evidence": str(baseline_path.relative_to(repo_root)),
         "minimum_relative_improvement_percent": (
             args.minimum_relative_improvement

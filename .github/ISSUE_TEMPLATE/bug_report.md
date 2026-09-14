@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a problem with ZenVoice
+about: Report a problem with BuilderVoice
 title: "[BUG] "
 labels: bug
 assignees: ''
@@ -28,7 +28,7 @@ What happened instead.
 
 - macOS version: 
 - Mac model / chip: 
-- ZenVoice version or commit: 
+- BuilderVoice version or commit: 
 - Installed model(s): 
 
 ## Privacy note

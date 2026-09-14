@@ -1,11 +1,11 @@
 # Third-Party Notices
 
-ZenVoice embeds the `whisper.cpp` and `parakeet.cpp` runtimes and lets the
+BuilderVoice embeds the `whisper.cpp` and `parakeet.cpp` runtimes and lets the
 user download reviewed speech model weights from a verified in-app catalogue.
-ZenVoice does not bundle model weights in the repository or application.
+BuilderVoice does not bundle model weights in the repository or application.
 
 This notice records the reviewed upstream source, pinned runtime revision, and
-applicable licence text. It is not a licence for ZenVoice itself. ZenVoice is
+applicable licence text. It is not a licence for BuilderVoice itself. BuilderVoice is
 licensed under the Apache License, Version 2.0 (see [`LICENSE`](LICENSE)); the
 third-party components below remain under their own licences.
 
@@ -121,8 +121,8 @@ The MIT licence text is the same as [OpenAI Whisper model weights](#openai-whisp
 - Publisher: Oriserve
 - Upstream model:
   [`Oriserve/Whisper-Hindi2Hinglish-Apex`](https://huggingface.co/Oriserve/Whisper-Hindi2Hinglish-Apex)
-- ZenVoice GGML conversion:
-  [`imYChaudhary22/zenvoice-hinglish-apex-ggml`](https://huggingface.co/imYChaudhary22/zenvoice-hinglish-apex-ggml)
+- BuilderVoice GGML conversion:
+  [`imYChaudhary22/buildervoice-hinglish-apex-ggml`](https://huggingface.co/imYChaudhary22/buildervoice-hinglish-apex-ggml)
 - Download revision: `0c540ce8945ef96b2880f2d2c0d05ba419621171`
 - Licence: Apache License 2.0 (see [Apache License 2.0](#apache-license-20))
 
@@ -146,7 +146,7 @@ governing permissions and limitations under the License.
 ## Retired NVIDIA Parakeet Unified EN 0.6B CoreML model
 
 The Parakeet CoreML model was previously offered through a closed-source
-`FluidAudio` runtime. It has been retired from ZenVoice and is no longer
+`FluidAudio` runtime. It has been retired from BuilderVoice and is no longer
 downloaded, installed, or executed by the application. The retired catalogue
 entry remains resolvable only so that any previously installed selection does
 not turn into "no model installed" for users who already had it on disk.

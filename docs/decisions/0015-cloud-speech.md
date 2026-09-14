@@ -6,7 +6,7 @@ Accepted — Phases 1–4 (OpenAI + Gemini transcribe).
 
 ## Context
 
-ZenVoice's default path is on-device. ADR 0011 added optional cloud
+BuilderVoice's default path is on-device. ADR 0011 added optional cloud
 **text** cleanup and promised audio never leaves the Mac.
 
 Users also want hosted speech models (OpenAI transcribe, later Gemini)
@@ -20,7 +20,7 @@ and is not an STT engine.
 
 1. Cloud STT is a `SpeechEngine`, selectable next to Parakeet and Whisper.
 2. Off until the user stores a key **and** taps Use on that engine.
-3. Bring-your-own key. No ZenVoice proxy. Keychain, not `UserDefaults`.
+3. Bring-your-own key. No BuilderVoice proxy. Keychain, not `UserDefaults`.
 4. Recording stays local. On stop, the wav is uploaded once. No live stream.
 5. Cloud is never a silent fallback for a local engine. Local **is** the
    fallback if the selected cloud engine fails.

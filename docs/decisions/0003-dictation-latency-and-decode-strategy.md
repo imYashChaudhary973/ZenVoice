@@ -5,9 +5,9 @@
 
 ## Context
 
-ZenVoice was spending measurable time and battery on work that did not improve
+BuilderVoice was spending measurable time and battery on work that did not improve
 the transcript, and in one case actively degraded it. Three costs were
-identified and measured against `ZenVoiceAccuracyChecks` on
+identified and measured against `BuilderVoiceAccuracyChecks` on
 whisper-large-v3-turbo:
 
 - Live preview decoded every pause-delimited fragment with the selected model,
@@ -87,5 +87,5 @@ whole-machine count stands.
 - Both rejected optimisations are recorded in code — `WhisperDecoding` and
   `ProcessorTopology` — so the next person to have either idea finds the
   measurement rather than repeating the experiment.
-- `ZENVOICE_DECODE_THREADS` remains available for re-measuring thread count on
+- `BUILDERVOICE_DECODE_THREADS` remains available for re-measuring thread count on
   other hardware.

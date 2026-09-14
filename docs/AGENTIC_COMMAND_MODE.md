@@ -3,7 +3,7 @@
 > **Status: Phase 2 implemented — 2026-08-18.** The planner, validator,
 > orchestrator, approval gate, status contract, process adapters, encrypted
 > task store, settings surface, and ZenBar HUD row all exist in `Sources/` and
-> are covered by `ZenVoiceCoreChecks` and `ZenVoiceStorageChecks`. Agentic Mode
+> are covered by `BuilderVoiceCoreChecks` and `BuilderVoiceStorageChecks`. Agentic Mode
 > ships **off by default** and, when switched on, enables Command Mode with it:
 > the agentic path is only reached after the deterministic v1 phrase parser
 > declines. Command Mode **v1** remains current and unchanged
@@ -86,16 +86,16 @@ never intercepts a phrase v1 already resolves. If agentic mode is disabled
 
 | Component | Owns | Module home |
 |---|---|---|
-| `CommandRouter` | v1-first dispatch, goal detection | `ZenVoiceCore` |
-| `AgenticPlanner` | transcript → `GoalPlan` (hybrid tiers) | `ZenVoiceCore` (parsing) + `ZenVoiceRuntime` (LLM runtime) |
-| `PlanValidator` | schema, agent whitelist, dependency lint, risk recomputation | `ZenVoiceCore` |
-| `ApprovalGate` | risk policy, approval UI model, decision records | `ZenVoiceCore` (policy) + `BuilderHelm Voice` (UI) |
-| `GoalOrchestrator` | state machine, process spawning, cancellation, persistence | `BuilderHelm Voice` (process) + `ZenVoiceCore` (model) |
-| Executors | codex / claude / shell / shortcut / notification adapters | `BuilderHelm Voice` (imp), protocols in `ZenVoiceCore` |
-| Status stream | event construction and fan-out | `ZenVoiceCore` (schema) + `BuilderHelm Voice` (HUD) |
-| Task store | encrypted records of plans, decisions, outputs | `ZenVoiceStorage` (vault reuse) |
+| `CommandRouter` | v1-first dispatch, goal detection | `BuilderVoiceCore` |
+| `AgenticPlanner` | transcript → `GoalPlan` (hybrid tiers) | `BuilderVoiceCore` (parsing) + `BuilderVoiceRuntime` (LLM runtime) |
+| `PlanValidator` | schema, agent whitelist, dependency lint, risk recomputation | `BuilderVoiceCore` |
+| `ApprovalGate` | risk policy, approval UI model, decision records | `BuilderVoiceCore` (policy) + `BuilderHelm Voice` (UI) |
+| `GoalOrchestrator` | state machine, process spawning, cancellation, persistence | `BuilderHelm Voice` (process) + `BuilderVoiceCore` (model) |
+| Executors | codex / claude / shell / shortcut / notification adapters | `BuilderHelm Voice` (imp), protocols in `BuilderVoiceCore` |
+| Status stream | event construction and fan-out | `BuilderVoiceCore` (schema) + `BuilderHelm Voice` (HUD) |
+| Task store | encrypted records of plans, decisions, outputs | `BuilderVoiceStorage` (vault reuse) |
 
-Module rule (matches existing architecture): **`ZenVoiceCore` never spawns
+Module rule (matches existing architecture): **`BuilderVoiceCore` never spawns
 processes and never touches the network.** Executors are protocols in Core
 with app-layer implementations, exactly like `CommandModeExecutor` today.
 
@@ -183,20 +183,20 @@ before any coding-agent integration.
 
 | Piece | File |
 |---|---|
-| Plan and step schema, agent whitelist, risk levels | `Sources/ZenVoiceCore/AgenticPlanner.swift` |
-| Validation, risk recomputation, path and secret policy | `Sources/ZenVoiceCore/PlanValidator.swift` |
-| Preferences, states, events, decisions, redaction, plan digest | `Sources/ZenVoiceCore/AgenticExecution.swift` |
-| Deterministic planner tier (Tier 1) | `Sources/ZenVoiceCore/GoalPlanner.swift` |
-| On-device planner tier (Tier 2) | `Sources/ZenVoiceCore/FoundationModelsGoalPlanner.swift` |
-| Orchestrator, queue, approval flow, low-risk memory | `Sources/ZenVoiceCore/GoalOrchestrator.swift` |
-| `codex` / `claude` / shell / shortcut process adapters | `Sources/ZenVoiceCore/AgenticExecutors.swift` |
-| Encrypted `agentic_tasks` store (schema v7) | `Sources/ZenVoiceStorage/DictationVault.swift` |
+| Plan and step schema, agent whitelist, risk levels | `Sources/BuilderVoiceCore/AgenticPlanner.swift` |
+| Validation, risk recomputation, path and secret policy | `Sources/BuilderVoiceCore/PlanValidator.swift` |
+| Preferences, states, events, decisions, redaction, plan digest | `Sources/BuilderVoiceCore/AgenticExecution.swift` |
+| Deterministic planner tier (Tier 1) | `Sources/BuilderVoiceCore/GoalPlanner.swift` |
+| On-device planner tier (Tier 2) | `Sources/BuilderVoiceCore/FoundationModelsGoalPlanner.swift` |
+| Orchestrator, queue, approval flow, low-risk memory | `Sources/BuilderVoiceCore/GoalOrchestrator.swift` |
+| `codex` / `claude` / shell / shortcut process adapters | `Sources/BuilderVoiceCore/AgenticExecutors.swift` |
+| Encrypted `agentic_tasks` store (schema v7) | `Sources/BuilderVoiceStorage/DictationVault.swift` |
 | Planning, approval, status coordination, notifications | `Sources/BuilderHelm Voice/AgenticModeCoordinator.swift` |
 | Approval and step-approval panel | `Sources/BuilderHelm Voice/AgenticApprovalWindowController.swift` |
 | Settings surface (Commands → Agentic Mode) | `Sources/BuilderHelm Voice/Screens/AgenticModeScreen.swift` |
 | Live status row and Stop control | `Sources/BuilderHelm Voice/ZenBarView.swift` |
 | Router from transcript to plan, fail-toward-text | `Sources/BuilderHelm Voice/AppDelegate.swift` |
-| Checks | `Sources/ZenVoiceCoreChecks/AgenticChecks.swift`, `Sources/ZenVoiceStorageChecks/main.swift` |
+| Checks | `Sources/BuilderVoiceCoreChecks/AgenticChecks.swift`, `Sources/BuilderVoiceStorageChecks/main.swift` |
 
 ### Deltas from the Phase 1 design
 

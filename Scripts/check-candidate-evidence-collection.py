@@ -125,7 +125,7 @@ def main() -> int:
                         "  REAL PROTECTED whole quantities 2 negations 1",
                         "  REAL PROTECTED segmented quantities 3 negations 1",
                         "  real-speech decode 10.00 s for 200 s of audio (20x real time)",
-                        "ZenVoiceAccuracyChecks passed",
+                        "BuilderVoiceAccuracyChecks passed",
                         "",
                     ]
                 ),
@@ -151,7 +151,7 @@ def main() -> int:
                             "hardware profile: 24 GB memory • 12 cores • Apple Silicon",
                             "  warm-up 0.30s (repeat 0.001s) · first decode 0.20s · second decode 0.18s",
                             "  memory 480 MB loaded · 120 MB after unload (reclaimed 360 MB) · reloaded on next decode",
-                            "ZenVoice runtime checks passed",
+                            "BuilderVoice runtime checks passed",
                             "",
                         ]
                     ),

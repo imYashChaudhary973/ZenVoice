@@ -17,7 +17,7 @@ loses. The product sentence that is true today:
 ## 1. Engines already in BuilderHelm Voice
 
 Do **not** rebuild these. They live in `VerifiedEngineCatalog` and
-`ZenVoiceRuntime`.
+`BuilderVoiceRuntime`.
 
 | Engine | ID | Runtime | Role after 2026-08-19 |
 |---|---|---|---|

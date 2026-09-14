@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for ZenVoice
+about: Suggest an idea for BuilderVoice
 title: "[FEAT] "
 labels: enhancement
 assignees: ''
@@ -12,7 +12,7 @@ What problem are you trying to solve?
 
 ## Proposal
 
-What should ZenVoice do?
+What should BuilderVoice do?
 
 ## Alternatives
 

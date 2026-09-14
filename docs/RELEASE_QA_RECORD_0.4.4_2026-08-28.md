@@ -28,21 +28,21 @@ Automatable evidence collected by agent; manual rows are marked **Requires human
 ### Signing and notarization evidence
 
 ```zsh
-$ mdls -name kMDItemVersion -name kMDItemCFBundleIdentifier -name kMDItemDisplayName /Applications/ZenVoice.app
-kMDItemCFBundleIdentifier = "com.zenvoice.app"
-kMDItemDisplayName        = "ZenVoice.app"
+$ mdls -name kMDItemVersion -name kMDItemCFBundleIdentifier -name kMDItemDisplayName /Applications/BuilderVoice.app
+kMDItemCFBundleIdentifier = "com.builderhelm.voice"
+kMDItemDisplayName        = "BuilderVoice.app"
 kMDItemVersion            = "0.4.4"
 
-$ plutil -extract CFBundleShortVersionString raw /Applications/ZenVoice.app/Contents/Info.plist
+$ plutil -extract CFBundleShortVersionString raw /Applications/BuilderVoice.app/Contents/Info.plist
 0.4.4
-$ plutil -extract CFBundleVersion raw /Applications/ZenVoice.app/Contents/Info.plist
+$ plutil -extract CFBundleVersion raw /Applications/BuilderVoice.app/Contents/Info.plist
 4
-$ plutil -extract CFBundleIdentifier raw /Applications/ZenVoice.app/Contents/Info.plist
-com.zenvoice.app
+$ plutil -extract CFBundleIdentifier raw /Applications/BuilderVoice.app/Contents/Info.plist
+com.builderhelm.voice
 
-$ codesign -dv --verbose=4 /Applications/ZenVoice.app 2>&1 | head -12
-Executable=/Applications/ZenVoice.app/Contents/MacOS/BuilderHelm Voice
-Identifier=com.zenvoice.app
+$ codesign -dv --verbose=4 /Applications/BuilderVoice.app 2>&1 | head -12
+Executable=/Applications/BuilderVoice.app/Contents/MacOS/BuilderHelm Voice
+Identifier=com.builderhelm.voice
 Format=app bundle with Mach-O thin (arm64)
 CodeDirectory v=20500 size=84828 flags=0x10000(runtime) hashes=2640+7 location=embedded
 Hash type=sha256 size=32
@@ -54,27 +54,27 @@ Authority=Apple Root CA
 Timestamp=27 Aug 2026 at 10:37:36
 Notarization Ticket=stapled
 
-$ spctl -a -vv /Applications/ZenVoice.app 2>&1
-/Applications/ZenVoice.app: accepted
+$ spctl -a -vv /Applications/BuilderVoice.app 2>&1
+/Applications/BuilderVoice.app: accepted
 source=Notarized Developer ID
 origin=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
 
-$ xcrun stapler validate /Applications/ZenVoice.app 2>&1
+$ xcrun stapler validate /Applications/BuilderVoice.app 2>&1
 The validate action worked!
 
-$ codesign -d --entitlements :- /Applications/ZenVoice.app 2>&1
+$ codesign -d --entitlements :- /Applications/BuilderVoice.app 2>&1
 <plist version="1.0"><dict><key>com.apple.security.device.audio-input</key><true/></dict></dict></plist>
 ```
 
 Nested executables signed with the same Developer ID:
-- `ZenVoice.app/Contents/MacOS/BuilderHelm Voice`
+- `BuilderVoice.app/Contents/MacOS/BuilderHelm Voice`
 - `whisper.framework`
 - `libparakeet.dylib`
 - `Sparkle.framework` and embedded XPC services
 
 Entitlement surface is `audio-input` only; `get-task-allow` is absent.
 Published DMG on GitHub Releases matches local artifact exactly:
-- `https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/ZenVoice.dmg`
+- `https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/BuilderVoice.dmg`
 - SHA-256: `8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2`
 - `hdiutil verify`: VALID
 - `stapler validate`: accepted
@@ -88,18 +88,18 @@ Published DMG on GitHub Releases matches local artifact exactly:
 | Hinglish Apex | `hindi2hinglish-apex` | whisper.cpp | pinned v1.9.1 | Not installed in this sweep |
 | Whisper Medium | `whisper-medium-multilingual` | whisper.cpp | pinned v1.9.1 | Not installed in this sweep |
 
-Note: only `whisper-small-multilingual` is present in `~/Library/Application Support/BuilderHelm Voice/Models/`. Runtime checks in CI use `ZENVOICE_RUNTIME_REQUIRED=1` with a model installed in the CI workspace.
+Note: only `whisper-small-multilingual` is present in `~/Library/Application Support/BuilderHelm Voice/Models/`. Runtime checks in CI use `BUILDERVOICE_RUNTIME_REQUIRED=1` with a model installed in the CI workspace.
 
 ## Automated verification
 
 | Check | Result | Evidence |
 |---|---|---|
 | `swift build` | Pass | Build complete (no errors) |
-| `swift run ZenVoiceCoreChecks` | Pass | All checks passed (engine registry, recommendation, hotkeys, privacy, 64 languages, etc.) |
-| `swift run ZenVoiceStorageChecks` | Pass | 25 checks passed |
-| `swift run ZenVoiceRuntimeChecks` | Skipped | No verified model visible to CLI process; expected for this sweep |
+| `swift run BuilderVoiceCoreChecks` | Pass | All checks passed (engine registry, recommendation, hotkeys, privacy, 64 languages, etc.) |
+| `swift run BuilderVoiceStorageChecks` | Pass | 25 checks passed |
+| `swift run BuilderVoiceRuntimeChecks` | Skipped | No verified model visible to CLI process; expected for this sweep |
 | `./Scripts/check-ui-invariants.sh` | Pass | All 38 UI invariants hold |
-| `./Scripts/check-release-readiness.sh` | Partial blockers | Fails on development signing and missing `ZENVOICE_RELEASE_MODEL_PATH`; signing/notarization of installed `/Applications/ZenVoice.app` is verified independently |
+| `./Scripts/check-release-readiness.sh` | Partial blockers | Fails on development signing and missing `BUILDERVOICE_RELEASE_MODEL_PATH`; signing/notarization of installed `/Applications/BuilderVoice.app` is verified independently |
 
 ## Development manual scenarios
 
@@ -107,7 +107,7 @@ Run every numbered scenario in `docs/DEVELOPMENT.md#manual-qa`. Rows marked **Re
 
 | Scenario | Result | Evidence, issue, or notes |
 |---:|---|---|
-| 1 | Requires human tester | Launch `/Applications/ZenVoice.app`; confirm settings window opens and Zen logo appears in menu bar and ZenBar. |
+| 1 | Requires human tester | Launch `/Applications/BuilderVoice.app`; confirm settings window opens and Zen logo appears in menu bar and ZenBar. |
 | 2 | Requires human tester | Open History; confirm encrypted-history state is available by default. |
 | 3 | Requires human tester | Pause history in Privacy, dictate once, confirm no record is added. Resume history. |
 | 4 | Requires human tester | Open Shortcuts, select current shortcut, record a temporary two-modifier combination. |
@@ -141,8 +141,8 @@ Run every numbered scenario in `docs/DEVELOPMENT.md#manual-qa`. Rows marked **Re
 
 ### Helper scripts for manual rows
 
-- `./Scripts/reset-zenvoice-state.sh` — resets preferences, app support, keychain, and TCC approvals to simulate clean install.
-- `./Scripts/run-qa-deterministic-e2e.sh [source.wav]` — launches a debug build with `ZENVOICE_E2E_AUDIO_FILE` so the microphone is bypassed with a known fixture.
+- `./Scripts/reset-buildervoice-state.sh` — resets preferences, app support, keychain, and TCC approvals to simulate clean install.
+- `./Scripts/run-qa-deterministic-e2e.sh [source.wav]` — launches a debug build with `BUILDERVOICE_E2E_AUDIO_FILE` so the microphone is bypassed with a known fixture.
 
 ## Model-runtime evidence
 
@@ -171,7 +171,7 @@ Run every numbered scenario in `docs/DEVELOPMENT.md#manual-qa`. Rows marked **Re
 | Scenario | Result | Evidence, issue, or notes |
 |---|---|---|
 | Denied microphone permission | Requires human tester | Deny in System Settings; confirm BuilderHelm Voice shows permission error and dictation does not start. |
-| Shortcut without a modifier | Pass (automated) | `ZenVoiceCoreChecks: option-only shortcuts remain valid` |
+| Shortcut without a modifier | Pass (automated) | `BuilderVoiceCoreChecks: option-only shortcuts remain valid` |
 | Shortcut reserved by macOS or another app | Requires human tester | Set shortcut to `⌘Space` or similar; confirm BuilderHelm Voice warns and does not steal system shortcut. |
 | Silence-only recording | Requires human tester | Start dictation without speaking; confirm graceful stop and no transcript inserted. |
 | Repeated hotkey presses during transcription | Requires human tester | Press shortcut multiple times while transcribing; confirm no duplicate insertions or stuck state. |
@@ -192,7 +192,7 @@ Run every numbered scenario in `docs/DEVELOPMENT.md#manual-qa`. Rows marked **Re
 | Private Dictation | Requires human tester | Enable Private Dictation; confirm no history record and no insight update. |
 | Delete All | Requires human tester | Use History → Delete All; confirm all records removed and key remains intact. |
 | Clipboard fallback | Requires human tester | Disable Accessibility; confirm transcript lands on clipboard. |
-| Clean supported-Mac install | Requires human tester | Use `./Scripts/reset-zenvoice-state.sh` on this Mac or test on a fresh user account/Mac. |
+| Clean supported-Mac install | Requires human tester | Use `./Scripts/reset-buildervoice-state.sh` on this Mac or test on a fresh user account/Mac. |
 | Microphone permission on clean install | Requires human tester | On first launch after reset, confirm macOS prompts for microphone and approval is recorded. |
 | Accessibility permission on clean install | Requires human tester | On first launch after reset, confirm macOS prompts for Accessibility and insertion works after approval. |
 
@@ -210,7 +210,7 @@ Automated review of source and binary:
 ## Post-catalogue runtime and model artefacts re-reviewed
 
 - `whisper.cpp` v1.9.1 XCFramework pinned in `Package.swift` / `Package.resolved`.
-- Whisper GGML model catalogue verified by `ZenVoiceCoreChecks`.
+- Whisper GGML model catalogue verified by `BuilderVoiceCoreChecks`.
 - Closed-source FluidAudio/Parakeet CoreML runtime remains removed.
 - NVIDIA engines are catalogued but execution is via the open `parakeet.cpp` path; current binary contains `libparakeet.dylib` signed by Developer ID.
 
@@ -227,8 +227,8 @@ Automated review of source and binary:
 
 ### How to finish this QA
 
-1. Download the published DMG from `https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/ZenVoice.dmg` and verify its SHA-256 matches `8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2`.
-2. Drag `ZenVoice.app` to `/Applications` on a clean Mac (or run `./Scripts/reset-zenvoice-state.sh` to simulate clean install).
+1. Download the published DMG from `https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/BuilderVoice.dmg` and verify its SHA-256 matches `8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2`.
+2. Drag `BuilderVoice.app` to `/Applications` on a clean Mac (or run `./Scripts/reset-buildervoice-state.sh` to simulate clean install).
 3. Launch the app and approve Microphone and Accessibility when prompted.
 4. Complete onboarding and download the recommended model.
 5. Run the numbered scenarios in `docs/DEVELOPMENT.md#manual-qa` and update the rows above with `Pass`/`Fail`/`Blocked`.

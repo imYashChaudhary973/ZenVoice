@@ -6,7 +6,7 @@
 
 ## Decision
 
-- ZenVoice saves every successful or usable partial transcript to its encrypted
+- BuilderVoice saves every successful or usable partial transcript to its encrypted
   local vault by default.
 - Transcript history has no automatic expiry. Only the user can delete it.
 - Fully failed transcription audio may be retained for retry for at most 24

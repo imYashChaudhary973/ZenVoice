@@ -2,14 +2,14 @@
 set -euo pipefail
 
 project_dir=${0:A:h:h}
-build_configuration=${ZENVOICE_BUILD_CONFIGURATION:-release}
-app_dir=${ZENVOICE_APP_DIR:-"$project_dir/build/ZenVoice.app"}
+build_configuration=${BUILDERVOICE_BUILD_CONFIGURATION:-release}
+app_dir=${BUILDERVOICE_APP_DIR:-"$project_dir/build/BuilderVoice.app"}
 contents_dir="$app_dir/Contents"
 frameworks_dir="$contents_dir/Frameworks"
 brand_dir="$project_dir/Resources/Brand"
-icon_path="$project_dir/build/ZenVoice.icns"
-entitlements_path="$project_dir/Resources/ZenVoice.entitlements"
-signing_identity=${ZENVOICE_SIGNING_IDENTITY:-}
+icon_path="$project_dir/build/BuilderVoice.icns"
+entitlements_path="$project_dir/Resources/BuilderVoice.entitlements"
+signing_identity=${BUILDERVOICE_SIGNING_IDENTITY:-}
 build_dir="$project_dir/.build/$build_configuration"
 
 cd "$project_dir"
@@ -57,7 +57,7 @@ if [[ -z "$signing_identity" ]]; then
     )
 fi
 
-# ZENVOICE_SIGNING_IDENTITY may be a full identity name or a certificate hash,
+# BUILDERVOICE_SIGNING_IDENTITY may be a full identity name or a certificate hash,
 # so resolve the hash case against the identity list instead of assuming the
 # string itself says "Developer ID Application". Getting this wrong signed a
 # Developer ID release with no secure timestamp and no clean-worktree check.
@@ -152,7 +152,7 @@ verify_release_dependencies
 
 rm -rf "$app_dir"
 mkdir -p "$contents_dir/MacOS" "$contents_dir/Resources" "$frameworks_dir"
-cp "$build_dir/ZenVoice" "$contents_dir/MacOS/ZenVoice"
+cp "$build_dir/BuilderVoice" "$contents_dir/MacOS/BuilderVoice"
 cp -R "$build_dir/whisper.framework" "$frameworks_dir/"
 # The Parakeet engines link @rpath/libparakeet.dylib. Without this copy the
 # bundle builds and signs cleanly but dyld refuses to start it, so the failure
@@ -173,10 +173,10 @@ else
 fi
 install_name_tool \
     -add_rpath "@executable_path/../Frameworks" \
-    "$contents_dir/MacOS/ZenVoice"
+    "$contents_dir/MacOS/BuilderVoice"
 cp "$project_dir/Resources/Info.plist" "$contents_dir/Info.plist"
 cp "$brand_dir/ZenLogo.png" "$contents_dir/Resources/ZenLogo.png"
-cp "$icon_path" "$contents_dir/Resources/ZenVoice.icns"
+cp "$icon_path" "$contents_dir/Resources/BuilderVoice.icns"
 cp \
     "$project_dir/THIRD_PARTY_NOTICES.md" \
     "$contents_dir/Resources/THIRD_PARTY_NOTICES.md"

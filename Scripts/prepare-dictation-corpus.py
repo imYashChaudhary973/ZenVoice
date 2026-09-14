@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and validate local, consented ZenVoice dictation sessions.
+"""Create and validate local, consented BuilderVoice dictation sessions.
 
 The workflow is deliberately local-only. ``init`` creates an empty recording
 session with a consent form and representative prompt pack. ``validate``
@@ -25,8 +25,8 @@ from typing import Any
 SAMPLE_RATE = 16_000
 MIN_SECONDS = 0.5
 MAX_SECONDS = 30.0
-CONSENT_VERSION = "zenvoice-dictation-v1"
-PROMPT_PACK_VERSION = "zenvoice-dictation-prompts-v2"
+CONSENT_VERSION = "buildervoice-dictation-v1"
+PROMPT_PACK_VERSION = "buildervoice-dictation-prompts-v2"
 PROMPTS_PER_CATEGORY = 6
 IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
 
@@ -215,7 +215,7 @@ PROMPTS = [
         "id": "punctuation-email",
         "category": "punctuation",
         "kind": "spontaneous",
-        "instruction": "Dictate a three-sentence email and speak any punctuation commands you normally use in ZenVoice.",
+        "instruction": "Dictate a three-sentence email and speak any punctuation commands you normally use in BuilderVoice.",
     },
     {
         "id": "bullet-list",
@@ -423,7 +423,7 @@ def validate_prompt_pack_definition() -> None:
             f"per category; observed {category_counts}"
         )
 
-README = """# Consented ZenVoice Dictation Session
+README = """# Consented BuilderVoice Dictation Session
 
 This directory is a local recording session for model research. It is not a
 public dataset and must stay below the gitignored `Datasets/` directory.
@@ -439,7 +439,7 @@ public dataset and must stay below the gitignored `Datasets/` directory.
 
 ## Recording
 
-- ZenVoice users can enable Audio History, make intentional test dictations,
+- BuilderVoice users can enable Audio History, make intentional test dictations,
   then export selected recordings with transcripts included.
 - The canonical pack contains 60 prompts, six per required category. Complete
   every prompt you are comfortable contributing; participation remains
@@ -457,7 +457,7 @@ public dataset and must stay below the gitignored `Datasets/` directory.
 
 ## Validation
 
-Run from the ZenVoice repository:
+Run from the BuilderVoice repository:
 
     python3 Scripts/prepare-dictation-corpus.py validate \
       --session-dir Datasets/consented-dictation/<participant>/<session> \
@@ -766,7 +766,7 @@ def validate_session(
                 "audio": str(audio.resolve().relative_to(repo_root)),
                 "text": transcript,
                 "duration_seconds": round(inspect_wav(audio), 3),
-                "source": "consented ZenVoice dictation",
+                "source": "consented BuilderVoice dictation",
                 "license": "private-consent-local-only",
                 "participant_id": participant,
                 "speaker_group_id": speaker_group,

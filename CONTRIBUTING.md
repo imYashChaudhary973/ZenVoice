@@ -26,7 +26,7 @@ Good examples:
 feat: add configurable dictation shortcut
 fix: release microphone after cancelled recording
 docs: explain multilingual model setup
-license: add Apache-2.0 header to ZenVoiceCore files
+license: add Apache-2.0 header to BuilderVoiceCore files
 ```
 
 Bad examples:
@@ -40,9 +40,9 @@ fix stuff
 Before committing, run the checks relevant to your change:
 
 ```bash
-swift run ZenVoiceCoreChecks
-swift run ZenVoiceStorageChecks
-swift run ZenVoiceRuntimeChecks
+swift run BuilderVoiceCoreChecks
+swift run BuilderVoiceStorageChecks
+swift run BuilderVoiceRuntimeChecks
 swift build
 ```
 
@@ -58,8 +58,8 @@ Open a pull request as soon as a coherent chunk of work is complete and
 reviewable. A PR must:
 
 - have a clear title and a short description of what changed and why;
-- pass CI (`swift build`, `ZenVoiceCoreChecks`, `ZenVoiceStorageChecks`,
-  `ZenVoiceRuntimeChecks`);
+- pass CI (`swift build`, `BuilderVoiceCoreChecks`, `BuilderVoiceStorageChecks`,
+  `BuilderVoiceRuntimeChecks`);
 - be small enough to review in under 30 minutes.
 
 ### Splitting work into multiple PRs
@@ -79,12 +79,12 @@ Example: switching the project license and removing a dependency should be
 ## Required verification
 
 ```bash
-swift run ZenVoiceCoreChecks
-swift run ZenVoiceStorageChecks
-swift run ZenVoiceRuntimeChecks
+swift run BuilderVoiceCoreChecks
+swift run BuilderVoiceStorageChecks
+swift run BuilderVoiceRuntimeChecks
 swift build
 ./Scripts/build-app.sh
-codesign --verify --deep --strict build/ZenVoice.app
+codesign --verify --deep --strict build/BuilderVoice.app
 ```
 
 UI, microphone, hotkey, and auto-paste changes also require the manual QA

@@ -131,8 +131,8 @@ def main() -> int:
             "license_review_passed": True,
             "attribution_recorded": True,
             "frozen_test_sha256": sha256(locked / "test.jsonl"),
-            "locked_dataset_kind": "private_zenvoice_dictation",
-            "representative_zenvoice_dictation": True,
+            "locked_dataset_kind": "private_buildervoice_dictation",
+            "representative_buildervoice_dictation": True,
             "native_realtime_multiple": 20.0,
             "q5_model_bytes": runtime_model.stat().st_size,
             "hardware_profile": "24 GB memory • 12 cores • Apple Silicon",
@@ -290,7 +290,7 @@ def main() -> int:
             {"representative_dictation": False},
         )
         summary = locked / "summary.json"
-        write_json(summary, {"representative_zenvoice_dictation": False})
+        write_json(summary, {"representative_buildervoice_dictation": False})
         write_json(
             locked / "PUBLIC_CORPUS_LOCK.json",
             {
@@ -304,7 +304,7 @@ def main() -> int:
         for evidence_path in (baseline, safe):
             evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
             evidence["locked_dataset_kind"] = "public_spontaneous_supplement"
-            evidence["representative_zenvoice_dictation"] = False
+            evidence["representative_buildervoice_dictation"] = False
             write_json(evidence_path, evidence)
         public_decision_path = fixture / "public-decision.json"
         run(
@@ -326,7 +326,7 @@ def main() -> int:
             public_decision_path.read_text(encoding="utf-8")
         )
         public_candidate = public_decision["candidates"][0]
-        if public_candidate["gates"]["representative_zenvoice_dictation"]:
+        if public_candidate["gates"]["representative_buildervoice_dictation"]:
             raise RuntimeError("public corpus passed the representativeness gate")
         if public_decision["selected"] is not None:
             raise RuntimeError("selector chose a public-corpus-only candidate")

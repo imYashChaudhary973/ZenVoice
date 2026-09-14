@@ -3,7 +3,7 @@
 
 The converter and quantizer must already be present locally. This wrapper uses
 argument arrays rather than a shell, records exact tool revisions and hashes,
-and restricts all model artifacts to ZenVoice's gitignored ``Datasets`` tree.
+and restricts all model artifacts to BuilderVoice's gitignored ``Datasets`` tree.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def main() -> int:
         default="multilingual",
         help=(
             "runtime language capability; controls the Q5 filename so "
-            "ZenVoice cannot misclassify an evaluation artifact"
+            "BuilderVoice cannot misclassify an evaluation artifact"
         ),
     )
     parser.add_argument(

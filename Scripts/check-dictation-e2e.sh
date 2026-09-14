@@ -2,10 +2,10 @@
 set -euo pipefail
 
 project_dir=${0:A:h:h}
-audio_file=${ZENVOICE_E2E_AUDIO_FILE:-"$project_dir/Datasets/common-voice-spontaneous-4.0/prepared-v1/audio/train/cv-sps-en-70876.wav"}
-model_file=${ZENVOICE_MODEL_PATH:-"$HOME/Library/Application Support/ZenVoice/Models/ggml-medium.bin"}
-app_dir="${TMPDIR:-/tmp}/ZenVoice-E2E-$$.app"
-log_file="${TMPDIR:-/tmp}/ZenVoice-E2E-$$.log"
+audio_file=${BUILDERVOICE_E2E_AUDIO_FILE:-"$project_dir/Datasets/common-voice-spontaneous-4.0/prepared-v1/audio/train/cv-sps-en-70876.wav"}
+model_file=${BUILDERVOICE_MODEL_PATH:-"$HOME/Library/Application Support/BuilderVoice/Models/ggml-medium.bin"}
+app_dir="${TMPDIR:-/tmp}/BuilderVoice-E2E-$$.app"
+log_file="${TMPDIR:-/tmp}/BuilderVoice-E2E-$$.log"
 pid=""
 
 cleanup() {
@@ -25,14 +25,14 @@ trap cleanup EXIT
     exit 1
 }
 
-ZENVOICE_BUILD_CONFIGURATION=debug \
-ZENVOICE_APP_DIR="$app_dir" \
+BUILDERVOICE_BUILD_CONFIGURATION=debug \
+BUILDERVOICE_APP_DIR="$app_dir" \
     "$project_dir/Scripts/build-app.sh" >/dev/null
 
-ZENVOICE_E2E_AUDIO_FILE="$audio_file" \
-ZENVOICE_E2E_AUTORUN=1 \
-ZENVOICE_MODEL_PATH="$model_file" \
-    "$app_dir/Contents/MacOS/ZenVoice" >"$log_file" 2>&1 &
+BUILDERVOICE_E2E_AUDIO_FILE="$audio_file" \
+BUILDERVOICE_E2E_AUTORUN=1 \
+BUILDERVOICE_MODEL_PATH="$model_file" \
+    "$app_dir/Contents/MacOS/BuilderVoice" >"$log_file" 2>&1 &
 pid=$!
 
 for _ in {1..400}; do
@@ -46,8 +46,8 @@ fi
 wait "$pid" || true
 cat "$log_file"
 
-result=$(grep -E 'ZENVOICE_E2E_RESULT (success|failure)' "$log_file" | tail -n 1 || true)
-[[ "$result" == ZENVOICE_E2E_RESULT\ success* ]] || {
+result=$(grep -E 'BUILDERVOICE_E2E_RESULT (success|failure)' "$log_file" | tail -n 1 || true)
+[[ "$result" == BUILDERVOICE_E2E_RESULT\ success* ]] || {
     echo "FAIL  deterministic dictation failed: ${result:-no result}" >&2
     exit 1
 }

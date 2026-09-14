@@ -6,7 +6,7 @@ Accepted — Phase 4 implemented.
 
 ## Context
 
-Until now ZenVoice deleted the source recording as soon as a transcript was
+Until now BuilderVoice deleted the source recording as soon as a transcript was
 stored. That is the right default: audio is the rawest form of a dictation, and
 keeping it indefinitely would be the single largest privacy liability in an
 otherwise transcript-only product.
@@ -66,14 +66,14 @@ Audio History is an opt-in, bounded, separately-governed archive.
 
 ## Implementation notes
 
-- `Sources/ZenVoiceStorage/AudioArchiveRecord.swift` — the record type.
-- `Sources/ZenVoiceStorage/AudioHistoryPreferences.swift` — opt-in and budgets.
-- `Sources/ZenVoiceStorage/AudioArchiveExporter.swift` — ZIP export via
+- `Sources/BuilderVoiceStorage/AudioArchiveRecord.swift` — the record type.
+- `Sources/BuilderVoiceStorage/AudioHistoryPreferences.swift` — opt-in and budgets.
+- `Sources/BuilderVoiceStorage/AudioArchiveExporter.swift` — ZIP export via
   `NSFileCoordinator(.forUploading)`, so no third-party archiver is needed.
 - `DictationVault` owns the `audio_archive` table, budget enforcement, and path
   confinement — an archive row's audio path must resolve to the exact expected
   file inside the archive directory, mirroring the recovery-audio rule.
-- `Sources/ZenVoice/Screens/AudioHistoryScreen.swift` and
+- `Sources/BuilderVoice/Screens/AudioHistoryScreen.swift` and
   `AudioHistoryViewModel.swift` provide enable, budget, browse, playback,
   delete, and export.
 

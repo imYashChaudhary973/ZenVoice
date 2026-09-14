@@ -7,7 +7,7 @@ Accepted — Phase 5 implemented, shipped disabled pending a shipping decision
 
 ## Context
 
-ZenVoice is distributed as a direct download rather than through the Mac App
+BuilderVoice is distributed as a direct download rather than through the Mac App
 Store, because the App Store sandbox cannot host the Accessibility paste the
 product depends on. Direct distribution means there is no platform updater, so
 shipping publicly implies owning the update path.
@@ -47,12 +47,12 @@ The updater is opt-in, verifies before it trusts, and fails closed.
 ### Framework choice
 
 Sparkle is the obvious candidate and is well-regarded. It is not used here.
-The verification surface ZenVoice needs is small — fetch JSON, check one
+The verification surface BuilderVoice needs is small — fetch JSON, check one
 signature, compare one hash, compare one version — and CryptoKit provides
 Ed25519 directly. Taking Sparkle would add a large dependency, its own update
 UI, and its own historical CVE surface, in exchange for features (delta
 updates, installer scripts) this product does not want. The trade-off is that
-ZenVoice owns this code and its bugs; the mitigating factor is that it is
+BuilderVoice owns this code and its bugs; the mitigating factor is that it is
 roughly two hundred auditable lines with no dynamic behaviour.
 
 Squirrel was not considered seriously — it targets Electron.
@@ -62,7 +62,7 @@ Squirrel was not considered seriously — it targets Electron.
 - The update path is small enough to read in full during a security review.
 - Losing the signing key means losing the ability to ship updates to existing
   installs; key custody becomes a release-process concern, not a code concern.
-- No delta updates: every update is a full download. At ZenVoice's size this is
+- No delta updates: every update is a full download. At BuilderVoice's size this is
   an acceptable cost for a much smaller trust surface.
 - Because the public key is compiled in, rotating it requires shipping a build
   signed with the old key first. That ordering constraint is a release-process
@@ -72,9 +72,9 @@ Squirrel was not considered seriously — it targets Electron.
 
 ## Implementation notes
 
-- `Sources/ZenVoiceCore/UpdateFeed.swift` — the feed model, channel, and
+- `Sources/BuilderVoiceCore/UpdateFeed.swift` — the feed model, channel, and
   version comparison.
-- `Sources/ZenVoiceCore/UpdateVerifier.swift` — Ed25519 verification and hash
+- `Sources/BuilderVoiceCore/UpdateVerifier.swift` — Ed25519 verification and hash
   binding. Pure and fully testable without a network.
 - `UpdatePreferences` — enabled, channel, last-check timestamp.
 - Checks cover the rejection paths specifically: tampered payload, wrong key,

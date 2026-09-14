@@ -5,7 +5,7 @@
 
 ## Context
 
-ZenVoice has reached a functional personal-dictation state: local transcription,
+BuilderVoice has reached a functional personal-dictation state: local transcription,
 encrypted history, multilingual profiles, application profiles, a verified
 model catalogue, a `whisper.cpp` runtime, onboarding, and release tooling are all
 implemented. The project also has a complete public-distribution checklist
@@ -13,7 +13,7 @@ implemented. The project also has a complete public-distribution checklist
 GitHub Releases workflow).
 
 However, the product has not yet been used broadly enough to confidently ship
-a public release. The founder/team's priority is to make ZenVoice the best
+a public release. The founder/team's priority is to make BuilderVoice the best
 daily dictation tool for their own workflows before inviting external users.
 Shipping introduces support surface, trust expectations, and release-maintenance
 overhead that are not justified until the product is meaningfully better through
@@ -21,7 +21,7 @@ regular personal use.
 
 ## Decision
 
-- ZenVoice is now **internal-use-first**. The immediate goal is to make it the
+- BuilderVoice is now **internal-use-first**. The immediate goal is to make it the
   best possible personal dictation tool for the people building it.
 - **Public shipping is deferred.** Signed, notarized distribution, a private
   beta programme, Homebrew cask availability, and GitHub Releases publishing are
@@ -43,7 +43,7 @@ regular personal use.
   be done before any future public distribution, but its unchecked items are
   now explicitly deferred rather than urgent blockers.
 - The private-beta guide has been retired: the programme is paused while
-  ZenVoice is refined for internal use, and a paused programme needs a decision
+  BuilderVoice is refined for internal use, and a paused programme needs a decision
   record rather than an invitation process.
 - Security and privacy reviews continue to be valuable for protecting the
   developer's own data, not only for future users.

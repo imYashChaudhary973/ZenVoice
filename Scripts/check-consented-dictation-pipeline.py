@@ -91,7 +91,7 @@ def create_session(
         session_dir / "consent.json",
         {
             "schema_version": 1,
-            "consent_text_version": "zenvoice-dictation-v1",
+            "consent_text_version": "buildervoice-dictation-v1",
             "participant_id": participant,
             "consented_at": "2026-08-14T00:00:00+00:00",
             "participant_is_adult": True,

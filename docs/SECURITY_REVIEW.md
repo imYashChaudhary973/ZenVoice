@@ -121,7 +121,7 @@ public key requires shipping a build signed with the old key first.
 
 ### Verification
 
-`ZenVoiceCoreChecks` covers the rejection paths specifically, since a verifier
+`BuilderVoiceCoreChecks` covers the rejection paths specifically, since a verifier
 that accepts valid input is the easy half: tampered manifest, unknown signing
 key, absent signature, `http://` archive URL, downgrade, same-version reinstall,
 beta-on-stable, disabled-updates, and archive hash mismatch. Cloud AI checks
@@ -171,7 +171,7 @@ output live in the same AES-GCM-sealed vault as transcripts, in `agentic_tasks`
 with field-bound authentication context (schema v7). Every event message and
 every retained output chunk passes `SecretRedactor` before persistence, retained
 output is capped at 5 MB per step and the event log at 500 events per goal.
-`ZenVoiceStorageChecks` scans the raw database file for known plaintext markers,
+`BuilderVoiceStorageChecks` scans the raw database file for known plaintext markers,
 so a future change that stores an agentic plan or its output unencrypted fails
 the build.
 
@@ -185,5 +185,5 @@ execution, and why approval is never voice-only.
 **Not covered:** no live run against a paid provider was performed as part of
 this review. The executor path is exercised end to end with the `shell` agent
 (success, non-zero exit, timeout, process-group cancellation, agent mismatch) in
-`ZenVoiceCoreChecks`; the Codex and Claude adapters share that code path and
+`BuilderVoiceCoreChecks`; the Codex and Claude adapters share that code path and
 differ only in their verified argument vectors.

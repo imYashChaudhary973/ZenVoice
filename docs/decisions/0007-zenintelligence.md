@@ -50,7 +50,7 @@ rung of the single **Formatting** ladder:
 - The `Smart` rung never sends transcript text off-device.
 - Cloud formatting sends only the transcript and the user-supplied prompt to
   the provider chosen by the user, using the user's own API key.
-- Apple's system model is OS-managed; ZenVoice supplies no model URL or API key.
+- Apple's system model is OS-managed; BuilderVoice supplies no model URL or API key.
 - `PrivateCloudComputeLanguageModel` is not constructed anywhere in this path.
 
 ## Related decisions

@@ -23,8 +23,8 @@ from typing import Any
 
 SPLITS = ("train", "validation", "test")
 POLICY_SCHEMA_VERSION = 2
-CONSENT_VERSION = "zenvoice-dictation-v1"
-PROMPT_PACK_VERSION = "zenvoice-dictation-prompts-v2"
+CONSENT_VERSION = "buildervoice-dictation-v1"
+PROMPT_PACK_VERSION = "buildervoice-dictation-prompts-v2"
 PROMPT_PACK_SHA256 = (
     "e5bcb34857e491cd91483fc9180eebb092eca456941c5cff3afb2a4407268dfd"
 )
@@ -450,7 +450,7 @@ def load_rows(
                     )
                 if row.get("license") != "private-consent-local-only":
                     raise ValueError(f"unexpected license at {label}")
-                if row.get("source") != "consented ZenVoice dictation":
+                if row.get("source") != "consented BuilderVoice dictation":
                     raise ValueError(f"unexpected source at {label}")
 
                 audio_value = row.get("audio")

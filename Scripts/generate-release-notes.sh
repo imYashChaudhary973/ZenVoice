@@ -29,6 +29,6 @@ awk -v ver="$version" '
 
 echo ""
 echo "## Artifacts"
-echo "- ZenVoice.dmg contains the signed, notarized, and stapled ZenVoice.app."
-echo "  Drag ZenVoice.app to Applications, then verify with:"
-echo "  spctl --assess --type execute /Applications/ZenVoice.app"
+echo "- BuilderVoice.dmg contains the signed, notarized, and stapled BuilderVoice.app."
+echo "  Drag BuilderVoice.app to Applications, then verify with:"
+echo "  spctl --assess --type execute /Applications/BuilderVoice.app"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build checkpoint-selection evidence from verified evaluator artifacts.
 
-The collector ties Hugging Face metrics and the native ZenVoice runtime log to
+The collector ties Hugging Face metrics and the native BuilderVoice runtime log to
 the exact frozen test manifest, runtime model, and adapter hashes. It parses
 clean/real WER, semantic safety, silence probes, long-form insertions, and
 repetition. A runtime log without the final pass marker is rejected.
@@ -113,11 +113,11 @@ def verify_lock(directory: Path) -> tuple[dict[str, Any], str, bool]:
         summary = read_json(directory / "summary.json")
         if (
             provenance.get("representative_dictation") is not False
-            or summary.get("representative_zenvoice_dictation") is not False
+            or summary.get("representative_buildervoice_dictation") is not False
         ):
             raise ValueError("public corpus must be explicitly non-representative")
         return lock, "public_spontaneous_supplement", False
-    return lock, "private_zenvoice_dictation", True
+    return lock, "private_buildervoice_dictation", True
 
 
 def single_match(expression: re.Pattern[str], text: str, label: str) -> re.Match[str]:
@@ -241,7 +241,7 @@ def main() -> int:
         raise ValueError("license review schema_version must be 1")
 
     log_text = runtime_log.read_text(encoding="utf-8")
-    if "ZenVoiceAccuracyChecks passed" not in log_text:
+    if "BuilderVoiceAccuracyChecks passed" not in log_text:
         raise ValueError("runtime harness did not finish with a pass")
     expected_model_line = f"model artifact: {runtime_model}"
     expected_corpus_line = f"corpus input: {test_manifest}"
@@ -282,7 +282,7 @@ def main() -> int:
     expected_lifecycle_model = f"model artifact: {runtime_model}"
     for lifecycle_log in lifecycle_logs:
         lifecycle_text = lifecycle_log.read_text(encoding="utf-8")
-        if "ZenVoice runtime checks passed" not in lifecycle_text:
+        if "BuilderVoice runtime checks passed" not in lifecycle_text:
             raise ValueError(f"runtime lifecycle did not pass: {lifecycle_log}")
         if expected_lifecycle_model not in lifecycle_text:
             raise ValueError(
@@ -340,7 +340,7 @@ def main() -> int:
         "hf_wer_percent": hf_metrics.get("wer_percent"),
         "frozen_test_sha256": lock["frozen_test_sha256"],
         "locked_dataset_kind": locked_dataset_kind,
-        "representative_zenvoice_dictation": representative,
+        "representative_buildervoice_dictation": representative,
         "dictation_wer_percent": float(real.group(1)),
         "dictation_segmented_wer_percent": float(real.group(2)),
         "native_realtime_multiple": float(speed.group(3)),

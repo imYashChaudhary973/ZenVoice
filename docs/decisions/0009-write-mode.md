@@ -27,7 +27,7 @@ Write Mode is an opt-in mode switch in ZenBar alongside Dictation and Command.
    - `.rewrite` — replace selected/focused text after transformation.
 2. For `.rewrite`:
    - Read the selection or focused text via Accessibility.
-   - Verify the selection matches what ZenVoice expects before replacing.
+   - Verify the selection matches what BuilderVoice expects before replacing.
    - Fall back to clipboard if Accessibility cannot safely read the selection.
    - Show a diff/preview for replacements longer than 200 characters or more
      than 30% changed.
@@ -38,7 +38,7 @@ Write Mode is an opt-in mode switch in ZenBar alongside Dictation and Command.
 
 ## Consequences
 
-- Users can dictate first drafts and then ask ZenVoice to polish them inline.
+- Users can dictate first drafts and then ask BuilderVoice to polish them inline.
 - The diff/preview prevents surprising replacements.
 - Clipboard fallback keeps the feature usable when Accessibility access is
   missing, with explicit user consent to paste.
@@ -47,8 +47,8 @@ Write Mode is an opt-in mode switch in ZenBar alongside Dictation and Command.
 
 ## Implementation notes
 
-- `Sources/ZenVoiceCore/WriteModeEngine.swift` owns the core logic.
-- Accessibility read and replace live in the `ZenVoice` app target.
+- `Sources/BuilderVoiceCore/WriteModeEngine.swift` owns the core logic.
+- Accessibility read and replace live in the `BuilderVoice` app target.
 - The diff/preview UI is part of the Phase 3 settings/overlay work.
 
 ## Privacy

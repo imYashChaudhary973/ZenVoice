@@ -86,7 +86,7 @@ running).
 
 ## 5. Decision records
 
-Every decision writes an encrypted record (task store, `ZenVoiceStorage`
+Every decision writes an encrypted record (task store, `BuilderVoiceStorage`
 vault) at decision time:
 
 ```swift

@@ -6,7 +6,7 @@ Accepted — Phase 5 implemented, shipped off by default.
 
 ## Context
 
-Every transcript path in ZenVoice up to this point is local. Instant Refine is
+Every transcript path in BuilderVoice up to this point is local. Instant Refine is
 deterministic, ZenIntelligence runs on-device, and no application code opens a
 network connection for transcription or refinement. That is the product's
 central promise.
@@ -27,9 +27,9 @@ Cloud AI Enhancement is opt-in, bring-your-own-key, and narrow by construction.
 1. **Off by default, and inert until fully configured.** The feature requires an
    explicit toggle *and* a user-supplied API key. Absent either, no network code
    path is reachable.
-2. **Bring your own key.** ZenVoice operates no proxy and holds no vendor
+2. **Bring your own key.** BuilderVoice operates no proxy and holds no vendor
    account. Requests go from the user's Mac to the provider the user chose,
-   authenticated with the user's own key. There is no ZenVoice server in the
+   authenticated with the user's own key. There is no BuilderVoice server in the
    path, so there is nothing for us to log.
 3. **The key lives in the Keychain**, never in `UserDefaults` and never in the
    SQLite vault, using the same generic-password pattern as the transcript
@@ -57,9 +57,9 @@ Cloud AI Enhancement is opt-in, bring-your-own-key, and narrow by construction.
 - The default install is unchanged: no network path, no key, no prompt.
 - A user who opts in accepts a real and clearly-stated trade-off — their
   transcript text goes to a third party under their own account and that
-  provider's retention policy, which ZenVoice cannot control or promise anything
+  provider's retention policy, which BuilderVoice cannot control or promise anything
   about. The UI says this plainly rather than burying it.
-- Because there is no ZenVoice-operated proxy, we cannot add server-side
+- Because there is no BuilderVoice-operated proxy, we cannot add server-side
   features later without revisiting this ADR.
 - The preview step costs an interaction. That is deliberate: silently replacing
   local text with the output of a remote model is exactly the surprise this
@@ -69,7 +69,7 @@ Cloud AI Enhancement is opt-in, bring-your-own-key, and narrow by construction.
 
 ## Implementation notes
 
-- `Sources/ZenVoiceCore/CloudAIEnhancement.swift` — providers, configuration,
+- `Sources/BuilderVoiceCore/CloudAIEnhancement.swift` — providers, configuration,
   prompt templates, and request construction. Request building is pure and
   therefore directly testable without a network.
 - `CloudAITransport` is a protocol; the URLSession implementation is the only

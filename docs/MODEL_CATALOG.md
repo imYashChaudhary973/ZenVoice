@@ -16,7 +16,7 @@ been reviewed.
   [MIT](https://github.com/ggml-org/whisper.cpp/blob/master/LICENSE)
 - Format: `whisper.cpp` GGML
 - Hinglish specialist:
-  [`imYChaudhary22/zenvoice-hinglish-apex-ggml`](https://huggingface.co/imYChaudhary22/zenvoice-hinglish-apex-ggml)
+  [`imYChaudhary22/buildervoice-hinglish-apex-ggml`](https://huggingface.co/imYChaudhary22/buildervoice-hinglish-apex-ggml)
 - Pinned revision: `0c540ce8945ef96b2880f2d2c0d05ba419621171`
 - Upstream model:
   [`Oriserve/Whisper-Hindi2Hinglish-Apex`](https://huggingface.co/Oriserve/Whisper-Hindi2Hinglish-Apex)
@@ -210,4 +210,4 @@ TDT v3:
 
 Swift Package Manager exposes the `parakeet` binary target from
 `Package.swift`. The app embeds and signs the framework. BuilderHelm Voice calls its flat
-C API in-process through `Sources/ZenVoiceRuntime/ParakeetBridge.swift`.
+C API in-process through `Sources/BuilderVoiceRuntime/ParakeetBridge.swift`.

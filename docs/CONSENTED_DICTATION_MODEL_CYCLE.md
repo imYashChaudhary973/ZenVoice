@@ -12,7 +12,7 @@ and redistribution gate passes.
 
 ## Completed
 
-- Added a fail-closed semantic guard to `ZenVoiceCore`. If refinement changes
+- Added a fail-closed semantic guard to `BuilderVoiceCore`. If refinement changes
   the multiset of number words, digit-bearing tokens, or negations, BuilderHelm Voice
   returns the original ASR transcript with `wasRejected = true`.
 - Protected both direct `InstantRefineEngine` use and the complete
@@ -40,7 +40,7 @@ and redistribution gate passes.
   verification, and tamper rejection.
 - Added end-to-end 1-, 5-, and 10-second silence probes to the actual
   Whisper-plus-`TranscriptCleaner` runtime path.
-- Added JSONL corpus support to `ZenVoiceAccuracyChecks`, so the exact locked
+- Added JSONL corpus support to `BuilderVoiceAccuracyChecks`, so the exact locked
   test manifest can be evaluated without copying files into a mutable folder.
 - Added conservative training mode, composite checkpoint selection, verified
   adapter merging, and selection-aware Q5 conversion. The public-supplement
@@ -77,7 +77,7 @@ and redistribution gate passes.
   The exact archive, manifests, review, provenance, and summary are bound by
   SHA-256 under `Datasets/common-voice-spontaneous-4.0/prepared-v1`.
 - Extended evidence collection and composite selection to understand public
-  corpus locks. A machine-enforced `representative_zenvoice_dictation` gate
+  corpus locks. A machine-enforced `representative_buildervoice_dictation` gate
   prevents a public-only candidate from being selected for promotion even if
   its accuracy and runtime metrics improve.
 - Completed the conservative public-supplement LoRA run and retained both epoch
@@ -111,7 +111,7 @@ statement.
 The general-English regularizer is ready and independently verifiable:
 
 ```bash
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/prepare-librispeech-general-speech.py verify \
   --dataset-dir Datasets/general-speech/librispeech-mini/prepared-v1
 ```
@@ -148,7 +148,7 @@ Review Mozilla's access terms and CC0 license, then truthfully fill
 closed while placeholders or false approvals remain:
 
 ```bash
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/prepare-common-voice-spontaneous.py prepare \
   --archive \
     Datasets/incoming/sps-corpus-4.0-2026-06-12-en.tar.gz \
@@ -156,7 +156,7 @@ Datasets/zenvoice-training/.venv/bin/python \
     Datasets/common-voice-spontaneous-4.0/license-review.json \
   --output-dir Datasets/common-voice-spontaneous-4.0/prepared-v1
 
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/prepare-common-voice-spontaneous.py verify \
   --dataset-dir Datasets/common-voice-spontaneous-4.0/prepared-v1
 ```
@@ -244,9 +244,9 @@ python3 Scripts/build-consented-dictation-splits.py verify \
 Validate the exact JSONL in the native harness without loading a model:
 
 ```bash
-ZENVOICE_CORPUS_VALIDATE_ONLY=1 \
-ZENVOICE_ACCURACY_CORPUS=Datasets/consented-dictation/frozen-v1/test.jsonl \
-swift run ZenVoiceAccuracyChecks
+BUILDERVOICE_CORPUS_VALIDATE_ONLY=1 \
+BUILDERVOICE_ACCURACY_CORPUS=Datasets/consented-dictation/frozen-v1/test.jsonl \
+swift run BuilderVoiceAccuracyChecks
 ```
 
 ## Public-supplement exploratory cycle
@@ -257,7 +257,7 @@ model scored 8.109% WER on its 262 clips. A two-epoch LoRA run mixed the 1,023
 public training clips with 1,519 LibriSpeech regularizer clips:
 
 ```bash
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/train-whisper-dictation.py \
   --model-dir \
     Datasets/whisper-dictation-experiment/base-model/whisper-small.en \
@@ -311,7 +311,7 @@ The conservative command is intentionally shown only with placeholders until
 the locked dataset exists:
 
 ```bash
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/train-whisper-dictation.py \
   --model-dir \
     Datasets/whisper-dictation-experiment/base-model/whisper-small.en \
@@ -338,7 +338,7 @@ Each retained checkpoint is first merged strictly for evaluation, then converted
 to a temporary Q5 model. This does not authorize promotion:
 
 ```bash
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/materialize-whisper-candidate.py \
   --checkpoint-dir Datasets/whisper-small-en-v2/training/checkpoints/checkpoint-1 \
   --training-result Datasets/whisper-small-en-v2/training/training-result.json \
@@ -347,7 +347,7 @@ Datasets/zenvoice-training/.venv/bin/python \
   --base-model-revision e8727524f962ee844a7319d92be39ac1bd25655a \
   --output-dir Datasets/whisper-small-en-v2/evaluation/checkpoint-1-merged
 
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/convert-quantize-whisper.py \
   --model-dir Datasets/whisper-small-en-v2/evaluation/checkpoint-1-merged \
   --output-dir Datasets/whisper-small-en-v2/evaluation/checkpoint-1-ggml \
@@ -417,7 +417,7 @@ or attribution failure cannot win. The decision explicitly leaves
 Only that decision can be merged and passed to selection-aware quantization:
 
 ```bash
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/merge-selected-whisper-adapter.py \
   --selection-decision Datasets/whisper-small-en-v2/selection.json \
   --base-model-dir \
@@ -425,7 +425,7 @@ Datasets/zenvoice-training/.venv/bin/python \
   --base-model-revision e8727524f962ee844a7319d92be39ac1bd25655a \
   --output-dir Datasets/whisper-small-en-v2/merged
 
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/convert-quantize-whisper.py \
   --model-dir Datasets/whisper-small-en-v2/merged \
   --output-dir Datasets/whisper-small-en-v2/ggml \
@@ -461,7 +461,7 @@ not be completed by automation.
 
 ```bash
 python3 Scripts/check-consented-dictation-pipeline.py
-Datasets/zenvoice-training/.venv/bin/python \
+Datasets/buildervoice-training/.venv/bin/python \
   Scripts/check-conservative-training-inputs.py
 python3 Scripts/check-candidate-evidence-collection.py
 python3 Scripts/check-composite-checkpoint-selection.py

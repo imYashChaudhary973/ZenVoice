@@ -7,7 +7,7 @@ this change. Implementation starts only when Phase 1 is requested.
 
 ## Context
 
-ZenVoice today is short, on-demand speech that pastes into the focused
+BuilderVoice today is short, on-demand speech that pastes into the focused
 app. A lecture is a different job: a long, explicit recording that must
 keep the original words, then optionally summarize them.
 
@@ -31,9 +31,9 @@ only after the user confirms; the previous original is discarded only
 then. Summary stays in its own field or is cleared; it never lands in
 the original.
 
-### 2. Capture is start/stop inside ZenVoice
+### 2. Capture is start/stop inside BuilderVoice
 
-Lecture recording starts and stops from a ZenVoice lecture control, not
+Lecture recording starts and stops from a BuilderVoice lecture control, not
 from the global dictation hotkey.
 
 The dictation hotkey keeps its current job: record a short utterance and

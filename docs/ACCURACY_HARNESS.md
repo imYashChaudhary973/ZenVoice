@@ -1,10 +1,10 @@
 # Accuracy harness
 
-`ZenVoiceAccuracyChecks` measures transcription accuracy so changes to the
+`BuilderVoiceAccuracyChecks` measures transcription accuracy so changes to the
 dictation path can be verified rather than assumed.
 
 ```sh
-swift run ZenVoiceAccuracyChecks
+swift run BuilderVoiceAccuracyChecks
 ```
 
 It skips itself — exit code 0 — when no verified model is installed or when
@@ -125,7 +125,7 @@ cannot tell them apart. The zero means something only because that check passed.
 ## Real speech
 
 ```sh
-ZENVOICE_ACCURACY_CORPUS=~/zenvoice-corpus swift run ZenVoiceAccuracyChecks
+BUILDERVOICE_ACCURACY_CORPUS=~/buildervoice-corpus swift run BuilderVoiceAccuracyChecks
 ```
 
 Each `name.wav` pairs with a `name.txt` holding what was actually said. `aiff`,
@@ -173,13 +173,13 @@ drift while still catching a collapse back towards the 0/26 baseline.
 
 | Variable | Effect |
 | --- | --- |
-| `ZENVOICE_MODEL_PATH` | use a specific model instead of the usual discovery |
-| `ZENVOICE_ACCURACY_GAIN` | input gain applied before decoding (default `0.35`) |
-| `ZENVOICE_ACCURACY_NOISE` | noise floor added before decoding (default `0.004`) |
-| `ZENVOICE_ACCURACY_CLEAN` | `1` measures studio-clean audio instead |
-| `ZENVOICE_ACCURACY_FIXTURES` | cache directory for rendered audio |
-| `ZENVOICE_ACCURACY_CORPUS` | directory of real recordings (`name.wav` + `name.txt`) |
-| `ZENVOICE_ACCURACY_VERBOSE` | `1` prints every hypothesis |
+| `BUILDERVOICE_MODEL_PATH` | use a specific model instead of the usual discovery |
+| `BUILDERVOICE_ACCURACY_GAIN` | input gain applied before decoding (default `0.35`) |
+| `BUILDERVOICE_ACCURACY_NOISE` | noise floor added before decoding (default `0.004`) |
+| `BUILDERVOICE_ACCURACY_CLEAN` | `1` measures studio-clean audio instead |
+| `BUILDERVOICE_ACCURACY_FIXTURES` | cache directory for rendered audio |
+| `BUILDERVOICE_ACCURACY_CORPUS` | directory of real recordings (`name.wav` + `name.txt`) |
+| `BUILDERVOICE_ACCURACY_VERBOSE` | `1` prints every hypothesis |
 
 The default gain and noise approximate a laptop microphone across a desk.
 Studio-clean audio flatters every configuration and hides the differences worth

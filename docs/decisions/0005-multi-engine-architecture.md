@@ -6,7 +6,7 @@ Accepted. Implemented in Phase 1.
 
 ## Context
 
-ZenVoice started with a single transcription path: whisper.cpp. That path is
+BuilderVoice started with a single transcription path: whisper.cpp. That path is
 mature, but it is no longer the only runtime the app wants to offer. The roadmap
 now includes eight engines/models:
 
@@ -49,8 +49,8 @@ and availability checks.
   showing engine-specific availability reasons.
 - Engine selection must be validated against the active language profile, just
   as model selection is today.
-- Runtime-only engines (Whisper, Apple Speech) live in `ZenVoiceRuntime`; the
-  protocol and registry interfaces live in `ZenVoiceCore`.
+- Runtime-only engines (Whisper, Apple Speech) live in `BuilderVoiceRuntime`; the
+  protocol and registry interfaces live in `BuilderVoiceCore`.
 
 ## SpeechEngine protocol
 

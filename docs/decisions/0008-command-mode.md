@@ -6,7 +6,7 @@ Accepted — Phase 3 implemented.
 
 ## Context
 
-ZenVoice already parses a small set of local voice commands ("new paragraph",
+BuilderVoice already parses a small set of local voice commands ("new paragraph",
 "period", etc.) inside `LocalVoiceCommandEngine`. Phase 3 extends this into
 full **Command Mode**: launching apps, running Shortcuts, changing system
 settings, and executing user-defined scripts by voice. This is a trust
@@ -40,7 +40,7 @@ Command Mode is **off by default** and requires explicit opt-in per app profile.
 ## Consequences
 
 - Power users can automate their Mac by voice without cloud services.
-- Script execution is gated by Accessibility permission and an explicit ZenVoice
+- Script execution is gated by Accessibility permission and an explicit BuilderVoice
   approval prompt.
 - Built-in system actions avoid shell/AppleScript for common tasks.
 - The phrase-to-action manifest is inspectable and editable in Settings.
@@ -57,19 +57,19 @@ Command Mode is **off by default** and requires explicit opt-in per app profile.
 
 ## Implementation notes
 
-- `Sources/ZenVoiceCore/CommandModeEngine.swift` owns parsing and action
+- `Sources/BuilderVoiceCore/CommandModeEngine.swift` owns parsing and action
   serialization.
-- `Sources/ZenVoiceCore/CommandAction.swift` defines the action types.
-- Execution bridges into `ZenVoice` (the app target) for `NSWorkspace`,
+- `Sources/BuilderVoiceCore/CommandAction.swift` defines the action types.
+- Execution bridges into `BuilderVoice` (the app target) for `NSWorkspace`,
   `Shortcuts`, and Accessibility APIs that require a real app bundle.
-- Unit tests in `ZenVoiceCoreChecks` cover phrase matching and action
+- Unit tests in `BuilderVoiceCoreChecks` cover phrase matching and action
   serialization; manual QA covers live execution.
 
 ## Privacy
 
 - Commands are processed locally.
 - No command history leaves the Mac.
-- Shortcuts and scripts execute with the user's own permissions; ZenVoice does
+- Shortcuts and scripts execute with the user's own permissions; BuilderVoice does
   not escalate privilege.
 
 ## Related decisions

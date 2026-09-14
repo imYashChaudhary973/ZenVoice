@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Builds real-speech corpora for ZenVoiceAccuracyChecks from LibriSpeech.
+"""Builds real-speech corpora for BuilderVoiceAccuracyChecks from LibriSpeech.
 
 The harness shipped with synthesized fixtures, which are reproducible and
 free but are not people: `say` does not hesitate, breathe, or sit in a room.
 This turns a published corpus of real recordings into the audio+txt pairs
-ZENVOICE_ACCURACY_CORPUS expects.
+BUILDERVOICE_ACCURACY_CORPUS expects.
 
-    python3 Scripts/build-librispeech-corpus.py --output ~/zenvoice-corpora
+    python3 Scripts/build-librispeech-corpus.py --output ~/buildervoice-corpora
 
 Downloads mini LibriSpeech dev-clean-2 (126 MB, CC BY 4.0) unless it is
 already present. Audio is deliberately never committed: it is someone else's
@@ -62,7 +62,7 @@ def download_archive(destination: str) -> None:
         connection.request(
             "GET",
             ARCHIVE_PATH,
-            headers={"User-Agent": "ZenVoice accuracy corpus builder"},
+            headers={"User-Agent": "BuilderVoice accuracy corpus builder"},
         )
         response = connection.getresponse()
         if response.status != 200:
@@ -177,7 +177,7 @@ def main() -> int:
             break
     print(f"dictation: {made}")
     print()
-    print(f"ZENVOICE_ACCURACY_CORPUS={single} swift run ZenVoiceAccuracyChecks")
+    print(f"BUILDERVOICE_ACCURACY_CORPUS={single} swift run BuilderVoiceAccuracyChecks")
     return 0
 
 

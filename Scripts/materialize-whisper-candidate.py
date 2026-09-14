@@ -2,7 +2,7 @@
 """Merge one LoRA checkpoint into an evaluation-only Whisper model.
 
 This closes the preselection loop: each retained adapter can be converted to a
-temporary GGML/Q5 model and exercised by the native ZenVoice runtime. The
+temporary GGML/Q5 model and exercised by the native BuilderVoice runtime. The
 output is explicitly non-promotable; final merging still requires an all-gates
 selection decision.
 """

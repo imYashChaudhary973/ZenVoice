@@ -17,7 +17,7 @@ engine. Phase 2 wanted to add:
 - Nemotron Speech 3.5 Ultra Fast / Multilingual (NVIDIA)
 - Cohere Transcribe (Cohere Labs)
 
-The model weights are available on Hugging Face, but ZenVoice removed the
+The model weights are available on Hugging Face, but BuilderVoice removed the
 closed-source `FluidAudio` runtime in Phase 1. We need an open-source execution
 layer that can load and run these checkpoints on macOS without sending audio
 off-device.
@@ -35,7 +35,7 @@ off-device.
 
 `parakeet.cpp` is the only open runtime that covers Parakeet and Nemotron with
 one dependency. It uses ggml (same backend family as whisper.cpp), so the build
-and Metal/ANE path is conceptually similar to what ZenVoice already ships.
+and Metal/ANE path is conceptually similar to what BuilderVoice already ships.
 
 We vendored `parakeet.cpp` v0.5.0 as a universal `libparakeet.dylib`, packaged
 it into `vendor/parakeet.xcframework`, and exposed it as a SwiftPM binary
@@ -68,7 +68,7 @@ Integration order executed:
 4. Parakeet Flash (`realtime_eou_120m-v1-q8_0.gguf`)
 5. Cohere Transcribe (`cohere-encoder.int8.onnx`, `cohere-decoder.int8.onnx`, `tokens.txt`)
 
-Engines are `SpeechEngine` conforming types in `ZenVoiceRuntime`:
+Engines are `SpeechEngine` conforming types in `BuilderVoiceRuntime`:
 
 - `ParakeetTDTEngine` (`.v2` English and `.v3` multilingual configurations)
 - `NemotronSpeechUltraFastEngine`

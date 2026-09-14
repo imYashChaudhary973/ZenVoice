@@ -3,36 +3,36 @@
 import PackageDescription
 
 let package = Package(
-    name: "ZenVoice",
+    name: "BuilderVoice",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "ZenVoice", targets: ["ZenVoice"]),
-        .executable(name: "ZenVoiceCoreChecks", targets: ["ZenVoiceCoreChecks"]),
+        .executable(name: "BuilderVoice", targets: ["BuilderVoice"]),
+        .executable(name: "BuilderVoiceCoreChecks", targets: ["BuilderVoiceCoreChecks"]),
         .executable(
-            name: "ZenVoiceStorageChecks",
-            targets: ["ZenVoiceStorageChecks"]
+            name: "BuilderVoiceStorageChecks",
+            targets: ["BuilderVoiceStorageChecks"]
         ),
         .executable(
-            name: "ZenVoiceRuntimeChecks",
-            targets: ["ZenVoiceRuntimeChecks"]
+            name: "BuilderVoiceRuntimeChecks",
+            targets: ["BuilderVoiceRuntimeChecks"]
         ),
         .executable(
-            name: "ZenVoiceAccuracyChecks",
-            targets: ["ZenVoiceAccuracyChecks"]
+            name: "BuilderVoiceAccuracyChecks",
+            targets: ["BuilderVoiceAccuracyChecks"]
         ),
         .executable(
-            name: "ZenVoiceLanguageBench",
-            targets: ["ZenVoiceLanguageBench"]
+            name: "BuilderVoiceLanguageBench",
+            targets: ["BuilderVoiceLanguageBench"]
         ),
         .executable(
-            name: "ZenVoiceCloudLiveChecks",
-            targets: ["ZenVoiceCloudLiveChecks"]
+            name: "BuilderVoiceCloudLiveChecks",
+            targets: ["BuilderVoiceCloudLiveChecks"]
         ),
         .executable(
-            name: "ZenVoiceLinkChecks",
-            targets: ["ZenVoiceLinkChecks"]
+            name: "BuilderVoiceLinkChecks",
+            targets: ["BuilderVoiceLinkChecks"]
         ),
     ],
     dependencies: [
@@ -43,73 +43,73 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "ZenVoiceCore"
+            name: "BuilderVoiceCore"
         ),
         .target(
-            name: "ZenVoiceStorage",
-            dependencies: ["ZenVoiceCore"],
+            name: "BuilderVoiceStorage",
+            dependencies: ["BuilderVoiceCore"],
             linkerSettings: [
                 .linkedLibrary("sqlite3")
             ]
         ),
         .target(
-            name: "ZenVoiceLink",
-            dependencies: ["ZenVoiceCore"]
+            name: "BuilderVoiceLink",
+            dependencies: ["BuilderVoiceCore"]
         ),
         .target(
-            name: "ZenVoiceRuntime",
+            name: "BuilderVoiceRuntime",
             dependencies: [
-                "ZenVoiceCore",
+                "BuilderVoiceCore",
                 "whisper",
                 "parakeet",
             ]
         ),
         .executableTarget(
-            name: "ZenVoice",
+            name: "BuilderVoice",
             dependencies: [
-                "ZenVoiceCore",
-                "ZenVoiceStorage",
-                "ZenVoiceRuntime",
-                "ZenVoiceLink",
+                "BuilderVoiceCore",
+                "BuilderVoiceStorage",
+                "BuilderVoiceRuntime",
+                "BuilderVoiceLink",
                 .product(name: "Sparkle", package: "Sparkle"),
             ]
         ),
         .executableTarget(
-            name: "ZenVoiceCoreChecks",
-            dependencies: ["ZenVoiceCore"]
+            name: "BuilderVoiceCoreChecks",
+            dependencies: ["BuilderVoiceCore"]
         ),
         .executableTarget(
-            name: "ZenVoiceStorageChecks",
-            dependencies: ["ZenVoiceCore", "ZenVoiceStorage"]
+            name: "BuilderVoiceStorageChecks",
+            dependencies: ["BuilderVoiceCore", "BuilderVoiceStorage"]
         ),
         .executableTarget(
-            name: "ZenVoiceRuntimeChecks",
+            name: "BuilderVoiceRuntimeChecks",
             dependencies: [
-                "ZenVoiceCore",
-                "ZenVoiceRuntime",
+                "BuilderVoiceCore",
+                "BuilderVoiceRuntime",
             ]
         ),
         .executableTarget(
-            name: "ZenVoiceAccuracyChecks",
+            name: "BuilderVoiceAccuracyChecks",
             dependencies: [
-                "ZenVoiceCore",
-                "ZenVoiceRuntime",
+                "BuilderVoiceCore",
+                "BuilderVoiceRuntime",
             ]
         ),
         .executableTarget(
-            name: "ZenVoiceLanguageBench",
+            name: "BuilderVoiceLanguageBench",
             dependencies: [
-                "ZenVoiceCore",
-                "ZenVoiceRuntime",
+                "BuilderVoiceCore",
+                "BuilderVoiceRuntime",
             ]
         ),
         .executableTarget(
-            name: "ZenVoiceCloudLiveChecks",
-            dependencies: ["ZenVoiceCore"]
+            name: "BuilderVoiceCloudLiveChecks",
+            dependencies: ["BuilderVoiceCore"]
         ),
         .executableTarget(
-            name: "ZenVoiceLinkChecks",
-            dependencies: ["ZenVoiceCore", "ZenVoiceLink"]
+            name: "BuilderVoiceLinkChecks",
+            dependencies: ["BuilderVoiceCore", "BuilderVoiceLink"]
         ),
         .binaryTarget(
             name: "whisper",

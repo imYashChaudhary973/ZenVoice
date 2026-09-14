@@ -39,7 +39,7 @@ result was usable. Three specific things went wrong:
 ### 1. Remove borrowed and dead UI
 
 - [x] Delete `"Codebase overview"`, the `t3.gg` badge pill, and the **Open** and
-      **Commit & push** title actions from `ZenVoiceSettingsView.ledgerTitleBar`.
+      **Commit & push** title actions from `BuilderVoiceSettingsView.ledgerTitleBar`.
 - [x] Replace the title bar with something a dictation app needs: current status,
       the dictation shortcut, and a single primary action.
 - [x] Audit every screen for controls wired to `{ }` or to no-op handlers.
@@ -160,7 +160,7 @@ Phase 5 shipped a settings-only preview. It is not usable during dictation.
       rather than `choices[0].message.content`. `CloudAIRequest` currently
       hardcodes the OpenAI shape, so this needs a per-provider request builder
       and response parser.
-- [x] Verify Groq against the live endpoint (2026-08-18, `ZenVoiceCloudLiveChecks`:
+- [x] Verify Groq against the live endpoint (2026-08-18, `BuilderVoiceCloudLiveChecks`:
       2xx on four models, cleanup changes the transcript, wrong key yields
       `provider(401)` with a readable message — evidence in
       [CLOUD_PROVIDERS.md §5.1](CLOUD_PROVIDERS.md)). En route this caught a
@@ -169,9 +169,9 @@ Phase 5 shipped a settings-only preview. It is not usable during dictation.
       and the stored configuration migrated.
 - [ ] Verify OpenAI and Anthropic against live endpoints — **credential-blocked
       (user opted to skip, 2026-08-18)**. Wire shapes stay covered by
-      `ZenVoiceCoreChecks`; one command per provider closes each when a key
-      is stored: `ZENVOICE_CLOUD_LIVE_PROVIDER=openai|anthropic swift run
-      ZenVoiceCloudLiveChecks`.
+      `BuilderVoiceCoreChecks`; one command per provider closes each when a key
+      is stored: `BUILDERVOICE_CLOUD_LIVE_PROVIDER=openai|anthropic swift run
+      BuilderVoiceCloudLiveChecks`.
 - [x] Make refinement reachable from the dictation flow, not only from settings.
       `CloudAIPreviewWindowController` is presented from `finishRecording()` when
       the active formatting mode is Cloud; Accept inserts the enhanced transcript,
@@ -190,9 +190,9 @@ dictation.
       covers read speech; conversational corpora (Common Voice, AMI, or
       self-recorded) are needed for the dictation case. Record provenance and
       licence for each source.
-- [x] Extend `ZenVoiceAccuracyChecks` to report per-engine WER on the new corpus.
-- [x] Baseline every installed engine (2026-08-18). `ZENVOICE_ACCURACY_ENGINE`
-      added to `ZenVoiceAccuracyChecks`; all seven registry engines measured on
+- [x] Extend `BuilderVoiceAccuracyChecks` to report per-engine WER on the new corpus.
+- [x] Baseline every installed engine (2026-08-18). `BUILDERVOICE_ACCURACY_ENGINE`
+      added to `BuilderVoiceAccuracyChecks`; all seven registry engines measured on
       the frozen Common Voice Spontaneous test through their own
       `SpeechEngine` paths — Parakeet TDT v3 6.9 % whole WER at 73× real time
       (best accuracy *and* speed), Whisper Turbo 8.2 %, Cohere 10.8 %,
@@ -227,6 +227,6 @@ block the interface work.
 - Cloud refinement works against a real key: **Groq verified end to end
       2026-08-18** (plus a fixed dead default model); OpenAI and Anthropic
       remain credential-blocked by user choice — one stored key each closes
-      them via `ZENVOICE_CLOUD_LIVE_PROVIDER=openai|anthropic swift run
-      ZenVoiceCloudLiveChecks`.
+      them via `BUILDERVOICE_CLOUD_LIVE_PROVIDER=openai|anthropic swift run
+      BuilderVoiceCloudLiveChecks`.
 - Engine accuracy claims trace to a measured number on real dictation audio.

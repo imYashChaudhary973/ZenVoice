@@ -336,7 +336,7 @@ Local-first does not mean risk-free:
   and view decrypted history.
 - Secure deletion on SSD storage has platform limitations; Delete All removes
   records, recovery audio, and rotates the encryption key.
-- A developer-provided `ZENVOICE_MODEL_PATH` bypasses catalogue verification;
+- A developer-provided `BUILDERVOICE_MODEL_PATH` bypasses catalogue verification;
   only use it with a model file you trust.
 - Apple Development signing gives local builds a stable macOS identity but is
   not appropriate for public distribution.

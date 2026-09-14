@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a real-speech evaluation corpus from the AMI Meeting Corpus.
 
-`build-librispeech-corpus.py` covers read speech, which is the case ZenVoice is
+`build-librispeech-corpus.py` covers read speech, which is the case BuilderVoice is
 *least* interested in: nobody dictates like an audiobook narrator. AMI is
 spontaneous — people hesitate, restart, talk over each other, and sit in a room
 with a projector fan. That is the shape of real dictation, and it is what the
@@ -23,9 +23,9 @@ cuts it into utterance clips paired with reference transcripts:
 
 which is the flat wav+txt layout `Fixtures.corpus(at:)` reads. Consume it with:
 
-    ZENVOICE_ACCURACY_CORPUS=Datasets/dictation-ami \
-    ZENVOICE_ACCURACY_MULTIENGINE=1 \
-    swift run ZenVoiceAccuracyChecks
+    BUILDERVOICE_ACCURACY_CORPUS=Datasets/dictation-ami \
+    BUILDERVOICE_ACCURACY_MULTIENGINE=1 \
+    swift run BuilderVoiceAccuracyChecks
 
 Individual headset channels rather than the mixed `Mix-Headset` track: the word
 annotations are per speaker, so scoring a speaker's words against a mix that

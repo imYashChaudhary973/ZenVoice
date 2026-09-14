@@ -92,7 +92,7 @@ NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Int
 
 ## Quick start
 
-1. **Build** from this private repository (see below) or install a signed build when one is issued. Drag `ZenVoice.app` to `/Applications` — the display name is **BuilderHelm Voice**.
+1. **Build** from this private repository (see below) or install a signed build when one is issued. Drag `BuilderVoice.app` to `/Applications` — the display name is **BuilderHelm Voice**.
 2. **Allow Microphone and Accessibility.** Without Accessibility, text still lands on the clipboard.
 3. **Finish setup** — language, then the recommended engine/model, then a test dictation.
 4. **Put the caret** in any editable field. Press `⌃⌥Space`, speak, press it again.
@@ -152,10 +152,10 @@ Full boundary: [Privacy](docs/PRIVACY.md).
 Xcode required (SwiftUI macros). Internet on the first build, for the pinned `whisper.cpp` XCFramework.
 
 ```bash
-git clone https://github.com/imYashChaudhary973/ZenVoice.git
-cd ZenVoice
+git clone https://github.com/imYashChaudhary973/BuilderHelm-Voice.git
+cd BuilderHelm-Voice
 ./Scripts/build-app.sh
-open build/ZenVoice.app
+open build/BuilderVoice.app
 ```
 
 ---
@@ -163,16 +163,16 @@ open build/ZenVoice.app
 ## Verify
 
 ```bash
-swift run ZenVoiceCoreChecks
-swift run ZenVoiceStorageChecks
-swift run ZenVoiceRuntimeChecks
+swift run BuilderVoiceCoreChecks
+swift run BuilderVoiceStorageChecks
+swift run BuilderVoiceRuntimeChecks
 swift build
 ./Scripts/check-ui-invariants.sh
 ./Scripts/build-app.sh
-codesign --verify --deep --strict build/ZenVoice.app
+codesign --verify --deep --strict build/BuilderVoice.app
 ```
 
-Point a runtime check at a model with `ZENVOICE_MODEL_PATH`. `ZENVOICE_RUNTIME_REQUIRED=1` fails instead of skipping when none is visible.
+Point a runtime check at a model with `BUILDERVOICE_MODEL_PATH`. `BUILDERVOICE_RUNTIME_REQUIRED=1` fails instead of skipping when none is visible.
 
 ---
 
@@ -183,7 +183,7 @@ flowchart LR
     Hotkey[GlobalHotKey] --> State[AppState]
     State --> Bar[ZenBar]
     State --> Rec[AudioRecorder]
-    Rec --> Runtime[ZenVoiceRuntime]
+    Rec --> Runtime[BuilderVoiceRuntime]
     Runtime --> Clean[TranscriptCleaner]
     Clean --> Refine[Formatting]
     Refine --> Vault[DictationVault]
@@ -194,11 +194,11 @@ flowchart LR
 
 | Target | Responsibility |
 |---|---|
-| `ZenVoice` | App, ZenBar, settings window, design system |
-| `ZenVoiceCore` | Cleanup, formatting, hotkeys, catalogues, insertion policy |
-| `ZenVoiceRuntime` | Local engines (Whisper, Parakeet TDT v3) and optional cloud speech |
-| `ZenVoiceStorage` | Encrypted vault, insights, voice profile, audio archive |
-| `ZenVoice*Checks` | Deterministic checks the compiler cannot see |
+| `BuilderVoice` | App, ZenBar, settings window, design system |
+| `BuilderVoiceCore` | Cleanup, formatting, hotkeys, catalogues, insertion policy |
+| `BuilderVoiceRuntime` | Local engines (Whisper, Parakeet TDT v3) and optional cloud speech |
+| `BuilderVoiceStorage` | Encrypted vault, insights, voice profile, audio archive |
+| `BuilderVoice*Checks` | Deterministic checks the compiler cannot see |
 
 A loaded model is 600–940 MB of GPU buffers. After five idle minutes the registry unloads. With nothing resident the app sits near 50 MB. Measure `phys_footprint`, not RSS.
 
@@ -223,9 +223,9 @@ Start at the [documentation index](docs/README.md).
 
 ## Status
 
-Private GitHub beta. Apache-2.0. Auto-updates and Homebrew are off. Passing CI is not a 1.0 claim. BuilderHelm Voice is the product name; Swift targets and `com.zenvoice.app` are unchanged in this cut.
+Private GitHub beta. Apache-2.0. Auto-updates and Homebrew are off. Passing CI is not a 1.0 claim. BuilderHelm Voice is the product name; Swift targets and `com.builderhelm.voice` are unchanged in this cut.
 
-[File a bug](https://github.com/imYashChaudhary973/ZenVoice/issues/new?template=bug_report.md) if something breaks. Do not paste private transcripts.
+[File a bug](https://github.com/imYashChaudhary973/BuilderHelm-Voice/issues/new?template=bug_report.md) if something breaks. Do not paste private transcripts.
 
 <p align="center">
   <em>Speak. It types. Local by default.</em>

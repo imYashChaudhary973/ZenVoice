@@ -2,10 +2,10 @@
 """Prepare and verify the pinned Mini LibriSpeech general-speech corpus.
 
 The archive must be downloaded from OpenSLR SLR31 and match both the
-publisher's MD5 and ZenVoice's SHA-256 pin. Preparation extracts only regular
+publisher's MD5 and BuilderVoice's SHA-256 pin. Preparation extracts only regular
 files, records per-audio hashes and attribution, and emits a deterministic
 training manifest. This read audiobook speech is a clean-speech regularizer;
-it is never labelled representative ZenVoice dictation or used as the frozen
+it is never labelled representative BuilderVoice dictation or used as the frozen
 dictation test set.
 """
 
@@ -67,7 +67,7 @@ def validate_archive(archive: Path) -> None:
     if digest(archive, "md5") != OFFICIAL_MD5:
         raise ValueError("archive does not match OpenSLR's official MD5")
     if sha256(archive) != PINNED_SHA256:
-        raise ValueError("archive does not match ZenVoice's SHA-256 pin")
+        raise ValueError("archive does not match BuilderVoice's SHA-256 pin")
 
 
 def extract_safely(archive: Path, destination: Path) -> None:

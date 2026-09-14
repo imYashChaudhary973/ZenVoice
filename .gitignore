@@ -21,7 +21,7 @@ __pycache__/
 /Datasets/
 
 # Website design prototypes do not belong in the native app repository.
-/ZenVoiceNewDesign/
+/BuilderVoiceNewDesign/
 /*.html
 LinkedIn_Post.md
 Twitter_Post.md

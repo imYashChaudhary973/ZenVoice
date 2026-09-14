@@ -7,11 +7,11 @@
 	<key>CFBundleDisplayName</key>
 	<string>BuilderHelm Voice</string>
 	<key>CFBundleExecutable</key>
-	<string>ZenVoice</string>
+	<string>BuilderVoice</string>
 	<key>CFBundleIconFile</key>
-	<string>ZenVoice</string>
+	<string>BuilderVoice</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.zenvoice.app</string>
+	<string>com.builderhelm.voice</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -35,7 +35,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://github.com/imYashChaudhary973/ZenVoice/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/imYashChaudhary973/BuilderHelm-Voice/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>FldQiOtbpQ/D/qzcaHc8Yvf9OdEyDPD6gQSs/xLD14Q=</string>
 </dict>

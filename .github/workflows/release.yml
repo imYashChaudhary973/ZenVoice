@@ -1,20 +1,20 @@
 name: Release
 
-# Creates a signed, notarized ZenVoice DMG release and publishes it to GitHub
+# Creates a signed, notarized BuilderVoice DMG release and publishes it to GitHub
 # Releases. This workflow is triggered manually after the release checklist in
 # docs/RELEASE_READINESS.md is complete.
 #
 # Required repository secrets (add these in GitHub Settings > Secrets and
 # Variables > Actions before running):
-#   ZENVOICE_SIGNING_IDENTITY       - full "Developer ID Application: ..." string
-#   ZENVOICE_SIGNING_CERTIFICATE    - base64-encoded Developer ID .p12
-#   ZENVOICE_SIGNING_CERTIFICATE_PASSWORD - password for the .p12
-#   ZENVOICE_NOTARY_KEY             - base64-encoded App Store Connect API .p8
-#   ZENVOICE_NOTARY_KEY_ID          - App Store Connect API key ID
-#   ZENVOICE_NOTARY_ISSUER_ID       - App Store Connect API issuer ID
+#   BUILDERVOICE_SIGNING_IDENTITY       - full "Developer ID Application: ..." string
+#   BUILDERVOICE_SIGNING_CERTIFICATE    - base64-encoded Developer ID .p12
+#   BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD - password for the .p12
+#   BUILDERVOICE_NOTARY_KEY             - base64-encoded App Store Connect API .p8
+#   BUILDERVOICE_NOTARY_KEY_ID          - App Store Connect API key ID
+#   BUILDERVOICE_NOTARY_ISSUER_ID       - App Store Connect API issuer ID
 #
 # Optional:
-#   ZENVOICE_HOMEBREW_TAP_TOKEN     - GitHub token with repo scope for the tap repo.
+#   BUILDERVOICE_HOMEBREW_TAP_TOKEN     - GitHub token with repo scope for the tap repo.
 
 on:
   workflow_dispatch:
@@ -54,12 +54,12 @@ jobs:
 
       - name: Install Developer ID certificate
         env:
-          P12_BASE64: ${{ secrets.ZENVOICE_SIGNING_CERTIFICATE }}
-          P12_PASSWORD: ${{ secrets.ZENVOICE_SIGNING_CERTIFICATE_PASSWORD }}
+          P12_BASE64: ${{ secrets.BUILDERVOICE_SIGNING_CERTIFICATE }}
+          P12_PASSWORD: ${{ secrets.BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD }}
           CERT_PATH: ${{ runner.temp }}/developer-id.p12
         run: |
           if [[ -z "$P12_BASE64" || -z "$P12_PASSWORD" ]]; then
-            echo "Error: ZENVOICE_SIGNING_CERTIFICATE and ZENVOICE_SIGNING_CERTIFICATE_PASSWORD are required." >&2
+            echo "Error: BUILDERVOICE_SIGNING_CERTIFICATE and BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD are required." >&2
             exit 1
           fi
           python3 -c "import base64,os; open(os.environ['CERT_PATH'],'wb').write(base64.b64decode(''.join(os.environ['P12_BASE64'].split())))"
@@ -73,25 +73,25 @@ jobs:
 
       - name: Configure release identity
         run: |
-          echo "ZENVOICE_SIGNING_IDENTITY=${{ secrets.ZENVOICE_SIGNING_IDENTITY }}" >> "$GITHUB_ENV"
+          echo "BUILDERVOICE_SIGNING_IDENTITY=${{ secrets.BUILDERVOICE_SIGNING_IDENTITY }}" >> "$GITHUB_ENV"
 
       - name: Build and sign app
         run: ./Scripts/build-app.sh
 
       - name: Verify signatures before notarization
-        run: codesign --verify --deep --strict --verbose=2 build/ZenVoice.app
+        run: codesign --verify --deep --strict --verbose=2 build/BuilderVoice.app
 
       - name: Store notarytool credentials
         env:
-          NOTARY_KEY_BASE64: ${{ secrets.ZENVOICE_NOTARY_KEY }}
-          NOTARY_KEY_ID: ${{ secrets.ZENVOICE_NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.ZENVOICE_NOTARY_ISSUER_ID }}
+          NOTARY_KEY_BASE64: ${{ secrets.BUILDERVOICE_NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.BUILDERVOICE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.BUILDERVOICE_NOTARY_ISSUER_ID }}
         run: |
           mkdir -p "$RUNNER_TEMP/private_keys"
           export KEY_PATH="$RUNNER_TEMP/private_keys/AuthKey_${NOTARY_KEY_ID}.p8"
           python3 -c "import base64,os; open(os.environ['KEY_PATH'],'wb').write(base64.b64decode(''.join(os.environ['NOTARY_KEY_BASE64'].split())))"
           key_path="$KEY_PATH"
-          xcrun notarytool store-credentials zenvoice-notary \
+          xcrun notarytool store-credentials buildervoice-notary \
             --key "$key_path" \
             --key-id "$NOTARY_KEY_ID" \
             --issuer "$NOTARY_ISSUER_ID" \
@@ -99,39 +99,39 @@ jobs:
 
       - name: Notarize and staple app
         run: |
-          ZENVOICE_NOTARY_PROFILE=zenvoice-notary \
-            ZENVOICE_NOTARY_KEYCHAIN="$HOME/Library/Keychains/build.keychain-db" \
+          BUILDERVOICE_NOTARY_PROFILE=buildervoice-notary \
+            BUILDERVOICE_NOTARY_KEYCHAIN="$HOME/Library/Keychains/build.keychain-db" \
             ./Scripts/notarize-app.sh
 
       - name: Build DMG
         env:
           VERSION: ${{ github.event.inputs.version }}
         run: |
-          rm -rf build/dmg-staging build/ZenVoice.dmg
+          rm -rf build/dmg-staging build/BuilderVoice.dmg
           mkdir -p build/dmg-staging
-          cp -R build/ZenVoice.app build/dmg-staging/ZenVoice.app
+          cp -R build/BuilderVoice.app build/dmg-staging/BuilderVoice.app
           ln -s /Applications build/dmg-staging/Applications
           hdiutil create \
-            -volname "ZenVoice $VERSION" \
+            -volname "BuilderVoice $VERSION" \
             -srcfolder build/dmg-staging \
             -ov \
             -format UDZO \
-            build/ZenVoice.dmg
+            build/BuilderVoice.dmg
 
       - name: Notarize and staple DMG
         run: |
-          xcrun notarytool submit build/ZenVoice.dmg \
-            --keychain-profile zenvoice-notary \
+          xcrun notarytool submit build/BuilderVoice.dmg \
+            --keychain-profile buildervoice-notary \
             --keychain "$HOME/Library/Keychains/build.keychain-db" \
             --wait
-          xcrun stapler staple build/ZenVoice.dmg
-          xcrun stapler validate build/ZenVoice.dmg
+          xcrun stapler staple build/BuilderVoice.dmg
+          xcrun stapler validate build/BuilderVoice.dmg
 
       - name: Verify DMG contents
         run: |
           mount_point=$(mktemp -d)
-          hdiutil attach build/ZenVoice.dmg -mountpoint "$mount_point" -noverify -quiet
-          spctl --assess --type execute "$mount_point/ZenVoice.app"
+          hdiutil attach build/BuilderVoice.dmg -mountpoint "$mount_point" -noverify -quiet
+          spctl --assess --type execute "$mount_point/BuilderVoice.app"
           hdiutil detach "$mount_point" -quiet
           rm -rf "$mount_point"
 
@@ -146,13 +146,13 @@ jobs:
           VERSION: ${{ github.event.inputs.version }}
         run: |
           export KEY_PATH="$RUNNER_TEMP/sparkle_private_key.pem"
-          export SPARKLE_KEY_B64='${{ secrets.ZENVOICE_SPARKLE_PRIVATE_KEY }}'
+          export SPARKLE_KEY_B64='${{ secrets.BUILDERVOICE_SPARKLE_PRIVATE_KEY }}'
           python3 -c "import base64,os; open(os.environ['KEY_PATH'],'wb').write(base64.b64decode(''.join(os.environ['SPARKLE_KEY_B64'].split())))"
           key_path="$KEY_PATH"
           ./Scripts/generate-appcast.rb \
             --version "$VERSION" \
-            --dmg build/ZenVoice.dmg \
-            --feed-url "https://github.com/imYashChaudhary973/ZenVoice/releases/latest/download/appcast.xml" \
+            --dmg build/BuilderVoice.dmg \
+            --feed-url "https://github.com/imYashChaudhary973/BuilderHelm-Voice/releases/latest/download/appcast.xml" \
             --private-key "$key_path" \
             --output build/appcast.xml
           rm -f "$key_path"
@@ -166,29 +166,29 @@ jobs:
           notes=build/RELEASE_NOTES.md
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release edit "$tag" \
-              --title "ZenVoice $VERSION" \
+              --title "BuilderVoice $VERSION" \
               --notes-file "$notes" \
               --latest
           else
             gh release create "$tag" \
-              --title "ZenVoice $VERSION" \
+              --title "BuilderVoice $VERSION" \
               --notes-file "$notes" \
               --latest
           fi
           # Upload sequentially. Parallel uploads via action-gh-release failed
           # with a content-length mismatch on Node 24 runners.
-          gh release upload "$tag" build/ZenVoice.dmg --clobber
+          gh release upload "$tag" build/BuilderVoice.dmg --clobber
           gh release upload "$tag" build/appcast.xml --clobber
 
       - name: Prepare Homebrew cask update
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.ZENVOICE_HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.BUILDERVOICE_HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ github.event.inputs.version }}
         run: |
           if [[ -n "$HOMEBREW_TAP_TOKEN" ]]; then
             ./Scripts/generate-homebrew-cask.rb \
               --version "$VERSION" \
-              --dmg build/ZenVoice.dmg
+              --dmg build/BuilderVoice.dmg
           else
             echo "No HOMEBREW_TAP_TOKEN set; skipping Homebrew cask PR."
           fi

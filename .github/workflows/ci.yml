@@ -44,10 +44,10 @@ jobs:
             'Package.resolved') }}
 
       - name: Run deterministic core checks
-        run: swift run ZenVoiceCoreChecks
+        run: swift run BuilderVoiceCoreChecks
 
       - name: Run encrypted storage checks
-        run: swift run ZenVoiceStorageChecks
+        run: swift run BuilderVoiceStorageChecks
 
       # Runtime checks decode through the real whisper.cpp path, so they need
       # a real model even though the audio is a deterministic silence fixture.
@@ -72,14 +72,14 @@ jobs:
 
       - name: Run runtime checks
         env:
-          ZENVOICE_MODEL_PATH: ${{ github.workspace }}/.build/models/ggml-small.en.bin
-          ZENVOICE_RUNTIME_REQUIRED: "1"
-        run: swift run ZenVoiceRuntimeChecks
+          BUILDERVOICE_MODEL_PATH: ${{ github.workspace }}/.build/models/ggml-small.en.bin
+          BUILDERVOICE_RUNTIME_REQUIRED: "1"
+        run: swift run BuilderVoiceRuntimeChecks
 
       - name: Run deterministic accuracy scoring checks
         env:
-          ZENVOICE_SCORING_ONLY: "1"
-        run: swift run ZenVoiceAccuracyChecks
+          BUILDERVOICE_SCORING_ONLY: "1"
+        run: swift run BuilderVoiceAccuracyChecks
 
       - name: Check settings-window structural invariants
         run: ./Scripts/check-ui-invariants.sh
@@ -91,4 +91,4 @@ jobs:
         run: ./Scripts/build-app.sh
 
       - name: Verify nested code signature
-        run: codesign --verify --deep --strict --verbose=2 build/ZenVoice.app
+        run: codesign --verify --deep --strict --verbose=2 build/BuilderVoice.app

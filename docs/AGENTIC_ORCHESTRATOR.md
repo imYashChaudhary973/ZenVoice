@@ -5,7 +5,7 @@
 > execution after an approval exists; it produces the events defined in
 > [AGENTIC_STATUS_STREAMING.md](AGENTIC_STATUS_STREAMING.md) and persists state
 > through the encrypted task store. Code:
-> `Sources/ZenVoiceCore/GoalOrchestrator.swift` with the process adapters in
+> `Sources/BuilderVoiceCore/GoalOrchestrator.swift` with the process adapters in
 > `AgenticExecutors.swift`; relaunch marks non-terminal records `interrupted`
 > and never resumes a process.
 
@@ -105,7 +105,7 @@ public enum StepState: String, Codable, Sendable {
   parallelism to feel fast.
 - A step with a failed dependency is `skipped` (recorded, not silent).
 
-### 3.2 Spawning executors (app layer; `ZenVoiceCore` holds only protocols)
+### 3.2 Spawning executors (app layer; `BuilderVoiceCore` holds only protocols)
 
 ```swift
 public protocol GoalExecutor: Sendable {
@@ -177,7 +177,7 @@ machine never special-cases an agent.
    approval gate doc).
 
 - Every state transition and step outcome is written to the encrypted task
-  record (`ZenVoiceStorage` vault) **at transition time**, not at goal end —
+  record (`BuilderVoiceStorage` vault) **at transition time**, not at goal end —
   crash-consistency is the point.
 - Record shape: plan (with version chain), approval decisions, per-step
   outcome + retained output (capped), terminal state, timestamps.
@@ -189,12 +189,12 @@ machine never special-cases an agent.
 
 ## 7. What the coding agent builds first
 
-1. `GoalState`/`StepState` + transition function as pure `ZenVoiceCore` code
+1. `GoalState`/`StepState` + transition function as pure `BuilderVoiceCore` code
    with a full transition-table check (every legal transition exercised,
    every illegal one rejected).
 2. `GoalOrchestrator` with the `shell` executor and a **fake** codex/claude
    executor (scripted outcomes) — end-to-end 3-step goal, dependency skip,
-   failure halt, cancel mid-step, timeout — all under `ZenVoiceCoreChecks`
+   failure halt, cancel mid-step, timeout — all under `BuilderVoiceCoreChecks`
    semantics (deterministic, no network, no real agents).
 3. Only then: real adapters, behind manual QA with the real CLIs.
 

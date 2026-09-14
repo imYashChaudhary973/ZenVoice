@@ -9,7 +9,7 @@ fi
 source_png=$1
 output_icns=$2
 temporary_dir=$(mktemp -d)
-iconset_dir="$temporary_dir/ZenVoice.iconset"
+iconset_dir="$temporary_dir/BuilderVoice.iconset"
 
 cleanup() {
     rm -rf "$temporary_dir"

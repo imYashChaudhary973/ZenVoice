@@ -2,8 +2,8 @@
 set -u
 
 project_dir=${0:A:h:h}
-app_path=${1:-"$project_dir/build/ZenVoice.app"}
-distribution_archive=${2:-"$project_dir/build/ZenVoice.dmg"}
+app_path=${1:-"$project_dir/build/BuilderVoice.app"}
+distribution_archive=${2:-"$project_dir/build/BuilderVoice.dmg"}
 blocker_count=0
 source_cdhash=""
 
@@ -30,9 +30,9 @@ require_file "docs/SECURITY_REVIEW.md"
 require_file "docs/RELEASE_READINESS.md"
 
 if [[ -f "$project_dir/LICENSE" ]]; then
-    pass "ZenVoice project licence exists"
+    pass "BuilderVoice project licence exists"
 else
-    block "ZenVoice project licence has not been selected"
+    block "BuilderVoice project licence has not been selected"
 fi
 
 unfinished_items=$(
@@ -68,7 +68,7 @@ else
     block "Swift package does not build"
 fi
 
-for check in ZenVoiceCoreChecks ZenVoiceStorageChecks ZenVoiceLinkChecks; do
+for check in BuilderVoiceCoreChecks BuilderVoiceStorageChecks BuilderVoiceLinkChecks; do
     if (cd "$project_dir" && swift run "$check"); then
         pass "$check passed"
     else
@@ -82,14 +82,14 @@ else
     block "UI invariants failed"
 fi
 
-release_model=${ZENVOICE_RELEASE_MODEL_PATH:-}
+release_model=${BUILDERVOICE_RELEASE_MODEL_PATH:-}
 if [[ -z "$release_model" || ! -f "$release_model" ]]; then
-    block "ZENVOICE_RELEASE_MODEL_PATH must name a verified model artifact"
+    block "BUILDERVOICE_RELEASE_MODEL_PATH must name a verified model artifact"
 elif (
     cd "$project_dir" &&
-        ZENVOICE_MODEL_PATH="$release_model" \
-        ZENVOICE_RUNTIME_REQUIRED=1 \
-        swift run ZenVoiceRuntimeChecks
+        BUILDERVOICE_MODEL_PATH="$release_model" \
+        BUILDERVOICE_RUNTIME_REQUIRED=1 \
+        swift run BuilderVoiceRuntimeChecks
 ); then
     pass "real model runtime checks passed"
 else
@@ -97,7 +97,7 @@ else
 fi
 
 if [[ -n "$release_model" && -f "$release_model" ]] \
-    && ZENVOICE_MODEL_PATH="$release_model" \
+    && BUILDERVOICE_MODEL_PATH="$release_model" \
         "$project_dir/Scripts/check-dictation-e2e.sh"; then
     pass "deterministic app dictation passed"
 else
@@ -158,9 +158,9 @@ else
         block "distribution DMG could not be mounted"
         artifact_valid=false
     else
-        extracted_app=$(find "$mount_point" -maxdepth 2 -type d -name 'ZenVoice.app' | head -n 1)
+        extracted_app=$(find "$mount_point" -maxdepth 2 -type d -name 'BuilderVoice.app' | head -n 1)
         if [[ -z "$extracted_app" || ! -d "$extracted_app" || -L "$extracted_app" ]]; then
-            block "DMG does not contain a regular ZenVoice.app bundle"
+            block "DMG does not contain a regular BuilderVoice.app bundle"
             artifact_valid=false
         elif ! codesign --verify --deep --strict "$extracted_app" >/dev/null 2>&1; then
             block "DMG app has invalid nested code signatures"
@@ -192,7 +192,7 @@ else
     if [[ "$artifact_valid" == true ]]; then
         if archive_sha256=$(shasum -a 256 "$distribution_archive"); then
             archive_sha256=${archive_sha256%% *}
-            pass "distribution DMG contains a signed, stapled, Gatekeeper-approved ZenVoice.app"
+            pass "distribution DMG contains a signed, stapled, Gatekeeper-approved BuilderVoice.app"
             pass "distribution SHA-256 is $archive_sha256"
         else
             block "distribution DMG SHA-256 could not be calculated"

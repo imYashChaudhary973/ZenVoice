@@ -59,7 +59,7 @@ transcripts. Put approved preferred terms in a local UTF-8 file, one term per
 line, to measure Whisper prompt bias:
 
 ```bash
-.build/release/ZenVoiceLanguageBench \
+.build/release/BuilderVoiceLanguageBench \
   --model "$HOME/Library/Application Support/BuilderHelm Voice/Models/ggml-hindi2hinglish-apex-q8_0.bin" \
   --suite hinglish \
   --corpus "$HOME/BuilderHelm Voice-Hinglish-Spelling" \
@@ -71,7 +71,7 @@ line, to measure Whisper prompt bias:
 Use the deterministic app harness for an individual end-to-end insertion:
 
 ```bash
-ZENVOICE_E2E_AUDIO_FILE="$HOME/BuilderHelm Voice-Hinglish-Spelling/001.wav" \
+BUILDERVOICE_E2E_AUDIO_FILE="$HOME/BuilderHelm Voice-Hinglish-Spelling/001.wav" \
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
 swift run BuilderHelm Voice
 ```

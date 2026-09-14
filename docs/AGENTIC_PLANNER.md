@@ -2,8 +2,8 @@
 
 > **Status: implemented — 2026-08-18.** Part of
 > [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md). Tier 1 lives in
-> `Sources/ZenVoiceCore/GoalPlanner.swift`, Tier 2 in
-> `Sources/ZenVoiceCore/FoundationModelsGoalPlanner.swift`, and the schema and
+> `Sources/BuilderVoiceCore/GoalPlanner.swift`, Tier 2 in
+> `Sources/BuilderVoiceCore/FoundationModelsGoalPlanner.swift`, and the schema and
 > validation in `AgenticPlanner.swift` / `PlanValidator.swift`. `GoalPlan` also
 > carries an `id: UUID` so an approval cannot be replayed onto another plan.
 
@@ -185,7 +185,7 @@ text, with a one-line reason surfaced):
 6. **Secret scan:** any field matching common secret shapes (key=, token,
      `AKIA…`, long hex/base64 runs) → reject the whole plan.
 
-Checks to write with the schema (pure `ZenVoiceCore`, no LLM): valid plan
+Checks to write with the schema (pure `BuilderVoiceCore`, no LLM): valid plan
 passes; each gate has a fixture that only fails that gate; planner-supplied
 risk is provably ignored (fixture where `plannedRisk: low` but surface is
 `git push` → `computedRisk: high`).

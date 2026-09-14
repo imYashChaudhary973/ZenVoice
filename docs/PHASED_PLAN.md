@@ -84,7 +84,7 @@ Every phase must:
 
 1. Update the verified model catalogue, licence notices, and source provenance when new models or runtimes are introduced.
 2. Add or extend a dedicated ADR before a cross-cutting architecture change lands.
-3. Pass `swift build`, `ZenVoiceCoreChecks`, and `ZenVoiceStorageChecks`.
+3. Pass `swift build`, `BuilderVoiceCoreChecks`, and `BuilderVoiceStorageChecks`.
 4. Add manual QA evidence for any user-facing behavior change.
 5. Keep all new features opt-in unless they replace an existing default with clear UX consent.
 

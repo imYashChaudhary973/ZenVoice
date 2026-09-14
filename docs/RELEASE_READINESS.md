@@ -61,26 +61,26 @@ a project gate, not legal advice.
 ## Apple distribution (v0.4.4)
 
 Shipped 2026-08-27 via local build, sign, notarize, and `gh release create`
-(asset: `ZenVoice.dmg`). Source commit `4a996f468500c3a77e5782946a5bf2beef3506a3`.
+(asset: `BuilderVoice.dmg`). Source commit `4a996f468500c3a77e5782946a5bf2beef3506a3`.
 
 ### v0.4.4 installed-app smoke evidence
 
-Captured from `/Applications/ZenVoice.app` and the published DMG on 2026-08-28.
+Captured from `/Applications/BuilderVoice.app` and the published DMG on 2026-08-28.
 
 ```zsh
-$ mdls -name kMDItemVersion -name kMDItemCFBundleIdentifier -name kMDItemDisplayName /Applications/ZenVoice.app
-kMDItemCFBundleIdentifier = "com.zenvoice.app"
-kMDItemDisplayName        = "ZenVoice.app"
+$ mdls -name kMDItemVersion -name kMDItemCFBundleIdentifier -name kMDItemDisplayName /Applications/BuilderVoice.app
+kMDItemCFBundleIdentifier = "com.builderhelm.voice"
+kMDItemDisplayName        = "BuilderVoice.app"
 kMDItemVersion            = "0.4.4"
 
-$ plutil -extract CFBundleShortVersionString raw /Applications/ZenVoice.app/Contents/Info.plist && plutil -extract CFBundleVersion raw /Applications/ZenVoice.app/Contents/Info.plist && plutil -extract CFBundleIdentifier raw /Applications/ZenVoice.app/Contents/Info.plist
+$ plutil -extract CFBundleShortVersionString raw /Applications/BuilderVoice.app/Contents/Info.plist && plutil -extract CFBundleVersion raw /Applications/BuilderVoice.app/Contents/Info.plist && plutil -extract CFBundleIdentifier raw /Applications/BuilderVoice.app/Contents/Info.plist
 0.4.4
 4
-com.zenvoice.app
+com.builderhelm.voice
 
-$ codesign -dv --verbose=4 /Applications/ZenVoice.app 2>&1 | head -12
-Executable=/Applications/ZenVoice.app/Contents/MacOS/BuilderHelm Voice
-Identifier=com.zenvoice.app
+$ codesign -dv --verbose=4 /Applications/BuilderVoice.app 2>&1 | head -12
+Executable=/Applications/BuilderVoice.app/Contents/MacOS/BuilderHelm Voice
+Identifier=com.builderhelm.voice
 Format=app bundle with Mach-O thin (arm64)
 CodeDirectory v=20500 size=84828 flags=0x10000(runtime) hashes=2640+7 location=embedded
 Hash type=sha256 size=32
@@ -94,59 +94,59 @@ Notarization Ticket=stapled
 TeamIdentifier=8QSM298XJ2
 Runtime Version=14.0.0
 
-$ spctl -a -vv /Applications/ZenVoice.app 2>&1
-/Applications/ZenVoice.app: accepted
+$ spctl -a -vv /Applications/BuilderVoice.app 2>&1
+/Applications/BuilderVoice.app: accepted
 source=Notarized Developer ID
 origin=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
 
-$ xcrun stapler validate /Applications/ZenVoice.app 2>&1
+$ xcrun stapler validate /Applications/BuilderVoice.app 2>&1
 The validate action worked!
 
-$ codesign -d --entitlements :- /Applications/ZenVoice.app 2>&1
+$ codesign -d --entitlements :- /Applications/BuilderVoice.app 2>&1
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>com.apple.security.device.audio-input</key><true/></dict></plist>
 
-$ find /Applications/ZenVoice.app \( -type f -perm +111 \) -o -name "*.dylib" -o -name "*.framework" | xargs -I{} sh -c 'codesign -dv --verbose=2 "$1" 2>&1 | grep -E "^(Executable|Identifier|Authority)" | head -3' _ {} 2>&1 | head -80
-Executable=/Applications/ZenVoice.app/Contents/MacOS/BuilderHelm Voice
-Identifier=com.zenvoice.app
+$ find /Applications/BuilderVoice.app \( -type f -perm +111 \) -o -name "*.dylib" -o -name "*.framework" | xargs -I{} sh -c 'codesign -dv --verbose=2 "$1" 2>&1 | grep -E "^(Executable|Identifier|Authority)" | head -3' _ {} 2>&1 | head -80
+Executable=/Applications/BuilderVoice.app/Contents/MacOS/BuilderHelm Voice
+Identifier=com.builderhelm.voice
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Sparkle
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Sparkle
 Identifier=org.sparkle-project.Sparkle
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate
 Identifier=Autoupdate
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater
 Identifier=org.sparkle-project.Sparkle.Updater
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader
 Identifier=org.sparkle-project.DownloaderService
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer
 Identifier=org.sparkle-project.InstallerLauncher
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle
 Identifier=org.sparkle-project.Sparkle
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/whisper.framework/Versions/Current/whisper
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/whisper.framework/Versions/Current/whisper
 Identifier=org.ggml.whisper
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/whisper.framework/Versions/A/whisper
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/whisper.framework/Versions/A/whisper
 Identifier=org.ggml.whisper
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
-Executable=/Applications/ZenVoice.app/Contents/Frameworks/libparakeet.dylib
+Executable=/Applications/BuilderVoice.app/Contents/Frameworks/libparakeet.dylib
 Identifier=libparakeet
 Authority=Developer ID Application: Yash Chaudhary (8QSM298XJ2)
 
-$ lipo -archs /Applications/ZenVoice.app/Contents/MacOS/BuilderHelm Voice
+$ lipo -archs /Applications/BuilderVoice.app/Contents/MacOS/BuilderHelm Voice
 arm64
 
-$ curl -sL https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/ZenVoice.dmg -o /tmp/BuilderHelm Voice-published-0.4.4.dmg && shasum -a 256 /tmp/BuilderHelm Voice-published-0.4.4.dmg
+$ curl -sL https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.4/BuilderVoice.dmg -o /tmp/BuilderHelm Voice-published-0.4.4.dmg && shasum -a 256 /tmp/BuilderHelm Voice-published-0.4.4.dmg
 8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2  /tmp/BuilderHelm Voice-published-0.4.4.dmg
 
-$ grep -E "version|sha256|url" Casks/zenvoice.rb
+$ grep -E "version|sha256|url" Casks/buildervoice.rb
   version "0.4.4"
   sha256 "8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2"
-  url "https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v#{version}/ZenVoice.dmg"
+  url "https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v#{version}/BuilderVoice.dmg"
 
 $ xcrun stapler validate /tmp/BuilderHelm Voice-published-0.4.4.dmg 2>&1
 The validate action worked!
@@ -157,7 +157,7 @@ hdiutil verify: checksum of "/tmp/BuilderHelm Voice-published-0.4.4.dmg" is VALI
 
 Summary of automated checks for v0.4.4:
 
-- Version 0.4.4, bundle ID `com.zenvoice.app`, build 4.
+- Version 0.4.4, bundle ID `com.builderhelm.voice`, build 4.
 - Architecture is `arm64` (Apple Silicon baseline).
 - Hardened Runtime flag `0x10000(runtime)` is present; only entitlement is
   `com.apple.security.device.audio-input`; `get-task-allow` is absent.
@@ -167,7 +167,7 @@ Summary of automated checks for v0.4.4:
   (`8c7dbf30beccfe505ba0ab8ebca58d06f00bfb91d5e57de9207cc4a7535ed6b2`); the
   DMG also passes `stapler validate` and `hdiutil verify`.
 - Sparkle auto-update framework and XPC services are present and signed.
-- `swift build`, `swift run ZenVoiceCoreChecks`, `swift run ZenVoiceStorageChecks`,
+- `swift build`, `swift run BuilderVoiceCoreChecks`, `swift run BuilderVoiceStorageChecks`,
   and `./Scripts/check-ui-invariants.sh` all pass on the source commit.
 
 - [x] Sign the app and every nested executable with a **Developer ID
@@ -236,15 +236,15 @@ such change invalidates the evidence: build, sign, notarize, package, and test
 a new candidate.
 
 For the Apple distribution items: `Scripts/build-app.sh` requires a clean
-worktree when `ZENVOICE_SIGNING_IDENTITY` names a Developer ID Application
+worktree when `BUILDERVOICE_SIGNING_IDENTITY` names a Developer ID Application
 certificate. It resets ignored SwiftPM state, resolves the pinned manifests,
 rejects editable or dirty dependency checkouts, verifies that tracked inputs
 remain unchanged through signing, and reports the source commit.
 `Scripts/notarize-app.sh` creates a separate upload archive, submits it with
 `notarytool`, staples and verifies the app with `codesign`, `stapler`, and
-`spctl`, then packages the stapled app as a DMG (`build/ZenVoice.dmg`) and
+`spctl`, then packages the stapled app as a DMG (`build/BuilderVoice.dmg`) and
 prints its SHA-256. The local gate mounts the DMG, verifies that it contains
-only `ZenVoice.app`, and confirms Gatekeeper acceptance with `spctl`.
+only `BuilderVoice.app`, and confirms Gatekeeper acceptance with `spctl`.
 
 The automated GitHub release flow is defined in `.github/workflows/release.yml`:
 
@@ -253,18 +253,18 @@ The automated GitHub release flow is defined in `.github/workflows/release.yml`:
 3. Go to the Actions tab, select **Release**, enter the version, and trigger the
    workflow manually.
 4. The workflow builds, signs, notarizes, and packages the app as a signed,
-   stapled DMG, then creates a GitHub Release with `ZenVoice.dmg` and the
+   stapled DMG, then creates a GitHub Release with `BuilderVoice.dmg` and the
    generated release notes.
-5. Optionally provide `ZENVOICE_HOMEBREW_TAP_TOKEN` in the repository secrets so
+5. Optionally provide `BUILDERVOICE_HOMEBREW_TAP_TOKEN` in the repository secrets so
    the workflow can propose a cask update to the tap repository.
 
 Required repository secrets are listed in
 [`docs/RELEASE_SECRETS.md`](./RELEASE_SECRETS.md). Add them in GitHub Settings >
 Secrets and Variables > Actions before running the workflow. The short version:
-`ZENVOICE_SIGNING_IDENTITY`, `ZENVOICE_SIGNING_CERTIFICATE`,
-`ZENVOICE_SIGNING_CERTIFICATE_PASSWORD`, `ZENVOICE_NOTARY_KEY`,
-`ZENVOICE_NOTARY_KEY_ID`, `ZENVOICE_NOTARY_ISSUER_ID`, and optionally
-`ZENVOICE_HOMEBREW_TAP_TOKEN`.
+`BUILDERVOICE_SIGNING_IDENTITY`, `BUILDERVOICE_SIGNING_CERTIFICATE`,
+`BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD`, `BUILDERVOICE_NOTARY_KEY`,
+`BUILDERVOICE_NOTARY_KEY_ID`, `BUILDERVOICE_NOTARY_ISSUER_ID`, and optionally
+`BUILDERVOICE_HOMEBREW_TAP_TOKEN`.
 
 Do not place Developer ID certificates, private keys, App Store Connect API
 keys, notary credentials, or passwords in the repository. The release workflow

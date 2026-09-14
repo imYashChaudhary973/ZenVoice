@@ -1,27 +1,27 @@
 #!/bin/zsh
 set -euo pipefail
 
-# Submits a built ZenVoice.app for Apple notarization, staples the ticket, and
+# Submits a built BuilderVoice.app for Apple notarization, staples the ticket, and
 # packages the verified app for direct download — the second half of the
 # Developer ID pipeline that Scripts/build-app.sh starts.
 #
 # One-off prerequisites:
 #   1. A "Developer ID Application" certificate in the login keychain.
 #   2. Notary credentials stored once with:
-#        xcrun notarytool store-credentials zenvoice-notary \
+#        xcrun notarytool store-credentials buildervoice-notary \
 #            --apple-id <apple-id> --team-id <team-id>
 #      (An App Store Connect API key works too; see `man notarytool`.)
 #
 # Usage:
-#   ZENVOICE_SIGNING_IDENTITY="Developer ID Application: ..." \
+#   BUILDERVOICE_SIGNING_IDENTITY="Developer ID Application: ..." \
 #       ./Scripts/build-app.sh
-#   ./Scripts/notarize-app.sh [path/to/ZenVoice.app]
+#   ./Scripts/notarize-app.sh [path/to/BuilderVoice.app]
 
 project_dir=${0:A:h:h}
-app_path=${1:-"$project_dir/build/ZenVoice.app"}
-profile=${ZENVOICE_NOTARY_PROFILE:-zenvoice-notary}
-submission_archive_path="$project_dir/build/ZenVoice-notarization-upload.zip"
-distribution_archive_path="$project_dir/build/ZenVoice-distribution.zip"
+app_path=${1:-"$project_dir/build/BuilderVoice.app"}
+profile=${BUILDERVOICE_NOTARY_PROFILE:-buildervoice-notary}
+submission_archive_path="$project_dir/build/BuilderVoice-notarization-upload.zip"
+distribution_archive_path="$project_dir/build/BuilderVoice-distribution.zip"
 
 if [[ ! -d "$app_path" ]]; then
     echo "Error: no app at $app_path — run Scripts/build-app.sh first." >&2
@@ -39,7 +39,7 @@ signature_details=$(codesign -dvv "$app_path" 2>&1 || true)
 if [[ "$signature_details" != *"Authority=Developer ID Application:"* ]]; then
     echo "Error: $app_path is not signed with a Developer ID Application" >&2
     echo "identity. Re-run Scripts/build-app.sh with" >&2
-    echo "ZENVOICE_SIGNING_IDENTITY naming one." >&2
+    echo "BUILDERVOICE_SIGNING_IDENTITY naming one." >&2
     exit 1
 fi
 

@@ -13,16 +13,16 @@ This guide lists each required secret, explains how to extract it from your loca
 
 | Secret | What it is | Local source |
 |--------|------------|--------------|
-| `ZENVOICE_SIGNING_IDENTITY` | Full codesigning identity string | macOS keychain / `security find-identity` |
-| `ZENVOICE_SIGNING_CERTIFICATE` | Base64-encoded Developer ID `.p12` | Exported from Keychain Access |
-| `ZENVOICE_SIGNING_CERTIFICATE_PASSWORD` | Password protecting the `.p12` | The password you chose on export |
-| `ZENVOICE_NOTARY_KEY` | Base64-encoded App Store Connect API `.p8` | Downloaded from App Store Connect |
-| `ZENVOICE_NOTARY_KEY_ID` | App Store Connect API key ID | App Store Connect API Keys page |
-| `ZENVOICE_NOTARY_ISSUER_ID` | App Store Connect API issuer ID | App Store Connect API Keys page |
+| `BUILDERVOICE_SIGNING_IDENTITY` | Full codesigning identity string | macOS keychain / `security find-identity` |
+| `BUILDERVOICE_SIGNING_CERTIFICATE` | Base64-encoded Developer ID `.p12` | Exported from Keychain Access |
+| `BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD` | Password protecting the `.p12` | The password you chose on export |
+| `BUILDERVOICE_NOTARY_KEY` | Base64-encoded App Store Connect API `.p8` | Downloaded from App Store Connect |
+| `BUILDERVOICE_NOTARY_KEY_ID` | App Store Connect API key ID | App Store Connect API Keys page |
+| `BUILDERVOICE_NOTARY_ISSUER_ID` | App Store Connect API issuer ID | App Store Connect API Keys page |
 
 ---
 
-## `ZENVOICE_SIGNING_IDENTITY`
+## `BUILDERVOICE_SIGNING_IDENTITY`
 
 The full identity string used by `codesign`, exactly as macOS displays it.
 
@@ -49,12 +49,12 @@ Use the full quoted string (without the surrounding quotes) as the secret value.
 ### Upload
 
 ```zsh
-gh secret set ZENVOICE_SIGNING_IDENTITY --body "Developer ID Application: Your Name (TEAM_ID)"
+gh secret set BUILDERVOICE_SIGNING_IDENTITY --body "Developer ID Application: Your Name (TEAM_ID)"
 ```
 
 ---
 
-## `ZENVOICE_SIGNING_CERTIFICATE`
+## `BUILDERVOICE_SIGNING_CERTIFICATE`
 
 A base64-encoded `.p12` file containing your **Developer ID Application** certificate and its private key. The workflow decodes this in the runner and imports it into a temporary keychain.
 
@@ -62,11 +62,11 @@ A base64-encoded `.p12` file containing your **Developer ID Application** certif
 
 1. Open **Keychain Access** and select **My Certificates**.
 2. Select your **Developer ID Application** certificate and its private key together.
-3. Choose **File > Export Items…**, select `.p12`, set a strong password, and save it to a temporary location such as `~/Desktop/BuilderHelm VoiceSigningCert.p12`.
+3. Choose **File > Export Items…**, select `.p12`, set a strong password, and save it to a temporary location such as `~/Desktop/BuilderVoiceSigningCert.p12`.
 4. Base64-encode the file:
 
 ```zsh
-base64 -i ~/Desktop/BuilderHelm VoiceSigningCert.p12 -o ~/Desktop/BuilderHelm VoiceSigningCert.p12.base64
+base64 -i ~/Desktop/BuilderVoiceSigningCert.p12 -o ~/Desktop/BuilderVoiceSigningCert.p12.base64
 ```
 
 The `.base64` file is safe to pipe into `gh secret set`, but treat it as a secret file and delete it after uploading.
@@ -74,12 +74,12 @@ The `.base64` file is safe to pipe into `gh secret set`, but treat it as a secre
 ### Upload
 
 ```zsh
-gh secret set ZENVOICE_SIGNING_CERTIFICATE < ~/Desktop/BuilderHelm VoiceSigningCert.p12.base64
+gh secret set BUILDERVOICE_SIGNING_CERTIFICATE < ~/Desktop/BuilderVoiceSigningCert.p12.base64
 ```
 
 ---
 
-## `ZENVOICE_SIGNING_CERTIFICATE_PASSWORD`
+## `BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD`
 
 The password you entered when exporting the `.p12` from Keychain Access.
 
@@ -88,14 +88,14 @@ The password you entered when exporting the `.p12` from Keychain Access.
 To avoid leaving the password in your shell history, set it from an interactive prompt:
 
 ```zsh
-read -s ZENVOICE_SIGNING_CERTIFICATE_PASSWORD
-gh secret set ZENVOICE_SIGNING_CERTIFICATE_PASSWORD --body "$ZENVOICE_SIGNING_CERTIFICATE_PASSWORD"
-unset ZENVOICE_SIGNING_CERTIFICATE_PASSWORD
+read -s BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD
+gh secret set BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD --body "$BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD"
+unset BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD
 ```
 
 ---
 
-## `ZENVOICE_NOTARY_KEY`
+## `BUILDERVOICE_NOTARY_KEY`
 
 A base64-encoded `.p8` file containing the private key for an App Store Connect API key. The workflow decodes this and passes it to `notarytool`.
 
@@ -114,12 +114,12 @@ base64 -i ~/Downloads/AuthKey_KEYID.p8 -o ~/Downloads/AuthKey_KEYID.p8.base64
 ### Upload
 
 ```zsh
-gh secret set ZENVOICE_NOTARY_KEY < ~/Downloads/AuthKey_KEYID.p8.base64
+gh secret set BUILDERVOICE_NOTARY_KEY < ~/Downloads/AuthKey_KEYID.p8.base64
 ```
 
 ---
 
-## `ZENVOICE_NOTARY_KEY_ID`
+## `BUILDERVOICE_NOTARY_KEY_ID`
 
 The key identifier for the App Store Connect API key used by `notarytool`. It is also the suffix of the downloaded `.p8` filename (`AuthKey_<KEY_ID>.p8`).
 
@@ -132,12 +132,12 @@ Example value:
 ### Upload
 
 ```zsh
-gh secret set ZENVOICE_NOTARY_KEY_ID --body "2X9R4H5X6B"
+gh secret set BUILDERVOICE_NOTARY_KEY_ID --body "2X9R4H5X6B"
 ```
 
 ---
 
-## `ZENVOICE_NOTARY_ISSUER_ID`
+## `BUILDERVOICE_NOTARY_ISSUER_ID`
 
 The issuer ID of your Apple Developer team / App Store Connect account. It is shown at the top of the API Keys page as a UUID.
 
@@ -150,7 +150,7 @@ Example value:
 ### Upload
 
 ```zsh
-gh secret set ZENVOICE_NOTARY_ISSUER_ID --body "12345678-1234-1234-1234-1234567890ab"
+gh secret set BUILDERVOICE_NOTARY_ISSUER_ID --body "12345678-1234-1234-1234-1234567890ab"
 ```
 
 ---
@@ -162,12 +162,12 @@ gh secret set ZENVOICE_NOTARY_ISSUER_ID --body "12345678-1234-1234-1234-12345678
 Set the required environment variables and run it from the repo root:
 
 ```zsh
-export ZENVOICE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAM_ID)"
-export ZENVOICE_SIGNING_CERTIFICATE_PASSWORD="..."
-export ZENVOICE_NOTARY_KEY_ID="..."
-export ZENVOICE_NOTARY_ISSUER_ID="..."
-export ZENVOICE_SIGNING_CERTIFICATE_PATH="/path/to/BuilderHelm VoiceSigningCert.p12.base64"
-export ZENVOICE_NOTARY_KEY_PATH="/path/to/AuthKey_KEYID.p8.base64"
+export BUILDERVOICE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAM_ID)"
+export BUILDERVOICE_SIGNING_CERTIFICATE_PASSWORD="..."
+export BUILDERVOICE_NOTARY_KEY_ID="..."
+export BUILDERVOICE_NOTARY_ISSUER_ID="..."
+export BUILDERVOICE_SIGNING_CERTIFICATE_PATH="/path/to/BuilderVoiceSigningCert.p12.base64"
+export BUILDERVOICE_NOTARY_KEY_PATH="/path/to/AuthKey_KEYID.p8.base64"
 
 ./Scripts/prepare-release-secrets.sh
 ```

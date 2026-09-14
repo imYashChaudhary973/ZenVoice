@@ -248,12 +248,12 @@ physical speech energy. Reduce Motion replaces spatial springs and travel with
 
 ```sh
 swift build
-swift run ZenVoiceCoreChecks
-swift run ZenVoiceStorageChecks
-swift run ZenVoiceLinkChecks
-ZENVOICE_MODEL_PATH=/path/to/model swift run ZenVoiceRuntimeChecks
+swift run BuilderVoiceCoreChecks
+swift run BuilderVoiceStorageChecks
+swift run BuilderVoiceLinkChecks
+BUILDERVOICE_MODEL_PATH=/path/to/model swift run BuilderVoiceRuntimeChecks
 ./Scripts/check-ui-invariants.sh
-ZENVOICE_MODEL_PATH=/path/to/model ./Scripts/check-dictation-e2e.sh
+BUILDERVOICE_MODEL_PATH=/path/to/model ./Scripts/check-dictation-e2e.sh
 ```
 
 The gates cover scaffold ownership, compact width, Liquid Glass availability,

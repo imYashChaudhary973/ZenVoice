@@ -1,7 +1,7 @@
 #!/bin/zsh
-# Deterministic E2E helper for ZenVoice QA.
+# Deterministic E2E helper for BuilderVoice QA.
 # Builds a debug .app, generates a 16 kHz mono fixture, launches the app with
-# ZENVOICE_E2E_AUDIO_FILE override, and prints the QA steps to perform.
+# BUILDERVOICE_E2E_AUDIO_FILE override, and prints the QA steps to perform.
 #
 # Usage: ./Scripts/run-qa-deterministic-e2e.sh /path/to/source.wav
 # If no source is given, creates a short silence fixture.
@@ -11,8 +11,8 @@ set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 REPO_ROOT="${SCRIPT_DIR:h}"
 SOURCE_WAV="${1:-}"
-FIXTURE="/tmp/zenvoice-qa-e2e.wav"
-BUILD_APP="${REPO_ROOT}/build/ZenVoice.app"
+FIXTURE="/tmp/buildervoice-qa-e2e.wav"
+BUILD_APP="${REPO_ROOT}/build/BuilderVoice.app"
 
 echo "Building debug app…"
 (cd "${REPO_ROOT}" && swift build && ./Scripts/build-app.sh)
@@ -32,15 +32,15 @@ if [[ ! -f "${FIXTURE}" ]]; then
 fi
 
 echo ""
-echo "Launching ZenVoice with deterministic audio override…"
-echo "ZENVOICE_E2E_AUDIO_FILE=${FIXTURE}"
+echo "Launching BuilderVoice with deterministic audio override…"
+echo "BUILDERVOICE_E2E_AUDIO_FILE=${FIXTURE}"
 echo ""
 
-# Quit any running ZenVoice first
-osascript -e 'quit app "ZenVoice"' 2>/dev/null || true
+# Quit any running BuilderVoice first
+osascript -e 'quit app "BuilderVoice"' 2>/dev/null || true
 sleep 1
 
-ZENVOICE_E2E_AUDIO_FILE="${FIXTURE}" open "${BUILD_APP}"
+BUILDERVOICE_E2E_AUDIO_FILE="${FIXTURE}" open "${BUILD_APP}"
 
 echo "App launched. Perform these manual steps:"
 echo "1. Complete onboarding if prompted."

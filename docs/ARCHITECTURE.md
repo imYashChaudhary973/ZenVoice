@@ -21,7 +21,7 @@ AppDelegate ──────────────────────�
     │         ▲
     │         └──────── HistoryViewModel ─► HistoryView
     ▼                                      │ microphone levels
-AudioRecorder ──────► local WAV ──────► ZenVoiceRuntime
+AudioRecorder ──────► local WAV ──────► BuilderVoiceRuntime
     │                      ▲
     └─► stable pause ──────┘
                                            │
@@ -60,7 +60,7 @@ The native application target owns macOS-specific behavior:
   pattern analysis.
 - `ShareHighlightCardRenderer` renders a fixed 1200×630 image locally from a
   numeric-only `ShareCardSummary`.
-- `ZenVoiceSettingsView` provides Overview, Models, History, Insights,
+- `BuilderVoiceSettingsView` provides Overview, Models, History, Insights,
   Voice Profile, Shortcuts, and Privacy screens.
 - `OnboardingViewModel` presents an upgrade-safe, reopenable setup sheet.
   `OnboardingPreferences` distinguishes a fresh install from an existing
@@ -81,7 +81,7 @@ The native application target owns macOS-specific behavior:
 - `ZenBarView` renders state and microphone-responsive waveform history.
 - `BrandAssets` loads packaged Zen branding.
 
-### `ZenVoiceCore`
+### `BuilderVoiceCore`
 
 The shared core contains logic that can be checked without launching the full
 application:
@@ -99,12 +99,12 @@ application:
   before refinement. `NextDictationContext` bounds and sanitizes the
   memory-only hint passed to local runtimes.
 - `TextInserter` owns the macOS clipboard and accessibility boundary. Its
-  secure-input policy is deterministic and checked in `ZenVoiceCoreChecks`.
+  secure-input policy is deterministic and checked in `BuilderVoiceCoreChecks`.
 - `LanguageCatalog` exposes the reviewed language codes and product support
   level. `LanguagePreferences` persists the explicit input/output profile.
 - `LocalTransliterator` converts supported native scripts to Latin characters
   after transcription without a network service.
-- `BuilderHelm VoiceConfiguration` discovers the selected verified model and rejects
+- `BuilderVoiceConfiguration` discovers the selected verified model and rejects
   incompatible language/model combinations.
 - `VerifiedModelCatalog` is the signed allowlist for model publisher, source,
   revision, size, format, language capability, licence, and SHA-256.
@@ -123,7 +123,7 @@ analytics store.
 `ModelRecommendationEngine` maps RAM and storage headroom to a default tier,
 while `ModelBenchmarkStore` keeps bounded, content-free local timing samples.
 
-### `ZenVoiceRuntime`
+### `BuilderVoiceRuntime`
 
 - `WhisperTranscriber` is the local speech interface. It calls the official
   pinned `whisper.cpp` XCFramework directly instead of launching a child process.
@@ -141,7 +141,7 @@ The previous Parakeet/CoreML path, which required the closed-source FluidAudio
 runtime, has been removed. BuilderHelm Voice now uses `whisper.cpp` as its only local
 speech engine.
 
-### `ZenVoiceStorage`
+### `BuilderVoiceStorage`
 
 The storage target owns the sensitive local-data boundary:
 
@@ -167,13 +167,13 @@ The storage target owns the sensitive local-data boundary:
   later than 24 hours after capture began; disabling recovery removes retained
   recovery recordings immediately.
 
-### `ZenVoiceCoreChecks`
+### `BuilderVoiceCoreChecks`
 
-`ZenVoiceCoreChecks` provides deterministic checks for transcript cleanup,
+`BuilderVoiceCoreChecks` provides deterministic checks for transcript cleanup,
 quiet-versus-loud waveform behavior, strict hotkey validation, private-mode
 shortcut defaults, and hold-key serialization.
 
-`ZenVoiceStorageChecks` verifies encrypted-at-rest transcript storage, weighted
+`BuilderVoiceStorageChecks` verifies encrypted-at-rest transcript storage, weighted
 WPM and insights, editable categories, application classification,
 encrypted correction rules and usage, recurring phrases,
 interruption recovery, capture-bounded recovery expiry, durable
@@ -181,7 +181,7 @@ Private Dictation suppression, recovery-disable cleanup, cancellation cleanup,
 cryptographic Delete All, ciphertext field binding, recovery-path confinement,
 partial transcript flags, and history preferences.
 
-`ZenVoiceRuntimeChecks` creates a local silent WAV and performs two sequential
+`BuilderVoiceRuntimeChecks` creates a local silent WAV and performs two sequential
 passes through one transcriber. It validates the embedded Whisper C API and the
 persistent Whisper-model lifecycle without microphone or UI interaction.
 
@@ -316,10 +316,10 @@ instead, which may reuse this process's answer for a file whose path, size,
 modification date and identifier all match. That distinction is not cosmetic.
 Size and mtime are not an integrity boundary: a same-size edit inside the
 filesystem's timestamp resolution is indistinguishable from no edit at all,
-which is exactly what `ZenVoiceCoreChecks` demonstrates by rewriting a fixture
+which is exactly what `BuilderVoiceCoreChecks` demonstrates by rewriting a fixture
 in place and demanding a rejection. The worst a stale listing answer can do is
 leave a badge wrong in a list; nothing is loaded on its say-so, because
-`BuilderHelm VoiceConfiguration.discover` calls `verify` and hashes the bytes.
+`BuilderVoiceConfiguration.discover` calls `verify` and hashes the bytes.
 
 ## Current trade-offs
 

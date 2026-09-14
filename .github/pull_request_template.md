@@ -20,9 +20,9 @@ If more than three are checked, consider splitting this PR.
 
 ## Verification
 
-- [ ] `swift run ZenVoiceCoreChecks`
-- [ ] `swift run ZenVoiceStorageChecks`
-- [ ] `swift run ZenVoiceRuntimeChecks` (when a local model is installed)
+- [ ] `swift run BuilderVoiceCoreChecks`
+- [ ] `swift run BuilderVoiceStorageChecks`
+- [ ] `swift run BuilderVoiceRuntimeChecks` (when a local model is installed)
 - [ ] `swift build`
 - [ ] `./Scripts/build-app.sh`
 - [ ] Manual macOS QA completed when applicable

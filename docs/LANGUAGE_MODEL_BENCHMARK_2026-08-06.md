@@ -1,7 +1,7 @@
 # Multi-Engine Speech Benchmark — 2026-08-06
 
 This benchmark compares the newly integrated local speech engines against the
-existing Whisper default. All runs used `Sources/ZenVoiceAccuracyChecks` with the
+existing Whisper default. All runs used `Sources/BuilderVoiceAccuracyChecks` with the
 same evaluation corpus and the same 16 kHz mono float PCM conversion path.
 
 ## Engines under test
@@ -57,7 +57,7 @@ microphone authorization.
 ## Recommendations impact
 
 The results support the fallback order implemented in
-`Sources/ZenVoiceCore/EngineRecommendations.swift`:
+`Sources/BuilderVoiceCore/EngineRecommendations.swift`:
 
 - English profile: Parakeet TDT v3 → TDT v2 → Flash → Nemotron Multilingual →
   Nemotron Ultra Fast → Apple Speech → Whisper.
@@ -84,9 +84,9 @@ Whisper remains the universal fallback and the only option for Hinglish.
 ## Reproduce
 
 ```sh
-swift build -c release --product ZenVoiceAccuracyChecks
+swift build -c release --product BuilderVoiceAccuracyChecks
 
-.build/release/ZenVoiceAccuracyChecks --suite multi-engine
+.build/release/BuilderVoiceAccuracyChecks --suite multi-engine
 ```
 
 The harness discovers installed GGUF and ONNX files in

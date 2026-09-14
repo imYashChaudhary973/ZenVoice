@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-# Bumps the ZenVoice marketing version in the places a release needs it.
+# Bumps the BuilderVoice marketing version in the places a release needs it.
 # Usage:
 #   ./Scripts/bump-version.sh 0.3.0
 

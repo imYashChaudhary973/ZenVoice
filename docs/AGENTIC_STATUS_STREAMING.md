@@ -4,14 +4,14 @@
 > [Agentic Command Mode v2](AGENTIC_COMMAND_MODE.md). One event vocabulary
 > serves the Mac HUD in v2 and a future iPhone companion unchanged; the iPhone
 > would be a consumer of the same envelope, not a second schema. Code:
-> `GoalStatusEvent` in `Sources/ZenVoiceCore/AgenticExecution.swift`, emitted by
+> `GoalStatusEvent` in `Sources/BuilderVoiceCore/AgenticExecution.swift`, emitted by
 > `GoalOrchestrator` and rendered by the ZenBar status row. Messages are
 > redacted and the per-goal log is capped at 500 events.
 
 ## 1. Envelope
 
 Every event is a single JSON object (and the matching `Codable` struct in
-`ZenVoiceCore`). Events are **append-only per goal** and **totally ordered**
+`BuilderVoiceCore`). Events are **append-only per goal** and **totally ordered**
 by `sequence`.
 
 ```json

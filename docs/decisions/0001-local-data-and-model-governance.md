@@ -5,7 +5,7 @@
 
 ## Context
 
-ZenVoice is expanding from ephemeral local dictation into recoverable history,
+BuilderVoice is expanding from ephemeral local dictation into recoverable history,
 downloadable speech models, and local usage insights. Dictation text can contain
 private messages, work material, documents, and prompts. Local-first operation
 reduces network exposure but does not remove storage, licensing, or product
@@ -15,7 +15,7 @@ honesty risks.
 
 ### Local history
 
-- ZenVoice asks for an explicit one-time choice before saving transcript
+- BuilderVoice asks for an explicit one-time choice before saving transcript
   history.
 - Transcript contents are encrypted using CryptoKit with a key protected by the
   user's macOS Keychain.
@@ -30,20 +30,20 @@ honesty risks.
 
 ### Application context
 
-- ZenVoice may store the frontmost application's bundle identifier and display
+- BuilderVoice may store the frontmost application's bundle identifier and display
   name at dictation start.
-- ZenVoice does not collect window titles, browser URLs, surrounding text,
+- BuilderVoice does not collect window titles, browser URLs, surrounding text,
   document contents, recipients, or geographic location.
 - Work, personal, document, message, email, AI, and other categories remain
   local and user-correctable.
 
 ### Voice profile
 
-- A ZenVoice voice profile is a local usage profile, not a biometric voiceprint.
-- ZenVoice does not identify or authenticate people from their voice.
-- “Corrected words” includes only changes made by ZenVoice's documented
-  correction pipeline or changes the user explicitly saves inside ZenVoice.
-- ZenVoice does not monitor edits performed later inside another application.
+- A BuilderVoice voice profile is a local usage profile, not a biometric voiceprint.
+- BuilderVoice does not identify or authenticate people from their voice.
+- “Corrected words” includes only changes made by BuilderVoice's documented
+  correction pipeline or changes the user explicitly saves inside BuilderVoice.
+- BuilderVoice does not monitor edits performed later inside another application.
 
 ### Metric definitions
 
@@ -63,8 +63,8 @@ honesty risks.
   official `whisper.cpp` conversions.
 - Every entry records publisher, source, pinned revision, SHA-256, file size,
   format, language coverage, licence, attribution, and compatibility.
-- ZenVoice downloads model weights only from approved HTTPS sources.
-- ZenVoice never executes repository scripts or arbitrary code from model
+- BuilderVoice downloads model weights only from approved HTTPS sources.
+- BuilderVoice never executes repository scripts or arbitrary code from model
   downloads.
 - Fast, Balanced, and High Accuracy are performance tiers. English and
   Multilingual are separate language capabilities.
@@ -75,7 +75,7 @@ honesty risks.
 
 - Share cards are rendered locally.
 - Transcript text and application names are excluded by default.
-- ZenVoice never uploads or publishes a highlight automatically.
+- BuilderVoice never uploads or publishes a highlight automatically.
 - The user previews and initiates every export or share action.
 
 ## Consequences

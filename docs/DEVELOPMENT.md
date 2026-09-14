@@ -15,7 +15,7 @@ If `xcode-select -p` points at `/Library/Developer/CommandLineTools`, the
 SwiftUI macro plugin is missing and `swift build` fails on valid code with
 dozens of misleading errors — `cannot find '$someState' in scope` and
 `cannot assign to property: 'self' is immutable`, mostly in
-`ZenVoiceSettingsView.swift`. The one real error is buried among them:
+`BuilderVoiceSettingsView.swift`. The one real error is buried among them:
 
 ```
 external macro implementation type 'SwiftUIMacros.StateMacro' could not be
@@ -38,11 +38,11 @@ BuilderHelm Voice normally resolves the selected model from its verified catalog
 `whisper.cpp` GGML files. For development overrides, BuilderHelm Voice searches for:
 
 1. the model selected in BuilderHelm Voice's verified catalogue;
-2. `ZENVOICE_MODEL_PATH` as a developer override; then
+2. `BUILDERVOICE_MODEL_PATH` as a developer override; then
    `~/Library/Application Support/BuilderHelm Voice/Models/ggml-base.en.bin`.
 
 The only runtime dependency is the checksum-pinned `whisper.cpp` v1.9.1
-XCFramework declared in `Package.swift`. `ZENVOICE_MODEL_PATH` is most useful
+XCFramework declared in `Package.swift`. `BUILDERVOICE_MODEL_PATH` is most useful
 when launching a `whisper.cpp` development model directly from a configured
 shell. The verified catalogue is recommended for the packaged app.
 
@@ -64,17 +64,17 @@ The script:
 
 1. produces a release Swift build;
 2. generates the macOS icon from the source Zen logo;
-3. assembles `build/ZenVoice.app`;
+3. assembles `build/BuilderVoice.app`;
 4. embeds and signs the pinned `whisper.framework`;
 5. embeds the required Hardened Runtime audio-input entitlement;
 6. signs with the configured identity or the first available Apple Development
    identity.
 
-Set `ZENVOICE_SIGNING_IDENTITY` to a certificate hash or full identity name to
+Set `BUILDERVOICE_SIGNING_IDENTITY` to a certificate hash or full identity name to
 choose a specific signing identity:
 
 ```bash
-ZENVOICE_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \
+BUILDERVOICE_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" \
   ./Scripts/build-app.sh
 ```
 
@@ -92,7 +92,7 @@ signing requirement. Ad-hoc signing ties that requirement to one specific build
 hash, so a rebuilt executable looks like a new app to macOS.
 
 Apple Development signing gives local builds a stable requirement based on the
-Apple-issued signer, team, and `com.zenvoice.app` bundle identifier.
+Apple-issued signer, team, and `com.builderhelm.voice` bundle identifier.
 Because the build enables Hardened Runtime, the signature also embeds
 `com.apple.security.device.audio-input` so AVFoundation may request microphone
 access.
@@ -100,7 +100,7 @@ After switching from an ad-hoc build:
 
 1. Remove the old BuilderHelm Voice entry from **System Settings → Privacy & Security →
    Accessibility** if it remains listed.
-2. Launch the newly built `build/ZenVoice.app`.
+2. Launch the newly built `build/BuilderVoice.app`.
 3. Start and finish one dictation.
 4. Approve Microphone and Accessibility when macOS asks.
 
@@ -112,12 +112,12 @@ can require approval again.
 ## Automated checks
 
 ```bash
-swift run ZenVoiceCoreChecks
-swift run ZenVoiceStorageChecks
-swift run ZenVoiceRuntimeChecks
+swift run BuilderVoiceCoreChecks
+swift run BuilderVoiceStorageChecks
+swift run BuilderVoiceRuntimeChecks
 swift build
 ./Scripts/build-app.sh
-codesign --verify --deep --strict build/ZenVoice.app
+codesign --verify --deep --strict build/BuilderVoice.app
 ```
 
 The checks cover:
@@ -147,10 +147,10 @@ The checks cover:
   installed, or the model selected in the app's defaults is invisible to a
   CLI process (`RuntimeIdentity` deliberately keeps bare executables out of
   the production defaults suite). Point a run at a specific model with
-  `ZENVOICE_MODEL_PATH`, and set `ZENVOICE_RUNTIME_REQUIRED=1` — as CI does —
+  `BUILDERVOICE_MODEL_PATH`, and set `BUILDERVOICE_RUNTIME_REQUIRED=1` — as CI does —
   to make an unresolved model fail the run instead of skipping it.
-  `ZenVoiceAccuracyChecks` honours the same contract through
-  `ZENVOICE_ACCURACY_REQUIRED=1`. Real-speech decoding in CI runs in the
+  `BuilderVoiceAccuracyChecks` honours the same contract through
+  `BUILDERVOICE_ACCURACY_REQUIRED=1`. Real-speech decoding in CI runs in the
   scheduled `speech-gate` workflow, not on every pull request.
 - privacy-safe numeric share-card payload validation.
 - Instant Refine fillers, repeated words, punctuation-marked restarts, agent
@@ -180,7 +180,7 @@ Use `phys_footprint`, not `ps`'s RSS — RSS counts shared and file-backed pages
 and reads far higher than what the app actually costs:
 
 ```sh
-PID=$(pgrep -f "ZenVoice.app/Contents/MacOS/BuilderHelm Voice" | head -1)
+PID=$(pgrep -f "BuilderVoice.app/Contents/MacOS/BuilderHelm Voice" | head -1)
 footprint -p "$PID" | grep phys_footprint   # steady and peak
 footprint -p "$PID" | head -30              # by category
 heap "$PID" | head -30                      # live allocations, by class
@@ -206,7 +206,7 @@ transcription, refinement, history, and insertion flow. This avoids the
 unreliable speaker-to-microphone loop used by acoustic tests.
 
 ```bash
-ZENVOICE_E2E_AUDIO_FILE=/absolute/path/to/fixture.wav \
+BUILDERVOICE_E2E_AUDIO_FILE=/absolute/path/to/fixture.wav \
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer \
 swift run BuilderHelm Voice
 ```
@@ -218,11 +218,11 @@ path, and limited to 100 MB and 10 minutes. For example, normalize an existing
 recording before launch:
 
 ```bash
-afconvert input.wav /tmp/zenvoice-e2e.wav -f WAVE -d LEF32@16000 -c 1
+afconvert input.wav /tmp/buildervoice-e2e.wav -f WAVE -d LEF32@16000 -c 1
 ```
 
 The override is compiled only into Debug builds. Release and packaged builds
-ignore `ZENVOICE_E2E_AUDIO_FILE` and always use the selected microphone. Test
+ignore `BUILDERVOICE_E2E_AUDIO_FILE` and always use the selected microphone. Test
 in Private Dictation when the transcript should not be retained, and use only
 non-sensitive fixture speech because normal history settings still apply.
 
@@ -253,7 +253,7 @@ identify the exact exported artifact and commit, and record every result without
 including private transcript text. Run the scenarios against that artifact;
 development builds can use the same list without creating a release record.
 
-1. For development QA, launch `build/ZenVoice.app`. For release QA, extract the
+1. For development QA, launch `build/BuilderVoice.app`. For release QA, extract the
    recorded `BuilderHelm Voice-distribution.zip` and launch that exact app.
 2. Confirm the settings window opens and the Zen logo appears in the menu bar
    and ZenBar.

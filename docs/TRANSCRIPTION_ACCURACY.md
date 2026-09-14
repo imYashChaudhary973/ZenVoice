@@ -24,7 +24,7 @@ built from it, neither committed to the repository:
   which is what a dictation actually looks like and what makes live
   segmentation fire.
 
-Point `ZENVOICE_ACCURACY_CORPUS` at either directory. The build steps are in
+Point `BUILDERVOICE_ACCURACY_CORPUS` at either directory. The build steps are in
 `Scripts/` — audio stays out of git, since it is 15 MB of someone else's
 recordings and the harness only needs it locally.
 

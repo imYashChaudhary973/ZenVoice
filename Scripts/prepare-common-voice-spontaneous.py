@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Prepare Mozilla Common Voice Spontaneous English for ZenVoice experiments.
+"""Prepare Mozilla Common Voice Spontaneous English for BuilderVoice experiments.
 
 The archive must be downloaded by a person who accepted Mozilla Data
 Collective's terms. This tool never downloads data or accepts terms. It binds a
 human license review to the archive SHA-256, extracts the untrusted tarball
 safely, retains only validated train/dev/test rows without QA flags, converts
 MP3 audio to 16 kHz mono PCM WAV, verifies speaker-disjoint splits, and writes
-checksum-locked manifests under ZenVoice's gitignored Datasets directory.
+checksum-locked manifests under BuilderVoice's gitignored Datasets directory.
 
 Common Voice spontaneous speech is a useful public training supplement. It is
-not labelled as representative ZenVoice dictation and does not replace the
+not labelled as representative BuilderVoice dictation and does not replace the
 frozen product-safety set for numbers, negations, punctuation, and coding terms.
 """
 
@@ -249,7 +249,7 @@ def convert_mp3_to_wav(source: Path, destination: Path) -> None:
         from scipy.signal import resample_poly
     except ImportError as error:
         raise ValueError(
-            "audio conversion requires ZenVoice's training virtual environment"
+            "audio conversion requires BuilderVoice's training virtual environment"
         ) from error
     samples, sample_rate = sf.read(
         source,
@@ -522,7 +522,7 @@ def prepare(args: argparse.Namespace, repo_root: Path) -> None:
             "dataset_id": DATASET_ID,
             "dataset_revision": DATASET_REVISION,
             "dataset_kind": "public-spontaneous-speech-supplement",
-            "representative_zenvoice_dictation": False,
+            "representative_buildervoice_dictation": False,
             "speaker_disjoint": True,
             "coverage": coverage,
             "preparation": preparation,

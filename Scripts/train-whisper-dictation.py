@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Fine-tune Whisper Small English for ZenVoice with a local LoRA adapter.
+"""Fine-tune Whisper Small English for BuilderVoice with a local LoRA adapter.
 
 This script never downloads a model implicitly and never uploads checkpoints.
 Pass a revision-pinned local Hugging Face model directory plus manifests created
-by the ZenVoice data tools. A locked-dataset run verifies either consented
+by the BuilderVoice data tools. A locked-dataset run verifies either consented
 dictation or an approved public spontaneous-speech corpus, mixes that target
 speech with explicitly supplied licensed general speech, uses conservative
 defaults, and preserves candidate adapters for later composite selection. It
@@ -159,7 +159,7 @@ def verify_locked_dataset(directory: Path) -> dict[str, Any]:
             raise ValueError(
                 "locked dataset lacks passing representativeness evidence"
             )
-        dataset_kind = "consented-zenvoice-dictation"
+        dataset_kind = "consented-buildervoice-dictation"
         representative_dictation = True
     else:
         coverage = summary.get("coverage") if isinstance(summary, dict) else None
@@ -169,7 +169,7 @@ def verify_locked_dataset(directory: Path) -> dict[str, Any]:
             or coverage.get("failures") != []
             or summary.get("dataset_kind")
             != "public-spontaneous-speech-supplement"
-            or summary.get("representative_zenvoice_dictation") is not False
+            or summary.get("representative_buildervoice_dictation") is not False
         ):
             raise ValueError("locked public corpus lacks passing coverage evidence")
         provenance_path = directory / "provenance.json"
@@ -216,7 +216,7 @@ def verify_locked_dataset(directory: Path) -> dict[str, Any]:
     lock["verified_lock_name"] = lock_name
     lock["frozen_test_sha256"] = expected_test_hash
     lock["dataset_kind"] = dataset_kind
-    lock["representative_zenvoice_dictation"] = representative_dictation
+    lock["representative_buildervoice_dictation"] = representative_dictation
     return lock
 
 
@@ -600,8 +600,8 @@ def main() -> int:
                 if frozen_lock is not None
                 else None
             ),
-            "representative_zenvoice_dictation": (
-                frozen_lock.get("representative_zenvoice_dictation")
+            "representative_buildervoice_dictation": (
+                frozen_lock.get("representative_buildervoice_dictation")
                 if frozen_lock is not None
                 else None
             ),
@@ -788,8 +788,8 @@ def main() -> int:
                 ),
                 "frozen_test_sha256": frozen_lock["frozen_test_sha256"],
                 "dataset_kind": frozen_lock["dataset_kind"],
-                "representative_zenvoice_dictation": frozen_lock[
-                    "representative_zenvoice_dictation"
+                "representative_buildervoice_dictation": frozen_lock[
+                    "representative_buildervoice_dictation"
                 ],
             }
             if locked_dataset is not None and frozen_lock is not None

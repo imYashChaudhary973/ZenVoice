@@ -1,12 +1,12 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Stubs a Homebrew cask file for ZenVoice.
+# Stubs a Homebrew cask file for BuilderVoice.
 # In a real release flow this script computes the zip SHA-256 and optionally
 # opens a PR against a dedicated homebrew-tap repository.
 #
 # Usage:
-#   ./Scripts/generate-homebrew-cask.rb --version 0.3.0 --zip build/ZenVoice-distribution.zip
+#   ./Scripts/generate-homebrew-cask.rb --version 0.3.0 --zip build/BuilderVoice-distribution.zip
 
 require 'digest'
 require 'fileutils'
@@ -28,31 +28,31 @@ raise "DMG not found: #{dmg_path}" unless File.exist?(dmg_path)
 
 sha256 = Digest::SHA256.file(dmg_path).hexdigest
 
-repo_owner = ENV.fetch('ZENVOICE_HOMEBREW_TAP_OWNER', 'imYashChaudhary973')
+repo_owner = ENV.fetch('BUILDERVOICE_HOMEBREW_TAP_OWNER', 'imYashChaudhary973')
 
 cask = <<~CASK
-  cask "zenvoice" do
+  cask "builderhelm-voice" do
     version "#{options[:version]}"
     sha256 "#{sha256}"
 
-    url "https://github.com/#{repo_owner}/ZenVoice/releases/download/v#{options[:version]}/ZenVoice.dmg"
-    name "ZenVoice"
+    url "https://github.com/#{repo_owner}/BuilderHelm-Voice/releases/download/v#{options[:version]}/BuilderVoice.dmg"
+    name "BuilderHelm Voice"
     desc "Privacy-first macOS speech capture, transcription, and lecture summaries"
-    homepage "https://github.com/#{repo_owner}/ZenVoice"
+    homepage "https://github.com/#{repo_owner}/BuilderHelm-Voice"
 
     auto_updates true
 
-    app "ZenVoice.app"
+    app "BuilderVoice.app"
 
     zap trash: [
-      "~/Library/Application Support/ZenVoice",
-      "~/Library/Caches/ZenVoice",
-      "~/Library/Preferences/com.zenvoice.app.plist",
+      "~/Library/Application Support/com.builderhelm.voice",
+      "~/Library/Caches/com.builderhelm.voice",
+      "~/Library/Preferences/com.builderhelm.voice.plist",
     ]
   end
 CASK
 
-output_path = options[:output] ? File.expand_path(options[:output]) : "Casks/zenvoice.rb"
+output_path = options[:output] ? File.expand_path(options[:output]) : "Casks/builderhelm-voice.rb"
 FileUtils.mkdir_p(File.dirname(output_path))
 File.write(output_path, cask)
 

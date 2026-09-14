@@ -1,0 +1,281 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import SwiftUI
+import BuilderVoiceCore
+import BuilderVoiceStorage
+
+private struct ZenFAQ: Identifiable {
+    let id: Int
+    let question: String
+    let answer: String
+    let tags: String
+}
+
+struct HelpScreen: View {
+    @ObservedObject var viewModel: SettingsViewModel
+    let openShortcuts: () -> Void
+
+    @State private var searchText = ""
+    @State private var expandedFAQs: Set<Int> = []
+
+    private static let faqs: [ZenFAQ] = [
+        ZenFAQ(
+            id: 1,
+            question: "Does my voice ever leave this Mac?",
+            answer:
+                "By default, no. Local engines (Parakeet, Whisper) record, transcribe, and store everything on this Mac. If you tap Use on a cloud engine in Models (OpenAI, Gemini, Scribe v2, or Grok), that clip is uploaded after you stop and billed to your key. Cloud formatting still sends text only, never audio.",
+            tags: "privacy cloud offline network openai gemini scribe elevenlabs grok"
+        ),
+        ZenFAQ(
+            id: 2,
+            question: "How do I start dictating?",
+            answer:
+                "Place the cursor in any text field and press your dictation shortcut. Speak while ZenBar shows the waveform, then press the shortcut again — the text is inserted where your cursor is. You can also enable hold-to-dictate in Shortcuts.",
+            tags: "start dictate shortcut begin how"
+        ),
+        ZenFAQ(
+            id: 3,
+            question: "Why does BuilderHelm Voice need Accessibility permission?",
+            answer:
+                "macOS requires it to type the finished text into the active app. Without it, BuilderHelm Voice still works — the transcript is copied to your clipboard instead, and you paste manually.",
+            tags: "accessibility permission paste insert"
+        ),
+        ZenFAQ(
+            id: 5,
+            question: "What happens if transcription fails mid-sentence?",
+            answer:
+                "Anything usable lands in the Recovery Inbox (History → Recovery) with Copy, Retry, and Delete actions. Temporary audio is deleted after every attempt either way.",
+            tags: "fail crash recovery partial lost"
+        ),
+        ZenFAQ(
+            id: 6,
+            question: "How does Hinglish mode work?",
+            answer:
+                "Hinglish Apex is retired for now. The Hinglish profile uses Whisper Large V3 Turbo until a replacement ships.",
+            tags: "hinglish hindi language apex latin"
+        ),
+        ZenFAQ(
+            id: 7,
+            question: "What does Formatting actually change?",
+            answer:
+                "Off keeps the raw transcript. Clean removes fillers, repeated words, and spoken restarts — never meaning. Smart adds capitalisation, number formatting, and spacing. Cloud sends the transcript to a provider you choose, with your own key, for enhancement.",
+            tags: "refine clean smart cloud rewrite grammar"
+        ),
+        ZenFAQ(
+            id: 8,
+            question: "How do I use cloud speech for dictation?",
+            answer:
+                "Open Models, paste your OpenAI, Google AI Studio, ElevenLabs, or xAI key under Cloud speech, then tap Use on that engine. Speak as usual. After you stop, the wav is uploaded once and the text is inserted. If the API fails, BuilderHelm Voice decodes the same clip locally.",
+            tags: "openai gemini scribe elevenlabs grok cloud transcribe key"
+        ),
+        ZenFAQ(
+            id: 9,
+            question: "Which model should I download?",
+            answer:
+                "Open Models — BuilderHelm Voice measures this Mac and marks a recommendation. Fast favors latency, Balanced is the best accuracy per second for most machines, High Accuracy is the multilingual pick.",
+            tags: "model download recommend fast balanced accuracy"
+        ),
+        ZenFAQ(
+            id: 10,
+            question: "Can I correct a word it keeps getting wrong?",
+            answer:
+                "Yes. Voice Profile → correction rules: add \"what I said → what I meant\". Rules are encrypted and deletable one by one, independent of History.",
+            tags: "correction wrong word fix rules dictionary"
+        ),
+        ZenFAQ(
+            id: 11,
+            question: "How do I delete everything?",
+            answer:
+                "Privacy shows a live inventory of everything stored — encrypted transcripts, recovery audio, correction rules, downloaded models — each with its own delete control. There is no hidden data.",
+            tags: "delete erase remove data reset"
+        )
+    ]
+
+    private var filteredFAQs: [ZenFAQ] {
+        let query = searchText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !query.isEmpty else { return Self.faqs }
+        return Self.faqs.filter {
+            $0.question.lowercased().contains(query)
+                || $0.answer.lowercased().contains(query)
+                || $0.tags.contains(query)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+            cheatSheet
+            faqCard
+            aboutCard
+        }
+    }
+
+
+
+    private var cheatSheet: some View {
+        ZenPanel(padding: ZenDesign.Spacing.lg) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Shortcut cheat-sheet")
+                    .font(ZenDesign.Typography.sectionTitle)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .padding(.bottom, ZenDesign.Spacing.xs)
+
+                cheatRow(
+                    "Start / stop dictation",
+                    viewModel.currentShortcut.displayName
+                )
+                Divider().overlay(ZenDesign.Semantic.border)
+                cheatRow(
+                    "Paste latest dictation",
+                    viewModel.pasteLastShortcut.displayName
+                )
+                Divider().overlay(ZenDesign.Semantic.border)
+
+                HStack {
+                    Text("Change any of these")
+                        .font(ZenDesign.Typography.body)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    Spacer()
+                    Button("Open Shortcuts") {
+                        openShortcuts()
+                    }
+                    .buttonStyle(ZenPressButtonStyle())
+                    .font(ZenDesign.Typography.captionStrong)
+                    .foregroundStyle(ZenDesign.Semantic.accent)
+                }
+                .frame(minHeight: 40)
+            }
+        }
+    }
+
+    private func cheatRow(_ title: String, _ combo: String) -> some View {
+        HStack {
+            Text(title)
+                .font(ZenDesign.Typography.body)
+                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            Spacer()
+            ZenKbdGroup(combo: combo)
+        }
+        .frame(minHeight: 40)
+    }
+
+    private var faqCard: some View {
+        ZenPanel(padding: ZenDesign.Spacing.lg) {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                HStack {
+                    Text("Frequently asked")
+                        .font(ZenDesign.Typography.sectionTitle)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Spacer()
+                    Text("\(filteredFAQs.count) of \(Self.faqs.count)")
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+
+                ZenSearchField(
+                    placeholder:
+                        "Search answers — try “private”, “model”, “hinglish”…",
+                    text: $searchText
+                )
+
+                if filteredFAQs.isEmpty {
+                    VStack(spacing: ZenDesign.Spacing.xxs) {
+                        Text("No answer found")
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text("Try a different word — or read the documentation in the repository.")
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, ZenDesign.Spacing.xl)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(filteredFAQs) { faq in
+                            if faq.id != filteredFAQs.first?.id {
+                                Divider().overlay(ZenDesign.Semantic.border)
+                            }
+                            faqRow(faq)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func faqRow(_ faq: ZenFAQ) -> some View {
+        let isExpanded = expandedFAQs.contains(faq.id)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                if isExpanded {
+                    expandedFAQs.remove(faq.id)
+                } else {
+                    expandedFAQs.insert(faq.id)
+                }
+            } label: {
+                HStack {
+                    Text(faq.question)
+                        .font(ZenDesign.Typography.bodyStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        .multilineTextAlignment(.leading)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(ZenDesign.Typography.badge)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+                .frame(minHeight: 40)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(ZenPressButtonStyle())
+            .accessibilityLabel(faq.question)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+
+            if isExpanded {
+                Text(faq.answer)
+                    .font(ZenDesign.Typography.body)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, ZenDesign.Spacing.sm)
+                    .frame(maxWidth: 560, alignment: .leading)
+            }
+        }
+    }
+
+    private var aboutCard: some View {
+        ZenPanel(padding: ZenDesign.Spacing.lg) {
+            HStack(spacing: ZenDesign.Spacing.sm) {
+                ZenBrandMark(size: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("BuilderHelm Voice")
+                        .font(ZenDesign.Typography.bodyStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    Text(aboutDetail)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                }
+                Spacer()
+            }
+        }
+    }
+
+    private var aboutDetail: String {
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String
+        return "Version \(version ?? "dev") · macOS 14+ · Apple Silicon · local-first"
+    }
+}

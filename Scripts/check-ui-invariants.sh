@@ -12,7 +12,7 @@
 set -u
 
 project_dir=${0:A:h:h}
-screens="$project_dir/Sources/ZenVoice/Screens"
+screens="$project_dir/Sources/BuilderVoice/Screens"
 failures=0
 
 pass() { echo "PASS  $1" }
@@ -52,9 +52,9 @@ for screen in $containers; do
 done
 
 # 3. The sidebar width is a token, not a literal repeated in the title bar.
-settings_view="$project_dir/Sources/ZenVoice/ZenVoiceSettingsView.swift"
+settings_view="$project_dir/Sources/BuilderVoice/BuilderVoiceSettingsView.swift"
 if ! grep -q "ideal: ZenDesign.Layout.sidebarWidth" "$settings_view"; then
-    fail "ZenVoiceSettingsView does not use the shared sidebar-width token"
+    fail "BuilderVoiceSettingsView does not use the shared sidebar-width token"
 else
     pass "sidebar width comes from ZenDesign.Layout"
 fi
@@ -74,7 +74,7 @@ else
     pass "settings shell uses native split navigation and toolbar chrome"
 fi
 
-chrome="$project_dir/Sources/ZenVoice/ZenChrome.swift"
+chrome="$project_dir/Sources/BuilderVoice/ZenChrome.swift"
 if ! grep -q "accessibilityReduceTransparency" "$chrome"; then
     fail "sidebar material has no Reduce Transparency fallback"
 else
@@ -94,8 +94,8 @@ else
     pass "settings window supports compact widths"
 fi
 
-model_manager="$project_dir/Sources/ZenVoice/ModelManagerViewModel.swift"
-overview="$project_dir/Sources/ZenVoice/Screens/OverviewScreen.swift"
+model_manager="$project_dir/Sources/BuilderVoice/ModelManagerViewModel.swift"
+overview="$project_dir/Sources/BuilderVoice/Screens/OverviewScreen.swift"
 if ! grep -q "selectEngine(availability.engine.id)" "$screens/ModelsScreen.swift" \
     || ! grep -q "EngineIdentifiers.whisper" "$model_manager"; then
     fail "the Models picker no longer selects an engine"
@@ -105,7 +105,7 @@ else
     pass "model selection and displayed engine share one source of truth"
 fi
 
-components="$project_dir/Sources/ZenVoice/ZenV2Components.swift"
+components="$project_dir/Sources/BuilderVoice/ZenV2Components.swift"
 if ! grep -q "struct ZenTabStrip" "$components" \
     || ! grep -q "matchedGeometryEffect" "$components"; then
     fail "subsection navigation does not use the shared sliding toggle"
@@ -119,8 +119,8 @@ else
     pass "settings pages fill the available window width"
 fi
 
-overlay_kind="$project_dir/Sources/ZenVoice/Overlay/OverlayKind.swift"
-overlay_panel="$project_dir/Sources/ZenVoice/Overlay/OverlayPanelController.swift"
+overlay_kind="$project_dir/Sources/BuilderVoice/Overlay/OverlayKind.swift"
+overlay_panel="$project_dir/Sources/BuilderVoice/Overlay/OverlayPanelController.swift"
 if ! grep -q "size(fitting" "$overlay_kind" \
     || ! grep -q "kind.size(fitting" "$overlay_panel"; then
     fail "dictation overlays do not adapt to the active display"
@@ -182,9 +182,9 @@ fi
 #    Comment lines are stripped first: the file explains *why* it does not call
 #    NSApp.activate, and matching that prose failed the check the prose exists
 #    to document.
-preview="$project_dir/Sources/ZenVoice/CloudAIPreviewWindowController.swift"
+preview="$project_dir/Sources/BuilderVoice/CloudAIPreviewWindowController.swift"
 if grep -v '^\s*//' "$preview" | grep -q "NSApp.activate"; then
-    fail "the cloud preview activates ZenVoice and will steal focus from the target app"
+    fail "the cloud preview activates BuilderVoice and will steal focus from the target app"
 else
     pass "the cloud preview does not steal focus"
 fi
@@ -195,14 +195,14 @@ else
 fi
 
 # 5. Cloud enhancement must be able to apply without prompting.
-if ! grep -q "autoApply" "$project_dir/Sources/ZenVoiceCore/CloudAIEnhancement.swift"; then
+if ! grep -q "autoApply" "$project_dir/Sources/BuilderVoiceCore/CloudAIEnhancement.swift"; then
     fail "CloudAIConfiguration has no autoApply preference"
 else
     pass "cloud enhancement can apply without re-asking"
 fi
 
 # 6. Permission state must distinguish "not asked" from "denied".
-settings_vm="$project_dir/Sources/ZenVoice/SettingsViewModel.swift"
+settings_vm="$project_dir/Sources/BuilderVoice/SettingsViewModel.swift"
 if ! grep -q "case notRequested" "$settings_vm" || ! grep -q "case denied" "$settings_vm"; then
     fail "PermissionStatus collapses 'not asked yet' and 'denied' into one state"
 else
@@ -217,7 +217,7 @@ fi
 # Permission polling runs once a second while the settings window is visible.
 # Model discovery performs a full SHA-256 verification, so calling it here
 # blocks the main actor for longer than the timer interval on large models.
-if grep -q "ZenVoiceConfiguration\.discover" "$settings_vm"; then
+if grep -q "BuilderVoiceConfiguration\.discover" "$settings_vm"; then
     fail "permission status polling performs full model discovery"
 else
     pass "permission polling performs no model verification"
@@ -237,7 +237,7 @@ fixed_rows=(
     "Screens/VoiceProfileScreen.swift:correctionEntryFields"
 )
 for entry in $fixed_rows; do
-    file="$project_dir/Sources/ZenVoice/${entry%%:*}"
+    file="$project_dir/Sources/BuilderVoice/${entry%%:*}"
     label="${entry##*:}"
     if ! grep -q "ViewThatFits" "$file"; then
         fail "${entry%%:*} has an unshrinkable control row ($label) with no ViewThatFits fallback"
@@ -247,7 +247,7 @@ for entry in $fixed_rows; do
 done
 
 # 6c. The Home two-column grid must collapse rather than overflow.
-overview="$project_dir/Sources/ZenVoice/Screens/OverviewScreen.swift"
+overview="$project_dir/Sources/BuilderVoice/Screens/OverviewScreen.swift"
 if grep -q "minWidth: 300, maxWidth: .infinity" "$overview"; then
     fail "OverviewScreen pins a minimum column width; a minimum is a request, not a constraint — use ViewThatFits"
 else
@@ -257,7 +257,7 @@ fi
 # 7. No UI type below the 11pt supporting-text floor. The share card is an
 #    exported image with its own canvas scale, not window chrome.
 offenders=$(grep -rn "size: 9[,.)]\|size: 10[,.)]\|size: 10\.5" \
-    "$project_dir/Sources/ZenVoice" --include="*.swift" \
+    "$project_dir/Sources/BuilderVoice" --include="*.swift" \
     | grep -v "ShareHighlightCard.swift" || true)
 if [[ -n "$offenders" ]]; then
     fail "type below the 11pt floor:\n$offenders"

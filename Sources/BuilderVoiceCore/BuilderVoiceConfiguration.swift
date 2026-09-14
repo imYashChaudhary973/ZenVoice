@@ -1,0 +1,201 @@
+// Copyright 2026 Yash Chaudhary
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import Foundation
+
+public struct BuilderVoiceConfiguration {
+    public let modelURL: URL
+    public let languageProfile: LanguageProfile
+
+    public init(
+        modelURL: URL,
+        languageProfile: LanguageProfile = .english
+    ) {
+        self.modelURL = modelURL
+        self.languageProfile = languageProfile
+    }
+
+    public var language: String {
+        languageProfile.whisperLanguageArgument(for: modelLanguageCapability)
+    }
+
+    public var shouldTranslateToEnglish: Bool {
+        languageProfile.shouldTranslateToEnglish
+    }
+
+    public var shouldTransliterateToLatin: Bool {
+        languageProfile.shouldTransliterateToLatin
+    }
+
+    public var modelID: String {
+        VerifiedModelCatalog.model(filename: modelURL.lastPathComponent)?.id
+            ?? modelURL.deletingPathExtension().lastPathComponent
+    }
+
+    /// Size of the selected model on disk, preferring the catalogue's reviewed
+    /// figure and falling back to the file itself for a legacy or overridden
+    /// model.
+    public var modelFileSizeBytes: Int64 {
+        if let model = VerifiedModelCatalog.model(
+            filename: modelURL.lastPathComponent
+        ) {
+            return model.fileSizeBytes
+        }
+        let attributes = try? FileManager.default.attributesOfItem(
+            atPath: modelURL.path(percentEncoded: false)
+        )
+        return (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    /// Smaller models are uncertain enough that exploring alternatives finds a
+    /// better transcript; larger ones are not. See ``WhisperDecoding``.
+    public var usesBeamSearchDecoding: Bool {
+        WhisperDecoding.usesBeamSearch(
+            modelFileSizeBytes: modelFileSizeBytes
+        )
+    }
+
+    public var modelLanguageCapability: ModelLanguageCapability {
+        if let model = VerifiedModelCatalog.model(
+            filename: modelURL.lastPathComponent
+        ) {
+            return model.languageCapability
+        }
+        // Fallback for a model supplied by path rather than chosen from the
+        // catalogue. Getting this wrong on a Hinglish model is not cosmetic:
+        // it would decode under the Hindi token and then romanize output that
+        // is already Latin, which is the exact failure the model exists to fix.
+        let filename = modelURL.lastPathComponent.lowercased()
+        if filename.contains("hinglish") {
+            return .hinglish
+        }
+        return filename.contains(".en.") ? .english : .multilingual
+    }
+
+    public static func verified(
+        model: VerifiedModel,
+        languageProfile: LanguageProfile,
+        fileManager: FileManager = .default
+    ) throws -> BuilderVoiceConfiguration {
+        guard languageProfile.isCompatible(
+            with: model.languageCapability
+        ) else {
+            throw ConfigurationError.incompatibleProfile(
+                ModelProfileTransition.incompatibleSelectionMessage(
+                    model: model,
+                    currentProfile: languageProfile
+                )
+            )
+        }
+        let modelURL = try VerifiedModelCatalog.installedURL(
+            for: model,
+            fileManager: fileManager
+        )
+        guard (try? VerifiedModelCatalog.verify(
+            modelURL,
+            for: model,
+            fileManager: fileManager
+        )) == true else {
+            throw ConfigurationError.modelVerificationFailed(
+                model.displayName
+            )
+        }
+        return BuilderVoiceConfiguration(
+            modelURL: modelURL,
+            languageProfile: languageProfile
+        )
+    }
+
+    public static func discover(
+        languageProfile: LanguageProfile? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) throws -> BuilderVoiceConfiguration {
+        let fileManager = FileManager.default
+
+        let selectedModel = ModelSelectionPreferences.load()
+        let selectedModelPath = selectedModel.flatMap {
+            try? VerifiedModelCatalog.installedURL(for: $0).path
+        }
+        let legacyModelPath = homeDirectory
+            .appendingPathComponent(
+                "Library/Application Support/BuilderVoice/Models/ggml-base.en.bin"
+            )
+            .path(percentEncoded: false)
+        let model: String
+        if let override = environment["BUILDERVOICE_MODEL_PATH"],
+           fileManager.fileExists(atPath: override) {
+            model = override
+        } else if let selectedModel,
+                  let selectedModelPath,
+                  (try? VerifiedModelCatalog.verify(
+                    URL(fileURLWithPath: selectedModelPath),
+                    for: selectedModel,
+                    fileManager: fileManager
+                  )) == true {
+            model = selectedModelPath
+        } else if legacyModelPath != selectedModelPath,
+                  fileManager.fileExists(atPath: legacyModelPath) {
+            model = legacyModelPath
+        } else {
+            throw ConfigurationError.modelMissing
+        }
+
+        let catalogueModel = VerifiedModelCatalog.model(
+            filename: URL(fileURLWithPath: model).lastPathComponent
+        )
+        let capability = catalogueModel?.languageCapability
+            ?? (model.contains(".en.") ? .english : .multilingual)
+        let resolvedLanguageProfile =
+            languageProfile ?? LanguagePreferences.load()
+        guard resolvedLanguageProfile.isCompatible(with: capability) else {
+            let message = catalogueModel.map {
+                ModelProfileTransition.incompatibleSelectionMessage(
+                    model: $0,
+                    currentProfile: resolvedLanguageProfile
+                )
+            } ?? ModelProfileTransition.unavailableMessage(
+                for: resolvedLanguageProfile
+            )
+            throw ConfigurationError.incompatibleProfile(
+                message
+            )
+        }
+        return BuilderVoiceConfiguration(
+            modelURL: URL(fileURLWithPath: model),
+            languageProfile: resolvedLanguageProfile
+        )
+    }
+
+    public enum ConfigurationError: LocalizedError {
+        case modelMissing
+        case modelVerificationFailed(String)
+        case incompatibleProfile(String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .modelMissing:
+                return
+                    "No local speech model was found. Download one in Models "
+                    + "or set BUILDERVOICE_MODEL_PATH."
+            case .modelVerificationFailed(let model):
+                return
+                    "\(model) failed local size or SHA-256 verification and "
+                    + "was not selected."
+            case .incompatibleProfile(let message):
+                return message
+            }
+        }
+    }
+}

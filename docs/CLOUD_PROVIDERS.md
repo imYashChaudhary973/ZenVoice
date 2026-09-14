@@ -7,7 +7,7 @@
 > in code today, the exact wire shapes each provider uses, and the
 > procedure that closes the remaining items. It is written for the coding
 > agent (Zcode Harness) implementing changes against
-> `Sources/ZenVoiceCore/CloudAIEnhancement.swift`.
+> `Sources/BuilderVoiceCore/CloudAIEnhancement.swift`.
 >
 > Related: [ADR 0011](decisions/0011-cloud-ai-enhancement.md) records the
 > privacy decision this feature implements.
@@ -22,8 +22,8 @@
 | Keychain key storage (`CloudAIKeyStore`), never `UserDefaults` | Done |
 | Preview window before replacing local text (`CloudAIPreviewWindowController`) | Done |
 | Never lose the local transcript on dismiss/timeout/error (`CloudTranscriptResolution`) | Done |
-| Deterministic checks for request shape and Anthropic shape | Done (`ZenVoiceCoreChecks`) |
-| Live verification against real Groq endpoint | **Done 2026-08-18** (`ZenVoiceCloudLiveChecks`, §5.1) |
+| Deterministic checks for request shape and Anthropic shape | Done (`BuilderVoiceCoreChecks`) |
+| Live verification against real Groq endpoint | **Done 2026-08-18** (`BuilderVoiceCloudLiveChecks`, §5.1) |
 | Live verification against real OpenAI endpoint | **Open — needs a real API key** (user opted to skip for now) |
 | Live verification against real Anthropic endpoint | Open (same reason) |
 
@@ -147,7 +147,7 @@ piece; no new error cases are expected from it.
 Phase 6 item *"Verify Groq and OpenAI against live endpoints"* (also Anthropic)
 needs real API keys, which the coding agent must never fabricate.
 
-The reproducible path is `ZenVoiceCloudLiveChecks` (added 2026-08-18). It
+The reproducible path is `BuilderVoiceCloudLiveChecks` (added 2026-08-18). It
 sends one real enhancement per provider through the exact production path —
 `makeRequest` → `urlRequest(apiKey:)` → `URLSessionCloudAITransport` →
 `firstMessageContent` — and asserts: HTTP 2xx with parseable per-provider
@@ -158,7 +158,7 @@ screen writes; it never touches the command line, the repo, or logs.
 
 ```bash
 # after storing the provider's key in Formatting → Cloud:
-ZENVOICE_CLOUD_LIVE_PROVIDER=groq swift run ZenVoiceCloudLiveChecks
+BUILDERVOICE_CLOUD_LIVE_PROVIDER=groq swift run BuilderVoiceCloudLiveChecks
 ```
 
 ### 5.1 Evidence — Groq, verified 2026-08-18
@@ -181,7 +181,7 @@ Cloud refinement would otherwise have failed with 404.
 
 OpenAI and Anthropic remain **credential-blocked** (user opted to skip on
 2026-08-18). Their wire shapes stay covered by the deterministic checks in
-`ZenVoiceCoreChecks`; run the same command with `openai` or `anthropic`
+`BuilderVoiceCoreChecks`; run the same command with `openai` or `anthropic`
 once a key is stored to close them.
 
 **Do not** spend the user's money without asking; the coaching workflow
@@ -196,7 +196,7 @@ requires asking before real API usage.
    speaks Chat Completions.
 3. Add deterministic checks: request shape (body keys, no private fields) and
    response parse for the new provider, next to the existing
-   "Anthropic request shape" checks in `ZenVoiceCoreChecks`.
+   "Anthropic request shape" checks in `BuilderVoiceCoreChecks`.
 4. Update this document's matrix.
 5. Model lists are **curated at build time**. Refresh them only with a
    verified provider announcement; a stale list must fail closed (user sees

@@ -1,12 +1,12 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Generates a Sparkle appcast.xml for a ZenVoice release.
+# Generates a Sparkle appcast.xml for a BuilderVoice release.
 #
 #   ./Scripts/generate-appcast.rb \
 #     --version 0.4.2 \
-#     --dmg build/ZenVoice.dmg \
-#     --feed-url https://example.com/zenvoice/appcast.xml \
+#     --dmg build/BuilderVoice.dmg \
+#     --feed-url https://example.com/buildervoice/appcast.xml \
 #     --private-key /secure/path/to/Sparkle-private-key.pem \
 #     --output build/appcast.xml
 #
@@ -109,7 +109,7 @@ end
 # Trim leading and trailing blank lines, then fall back to a short default.
 notes_lines.shift while notes_lines.first && notes_lines.first.strip.empty?
 notes_lines.pop while notes_lines.last && notes_lines.last.strip.empty?
-release_notes = notes_lines.empty? ? "ZenVoice #{options[:version]} release." : notes_lines.join("\n")
+release_notes = notes_lines.empty? ? "BuilderVoice #{options[:version]} release." : notes_lines.join("\n")
 
 # Build the appcast XML with REXML to avoid hand-escaped attributes.
 doc = REXML::Document.new
@@ -123,15 +123,15 @@ doc << rss
 channel = REXML::Element.new('channel')
 rss << channel
 
-channel << REXML::Element.new('title').tap { |e| e.text = 'ZenVoice' }
+channel << REXML::Element.new('title').tap { |e| e.text = 'BuilderVoice' }
 channel << REXML::Element.new('link').tap { |e| e.text = options[:feed_url] }
-channel << REXML::Element.new('description').tap { |e| e.text = 'ZenVoice release feed' }
+channel << REXML::Element.new('description').tap { |e| e.text = 'BuilderVoice release feed' }
 channel << REXML::Element.new('language').tap { |e| e.text = 'en' }
 
 item = REXML::Element.new('item')
 channel << item
 
-item << REXML::Element.new('title').tap { |e| e.text = "ZenVoice #{options[:version]}" }
+item << REXML::Element.new('title').tap { |e| e.text = "BuilderVoice #{options[:version]}" }
 item << REXML::Element.new('pubDate').tap { |e| e.text = Time.now.utc.strftime('%a, %d %b %Y %H:%M:%S GMT') }
 
 sparkle_version = REXML::Element.new('sparkle:version')
@@ -148,7 +148,7 @@ item << description
 
 enclosure = REXML::Element.new('enclosure')
 enclosure.add_attributes({
-  'url' => "https://github.com/imYashChaudhary973/ZenVoice/releases/download/v#{options[:version]}/ZenVoice.dmg",
+  'url' => "https://github.com/imYashChaudhary973/BuilderHelm-Voice/releases/download/v#{options[:version]}/BuilderVoice.dmg",
   'length' => length.to_s,
   'type' => 'application/octet-stream',
   'sparkle:version' => build,

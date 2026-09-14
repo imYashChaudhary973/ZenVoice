@@ -12,8 +12,8 @@ Phase 2 landed the whole design set in code — deterministic and on-device
 planner tiers, validator, orchestrator, approval gate, status events, `codex`
 and `claude` process adapters, encrypted `agentic_tasks` storage (vault schema
 v7), settings surface, and the ZenBar status row — with coverage in
-`ZenVoiceCoreChecks` (preferences, planner, validator, orchestration lifecycle,
-real process executor) and `ZenVoiceStorageChecks` (encrypted round-trip and
+`BuilderVoiceCoreChecks` (preferences, planner, validator, orchestration lifecycle,
+real process executor) and `BuilderVoiceStorageChecks` (encrypted round-trip and
 plaintext-at-rest scan). The feature ships **off by default**; enabling it
 enables Command Mode with it, and every runtime gate reads the effective value
 so switching Command Mode off neutralises the agentic path. See

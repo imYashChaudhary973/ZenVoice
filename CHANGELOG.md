@@ -6,9 +6,9 @@ All notable BuilderHelm Voice changes are recorded here.
 
 ### Changed
 
-- Product name is **BuilderHelm Voice** (formerly ZenVoice). Display name,
-  README, and GitHub-facing docs use the new name. Swift targets and
-  `com.zenvoice.app` are unchanged.
+- Product name is **BuilderHelm Voice** (formerly ZenVoice). Code, modules,
+  and the app binary use **BuilderVoice**. Bundle id is `com.builderhelm.voice`.
+  GitHub repo is `BuilderHelm-Voice`. Mic/Accessibility/Keychain reset on first launch.
 
 ### Fixed
 

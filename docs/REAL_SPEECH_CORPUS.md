@@ -26,7 +26,7 @@ program uses four tiers, in increasing order of product relevance:
 | Consented dictation | `consented-dictation/cohort-v1` (pre-registered) | **The only representative corpus** — not yet recorded |
 
 No public corpus is treated as representative BuilderHelm Voice dictation. The machine
-`representative_zenvoice_dictation` gate exists precisely so a public-data
+`representative_buildervoice_dictation` gate exists precisely so a public-data
 candidate can never be promoted.
 
 ## 2. Corpora on disk (all under gitignored `Datasets/`)
@@ -57,25 +57,25 @@ Audio and manifests are **never committed**. Scripts and locks are.
 
 ## 3. Running an evaluation (current commands)
 
-The harness is `ZenVoiceAccuracyChecks`. The relevant environment contract:
+The harness is `BuilderVoiceAccuracyChecks`. The relevant environment contract:
 
 | Variable | Effect |
 |---|---|
-| `ZENVOICE_MODEL_PATH` | Point the run at a specific model file (bypasses app defaults) |
-| `ZENVOICE_ACCURACY_CORPUS` | Flat audio+`.txt` directory **or** locked JSONL manifest |
-| `ZENVOICE_CORPUS_VALIDATE_ONLY=1` | Validate corpus paths/audio without loading a model |
-| `ZENVOICE_ACCURACY_REQUIRED=1` | Fail (exit 1) instead of skipping when no model resolves |
-| `ZENVOICE_ACCURACY_REQUIRE_REAL=1` | Refuse synthetic-only runs |
-| `ZENVOICE_ACCURACY_SMOKE=1` | Decode exactly one real clip (CI smoke path) |
-| `ZENVOICE_ACCURACY_NOISE` / `_CLEAN` / `_VERBOSE` / `_MAX_SYNTHETIC_CLIPS` | Noise floor, clean mode, per-clip hypotheses, synthetic cap |
+| `BUILDERVOICE_MODEL_PATH` | Point the run at a specific model file (bypasses app defaults) |
+| `BUILDERVOICE_ACCURACY_CORPUS` | Flat audio+`.txt` directory **or** locked JSONL manifest |
+| `BUILDERVOICE_CORPUS_VALIDATE_ONLY=1` | Validate corpus paths/audio without loading a model |
+| `BUILDERVOICE_ACCURACY_REQUIRED=1` | Fail (exit 1) instead of skipping when no model resolves |
+| `BUILDERVOICE_ACCURACY_REQUIRE_REAL=1` | Refuse synthetic-only runs |
+| `BUILDERVOICE_ACCURACY_SMOKE=1` | Decode exactly one real clip (CI smoke path) |
+| `BUILDERVOICE_ACCURACY_NOISE` / `_CLEAN` / `_VERBOSE` / `_MAX_SYNTHETIC_CLIPS` | Noise floor, clean mode, per-clip hypotheses, synthetic cap |
 
 Standard frozen-test run:
 
 ```bash
-ZENVOICE_ACCURACY_REQUIRED=1 \
-ZENVOICE_MODEL_PATH="<model.bin>" \
-ZENVOICE_ACCURACY_CORPUS=Datasets/common-voice-spontaneous-4.0/prepared-v1/test.jsonl \
-swift run ZenVoiceAccuracyChecks
+BUILDERVOICE_ACCURACY_REQUIRED=1 \
+BUILDERVOICE_MODEL_PATH="<model.bin>" \
+BUILDERVOICE_ACCURACY_CORPUS=Datasets/common-voice-spontaneous-4.0/prepared-v1/test.jsonl \
+swift run BuilderVoiceAccuracyChecks
 ```
 
 Output per run: whole vs segmented WER, per-clip table, silence-suppression
@@ -108,23 +108,23 @@ suppression list without an explicit decision.
 ## 5. Per-engine baselines (measured 2026-08-18)
 
 **Done, except Apple Speech** (manual-QA gate below). The harness grew
-`ZENVOICE_ACCURACY_ENGINE`, which baselines one engine through its own
+`BUILDERVOICE_ACCURACY_ENGINE`, which baselines one engine through its own
 `SpeechEngine` path — resolved via `EngineRegistry`, decoded via
 `transcribe(audioURL:)`, the same entry the app uses. One re-runnable
 command per engine:
 
 ```bash
-ZENVOICE_MODEL_PATH="<whisper model for registry construction>" \
-ZENVOICE_ACCURACY_ENGINE=parakeet-flash \
-ZENVOICE_ACCURACY_CORPUS=Datasets/common-voice-spontaneous-4.0/prepared-v1/test.jsonl \
-swift run ZenVoiceAccuracyChecks
+BUILDERVOICE_MODEL_PATH="<whisper model for registry construction>" \
+BUILDERVOICE_ACCURACY_ENGINE=parakeet-flash \
+BUILDERVOICE_ACCURACY_CORPUS=Datasets/common-voice-spontaneous-4.0/prepared-v1/test.jsonl \
+swift run BuilderVoiceAccuracyChecks
 ```
 
-- `ZENVOICE_ACCURACY_ENGINE=list` prints the exact ids this machine has;
+- `BUILDERVOICE_ACCURACY_ENGINE=list` prints the exact ids this machine has;
   an unknown id fails closed with the same list.
 - Output columns match §4 (whole and segmented WER, protected-token
   failures) plus p50/p95 decode latency and the real-time multiple.
-- `ZENVOICE_ACCURACY_NOSEGMENT=1` skips the segmented pass for slow
+- `BUILDERVOICE_ACCURACY_NOSEGMENT=1` skips the segmented pass for slow
   engines. On this corpus every clip is a single utterance
   (`LiveSegmentation` yields one segment), so the segmented column
   re-measures the whole decode rather than a chunking penalty.

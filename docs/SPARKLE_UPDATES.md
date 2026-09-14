@@ -84,7 +84,7 @@ shared in chat. Store it in one of these locations only:
 
 - A secure macOS keychain entry named `Sparkle zen private key` on the release
   machine.
-- A GitHub Actions secret named `ZENVOICE_SPARKLE_PRIVATE_KEY` that contains the
+- A GitHub Actions secret named `BUILDERVOICE_SPARKLE_PRIVATE_KEY` that contains the
   base64-encoded private key exported from `generate_keys`.
 
 The release workflow can download or use the key at build time, but the
@@ -104,8 +104,8 @@ Example usage:
 ```zsh
 ./Scripts/generate-appcast.rb \
   --version 0.4.2 \
-  --dmg build/ZenVoice.dmg \
-  --feed-url https://example.com/zenvoice/appcast.xml \
+  --dmg build/BuilderVoice.dmg \
+  --feed-url https://example.com/buildervoice/appcast.xml \
   --private-key /secure/path/to/sparkle-zen-private-key.pem \
   --output build/appcast.xml
 ```
@@ -142,14 +142,14 @@ release is created:
 - name: Generate appcast
   env:
     VERSION: ${{ github.event.inputs.version }}
-    SPARKLE_PRIVATE_KEY: ${{ secrets.ZENVOICE_SPARKLE_PRIVATE_KEY }}
+    SPARKLE_PRIVATE_KEY: ${{ secrets.BUILDERVOICE_SPARKLE_PRIVATE_KEY }}
   run: |
     key_path=$(mktemp)
     printf '%s' "$SPARKLE_PRIVATE_KEY" > "$key_path"
     ./Scripts/generate-appcast.rb \
       --version "$VERSION" \
-      --dmg build/ZenVoice.dmg \
-      --feed-url https://zenvoice.example.com/appcast.xml \
+      --dmg build/BuilderVoice.dmg \
+      --feed-url https://buildervoice.example.com/appcast.xml \
       --private-key "$key_path" \
       --output build/appcast.xml
     rm -f "$key_path"
@@ -162,7 +162,7 @@ release is created:
     body_path: build/RELEASE_NOTES.md
     make_latest: true
     files: |
-      build/ZenVoice.dmg
+      build/BuilderVoice.dmg
       build/appcast.xml
     fail_on_unmatched_files: true
 ```
@@ -180,7 +180,7 @@ A generated feed for version `0.4.2` looks like this (signature is shortened):
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
     <title>BuilderHelm Voice</title>
-    <link>https://example.com/zenvoice/appcast.xml</link>
+    <link>https://example.com/buildervoice/appcast.xml</link>
     <description>BuilderHelm Voice release feed</description>
     <language>en</language>
     <item>
@@ -195,7 +195,7 @@ A generated feed for version `0.4.2` looks like this (signature is shortened):
         ]]>
       </description>
       <enclosure
-        url="https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.2/ZenVoice.dmg"
+        url="https://github.com/imYashChaudhary973/BuilderHelm Voice/releases/download/v0.4.2/BuilderVoice.dmg"
         length="12345678"
         type="application/octet-stream"
         sparkle:version="4"
