@@ -97,19 +97,9 @@ function authWWW(origin) {
 
 function resolveDevice(url, input = {}) {
   const pairing = String(url.searchParams.get('pairing') || input.pairing || '').trim().toUpperCase();
-  if (pairing) {
-    for (const [id, row] of devices) if (row.pairing === pairing) return id;
-    fail(400, 'Unknown pairing code');
-  }
-  const resource = url.searchParams.get('resource') || '';
-  const fromResource = (resource.match(/\/d\/([^/]+)\/mcp/) || [])[1];
-  if (fromResource && devices.has(fromResource)) return fromResource;
-  const deviceParam = url.searchParams.get('device') || '';
-  if (deviceParam && devices.has(deviceParam)) return deviceParam;
-  const online = [...pulls.keys()];
-  if (online.length === 1) return online[0];
-  if (online.length === 0) fail(400, 'Open ZenVoice and turn on AI connectors.');
-  fail(400, 'Enter the pairing code shown in ZenVoice.');
+  if (!pairing) fail(400, 'Enter the pairing code shown in ZenVoice.');
+  for (const [id, row] of devices) if (row.pairing === pairing) return id;
+  fail(400, 'Unknown pairing code');
 }
 
 function deliverPull(deviceId, payload) {
@@ -296,9 +286,12 @@ async function handle(request, response) {
     const state = url.searchParams.get('state') || '';
     const ticket = nonce();
     codes.set(ticket, { clientId, deviceId, challenge, redirect, state, expires: Date.now() + 600_000, kind: 'consent' });
+    let redirectOrigin = client.redirect;
+    try { redirectOrigin = new URL(client.redirect).origin; } catch { /* keep raw */ }
     const page = html(
       'ZenVoice',
       '<h1>Allow this AI tool to read Notetaker meetings?</h1>' +
+        '<p>' + escape(client.name) + ' at ' + escape(redirectOrigin) + '</p>' +
         '<p>Meetings stay on your Mac. This grant sends meeting text to the AI tool that requested access. Dictation is not included. Audio is not included. ZenVoice does not keep a copy.</p>' +
         '<form method="post" action="/authorize">' +
         '<input type="hidden" name="ticket" value="' + escape(ticket) + '">' +
@@ -394,18 +387,25 @@ async function runCheck() {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ client_name: 'Check', redirect_uris: [`${origin}/done`] }),
   });
-  assert.equal(client.status, 201);
   const verifier = nonce();
   const challenge = digest(verifier);
-  const authorize = await call(`/authorize?client_id=${client.body.client_id}&redirect_uri=${encodeURIComponent(origin + '/done')}&code_challenge=${challenge}&code_challenge_method=S256&state=s&resource=${encodeURIComponent(mcpUrl)}&pairing=${pairing}`);
+  const authorizeQuery = `client_id=${client.body.client_id}&redirect_uri=${encodeURIComponent(origin + '/done')}&code_challenge=${challenge}&code_challenge_method=S256`;
+  const noPairing = await call(`/authorize?${authorizeQuery}&resource=${encodeURIComponent(`${origin}/d/${id}/mcp`)}`);
+  assert.equal(noPairing.status, 400, 'authorize requires pairing');
+  assert.match(String(noPairing.body.error || ''), /pairing/i);
+
+
+  const authorize = await call(`/authorize?${authorizeQuery}&state=s&resource=${encodeURIComponent(mcpUrl)}&pairing=${pairing}`);
   assert.equal(authorize.status, 200);
   assert.match(authorize.text, /Approve/);
+  assert.match(authorize.text, /Check/);
+  assert.match(authorize.text, new RegExp(origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   const ticket = authorize.text.match(/name="ticket" value="([^"]+)"/)[1];
   const denied = await call('/authorize', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `ticket=${ticket}&decision=deny`, redirect: 'manual' });
   assert.equal(denied.status, 302);
   assert.match(denied.headers.get('location') || '', /access_denied/);
 
-  const again = await call(`/authorize?client_id=${client.body.client_id}&redirect_uri=${encodeURIComponent(origin + '/done')}&code_challenge=${challenge}&code_challenge_method=S256&resource=${encodeURIComponent(mcpUrl)}&pairing=${pairing}`);
+  const again = await call(`/authorize?${authorizeQuery}&resource=${encodeURIComponent(mcpUrl)}&pairing=${pairing}`);
   const ticket2 = again.text.match(/name="ticket" value="([^"]+)"/)[1];
   const approved = await call('/authorize', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `ticket=${ticket2}&decision=approve`, redirect: 'manual' });
   const code = new URL(approved.headers.get('location')).searchParams.get('code');

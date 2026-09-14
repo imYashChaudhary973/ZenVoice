@@ -15,22 +15,50 @@ if (!rawUrl) {
   process.exit(1);
 }
 
+function allowedHost(hostname) {
+  const host = hostname.toLowerCase();
+  return (
+    host === "zoom.us" ||
+    host.endsWith(".zoom.us") ||
+    host === "meet.google.com" ||
+    host === "teams.microsoft.com" ||
+    host === "teams.live.com"
+  );
+}
+
 function toWebJoin(raw) {
+  let parsed;
   try {
-    const u = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    if (!u.hostname.includes("zoom.us")) return raw;
-    let id = null;
-    if (u.pathname.startsWith("/j/")) {
-      id = u.pathname.slice(3).split("/")[0];
-    } else {
-      const wc = u.pathname.match(/^\/wc\/join\/(\d+)/);
-      if (wc) id = wc[1];
-    }
-    if (id) return `https://app.zoom.us/wc/${id}/join${u.search}`;
+    parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
   } catch {
-    return raw;
+    console.error("invalid meeting url");
+    process.exit(1);
   }
-  return raw;
+  if (parsed.protocol !== "https:") {
+    console.error("https required");
+    process.exit(1);
+  }
+  if (parsed.username || parsed.password) {
+    console.error("refusing userinfo");
+    process.exit(1);
+  }
+  if (!allowedHost(parsed.hostname)) {
+    console.error("refusing host");
+    process.exit(1);
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "zoom.us" && !host.endsWith(".zoom.us")) {
+    return parsed.href;
+  }
+  let id = null;
+  if (parsed.pathname.startsWith("/j/")) {
+    id = parsed.pathname.slice(3).split("/")[0];
+  } else {
+    const wc = parsed.pathname.match(/^\/wc\/join\/(\d+)/);
+    if (wc) id = wc[1];
+  }
+  if (id) return `https://app.zoom.us/wc/${id}/join${parsed.search}`;
+  return parsed.href;
 }
 
 const url = toWebJoin(rawUrl);

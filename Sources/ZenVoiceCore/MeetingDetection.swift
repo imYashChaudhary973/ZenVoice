@@ -40,42 +40,29 @@ public enum MeetingDetection {
     }
 
     public static func kind(of text: String) -> MeetingURLKind {
-        let lower = text.lowercased()
-        if lower.contains("zoom.us/j") || lower.contains("zoom.us/wc") {
-            return .zoom
-        }
-        if lower.contains("meet.google.com") {
-            return .meet
-        }
-        if lower.contains("teams.microsoft.com")
-            || lower.contains("teams.live.com")
-        {
-            return .teams
-        }
-        return .unknown
+        guard let url = httpsURL(from: text) else { return .unknown }
+        return kind(of: url)
     }
 
     /// Browser join URL so the bot is a guest, not the user's Zoom.app.
     public static func webJoinURL(from raw: String) -> URL? {
-        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty { return nil }
-        if !text.lowercased().hasPrefix("http") {
-            text = "https://\(text)"
-        }
-        guard let url = URL(string: text) else { return nil }
-        guard kind(of: text) == .zoom,
-              let host = url.host?.lowercased(),
-              host.contains("zoom.us"),
-              url.path.lowercased().hasPrefix("/j/") else {
+        guard let url = httpsURL(from: raw) else { return nil }
+        switch kind(of: url) {
+        case .unknown:
+            return nil
+        case .meet, .teams:
             return url
+        case .zoom:
+            let path = url.path.lowercased()
+            guard path.hasPrefix("/j/") else { return url }
+            let rest = String(url.path.dropFirst(3))
+            let id = rest.split(separator: "/").first.map(String.init) ?? rest
+            var components = URLComponents(
+                string: "https://app.zoom.us/wc/\(id)/join"
+            )
+            components?.query = url.query
+            return components?.url ?? url
         }
-        let rest = String(url.path.dropFirst(3))
-        let id = rest.split(separator: "/").first.map(String.init) ?? rest
-        var components = URLComponents(
-            string: "https://app.zoom.us/wc/\(id)/join"
-        )
-        components?.query = url.query
-        return components?.url ?? url
     }
 
     public static func meetingURL(in text: String) -> String? {
@@ -91,7 +78,50 @@ public enum MeetingDetection {
         let raw = String(text[swiftRange]).trimmingCharacters(
             in: CharacterSet(charactersIn: ".,;:)]>")
         )
-        return raw.isEmpty ? nil : raw
+        guard !raw.isEmpty, kind(of: raw) != .unknown else { return nil }
+        return raw
+    }
+
+    private static func kind(of url: URL) -> MeetingURLKind {
+        guard url.user == nil, url.password == nil else { return .unknown }
+        guard let host = url.host?.lowercased(), !host.isEmpty else {
+            return .unknown
+        }
+        let path = url.path.lowercased()
+        if isZoomHost(host) {
+            if path.hasPrefix("/j/") || path.hasPrefix("/wc/") {
+                return .zoom
+            }
+            return .unknown
+        }
+        if host == "meet.google.com" { return .meet }
+        if host == "teams.microsoft.com" || host == "teams.live.com" {
+            return .teams
+        }
+        return .unknown
+    }
+
+    private static func isZoomHost(_ host: String) -> Bool {
+        host == "zoom.us" || host.hasSuffix(".zoom.us")
+    }
+
+    private static func httpsURL(from raw: String) -> URL? {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return nil }
+        if !text.lowercased().hasPrefix("http://"),
+           !text.lowercased().hasPrefix("https://")
+        {
+            text = "https://\(text)"
+        }
+        guard let components = URLComponents(string: text),
+              components.scheme?.lowercased() == "https",
+              components.user == nil,
+              components.password == nil,
+              components.host != nil
+        else {
+            return nil
+        }
+        return components.url
     }
 
     private static let urlExpression = try! NSRegularExpression(

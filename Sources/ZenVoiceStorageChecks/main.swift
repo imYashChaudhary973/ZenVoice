@@ -1498,6 +1498,34 @@ private func archiveFixtureRecording(
     return archiveID
 }
 
+private func checkMeetingIndexOmitsPlaintext() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "zenvoice-index-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let index = try await MeetingIndex(directoryURL: directory)
+    let secret = "SECRET_MEETING_TRANSCRIPT_PLAINTEXT"
+    try await index.upsert(
+        id: UUID(),
+        original: secret,
+        recap: "SECRET_RECAP"
+    )
+    let sqlite = try Data(
+        contentsOf: directory.appendingPathComponent("index.sqlite")
+    )
+    let hay = String(decoding: sqlite, as: UTF8.self)
+    try await require(
+        !hay.contains(secret),
+        "meeting index stored plaintext original"
+    )
+    try await require(
+        !hay.contains("SECRET_RECAP"),
+        "meeting index stored plaintext recap"
+    )
+}
+
 private func checkAudioArchiveLifecycle() async throws {
     let fixture = try await VaultFixture()
     defer { fixture.cleanup() }
@@ -1512,8 +1540,19 @@ private func checkAudioArchiveLifecycle() async throws {
         try await fixture.vault.audioArchiveCount() == 1,
         "archive row was not written"
     )
+    let archived = try await fixture.vault.audioArchive(id: archiveID)
+    let onDisk = try Data(contentsOf: archived!.audioURL)
     try await require(
-        try await fixture.vault.audioArchiveTotalSize() == 2_048,
+        onDisk.starts(with: Data("ZV2".utf8)),
+        "archived audio was stored as plaintext"
+    )
+    try await require(
+        try await fixture.vault.archiveAudioData(id: archiveID)
+            == Data(repeating: 0x41, count: 2_048),
+        "archived audio did not decrypt to the original bytes"
+    )
+    try await require(
+        try await fixture.vault.audioArchiveTotalSize() == Int64(onDisk.count),
         "archive size was not recorded"
     )
 
@@ -1629,10 +1668,15 @@ private func checkAudioArchiveExport() async throws {
 
     let destination = fixture.directoryURL
         .appendingPathComponent("export.zip")
+    var wavs: [UUID: Data] = [:]
+    for record in records {
+        wavs[record.id] = try await fixture.vault.archiveAudioData(id: record.id)
+    }
     try AudioArchiveExporter.export(
         records: records,
         to: destination,
-        transcriptProvider: { _ in "secret transcript" }
+        transcriptProvider: { _ in "secret transcript" },
+        audioDataProvider: { wavs[$0] }
     )
     try await require(
         FileManager.default.fileExists(atPath: destination.path),
@@ -1661,7 +1705,8 @@ private func checkAudioArchiveExport() async throws {
         records: records,
         options: AudioArchiveExportOptions(includeTranscripts: true),
         to: withTranscripts,
-        transcriptProvider: { _ in "secret transcript" }
+        transcriptProvider: { _ in "secret transcript" },
+        audioDataProvider: { wavs[$0] }
     )
     let optedInManifest = try unzippedManifest(from: withTranscripts)
     try await require(
@@ -2079,8 +2124,9 @@ do {
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
     try await checkMeetingStore()
+    try await checkMeetingIndexOmitsPlaintext()
     try await checkCallWavEnroll()
-    print("ZenVoiceStorageChecks: 27 checks passed")
+    print("ZenVoiceStorageChecks: 28 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

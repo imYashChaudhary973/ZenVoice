@@ -316,10 +316,7 @@ public struct PlanValidator: Sendable {
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()
 
-        // App launch is visible but non-destructive, matching v1's "open app" phrase.
-        if lower == "open -a" || lower.hasPrefix("open -a ") {
-            return .low
-        }
+
 
         // A read-only classification is only available to commands with no
         // shell control surface at all. Any separator (`;`, `&&`, `|`), any
@@ -329,6 +326,19 @@ public struct PlanValidator: Sendable {
         let hasControlSurface = trimmed.contains(where: { character in
             ";|&<>`$".contains(character) || character.isNewline
         })
+
+        // `open -a App` is low only when the remainder is one app name.
+        // `open -a Safari; curl …` must fall through to high-pattern scans.
+        if lower == "open -a" || lower.hasPrefix("open -a ") {
+            let rest = lower.hasPrefix("open -a ")
+                ? String(trimmed.dropFirst(8))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                : ""
+            if !hasControlSurface, Self.isSingleOpenAppName(rest) {
+                return .low
+            }
+        }
+
 
         // Known read-only / report-only prefixes, matched on whole words so
         // "pwdx" is not "pwd".
@@ -372,6 +382,23 @@ public struct PlanValidator: Sendable {
 
         // Default: file-editing agents, builds, test runs.
         return .medium
+    }
+
+    private static func isSingleOpenAppName(_ rest: String) -> Bool {
+        guard !rest.isEmpty else { return false }
+        if rest.hasPrefix("\"") || rest.hasPrefix("'") {
+            let quote = rest.first!
+            guard rest.count >= 2, rest.last == quote else { return false }
+            let inner = rest.dropFirst().dropLast()
+            return !inner.contains(quote)
+                && !inner.contains(where: {
+                    ";|&<>`$".contains($0) || $0.isNewline
+                })
+        }
+        return rest.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
+            && rest.allSatisfy { character in
+                !";|&<>`$".contains(character) && !character.isNewline
+            }
     }
 
     private static func mediumOrHigherIfDangerous(_ command: String) -> RiskLevel {
