@@ -286,12 +286,9 @@ async function handle(request, response) {
     const state = url.searchParams.get('state') || '';
     const ticket = nonce();
     codes.set(ticket, { clientId, deviceId, challenge, redirect, state, expires: Date.now() + 600_000, kind: 'consent' });
-    let redirectOrigin = client.redirect;
-    try { redirectOrigin = new URL(client.redirect).origin; } catch { /* keep raw */ }
     const page = html(
       'ZenVoice',
       '<h1>Allow this AI tool to read Notetaker meetings?</h1>' +
-        '<p>' + escape(client.name) + ' at ' + escape(redirectOrigin) + '</p>' +
         '<p>Meetings stay on your Mac. This grant sends meeting text to the AI tool that requested access. Dictation is not included. Audio is not included. ZenVoice does not keep a copy.</p>' +
         '<form method="post" action="/authorize">' +
         '<input type="hidden" name="ticket" value="' + escape(ticket) + '">' +
@@ -398,8 +395,7 @@ async function runCheck() {
   const authorize = await call(`/authorize?${authorizeQuery}&state=s&resource=${encodeURIComponent(mcpUrl)}&pairing=${pairing}`);
   assert.equal(authorize.status, 200);
   assert.match(authorize.text, /Approve/);
-  assert.match(authorize.text, /Check/);
-  assert.match(authorize.text, new RegExp(origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.equal(authorize.text.includes('Check'), false);
   const ticket = authorize.text.match(/name="ticket" value="([^"]+)"/)[1];
   const denied = await call('/authorize', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `ticket=${ticket}&decision=deny`, redirect: 'manual' });
   assert.equal(denied.status, 302);
