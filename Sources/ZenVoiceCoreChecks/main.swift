@@ -910,7 +910,7 @@ guard MeetingDetection.kind(of: "https://zoom.us/j/123") == .zoom,
         == .teams,
       MeetingDetection.kind(of: "https://zoom.us/pricing") == .unknown,
       MeetingDetection.webJoinURL(from: "https://zoom.us/j/555?pwd=ab")?
-        .absoluteString == "https://zoom.us/wc/join/555?pwd=ab" else {
+        .absoluteString == "https://app.zoom.us/wc/555/join?pwd=ab" else {
     FileHandle.standardError.write(
         Data("FAIL: meeting URL detection is incorrect\n".utf8)
     )
