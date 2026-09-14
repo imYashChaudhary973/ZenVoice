@@ -73,6 +73,22 @@ that window rather than the whole database.
   selected cloud engine uploads the live dictation clip, not this archive.
 - Full rationale in [ADR 0010](decisions/0010-audio-history.md).
 
+### Meetings
+
+- Off until you tap Start on History → Meetings. The dictation hotkey never
+  creates a meeting.
+- Microphone audio is You. System audio (Them) uses ScreenCaptureKit and
+  needs Screen Recording permission. Without it, only You is kept.
+- WAVs live in private Application Support `Meetings/`, unencrypted, same
+  honesty as Audio History. Original transcript and recap are AES-GCM with
+  the vault key.
+- Meeting audio is never uploaded to a cloud speech engine. Recap sends
+  transcript text plus the meeting prompt after Cloud AI is enabled, same
+  gate as [ADR 0011](decisions/0011-cloud-ai-enhancement.md).
+- Delete a meeting removes both WAVs, the sidecar, the original, and the recap.
+- Tell everyone on the call that you are recording.
+- Full contract: [ADR 0016](decisions/0016-meeting-notetaker.md).
+
 ### Transcripts
 
 - Stored in memory as the last transcript for immediate recovery.

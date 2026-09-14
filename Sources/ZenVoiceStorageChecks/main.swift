@@ -1940,6 +1940,117 @@ private func checkAgenticTaskPersistence() async throws {
     )
 }
 
+private func checkMeetingStore() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("zenvoice-meetings-\(UUID().uuidString)")
+    let store = MeetingStore(directoryURL: directory)
+    let key = StaticKeyProvider()
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    var record = try store.createRecording(availableBytes: MeetingStore.reservedAudioBytes)
+    record.elapsedSeconds = 15 * 60
+    record.status = .complete
+    try store.save(record)
+    try store.setOriginalTranscript(
+        "You: fifteen minute meeting\nThem: acknowledged",
+        for: record.id,
+        engineID: "whisper-large-v3-turbo",
+        keyProvider: key
+    )
+    do {
+        try store.setOriginalTranscript(
+            "should not replace",
+            for: record.id,
+            keyProvider: key
+        )
+        throw CheckError.failed("original meeting transcript was replaced")
+    } catch MeetingStore.StoreError.originalTranscriptLocked {
+    }
+    try Data("you".utf8).write(to: store.youAudioURL(for: record.id))
+    try Data("them".utf8).write(to: store.themAudioURL(for: record.id))
+    try store.setSummary("Topics: none.", for: record.id, keyProvider: key)
+    let inventory = try store.inventory()
+    try await require(
+        inventory.meetingCount == 1 && inventory.audioBytes == 7,
+        "meeting inventory count or audio bytes is wrong"
+    )
+    try store.removeRecordingArtifacts(id: record.id)
+    try await require(
+        (try store.all()).isEmpty,
+        "delete left a meeting row"
+    )
+    try await require(
+        !FileManager.default.fileExists(
+            atPath: store.youAudioURL(for: record.id).path
+        )
+            && !FileManager.default.fileExists(
+                atPath: store.themAudioURL(for: record.id).path
+            ),
+        "delete left meeting audio"
+    )
+}
+
+private func checkCallWavEnroll() async throws {
+    let wav = URL(fileURLWithPath: "/tmp/zenvoice-you.wav")
+    guard FileManager.default.fileExists(atPath: wav.path) else {
+        print("ZenVoiceStorageChecks: call-wav enroll skipped (no /tmp/zenvoice-you.wav)")
+        return
+    }
+    let samples = try pcm16Mono(wav)
+    try await require(!samples.isEmpty, "call wav had no samples")
+    let embedding = rmsBands(samples, count: 16)
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("zenvoice-enroll-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let registry = SpeakerRegistry(
+        directoryURL: directory,
+        keyProvider: StaticKeyProvider()
+    )
+    let enrolled = try registry.enroll(
+        name: "ZenVoice Notetaker",
+        embedding: embedding
+    )
+    let matched = try registry.match(embedding: embedding)
+    try await require(
+        matched?.id == enrolled.id,
+        "call-wav embedding did not match the enrolled speaker"
+    )
+    print(
+        "ZenVoiceStorageChecks: enrolled call wav as \(enrolled.displayName)"
+    )
+}
+
+private func pcm16Mono(_ url: URL) throws -> [Float] {
+    let data = try Data(contentsOf: url)
+    guard data.count > 44 else { return [] }
+    return data.dropFirst(44).withUnsafeBytes { raw in
+        (0..<(raw.count / 2)).map { index in
+            let value = raw.load(fromByteOffset: index * 2, as: Int16.self)
+            return Float(Int16(littleEndian: value)) / 32768
+        }
+    }
+}
+
+private func rmsBands(_ samples: [Float], count: Int) -> [Float] {
+    let hop = max(1, samples.count / count)
+    var bands = [Float](repeating: 0, count: count)
+    for band in 0..<count {
+        let start = band * hop
+        let end = min(samples.count, start + hop)
+        guard end > start else { continue }
+        var sum: Float = 0
+        for i in start..<end {
+            sum += samples[i] * samples[i]
+        }
+        bands[band] = (sum / Float(end - start)).squareRoot()
+    }
+    let norm = bands.reduce(Float(0)) { $0 + $1 * $1 }.squareRoot()
+    if norm > 0 {
+        for i in 0..<count { bands[i] /= norm }
+    }
+    return bands
+}
+
 do {
     try await checkEncryptedStorage()
     try await checkRecoveryExpiry()
@@ -1967,7 +2078,9 @@ do {
     try await checkAudioHistoryPreferenceDefaults()
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
-    print("ZenVoiceStorageChecks: 25 checks passed")
+    try await checkMeetingStore()
+    try await checkCallWavEnroll()
+    print("ZenVoiceStorageChecks: 27 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

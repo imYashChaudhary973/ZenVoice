@@ -473,6 +473,23 @@ public struct CloudAIPromptTemplate: Equatable, Sendable {
         """
     )
 
+    public static let meeting = CloudAIPromptTemplate(
+        name: "Meeting recap",
+        text: """
+        Summarize this meeting transcript. Use only the words in the \
+        transcript. Do not invent speakers, names, or facts. Labels You \
+        and Them are channel labels, not identities.
+
+        Reply with three sections:
+        1. Topics — what was discussed, in order
+        2. Decisions — what was agreed. If none, write "None."
+        3. Next steps — who does what, if the transcript says. If none, \
+        write "None."
+
+        Reply with the summary only.
+        """
+    )
+
     public static let builtIns: [CloudAIPromptTemplate] = [
         .cleanUp, .tightenUp
     ]

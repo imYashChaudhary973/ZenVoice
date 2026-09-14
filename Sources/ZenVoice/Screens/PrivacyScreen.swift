@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import AppKit
 import SwiftUI
 import ZenVoiceCore
 import ZenVoiceStorage
@@ -23,6 +24,7 @@ struct PrivacyScreen: View {
         VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel:
         ModelManagerViewModel
+    @ObservedObject var meetingViewModel: MeetingViewModel
     let openModels: () -> Void
     var embedded = false
 
@@ -175,6 +177,23 @@ struct PrivacyScreen: View {
                 }
                 ZenPanelDivider()
                 ZenRow(
+                    icon: "person.2",
+                    title: "Meetings",
+                    subtitle:
+                        "\(meetingViewModel.meetingCountDisplayString) · \(meetingViewModel.meetingAudioDisplayString) audio on this Mac"
+                ) {
+                    ZenHoldToDeleteButton(
+                        label: "Delete",
+                        minWidth: 108
+                    ) {
+                        for meeting in meetingViewModel.meetings {
+                            meetingViewModel.delete(meeting.id)
+                        }
+                    }
+                    .disabled(meetingViewModel.meetings.isEmpty)
+                }
+                ZenPanelDivider()
+                ZenRow(
                     icon: "trash",
                     title: "Reset local vault",
                     subtitle:
@@ -202,9 +221,25 @@ struct PrivacyScreen: View {
                 PermissionRow(
                     icon: "mic.fill",
                     title: "Microphone",
-                    detail: "Used only while a dictation is active.",
+                    detail: "Used while dictating or recording a meeting.",
                     status: viewModel.microphoneStatus,
                     action: viewModel.requestMicrophoneAccess
+                )
+                ZenPanelDivider()
+                PermissionRow(
+                    icon: "rectangle.dashed.badge.record",
+                    title: "Screen Recording",
+                    detail:
+                        "Captures the other side of a call (Them). Without it, a meeting records only your microphone.",
+                    status: viewModel.microphoneStatus,
+                    action: {
+                        if let url = URL(
+                            string:
+                                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+                        ) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
                 )
                 ZenPanelDivider()
                 PermissionRow(
