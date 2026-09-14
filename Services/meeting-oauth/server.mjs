@@ -3,6 +3,13 @@
 import http from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const publicPages = new Map([
+  ['/', 'index.html', 'text/html; charset=utf-8'],
+  ['/privacy', 'privacy.html', 'text/html; charset=utf-8'],
+  ['/styles.css', 'styles.css', 'text/css; charset=utf-8'],
+].map(([path, file, type]) => [path, { type, content: readFileSync(new URL(`public/${file}`, import.meta.url)) }]));
 
 const nonce = () => randomBytes(32).toString('base64url');
 const digest = value => createHash('sha256').update(value).digest('base64url');
@@ -67,6 +74,14 @@ function json(response, status, value) {
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost');
+    const page = publicPages.get(url.pathname);
+    if (page && (request.method === 'GET' || request.method === 'HEAD')) {
+      response.writeHead(200, { 'Content-Type': page.type, 'Content-Length': page.content.length,
+        'Cache-Control': 'public, max-age=300', 'Referrer-Policy': 'no-referrer',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" });
+      return response.end(request.method === 'HEAD' ? undefined : page.content);
+    }
     if (Date.now() - windowStart > 60_000) { windowStart = Date.now(); requests = 0; }
     if (++requests > 120) fail(429, 'Too many authorization requests; try again later');
     if (request.method === 'GET' && url.pathname === '/health') return json(response, 200, { ok: true });

@@ -13,8 +13,13 @@ All notable ZenVoice changes are recorded here.
   You/Them rename-once, FTS search, speaker gallery, Gmail/Slack connectors,
   Playwright guest join as ZenVoice Notetaker, enroll-from-You, and recap
   commands (email, Slack, calendar).
-
-
+- Public OAuth homepage and privacy policy at
+  `https://zenvoice-meeting-oauth.onrender.com`, with Google Search Console
+  ownership verification and explicitly allowlisted static routes.
+- Google Calendar and Gmail production-audience configuration and least-privilege
+  scope justifications. Google brand/scope approval is still pending: the
+  unverified-app warning and 100-user cap remain, and review submission requires
+  a real OAuth/data-use demo video. Gmail may also require a security assessment.
 
 ### Fixed
 
