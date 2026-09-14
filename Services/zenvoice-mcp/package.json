@@ -1,0 +1,9 @@
+{
+  "name": "zenvoice-mcp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node server.mjs --check"
+  }
+}
