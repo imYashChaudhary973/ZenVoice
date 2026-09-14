@@ -296,12 +296,10 @@ async function handle(request, response) {
     const state = url.searchParams.get('state') || '';
     const ticket = nonce();
     codes.set(ticket, { clientId, deviceId, challenge, redirect, state, expires: Date.now() + 600_000, kind: 'consent' });
-    const name = escape(client.name);
     const page = html(
       'ZenVoice',
-      '<h1>Allow ' + name + ' to read Notetaker meetings?</h1>' +
-        '<p>Meetings stay on your Mac. This grant sends meeting text to ' + name +
-        '. Dictation is not included. Audio is not included. ZenVoice does not keep a copy.</p>' +
+      '<h1>Allow this AI tool to read Notetaker meetings?</h1>' +
+        '<p>Meetings stay on your Mac. This grant sends meeting text to the AI tool that requested access. Dictation is not included. Audio is not included. ZenVoice does not keep a copy.</p>' +
         '<form method="post" action="/authorize">' +
         '<input type="hidden" name="ticket" value="' + escape(ticket) + '">' +
         '<button name="decision" value="deny" type="submit">Deny</button>' +
