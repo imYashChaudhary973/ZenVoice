@@ -38,5 +38,7 @@
 	<string>https://github.com/imYashChaudhary973/ZenVoice/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>FldQiOtbpQ/D/qzcaHc8Yvf9OdEyDPD6gQSs/xLD14Q=</string>
+	<key>ZenVoiceMCPOrigin</key>
+	<string>https://mcp.builderhelm.com</string>
 </dict>
 </plist>
