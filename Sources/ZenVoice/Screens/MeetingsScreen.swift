@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import AppKit
 import SwiftUI
 import ZenVoiceStorage
 
 struct MeetingsScreen: View {
     @ObservedObject var viewModel: MeetingViewModel
     @ObservedObject var cloudAIViewModel: CloudAIViewModel
+    @ObservedObject var mcpController: MeetingMCPController
+
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
@@ -41,6 +44,48 @@ struct MeetingsScreen: View {
                     )
                     .font(ZenDesign.Typography.body)
                     .tint(ZenDesign.Semantic.accentFill)
+
+                    Toggle(
+                        "AI connectors",
+                        isOn: Binding(
+                            get: { mcpController.isEnabled },
+                            set: { mcpController.setEnabled($0) }
+                        )
+                    )
+                    .font(ZenDesign.Typography.body)
+                    .tint(ZenDesign.Semantic.accentFill)
+                    Text(
+                        "Lets a paired AI tool read Notetaker meetings on this Mac. Meetings stay here. Off by default."
+                    )
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    if mcpController.isEnabled {
+                        HStack(spacing: ZenDesign.Spacing.sm) {
+                            Text(mcpController.displayedPairing.isEmpty
+                                ? "Registering…"
+                                : mcpController.displayedPairing)
+                                .font(ZenDesign.Typography.bodyStrong)
+                                .monospaced()
+                                .textSelection(.enabled)
+                            Spacer()
+                            controlButton("Copy code") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(
+                                    mcpController.pairing ?? "",
+                                    forType: .string
+                                )
+                            }
+                            .disabled(mcpController.pairing == nil)
+                        }
+                    }
+                    if let error = mcpController.errorMessage {
+                        Text(error)
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
 
                     HStack(spacing: ZenDesign.Spacing.sm) {
                         TextField(

@@ -66,6 +66,8 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
     @ObservedObject var meetingViewModel: MeetingViewModel
+    @ObservedObject var meetingMCPController: MeetingMCPController
+
     @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var updatesViewModel: UpdatesViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
@@ -454,7 +456,8 @@ struct ZenVoiceSettingsView: View {
                 audioHistoryViewModel: audioHistoryViewModel,
                 insightsViewModel: insightsViewModel,
                 meetingViewModel: meetingViewModel,
-                cloudAIViewModel: cloudAIViewModel
+                meetingMCPController: meetingMCPController,
+                cloudAIViewModel: cloudAIViewModel,
             )
         case .updates:
             ZenScreen(

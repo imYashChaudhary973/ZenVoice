@@ -54,75 +54,29 @@ public struct EmptyMeetingMCPStore: MeetingMCPDataSource {
     public func notes(meetingID: String?) throws -> [MeetingMCPNote] { [] }
 }
 
-public struct MeetingVaultStore: MeetingMCPDataSource {
-    private let vault: MeetingVault
+public enum MeetingError: LocalizedError {
+    case missingMeeting
 
-    public init(vault: MeetingVault) { self.vault = vault }
-
-    public func listReady() throws -> [MeetingMCPSummary] {
-        try ready().map(Self.summary)
-    }
-
-    public func search(query: String) throws -> [MeetingMCPSummary] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return try listReady() }
-        return try ready().filter { Self.matches($0, query: q) }.map(Self.summary)
-    }
-
-    public func get(id: String) throws -> MeetingMCPDetail {
-        let meeting = try ready(id)
-        return MeetingMCPDetail(
-            summary: Self.summary(meeting),
-            transcript: meeting.transcript,
-            notes: Self.notes(from: meeting),
-            followUpDraft: meeting.notes?.followUpDraft
-        )
-    }
-
-    public func notes(meetingID: String?) throws -> [MeetingMCPNote] {
-        if let meetingID { return Self.notes(from: try ready(meetingID)) }
-        return try ready().flatMap(Self.notes(from:))
-    }
-
-    private func ready() throws -> [Meeting] {
-        try vault.all().filter { $0.status == .ready }
-    }
-
-    private func ready(_ id: String) throws -> Meeting {
-        guard let uuid = UUID(uuidString: id) else { throw MeetingError.missingMeeting }
-        let meeting = try vault.load(uuid)
-        guard meeting.status == .ready else { throw MeetingError.missingMeeting }
-        return meeting
-    }
-
-    private static func summary(_ meeting: Meeting) -> MeetingMCPSummary {
-        MeetingMCPSummary(
-            id: meeting.id.uuidString,
-            title: meeting.title,
-            startedAt: meeting.startedAt.ISO8601Format(),
-            endedAt: meeting.endedAt?.ISO8601Format(),
-            status: meeting.status.rawValue,
-            sourceName: meeting.sourceName
-        )
-    }
-
-    private static func notes(from meeting: Meeting) -> [MeetingMCPNote] {
-        (meeting.notes?.claims ?? []).map {
-            MeetingMCPNote(kind: $0.kind, text: $0.text, owner: $0.owner, due: $0.due)
-        }
-    }
-
-    // ponytail: linear scan of ready meetings; index if vaults get large
-    private static func matches(_ meeting: Meeting, query: String) -> Bool {
-        if meeting.title.localizedCaseInsensitiveContains(query) { return true }
-        if meeting.transcript.localizedCaseInsensitiveContains(query) { return true }
-        if meeting.notes?.followUpDraft.localizedCaseInsensitiveContains(query) == true { return true }
-        return meeting.notes?.claims.contains { $0.text.localizedCaseInsensitiveContains(query) } == true
+    public var errorDescription: String? {
+        "That meeting is not available."
     }
 }
 
 public enum MeetingMCPPreferences {
     public static let enabledKey = "ZenVoice.mcp.connectorsEnabled"
+
+    public static func isEnabled(
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
+    ) -> Bool {
+        defaults.bool(forKey: enabledKey)
+    }
+
+    public static func setEnabled(
+        _ enabled: Bool,
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
+    ) {
+        defaults.set(enabled, forKey: enabledKey)
+    }
 
     public static func origin() -> URL? {
         let raw = ProcessInfo.processInfo.environment["ZENVOICE_MCP_ORIGIN"]

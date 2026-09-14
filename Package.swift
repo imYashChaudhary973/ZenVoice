@@ -34,6 +34,10 @@ let package = Package(
             name: "ZenVoiceLinkChecks",
             targets: ["ZenVoiceLinkChecks"]
         ),
+        .executable(
+            name: "ZenVoiceMCPSmoke",
+            targets: ["ZenVoiceMCPSmoke"]
+        ),
     ],
     dependencies: [
         .package(
@@ -51,6 +55,10 @@ let package = Package(
             linkerSettings: [
                 .linkedLibrary("sqlite3")
             ]
+        ),
+        .target(
+            name: "ZenVoiceMCP",
+            dependencies: ["ZenVoiceCore", "ZenVoiceStorage"]
         ),
         .target(
             name: "ZenVoiceLink",
@@ -71,6 +79,7 @@ let package = Package(
                 "ZenVoiceStorage",
                 "ZenVoiceRuntime",
                 "ZenVoiceLink",
+                "ZenVoiceMCP",
                 .product(name: "Sparkle", package: "Sparkle"),
             ]
         ),
@@ -80,7 +89,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "ZenVoiceStorageChecks",
-            dependencies: ["ZenVoiceCore", "ZenVoiceStorage"]
+            dependencies: ["ZenVoiceCore", "ZenVoiceStorage", "ZenVoiceMCP"]
         ),
         .executableTarget(
             name: "ZenVoiceRuntimeChecks",
@@ -110,6 +119,10 @@ let package = Package(
         .executableTarget(
             name: "ZenVoiceLinkChecks",
             dependencies: ["ZenVoiceCore", "ZenVoiceLink"]
+        ),
+        .executableTarget(
+            name: "ZenVoiceMCPSmoke",
+            dependencies: ["ZenVoiceCore", "ZenVoiceStorage", "ZenVoiceMCP"]
         ),
         .binaryTarget(
             name: "whisper",

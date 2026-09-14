@@ -14,6 +14,7 @@ const equal = (a, b) => {
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 const originOf = value => (value ?? '').replace(/\/+$/, '');
 const connectPath = '/connect/mcp';
+const mcpPaths = new Set([connectPath, '/mcp']);
 const connectUrl = origin => `${origin}${connectPath}`;
 const pairingOf = () => {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -42,8 +43,17 @@ const html = (title, body) =>
   '</body></html>';
 const escape = value => String(value).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
+function cors() {
+  return {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-headers': 'Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id',
+    'access-control-max-age': '86400',
+  };
+}
+
 function json(response, status, value, extra = {}) {
-  const headers = { 'content-type': 'application/json', 'cache-control': 'no-store', ...extra };
+  const headers = { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors(), ...extra };
   response.writeHead(status, headers);
   response.end(JSON.stringify(value));
 }
@@ -130,6 +140,10 @@ async function proxyMcp(response, origin, deviceId, rpc) {
 async function handle(request, response) {
   const host = request.headers.host || '127.0.0.1';
   const url = new URL(request.url, `http://${host}`);
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204, cors());
+    return response.end();
+  }
   if (Date.now() - windowStart > 60_000) { windowStart = Date.now(); requests = 0; }
   if (++requests > 240) fail(429, 'Too many requests; try again later');
 
@@ -155,9 +169,9 @@ async function handle(request, response) {
     });
   }
 
-  if (request.method === 'GET' && url.pathname === '/.well-known/oauth-protected-resource') {
+  if (request.method === 'GET' && (url.pathname === '/.well-known/oauth-protected-resource' || url.pathname === '/.well-known/oauth-protected-resource/mcp' || url.pathname === '/.well-known/oauth-protected-resource/connect/mcp')) {
     return json(response, 200, {
-      resource: connectUrl(origin),
+      resource: `${origin}/mcp`,
       authorization_servers: [origin],
       bearer_methods_supported: ['header'],
       scopes_supported: ['meetings.read'],
@@ -198,10 +212,10 @@ async function handle(request, response) {
     return json(response, 201, { id, secret, pairing, mcpUrl: connectUrl(origin) });
   }
 
-  if (request.method === 'POST' && url.pathname === connectPath) {
+  if (request.method === 'POST' && mcpPaths.has(url.pathname)) {
     const token = bearer(request);
     if (!token) {
-      response.writeHead(401, { 'www-authenticate': authWWW(origin), 'cache-control': 'no-store' });
+      response.writeHead(401, { 'www-authenticate': authWWW(origin), 'cache-control': 'no-store', ...cors() });
       return response.end(JSON.stringify({ error: 'invalid_token' }));
     }
     const grant = tokens.get(digest(token));
@@ -282,7 +296,8 @@ async function handle(request, response) {
     const challenge = url.searchParams.get('code_challenge') || '';
     if (!challenge) fail(400, 'PKCE code_challenge required');
     if ((url.searchParams.get('code_challenge_method') || 'S256') !== 'S256') fail(400, 'S256 required');
-    const deviceId = resolveDevice(url);
+    let deviceId = null;
+    if (String(url.searchParams.get('pairing') || '').trim()) deviceId = resolveDevice(url);
     const state = url.searchParams.get('state') || '';
     const ticket = nonce();
     codes.set(ticket, { clientId, deviceId, challenge, redirect, state, expires: Date.now() + 600_000, kind: 'consent' });
@@ -292,11 +307,12 @@ async function handle(request, response) {
         '<p>Meetings stay on your Mac. This grant sends meeting text to the AI tool that requested access. Dictation is not included. Audio is not included. ZenVoice does not keep a copy.</p>' +
         '<form method="post" action="/authorize">' +
         '<input type="hidden" name="ticket" value="' + escape(ticket) + '">' +
+        (deviceId ? '' : '<p>Enter the pairing code from ZenVoice.</p><p><input name="pairing" maxlength="8" autocomplete="off" required></p>') +
         '<button name="decision" value="deny" type="submit">Deny</button>' +
         '<button name="decision" value="approve" type="submit">Approve</button>' +
         '</form>'
     );
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...cors() });
     return response.end(page);
   }
 
@@ -312,6 +328,7 @@ async function handle(request, response) {
       response.writeHead(302, { Location: target.href, 'cache-control': 'no-store' });
       return response.end();
     }
+    if (!row.deviceId) row.deviceId = resolveDevice(url, input);
     const code = nonce();
     codes.set(code, { ...row, kind: 'code', expires: Date.now() + 60_000 });
     target.searchParams.set('code', code);
@@ -384,15 +401,24 @@ async function runCheck() {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ client_name: 'Check', redirect_uris: [`${origin}/done`] }),
   });
+  assert.equal(client.status, 201);
   const verifier = nonce();
   const challenge = digest(verifier);
   const authorizeQuery = `client_id=${client.body.client_id}&redirect_uri=${encodeURIComponent(origin + '/done')}&code_challenge=${challenge}&code_challenge_method=S256`;
-  const noPairing = await call(`/authorize?${authorizeQuery}&resource=${encodeURIComponent(`${origin}/d/${id}/mcp`)}`);
-  assert.equal(noPairing.status, 400, 'authorize requires pairing');
-  assert.match(String(noPairing.body.error || ''), /pairing/i);
 
+  const noPairing = await call(`/authorize?${authorizeQuery}`);
+  assert.equal(noPairing.status, 200, 'ChatGPT authorize without pairing still shows the form');
+  assert.match(noPairing.text, /name="pairing"/);
+  const ticketForm = noPairing.text.match(/name="ticket" value="([^"]+)"/)[1];
+  const missingCode = await call('/authorize', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `ticket=${ticketForm}&decision=approve`, redirect: 'manual' });
+  assert.equal(missingCode.status, 400, 'approve without pairing is rejected');
 
-  const authorize = await call(`/authorize?${authorizeQuery}&state=s&resource=${encodeURIComponent(mcpUrl)}&pairing=${pairing}`);
+  const viaForm = await call(`/authorize?${authorizeQuery}`);
+  const ticketForm2 = viaForm.text.match(/name="ticket" value="([^"]+)"/)[1];
+  const approvedForm = await call('/authorize', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `ticket=${ticketForm2}&decision=approve&pairing=${pairing}`, redirect: 'manual' });
+  assert.equal(approvedForm.status, 302, 'pairing on POST binds the Mac');
+
+  const authorize = await call(`/authorize?${authorizeQuery}&state=s&pairing=${pairing}`);
   assert.equal(authorize.status, 200);
   assert.match(authorize.text, /Approve/);
   assert.equal(authorize.text.includes('Check'), false);
@@ -401,7 +427,7 @@ async function runCheck() {
   assert.equal(denied.status, 302);
   assert.match(denied.headers.get('location') || '', /access_denied/);
 
-  const again = await call(`/authorize?${authorizeQuery}&resource=${encodeURIComponent(mcpUrl)}&pairing=${pairing}`);
+  const again = await call(`/authorize?${authorizeQuery}&pairing=${pairing}`);
   const ticket2 = again.text.match(/name="ticket" value="([^"]+)"/)[1];
   const approved = await call('/authorize', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `ticket=${ticket2}&decision=approve`, redirect: 'manual' });
   const code = new URL(approved.headers.get('location')).searchParams.get('code');
@@ -421,7 +447,7 @@ async function runCheck() {
 
   const pull = fetch(`${origin}/d/${id}/pull`, { method: 'POST', headers: { authorization: `Bearer ${secret}` } });
   await new Promise(resolve => setTimeout(resolve, 50));
-  const mcp = fetch(mcpUrl, {
+  const mcp = fetch(`${origin}/mcp`, {
     method: 'POST',
     headers: { authorization: `Bearer ${access}`, 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'list_meetings', arguments: {} } }),
@@ -457,7 +483,7 @@ async function runCheck() {
   assert.equal(after.status, 401, 'revoked token rejected');
 
   server.close();
-  console.log('PASS mcp relay: connect URL, pairing, OAuth PKCE, device tunnel, 401/503 fail-closed, revoke; no transcript store');
+  console.log('PASS mcp relay: pairing form for ChatGPT OAuth, /mcp alias, PKCE, device tunnel, 401/503 fail-closed');
 }
 
 if (process.argv.includes('--check')) {

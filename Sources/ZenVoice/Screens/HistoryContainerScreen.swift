@@ -25,6 +25,8 @@ struct HistoryContainerScreen: View {
     @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var meetingViewModel: MeetingViewModel
+    @ObservedObject var meetingMCPController: MeetingMCPController
+
     @ObservedObject var cloudAIViewModel: CloudAIViewModel
 
     private enum Tab: String, CaseIterable, Identifiable {
@@ -69,7 +71,8 @@ struct HistoryContainerScreen: View {
             case .meetings:
                 MeetingsScreen(
                     viewModel: meetingViewModel,
-                    cloudAIViewModel: cloudAIViewModel
+                    cloudAIViewModel: cloudAIViewModel,
+                    mcpController: meetingMCPController
                 )
             case .audio:
                 AudioHistoryScreen(viewModel: audioHistoryViewModel)

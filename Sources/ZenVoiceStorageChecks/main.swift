@@ -16,6 +16,8 @@ import Foundation
 import SQLite3
 import ZenVoiceCore
 import ZenVoiceStorage
+import ZenVoiceMCP
+
 
 private final class StaticKeyProvider: VaultKeyProviding {
     private var keyData: Data? = Data(repeating: 0x5A, count: 32)
@@ -2035,6 +2037,53 @@ private func checkMeetingStore() async throws {
     )
 }
 
+private func checkMeetingStoreMCP() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("zenvoice-mcp-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = MeetingStore(directoryURL: directory)
+    let key = StaticKeyProvider()
+    var record = try store.createRecording(
+        availableBytes: MeetingStore.reservedAudioBytes
+    )
+    record.status = .complete
+    record.title = "Standup"
+    try store.save(record)
+    let source = MeetingStoreMCPSource(store: store, keyProvider: key)
+    try await require(
+        try source.listReady().isEmpty,
+        "incomplete meeting was listed as ready"
+    )
+    try store.setOriginalTranscript(
+        "You: ship the pairing code",
+        for: record.id,
+        keyProvider: key
+    )
+    let listed = try source.listReady()
+    try await require(listed.count == 1, "ready meeting missing from list")
+    try await require(listed[0].title == "Standup", "ready title mismatch")
+    let hits = try source.search(query: "pairing")
+    try await require(hits.count == 1, "transcript search missed")
+    let detail = try source.get(id: record.id.uuidString)
+    try await require(
+        detail.transcript.contains("pairing"),
+        "get_meeting omitted transcript"
+    )
+    let request = try JSONSerialization.data(withJSONObject: [
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": [
+            "name": "list_meetings",
+            "arguments": [:] as [String: Any],
+        ],
+    ] as [String: Any])
+    let reply = try MeetingMCPServer.handle(jsonrpc: request, store: source)
+    let text = String(decoding: reply, as: UTF8.self)
+    try await require(text.contains("Standup"), "RPC list omitted title")
+}
+
+
 private func checkCallWavEnroll() async throws {
     let wav = URL(fileURLWithPath: "/tmp/zenvoice-you.wav")
     guard FileManager.default.fileExists(atPath: wav.path) else {
@@ -2124,9 +2173,10 @@ do {
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
     try await checkMeetingStore()
+    try await checkMeetingStoreMCP()
     try await checkMeetingIndexOmitsPlaintext()
     try await checkCallWavEnroll()
-    print("ZenVoiceStorageChecks: 28 checks passed")
+    print("ZenVoiceStorageChecks: 29 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

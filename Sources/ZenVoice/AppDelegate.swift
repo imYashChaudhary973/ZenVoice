@@ -21,6 +21,8 @@ import UserNotifications
 import ZenVoiceCore
 import ZenVoiceRuntime
 import ZenVoiceStorage
+import ZenVoiceMCP
+
 
 /// Live preview text held back in case the whole-recording decode fails.
 ///
@@ -181,6 +183,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var historyViewModel: HistoryViewModel!
     private var audioHistoryViewModel: AudioHistoryViewModel!
     private var meetingViewModel: MeetingViewModel!
+    private var meetingStore: MeetingStore!
+    private var meetingMCPController: MeetingMCPController!
+
     private var meetingWatcher: MeetingWatcher?
     private var cloudAIViewModel: CloudAIViewModel!
     private var cloudPreviewWindowController:
@@ -528,6 +533,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activeHistoryID = nil
         transcribingHistoryID = nil
         meetingViewModel?.markIncompleteForTermination()
+        meetingMCPController?.stopPull()
         meetingWatcher?.stop()
         let recordedAudio = recorder.stop()
         if let historyID {
@@ -807,12 +813,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func makeMeetingViewModel() -> MeetingViewModel {
-        let store: MeetingStore
         if let policy = try? RuntimeIdentity.policy(),
            let live = try? MeetingStore.live(policy: policy) {
-            store = live
+            meetingStore = live
         } else {
-            store = MeetingStore(
+            meetingStore = MeetingStore(
                 directoryURL: FileManager.default.temporaryDirectory
                     .appendingPathComponent(
                         "ZenVoiceMeetings",
@@ -821,7 +826,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
         }
         return MeetingViewModel(
-            store: store,
+            store: meetingStore,
             isDictationRecording: { [weak self] in
                 self?.recorder.isRecording == true
             },
@@ -1503,6 +1508,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         updatesViewModel = UpdatesViewModel()
         meetingViewModel = makeMeetingViewModel()
+        let mcpDevices: MeetingMCPDeviceStoring
+        if let policy = try? RuntimeIdentity.policy() {
+            mcpDevices = MeetingMCPKeychainStore(
+                service: RuntimeIdentity.keychainServiceName(policy: policy)
+            )
+        } else {
+            mcpDevices = InMemoryMeetingMCPDeviceStore()
+        }
+        meetingMCPController = MeetingMCPController(
+            store: meetingStore,
+            keyProvider: (try? RuntimeIdentity.policy()).map {
+                KeychainVaultKeyProvider(policy: $0)
+            },
+            devices: mcpDevices
+        )
         let watcher = MeetingWatcher()
         watcher.onDetected = { [weak self] detection in
             self?.meetingViewModel.handleDetection(detection)
@@ -1515,6 +1535,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             historyViewModel: historyViewModel,
             audioHistoryViewModel: audioHistoryViewModel,
             meetingViewModel: meetingViewModel,
+            meetingMCPController: meetingMCPController,
             cloudAIViewModel: cloudAIViewModel,
             updatesViewModel: updatesViewModel,
             insightsViewModel: insightsViewModel,

@@ -22,6 +22,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let historyViewModel: HistoryViewModel
     private let audioHistoryViewModel: AudioHistoryViewModel
     private let meetingViewModel: MeetingViewModel
+    private let meetingMCPController: MeetingMCPController
+
     private let cloudAIViewModel: CloudAIViewModel
     private let updatesViewModel: UpdatesViewModel
     private let insightsViewModel: InsightsViewModel
@@ -35,6 +37,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         historyViewModel: HistoryViewModel,
         audioHistoryViewModel: AudioHistoryViewModel,
         meetingViewModel: MeetingViewModel,
+        meetingMCPController: MeetingMCPController,
         cloudAIViewModel: CloudAIViewModel,
         updatesViewModel: UpdatesViewModel,
         insightsViewModel: InsightsViewModel,
@@ -48,6 +51,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.historyViewModel = historyViewModel
         self.audioHistoryViewModel = audioHistoryViewModel
         self.meetingViewModel = meetingViewModel
+        self.meetingMCPController = meetingMCPController
+
         self.cloudAIViewModel = cloudAIViewModel
         self.updatesViewModel = updatesViewModel
         self.insightsViewModel = insightsViewModel
@@ -93,6 +98,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 historyViewModel: historyViewModel,
                 audioHistoryViewModel: audioHistoryViewModel,
                 meetingViewModel: meetingViewModel,
+                meetingMCPController: meetingMCPController,
                 cloudAIViewModel: cloudAIViewModel,
                 updatesViewModel: updatesViewModel,
                 insightsViewModel: insightsViewModel,
