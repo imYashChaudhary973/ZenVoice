@@ -168,15 +168,65 @@ final class MeetingViewModel: ObservableObject {
     }
 
     func searchMeetings() {
-        let query = searchQuery
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         Task { [weak self] in
             guard let self else { return }
-            self.searchHits = (try? await self.index?.search(
-                query: query,
-                limit: 8
-            )) ?? []
+            self.searchHits = self.searchSidecars(query: query, limit: 8)
         }
     }
+
+    private func searchSidecars(
+        query: String,
+        limit: Int
+    ) -> [(id: UUID, snippet: String)] {
+        let terms = query.split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        guard limit > 0, !terms.isEmpty else { return [] }
+        let records = (try? store.all()) ?? []
+        var hits: [(id: UUID, snippet: String)] = []
+        for record in records {
+            var haystack = record.displayTitle
+            if let keyProvider {
+                haystack += "\n"
+                    + ((try? store.originalTranscript(
+                        for: record.id,
+                        keyProvider: keyProvider
+                    )) ?? "")
+                haystack += "\n"
+                    + ((try? store.summary(
+                        for: record.id,
+                        keyProvider: keyProvider
+                    )) ?? "")
+            }
+            let hayLower = haystack.lowercased()
+            guard terms.allSatisfy({
+                hayLower.contains($0.lowercased())
+            }) else { continue }
+            hits.append((record.id, Self.snippet(haystack, around: terms[0])))
+            if hits.count == limit { break }
+        }
+        return hits
+    }
+
+    private static func snippet(_ text: String, around term: String) -> String {
+        let folded = text.lowercased()
+        let needle = term.lowercased()
+        let match = folded.range(of: needle) ?? text.startIndex..<text.startIndex
+        let start = text.index(
+            match.lowerBound,
+            offsetBy: -20,
+            limitedBy: text.startIndex
+        ) ?? text.startIndex
+        let end = text.index(
+            match.upperBound,
+            offsetBy: 40,
+            limitedBy: text.endIndex
+        ) ?? text.endIndex
+        return String(text[start..<end])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
 
     func joinAndRecord() {
         let raw = joinURL

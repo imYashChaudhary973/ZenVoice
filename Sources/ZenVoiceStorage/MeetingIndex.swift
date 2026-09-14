@@ -64,6 +64,9 @@ public actor MeetingIndex {
             );
             """
         )
+        // Existing indexes stored live transcripts in sqlite. Blank them.
+        try execute("UPDATE meetings SET original = '', recap = '';")
+        try execute("DELETE FROM meetings_fts;")
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o600],
             ofItemAtPath: databaseURL.path
@@ -77,36 +80,24 @@ public actor MeetingIndex {
     public func upsert(id: UUID, original: String, recap: String) throws {
         let key = id.uuidString
         try transaction {
-            try run("DELETE FROM meetings_fts WHERE id = ?;") { statement in
-                bind(key, at: 1, in: statement)
-            }
-            try run(
-                "INSERT INTO meetings_fts(id, original, recap) VALUES (?, ?, ?);"
-            ) { statement in
-                bind(key, at: 1, in: statement)
-                bind(original, at: 2, in: statement)
-                bind(recap, at: 3, in: statement)
-            }
             try run(
                 """
                 INSERT INTO meetings(id, original, recap, embedding)
-                VALUES (?, ?, ?, ?)
+                VALUES (?, '', '', ?)
                 ON CONFLICT(id) DO UPDATE SET
-                    original = excluded.original,
-                    recap = excluded.recap,
+                    original = '',
+                    recap = '',
                     embedding = excluded.embedding;
                 """
             ) { statement in
                 bind(key, at: 1, in: statement)
-                bind(original, at: 2, in: statement)
-                bind(recap, at: 3, in: statement)
                 if let blob = Self.sentenceEmbeddingBlob(
                     original: original,
                     recap: recap
                 ) {
-                    bind(blob, at: 4, in: statement)
+                    bind(blob, at: 2, in: statement)
                 } else {
-                    sqlite3_bind_null(statement, 4)
+                    sqlite3_bind_null(statement, 2)
                 }
             }
         }

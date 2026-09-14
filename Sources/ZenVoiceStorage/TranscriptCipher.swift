@@ -129,9 +129,13 @@ struct TranscriptCipher {
         key = SymmetricKey(data: keyData)
     }
 
-    func seal(_ text: String, context: String) throws -> Data {
+    func isSealed(_ data: Data) -> Bool {
+        data.starts(with: Self.contextualHeader)
+    }
+
+    func seal(data: Data, context: String) throws -> Data {
         let sealedBox = try AES.GCM.seal(
-            Data(text.utf8),
+            data,
             using: key,
             authenticating: Data(context.utf8)
         )
@@ -140,6 +144,23 @@ struct TranscriptCipher {
         }
         return Self.contextualHeader + combined
     }
+
+    func seal(_ text: String, context: String) throws -> Data {
+        try seal(data: Data(text.utf8), context: context)
+    }
+
+    func openData(_ data: Data, context: String) throws -> Data {
+        guard isSealed(data) else { return data }
+        let sealedBox = try AES.GCM.SealedBox(
+            combined: data.dropFirst(Self.contextualHeader.count)
+        )
+        return try AES.GCM.open(
+            sealedBox,
+            using: key,
+            authenticating: Data(context.utf8)
+        )
+    }
+
 
     func open(_ data: Data, context: String) throws -> String {
         let clearData: Data

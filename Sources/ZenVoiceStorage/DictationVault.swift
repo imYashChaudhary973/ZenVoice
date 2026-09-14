@@ -295,16 +295,25 @@ public actor DictationVault {
     ) throws {
         let sourceURL = recoveryAudioURL(for: id)
         let destinationURL = archiveAudioURL(for: archiveID)
-        let attributes = try FileManager.default.attributesOfItem(
-            atPath: sourceURL.path
-        )
-        let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
-
         guard FileManager.default.fileExists(atPath: sourceURL.path) else {
             throw DictationVaultError.invalidRecord
         }
+        let plain = try openAudioFile(
+            sourceURL,
+            id: id,
+            field: "recovery"
+        )
+        let sealed = try cipher.seal(
+            data: plain,
+            context: audioContext(id: archiveID, field: "archive")
+        )
+        try sealed.write(to: destinationURL, options: .atomic)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: destinationURL.path
+        )
+        let fileSize = Int64(sealed.count)
 
-        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
 
         let statement = try prepare(
             """
@@ -335,6 +344,23 @@ public actor DictationVault {
             throw error
         }
     }
+
+    public func recoveryAudioData(id: UUID) throws -> Data {
+        try openAudioFile(
+            recoveryAudioURL(for: id),
+            id: id,
+            field: "recovery"
+        )
+    }
+
+    public func archiveAudioData(id: UUID) throws -> Data {
+        try openAudioFile(
+            archiveAudioURL(for: id),
+            id: id,
+            field: "archive"
+        )
+    }
+
 
     /// Deletes the archived audio file and metadata row for the given archive.
     public func deleteAudioArchive(id: UUID) throws {
@@ -543,7 +569,9 @@ public actor DictationVault {
             }
         )
 
-        if !retainAudio {
+        if retainAudio {
+            try sealRecoveryAudio(id: id)
+        } else {
             try deleteRecoveryAudioAndClear(id: id)
         }
     }
@@ -1467,6 +1495,39 @@ public actor DictationVault {
     private func encryptionContext(id: UUID, field: String) -> String {
         "ZenVoice.dictation.v2|\(id.uuidString.lowercased())|\(field)"
     }
+
+    private func audioContext(id: UUID, field: String) -> String {
+        "ZenVoice.audio.v2|\(id.uuidString.lowercased())|\(field)"
+    }
+
+    private func sealRecoveryAudio(id: UUID) throws {
+        let url = recoveryAudioURL(for: id)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let data = try Data(contentsOf: url)
+        if cipher.isSealed(data) { return }
+        let sealed = try cipher.seal(
+            data: data,
+            context: audioContext(id: id, field: "recovery")
+        )
+        try sealed.write(to: url, options: .atomic)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: url.path
+        )
+    }
+
+    private func openAudioFile(
+        _ url: URL,
+        id: UUID,
+        field: String
+    ) throws -> Data {
+        let data = try Data(contentsOf: url)
+        return try cipher.openData(
+            data,
+            context: audioContext(id: id, field: field)
+        )
+    }
+
 
     private func correctionContext(id: UUID, field: String) -> String {
         "ZenVoice.correction.v1|\(id.uuidString.lowercased())|\(field)"

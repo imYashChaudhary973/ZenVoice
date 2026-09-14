@@ -3732,15 +3732,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 )
             )
         }
-        guard let audioURL = record.recoveryAudioURL,
-              FileManager.default.fileExists(atPath: audioURL.path) else {
+        guard record.recoveryAudioURL != nil else {
             return .failure(
                 DictationVaultError.database(
                     "The recovery audio is no longer available."
                 )
             )
         }
+        let plaintextURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "zenvoice-retry-\(record.id.uuidString).wav"
+            )
+        do {
+            let wav = try await resolvedVault().recoveryAudioData(id: record.id)
+            try wav.write(to: plaintextURL, options: .atomic)
+        } catch {
+            return .failure(error)
+        }
         guard let registry = engineRegistry else {
+            try? FileManager.default.removeItem(at: plaintextURL)
             return .failure(
                 DictationVaultError.database(
                     "No speech engine is available."
@@ -3761,6 +3771,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               recordedLanguageProfile.isCompatible(
                   with: resolvedEngine.languageCapability
               ) else {
+            try? FileManager.default.removeItem(at: plaintextURL)
             return .failure(
                 DictationVaultError.database(
                     "This recording used \(recordedLanguageProfile.displayName). "
@@ -3775,13 +3786,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 durationSeconds: record.durationSeconds
             )
         } catch {
+            try? FileManager.default.removeItem(at: plaintextURL)
             return .failure(error)
         }
 
         state.phase = .transcribing
         transcribingHistoryID = record.id
         let recordedAudio = AudioRecorder.RecordedAudio(
-            url: audioURL,
+            url: plaintextURL,
             durationSeconds: record.durationSeconds
         )
         let correctionVault = dictationVault
@@ -3802,9 +3814,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let voiceCommandsEnabled =
             LocalVoiceCommandPreferences.isEnabled()
         Task { [weak self] in
+            defer { try? FileManager.default.removeItem(at: plaintextURL) }
             do {
                 let result = try await registry.transcribe(
-                    audioURL: audioURL,
+                    audioURL: plaintextURL,
                     profile: recordedLanguageProfile,
                     defaults: RuntimeIdentity.userDefaults(),
                     initialPrompt: initialPrompt

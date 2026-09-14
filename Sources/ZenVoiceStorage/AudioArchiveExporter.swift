@@ -74,7 +74,8 @@ public enum AudioArchiveExporter {
         options: AudioArchiveExportOptions = AudioArchiveExportOptions(),
         to destinationURL: URL,
         fileManager: FileManager = .default,
-        transcriptProvider: ((UUID) -> String?)? = nil
+        transcriptProvider: ((UUID) -> String?)? = nil,
+        audioDataProvider: ((UUID) -> Data?)? = nil
     ) throws {
         guard !records.isEmpty else {
             throw AudioArchiveExportError.noRecords
@@ -98,7 +99,8 @@ public enum AudioArchiveExporter {
             options: options,
             into: payloadDirectory,
             fileManager: fileManager,
-            transcriptProvider: transcriptProvider
+            transcriptProvider: transcriptProvider,
+            audioDataProvider: audioDataProvider
         )
 
         try writeManifest(
@@ -121,7 +123,8 @@ public enum AudioArchiveExporter {
         options: AudioArchiveExportOptions,
         into payloadDirectory: URL,
         fileManager: FileManager,
-        transcriptProvider: ((UUID) -> String?)?
+        transcriptProvider: ((UUID) -> String?)?,
+        audioDataProvider: ((UUID) -> Data?)?
     ) throws -> [ManifestEntry] {
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
@@ -148,8 +151,9 @@ public enum AudioArchiveExporter {
             }
             usedNames.insert(fileName)
 
-            try fileManager.copyItem(
-                at: record.audioURL,
+            let wav = try audioDataProvider?(record.id)
+                ?? Data(contentsOf: record.audioURL)
+            try wav.write(
                 to: payloadDirectory.appendingPathComponent(fileName)
             )
 

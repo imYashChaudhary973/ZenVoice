@@ -136,8 +136,14 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
             return
         }
         stopPlayback()
+        Task { await play(record) }
+    }
+
+    private func play(_ record: AudioArchiveRecord) async {
         do {
-            let player = try AVAudioPlayer(contentsOf: record.audioURL)
+            let vault = try await vaultProvider()
+            let wav = try await vault.archiveAudioData(id: record.id)
+            let player = try AVAudioPlayer(data: wav)
             player.delegate = self
             guard player.play() else {
                 errorMessage = "That recording could not be played."
@@ -150,6 +156,7 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
             errorMessage = error.localizedDescription
         }
     }
+
 
     func stopPlayback() {
         player?.stop()
@@ -280,6 +287,10 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
                     }
                 }
             }
+            var wavs: [UUID: Data] = [:]
+            for record in targets {
+                wavs[record.id] = try await vault.archiveAudioData(id: record.id)
+            }
             try AudioArchiveExporter.export(
                 records: targets,
                 options: AudioArchiveExportOptions(
@@ -288,7 +299,8 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
                 to: destination,
                 transcriptProvider: { dictationID in
                     transcripts[dictationID]
-                }
+                },
+                audioDataProvider: { wavs[$0] }
             )
             statusMessage = targets.count == 1
                 ? "Exported 1 recording."
