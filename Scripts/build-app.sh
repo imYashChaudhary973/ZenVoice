@@ -282,6 +282,18 @@ else
         --options runtime \
         --sign - \
         "$frameworks_dir/libparakeet.dylib"
+    codesign \
+        --force \
+        --options runtime \
+        --sign - \
+        "$frameworks_dir/onnxruntime.framework"
+    for bundle in "$contents_dir/Resources"/*.bundle(N); do
+        codesign \
+            --force \
+            --options runtime \
+            --sign - \
+            "$bundle"
+    done
     while IFS= read -r helper; do
         codesign \
             --force \
