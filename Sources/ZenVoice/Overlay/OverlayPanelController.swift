@@ -14,6 +14,7 @@
 
 import AppKit
 import ApplicationServices
+import Combine
 import SwiftUI
 import ZenVoiceCore
 
@@ -35,17 +36,15 @@ final class OverlayPanelController {
     private static let reassertDelays: [TimeInterval] = [0.15, 0.4, 0.9, 1.6]
 
     private let kind: OverlayKind
-    /// The Reduce Motion value this panel's content was built with. The value
-    /// is baked into the hosted view's environment, so a change means the
-    /// panel has to be rebuilt.
     private let reduceMotion: Bool
+    private let state: AppState
     private let panel: NSPanel
     private var isShowing = false
     private var spaceObserver: NSObjectProtocol?
     private var activationObserver: NSObjectProtocol?
     private var reassertWorkItems: [DispatchWorkItem] = []
     private var hostingView: NSHostingView<AnyView>?
-
+    private var previewWidthCancellable: AnyCancellable?
     /// Creates a panel controller for the given overlay kind. The closures are
     /// forwarded to the overlay content view.
     init(
@@ -58,8 +57,8 @@ final class OverlayPanelController {
         cancelAgenticGoal: @escaping () -> Void
     ) {
         self.kind = kind
+        self.state = state
         reduceMotion = OverlayPreferences.loadReduceMotion()
-
         let frame = NSRect(
             x: 0,
             y: 0,
@@ -99,9 +98,11 @@ final class OverlayPanelController {
 
         observeActiveSpaceChanges()
         observeApplicationActivation()
+        observeLiveTranscriptWidth()
     }
 
     deinit {
+        previewWidthCancellable?.cancel()
         if let spaceObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver)
         }
@@ -142,6 +143,28 @@ final class OverlayPanelController {
     func reposition() {
         guard isShowing else { return }
         positionOverlay()
+    }
+
+    private func observeLiveTranscriptWidth() {
+        previewWidthCancellable = state.$liveTranscriptPreview
+            .combineLatest(state.$livePreviewEnabled)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _, _ in
+                self?.reposition()
+            }
+    }
+
+    /// Compact bars + cancel/finish chrome, then grow with the spoken phrase.
+    private func liveHUDWidth(minimum: CGFloat, maximum: CGFloat) -> CGFloat {
+        guard state.livePreviewEnabled else { return minimum }
+        let font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        let textWidth = ceil(
+            (state.liveTranscriptPreview as NSString).size(
+                withAttributes: [.font: font]
+            ).width
+        )
+        let chrome: CGFloat = 128
+        return min(maximum, max(minimum, chrome + textWidth))
     }
 
     /// Rebuilds the panel size to match the current overlay kind on this display.
@@ -310,11 +333,14 @@ final class OverlayPanelController {
         case .notch:
             positionInCameraHousing(screen: screen)
         case .floatingPanel:
-            let hudSize = CGSize(width: 268, height: 44)
+            let hudSize = CGSize(
+                width: liveHUDWidth(minimum: 268, maximum: 420),
+                height: 44
+            )
             if panel.frame.size != hudSize {
                 var frame = panel.frame
                 frame.size = hudSize
-                panel.setFrame(frame, display: true, animate: false)
+                panel.setFrame(frame, display: true, animate: !reduceMotion)
             }
             panel.appearance = OverlayPreferences.nsAppearance()
             positionAtCorner(
@@ -401,17 +427,21 @@ final class OverlayPanelController {
             return
         }
         let hang: CGFloat = 36
+        let width = liveHUDWidth(
+            minimum: housing.width,
+            maximum: min(housing.width + 220, 420)
+        )
         let size = CGSize(
-            width: housing.width,
+            width: width,
             height: housing.height + hang
         )
         var window = panel.frame
         window.size = size
         window.origin = NSPoint(
-            x: housing.minX,
+            x: housing.midX - width / 2,
             y: housing.maxY - size.height
         )
-        panel.setFrame(window, display: true, animate: false)
+        panel.setFrame(window, display: true, animate: !reduceMotion)
     }
 
     /// The camera housing in AppKit coordinates, or nil on a display with no notch.

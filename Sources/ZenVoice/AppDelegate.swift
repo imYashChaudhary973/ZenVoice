@@ -3493,6 +3493,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// or toggles live previews off. The panel's kind is fixed at construction,
     /// so a change means building a new one and restoring its visibility.
     @objc private func overlayPreferencesChanged() {
+        state.livePreviewEnabled =
+            LiveDictationPreferences.isPreviewEnabled()
+        if recorder.isRecording {
+            beginLivePreviewSession()
+        } else {
+            state.liveTranscriptPreview = ""
+        }
         let kind = resolvedOverlayKind()
         if zenBarController.matches(
             kind: kind,

@@ -414,6 +414,7 @@ final class SettingsViewModel: ObservableObject {
 
     func setLivePreviewEnabled(_ enabled: Bool) {
         LiveDictationPreferences.setPreviewEnabled(enabled)
+        OverlayPreferences.saveLivePreviewEnabled(enabled)
         livePreviewEnabled =
             LiveDictationPreferences.isPreviewEnabled()
         commitOnPauseEnabled =
