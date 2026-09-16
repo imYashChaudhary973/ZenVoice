@@ -33,22 +33,26 @@ public enum RecordingHUDStyle: String, Codable, CaseIterable, Sendable {
     public var detail: String {
         switch self {
         case .notch: return "Hugs the camera housing"
-        case .floatingPanel: return "Glass pill, any corner"
+        case .floatingPanel: return "Glass pill, any edge"
         }
     }
 }
 
 public enum RecordingHUDPosition: String, Codable, CaseIterable, Sendable {
     case topLeft
+    case topMiddle
     case topRight
     case bottomLeft
+    case bottomMiddle
     case bottomRight
 
     public var displayName: String {
         switch self {
         case .topLeft: return "Top left"
+        case .topMiddle: return "Top middle"
         case .topRight: return "Top right"
         case .bottomLeft: return "Bottom left"
+        case .bottomMiddle: return "Bottom middle"
         case .bottomRight: return "Bottom right"
         }
     }

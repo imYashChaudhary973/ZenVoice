@@ -348,6 +348,11 @@ final class OverlayPanelController {
                 x: visible.minX + margin,
                 y: visible.maxY - size.height - margin
             )
+        case .topMiddle:
+            origin = NSPoint(
+                x: visible.midX - size.width / 2,
+                y: visible.maxY - size.height - margin
+            )
         case .topRight:
             origin = NSPoint(
                 x: visible.maxX - size.width - margin,
@@ -356,6 +361,11 @@ final class OverlayPanelController {
         case .bottomLeft:
             origin = NSPoint(
                 x: visible.minX + margin,
+                y: visible.minY + margin
+            )
+        case .bottomMiddle:
+            origin = NSPoint(
+                x: visible.midX - size.width / 2,
                 y: visible.minY + margin
             )
         case .bottomRight:

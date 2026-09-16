@@ -213,74 +213,77 @@ struct OverviewScreen: View {
 
     private var notchPreview: some View {
         ZStack(alignment: .top) {
-            hudGradient
+            previewDesktop
             UnevenRoundedRectangle(
                 topLeadingRadius: 0,
-                bottomLeadingRadius: 16,
-                bottomTrailingRadius: 16,
-                topTrailingRadius: 0
+                bottomLeadingRadius: 18,
+                bottomTrailingRadius: 18,
+                topTrailingRadius: 0,
+                style: .continuous
             )
             .fill(Color.black)
-            .frame(width: 148, height: 52)
+            .frame(width: 168, height: 56)
             .overlay(alignment: .bottom) {
-                hudChromePreview
+                hudListeningChrome
                     .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 6)
             }
         }
+        .environment(\.colorScheme, .dark)
     }
 
     private var floatingPreview: some View {
         ZStack {
-            hudGradient
-            Capsule()
-                .fill(Color.black.opacity(0.72))
-                .frame(width: 168, height: 36)
-                .overlay {
-                    hudChromePreview
-                        .padding(.horizontal, 8)
-                }
+            previewDesktop
+            hudListeningChrome
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+                .frame(width: 200, height: 44)
+                .zenGlassSurface(
+                    cornerRadius: ZenDesign.Radius.pill,
+                    interactive: false
+                )
         }
+        .environment(\.colorScheme, .dark)
     }
 
-    private var hudChromePreview: some View {
-        HStack(spacing: 6) {
+    private var previewDesktop: some View {
+        ZenDesign.Semantic.canvas
+    }
+
+    private var hudListeningChrome: some View {
+        HStack(spacing: 0) {
             previewCircle("xmark")
+            Spacer(minLength: 6)
             waveformBars
+            Spacer(minLength: 6)
             previewCircle("checkmark")
         }
     }
 
     private func previewCircle(_ name: String) -> some View {
         Image(systemName: name)
-            .font(.system(size: 8, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 16, height: 16)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            .frame(width: 22, height: 22)
             .overlay {
-                Circle().strokeBorder(Color.white, lineWidth: 1)
+                Circle()
+                    .strokeBorder(
+                        ZenDesign.Semantic.textPrimary,
+                        lineWidth: 1.4
+                    )
             }
     }
 
-    private var hudGradient: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.10, green: 0.28, blue: 0.28),
-                Color(red: 0.18, green: 0.10, blue: 0.32),
-                Color(red: 0.42, green: 0.12, blue: 0.38)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     private var waveformBars: some View {
-        HStack(spacing: 3) {
-            ForEach(Array([7, 12, 18, 10, 16, 8, 14].enumerated()), id: \.offset) {
-                _,
-                height in
+        HStack(spacing: 2) {
+            ForEach(
+                Array([6, 11, 16, 9, 14, 7, 12, 8, 15].enumerated()),
+                id: \.offset
+            ) { _, height in
                 Capsule()
                     .fill(ZenDesign.Semantic.accent)
-                    .frame(width: 3, height: CGFloat(height))
+                    .frame(width: 2.5, height: CGFloat(height))
             }
         }
     }
