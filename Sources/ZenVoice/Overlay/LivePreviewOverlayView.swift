@@ -140,11 +140,20 @@ struct LivePreviewOverlayView: View {
                     voiceprintBarCount: 4
                 )
                 .frame(width: 16, height: 16)
-                Text(state.liveTranscriptPreview)
+                Text(
+                    state.liveTranscriptPreview.isEmpty
+                        ? "Listening…"
+                        : state.liveTranscriptPreview
+                )
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .foregroundStyle(
+                        state.liveTranscriptPreview.isEmpty
+                            ? ZenDesign.Semantic.textSecondary
+                            : ZenDesign.Semantic.textPrimary
+                    )
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .layoutPriority(1)
                     .animation(
                         listeningMotion,
                         value: state.liveTranscriptPreview

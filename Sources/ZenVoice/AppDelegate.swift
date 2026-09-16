@@ -2068,21 +2068,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func beginLivePreviewSession() {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.beginLivePreviewSession()
+            }
+            return
+        }
         resetLivePreviewSession()
         guard LiveDictationPreferences.isPreviewEnabled() else {
             return
         }
+        state.livePreviewEnabled = true
         liveSessionID = UUID()
         liveTargetProcessIdentifier =
             NSWorkspace.shared.frontmostApplication?.processIdentifier
-        livePreviewTimer = Timer.scheduledTimer(
-            withTimeInterval: 0.20,
-            repeats: true
-        ) { [weak self] _ in
+        // startRecorder awaits before this; a Timer on that executor never
+        // fires because it has no run loop.
+        let timer = Timer(timeInterval: 0.20, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refreshLivePreview()
             }
         }
+        timer.tolerance = 0.05
+        RunLoop.main.add(timer, forMode: .common)
+        livePreviewTimer = timer
     }
 
     private func refreshLivePreview() {
@@ -2224,22 +2233,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         languageProfile: LanguageProfile,
         initialPrompt: String?
     ) async throws -> TranscriptionResult {
-        let whisper = (engine as? WhisperSpeechEngine) ?? whisperFallback
-        guard let whisper else {
-            throw EngineError.noEngineAvailable
+        if let whisper = engine as? WhisperSpeechEngine {
+            return try await whisper.enqueuePreview(
+                samples: samples,
+                languageProfile: languageProfile,
+                initialPrompt: initialPrompt
+            )
         }
-        // Whisper preview fragments must go through the engine's async API:
-        // it serializes on the engine's own queue, the same queue the final
-        // whole-recording decode uses. Calling the synchronous samples API on
-        // this side's transcriptionQueue could run whisper_full on the same
-        // context at the same time as a final decode — whisper.cpp contexts
-        // are not thread-safe, and the result is corruption or a crash that
-        // looks like a flaky decoder.
-        return try await whisper.enqueuePreview(
-            samples: samples,
-            languageProfile: languageProfile,
-            initialPrompt: initialPrompt
-        )
+        if let parakeet = engine as? ParakeetTDTEngine {
+            return try await parakeet.enqueuePreview(
+                samples: samples,
+                languageProfile: languageProfile
+            )
+        }
+        if let whisper = whisperFallback {
+            return try await whisper.enqueuePreview(
+                samples: samples,
+                languageProfile: languageProfile,
+                initialPrompt: initialPrompt
+            )
+        }
+        throw EngineError.noEngineAvailable
     }
 
     private func acceptStablePhrase(
@@ -3493,12 +3507,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// or toggles live previews off. The panel's kind is fixed at construction,
     /// so a change means building a new one and restoring its visibility.
     @objc private func overlayPreferencesChanged() {
-        state.livePreviewEnabled =
-            LiveDictationPreferences.isPreviewEnabled()
-        if recorder.isRecording {
-            beginLivePreviewSession()
-        } else {
-            state.liveTranscriptPreview = ""
+        let preview = LiveDictationPreferences.isPreviewEnabled()
+        let previewChanged = state.livePreviewEnabled != preview
+        state.livePreviewEnabled = preview
+        if previewChanged {
+            if recorder.isRecording {
+                recorder.setCapturesLiveSamples(preview)
+                liveSamplesEnabledForRecording = preview
+                if preview {
+                    beginLivePreviewSession()
+                } else {
+                    resetLivePreviewSession()
+                }
+            } else {
+                state.liveTranscriptPreview = ""
+            }
         }
         let kind = resolvedOverlayKind()
         if zenBarController.matches(

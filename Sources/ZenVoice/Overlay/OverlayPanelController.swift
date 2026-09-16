@@ -147,10 +147,17 @@ final class OverlayPanelController {
 
     private func observeLiveTranscriptWidth() {
         previewWidthCancellable = state.$liveTranscriptPreview
-            .combineLatest(state.$livePreviewEnabled)
+            .combineLatest(state.$livePreviewEnabled, state.$phase)
             .receive(on: RunLoop.main)
-            .sink { [weak self] _, _ in
-                self?.reposition()
+            .sink { [weak self] _, _, phase in
+                guard let self else { return }
+                switch phase {
+                case .listening, .error:
+                    self.panel.ignoresMouseEvents = false
+                default:
+                    self.panel.ignoresMouseEvents = true
+                }
+                self.reposition()
             }
     }
 

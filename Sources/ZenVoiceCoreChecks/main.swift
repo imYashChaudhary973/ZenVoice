@@ -2781,6 +2781,14 @@ guard previewRegistry.resolvePreview(for: .english)?.descriptor.id
         == EngineIdentifiers.whisperLargeV3Turbo else {
     failEngineCheck("Live preview should use Whisper, not TDT")
 }
+let tdtOnlyPreview = EngineRegistry(
+    engines: [fakeTDTv3],
+    fallbackOrder: [EngineIdentifiers.parakeetTDTv3]
+)
+guard tdtOnlyPreview.resolvePreview(for: .english)?.descriptor.id
+        == EngineIdentifiers.parakeetTDTv3 else {
+    failEngineCheck("Live preview should use TDT when Whisper is missing")
+}
 
 guard VerifiedEngineCatalog.engine(
         id: EngineIdentifiers.parakeetTDTv3
