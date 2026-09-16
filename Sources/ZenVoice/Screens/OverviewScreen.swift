@@ -119,7 +119,7 @@ struct OverviewScreen: View {
 
                 ZenRow(
                     title: "Live transcript",
-                    subtitle: "Words appear next to the bars as you speak. The pill grows with them."
+                    subtitle: "On-device preview next to the bars. The pill grows with the words. Stop still decodes the whole clip for paste."
                 ) {
                     ZenSwitch(
                         isOn: Binding(
