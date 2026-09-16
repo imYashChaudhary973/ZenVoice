@@ -76,7 +76,7 @@ public enum TranscriptionOutputMode:
         case .spokenLanguage:
             return "Keep the language and native writing system."
         case .englishTranslation:
-            return "Whisper translates speech to English on this Mac."
+            return "Translate the transcript to English on this Mac."
         case .latinScript:
             return "Keep the spoken language, written with Latin characters."
         }

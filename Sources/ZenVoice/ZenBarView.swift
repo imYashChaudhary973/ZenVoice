@@ -116,9 +116,6 @@ struct ZenBarView: View {
                 showsProgress: true
             )
 
-        case .awaitingCloudReview:
-            reviewContent
-
         case .inserting:
             workingContent(
                 "inserting…",
@@ -202,29 +199,6 @@ struct ZenBarView: View {
         .accessibilityLabel(label)
     }
 
-    private var reviewContent: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ZenStatusLabel(
-                text: "review cloud text…",
-                tint: ZenDesign.Semantic.accent,
-                pulses: false
-            )
-            Text("Press your dictation shortcut to keep the local text.")
-                .font(ZenDesign.Typography.caption)
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                .lineLimit(1)
-        }
-        .frame(
-            maxWidth: .infinity,
-            maxHeight: .infinity,
-            alignment: .leading
-        )
-        .padding(.horizontal, 16)
-        .accessibilityLabel(
-            "Waiting for your cloud review. Press your dictation "
-                + "shortcut to keep the local text."
-        )
-    }
 
     private var successContent: some View {
         HStack(spacing: 8) {
@@ -335,8 +309,6 @@ struct ZenBarView: View {
             return 188
         case .transcribing, .inserting:
             return 176
-        case .awaitingCloudReview:
-            return 420
         case .success:
             return state.lastDecodeWarning == nil ? 240 : 420
         case .error:

@@ -514,14 +514,6 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var engineAvailabilities: [EngineAvailability] = []
     @Published private(set) var installedEngineIDs: Set<String> = []
     @Published var errorMessage: String?
-    @Published var openAISpeechKeyDraft = ""
-    @Published var geminiSpeechKeyDraft = ""
-    @Published var elevenLabsSpeechKeyDraft = ""
-    @Published var grokSpeechKeyDraft = ""
-    @Published private(set) var hasOpenAISpeechKey = false
-    @Published private(set) var hasGeminiSpeechKey = false
-    @Published private(set) var hasElevenLabsSpeechKey = false
-    @Published private(set) var hasGrokSpeechKey = false
 
     private let downloader: VerifiedModelDownloader
     private let fileManager: FileManager
@@ -529,10 +521,6 @@ final class ModelManagerViewModel: ObservableObject {
         (VerifiedModel, LanguageProfile) -> Result<Void, Error>
     private let selectionInvalidated: () -> Void
     private let engineRegistryProvider: () -> EngineRegistry?
-    private let openAISpeechKeyStore: any CloudAIKeyStoring
-    private let geminiSpeechKeyStore: any CloudAIKeyStoring
-    private let elevenLabsSpeechKeyStore: any CloudAIKeyStoring
-    private let grokSpeechKeyStore: any CloudAIKeyStoring
     private var downloadTask: Task<Void, Never>?
     private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
@@ -545,122 +533,20 @@ final class ModelManagerViewModel: ObservableObject {
         applySelection: @escaping
             (VerifiedModel, LanguageProfile) -> Result<Void, Error>,
         selectionInvalidated: @escaping () -> Void,
-        engineRegistryProvider: @escaping () -> EngineRegistry? = { nil },
-        openAISpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore(),
-        geminiSpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore(),
-        elevenLabsSpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore(),
-        grokSpeechKeyStore: any CloudAIKeyStoring = InMemoryCloudAIKeyStore()
+        engineRegistryProvider: @escaping () -> EngineRegistry? = { nil }
     ) {
         self.downloader = downloader
         self.fileManager = fileManager
         self.applySelection = applySelection
         self.selectionInvalidated = selectionInvalidated
         self.engineRegistryProvider = engineRegistryProvider
-        self.openAISpeechKeyStore = openAISpeechKeyStore
-        self.geminiSpeechKeyStore = geminiSpeechKeyStore
-        self.elevenLabsSpeechKeyStore = elevenLabsSpeechKeyStore
-        self.grokSpeechKeyStore = grokSpeechKeyStore
         hardwareProfile = HardwareProfile.current(fileManager: fileManager)
         selectedModelID = ModelSelectionPreferences.load()?.id
-        refreshCloudSpeechKeys()
         refreshBenchmarks()
         refreshEngineSelection()
         refresh()
     }
 
-    func refreshCloudSpeechKeys() {
-        hasOpenAISpeechKey = hasKey(openAISpeechKeyStore)
-        hasGeminiSpeechKey = hasKey(geminiSpeechKeyStore)
-        hasElevenLabsSpeechKey = hasKey(elevenLabsSpeechKeyStore)
-        hasGrokSpeechKey = hasKey(grokSpeechKeyStore)
-    }
-
-    func saveOpenAISpeechKey() {
-        saveKey(
-            openAISpeechKeyDraft,
-            store: openAISpeechKeyStore,
-            clearDraft: { openAISpeechKeyDraft = "" }
-        )
-    }
-
-    func saveGeminiSpeechKey() {
-        saveKey(
-            geminiSpeechKeyDraft,
-            store: geminiSpeechKeyStore,
-            clearDraft: { geminiSpeechKeyDraft = "" }
-        )
-    }
-
-    func deleteOpenAISpeechKey() {
-        deleteKey(store: openAISpeechKeyStore)
-    }
-
-    func deleteGeminiSpeechKey() {
-        deleteKey(store: geminiSpeechKeyStore)
-    }
-
-    func saveElevenLabsSpeechKey() {
-        saveKey(
-            elevenLabsSpeechKeyDraft,
-            store: elevenLabsSpeechKeyStore,
-            clearDraft: { elevenLabsSpeechKeyDraft = "" }
-        )
-    }
-
-    func deleteElevenLabsSpeechKey() {
-        deleteKey(store: elevenLabsSpeechKeyStore)
-    }
-
-    func saveGrokSpeechKey() {
-        saveKey(
-            grokSpeechKeyDraft,
-            store: grokSpeechKeyStore,
-            clearDraft: { grokSpeechKeyDraft = "" }
-        )
-    }
-
-    func deleteGrokSpeechKey() {
-        deleteKey(store: grokSpeechKeyStore)
-    }
-
-    private func hasKey(_ store: any CloudAIKeyStoring) -> Bool {
-        let key = (try? store.loadKey()) ?? nil
-        return !(key?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ).isEmpty ?? true)
-    }
-
-    private func saveKey(
-        _ draft: String,
-        store: any CloudAIKeyStoring,
-        clearDraft: () -> Void
-    ) {
-        let trimmed = draft.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        do {
-            try store.saveKey(trimmed)
-            clearDraft()
-            refreshCloudSpeechKeys()
-            refreshEngineSelection()
-            selectionInvalidated()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func deleteKey(store: any CloudAIKeyStoring) {
-        do {
-            try store.deleteKey()
-            refreshCloudSpeechKeys()
-            refreshEngineSelection()
-            selectionInvalidated()
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
 
     func refresh() {
         verificationTask?.cancel()
@@ -722,6 +608,22 @@ final class ModelManagerViewModel: ObservableObject {
         )
         for engine in engines {
             let id = EngineIdentifiers.canonical(engine.descriptor.id)
+            if id == EngineIdentifiers.cohereTranscribe,
+               let modelsDirectory {
+                if CohereTranscribeEngine(modelsDirectory: modelsDirectory)
+                    .isAvailable
+                {
+                    installed.insert(id)
+                }
+                continue
+            }
+            if id == EngineIdentifiers.qwen3ASR,
+               let modelsDirectory {
+                if Qwen3ASREngine.isInstalled(in: modelsDirectory) {
+                    installed.insert(id)
+                }
+                continue
+            }
             let filename = engine.downloadFilename
                 ?? VerifiedModelCatalog.model(id: id)?.filename
             if let filename, let modelsDirectory {
@@ -1170,15 +1072,21 @@ final class ModelManagerViewModel: ObservableObject {
                 self?.refreshEngineSelection()
             }
             do {
-                guard let filename = engine.downloadFilename
-                    ?? VerifiedModelCatalog.model(id: id)?.filename
-                else {
-                    throw VerifiedModelDownloadError.invalidSource
+                if id == EngineIdentifiers.cohereTranscribe {
+                    try await self?.downloadCohereModel()
+                } else if id == EngineIdentifiers.qwen3ASR {
+                    try await self?.downloadQwen3Model()
+                } else {
+                    guard let filename = engine.downloadFilename
+                        ?? VerifiedModelCatalog.model(id: id)?.filename
+                    else {
+                        throw VerifiedModelDownloadError.invalidSource
+                    }
+                    try await self?.downloadEngineModel(
+                        engineID: id,
+                        filename: filename
+                    )
                 }
-                try await self?.downloadEngineModel(
-                    engineID: id,
-                    filename: filename
-                )
                 await MainActor.run {
                     self?.refreshEngineInstallStatus()
                     if let model = VerifiedModelCatalog.model(id: id) {
@@ -1243,6 +1151,155 @@ final class ModelManagerViewModel: ObservableObject {
             progress: progress
         )
     }
+
+    private func downloadCohereModel() async throws {
+        let base =
+            "https://huggingface.co/cstr/cohere-transcribe-onnx-int8/resolve/main/"
+        guard let sourceRevision = VerifiedEngineCatalog.engine(
+            id: EngineIdentifiers.cohereTranscribe
+        )?.sourceRevision else {
+            throw VerifiedModelDownloadError.invalidSource
+        }
+        let directory = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        let files: [(String, String, Int64, String)] = [
+            (
+                VerifiedEngineCatalog.cohereEncoderFilename,
+                "cohere-encoder.int8.onnx",
+                VerifiedEngineCatalog.cohereEncoderSizeBytes,
+                VerifiedEngineCatalog.cohereEncoderSHA256
+            ),
+            (
+                VerifiedEngineCatalog.cohereDecoderFilename,
+                "cohere-decoder.int8.onnx",
+                VerifiedEngineCatalog.cohereDecoderSizeBytes,
+                VerifiedEngineCatalog.cohereDecoderSHA256
+            ),
+            (
+                VerifiedEngineCatalog.cohereTokenizerFilename,
+                "tokens.txt",
+                VerifiedEngineCatalog.cohereTokenizerSizeBytes,
+                VerifiedEngineCatalog.cohereTokenizerSHA256
+            ),
+            (
+                VerifiedEngineCatalog.cohereEncoderDataFilename,
+                "cohere-encoder.int8.onnx.data",
+                VerifiedEngineCatalog.cohereEncoderDataSizeBytes,
+                VerifiedEngineCatalog.cohereEncoderDataSHA256
+            ),
+            (
+                VerifiedEngineCatalog.cohereDecoderDataFilename,
+                "cohere-decoder.int8.onnx.data",
+                VerifiedEngineCatalog.cohereDecoderDataSizeBytes,
+                VerifiedEngineCatalog.cohereDecoderDataSHA256
+            ),
+        ]
+        var completed: Int64 = 0
+        let total = VerifiedEngineCatalog.cohereBundleSizeBytes
+        for (filename, name, size, sha) in files {
+            try await downloadCohereFile(
+                filename: filename,
+                sourceURL: URL(string: base + name + "?download=true")!,
+                expectedSize: size,
+                expectedSHA256: sha,
+                sourceRevision: sourceRevision,
+                destinationDirectory: directory
+            )
+            completed += size
+            await MainActor.run {
+                self.downloadProgress = Double(completed) / Double(total)
+            }
+        }
+    }
+
+    private func downloadCohereFile(
+        filename: String,
+        sourceURL: URL,
+        expectedSize: Int64,
+        expectedSHA256: String,
+        sourceRevision: String,
+        destinationDirectory: URL
+    ) async throws {
+        let (_, progress) =
+            AsyncStream<VerifiedModelDownloadPhase>.makeStream()
+        defer { progress.finish() }
+        _ = try await downloader.download(
+            sourceURL: sourceURL,
+            sourceRevision: sourceRevision,
+            filename: filename,
+            expectedSize: expectedSize,
+            expectedSHA256: expectedSHA256,
+            destinationDirectory: destinationDirectory,
+            progress: progress
+        )
+    }
+
+    private func downloadQwen3Model() async throws {
+        let base =
+            "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-6bit/resolve/main/"
+        guard let sourceRevision = VerifiedEngineCatalog.engine(
+            id: EngineIdentifiers.qwen3ASR
+        )?.sourceRevision else {
+            throw VerifiedModelDownloadError.invalidSource
+        }
+        let root = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        let directory = root.appendingPathComponent(
+            VerifiedEngineCatalog.qwen3DirectoryName,
+            isDirectory: true
+        )
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let files: [(String, Int64, String)] = [
+            (
+                "config.json",
+                VerifiedEngineCatalog.qwen3ConfigSizeBytes,
+                VerifiedEngineCatalog.qwen3ConfigSHA256
+            ),
+            (
+                "tokenizer_config.json",
+                VerifiedEngineCatalog.qwen3TokenizerConfigSizeBytes,
+                VerifiedEngineCatalog.qwen3TokenizerConfigSHA256
+            ),
+            (
+                "vocab.json",
+                VerifiedEngineCatalog.qwen3VocabSizeBytes,
+                VerifiedEngineCatalog.qwen3VocabSHA256
+            ),
+            (
+                "merges.txt",
+                VerifiedEngineCatalog.qwen3MergesSizeBytes,
+                VerifiedEngineCatalog.qwen3MergesSHA256
+            ),
+            (
+                VerifiedEngineCatalog.qwen3WeightsFilename,
+                VerifiedEngineCatalog.qwen3WeightsSizeBytes,
+                VerifiedEngineCatalog.qwen3WeightsSHA256
+            ),
+        ]
+        var completed: Int64 = 0
+        let total = VerifiedEngineCatalog.qwen3BundleSizeBytes
+        for (name, size, sha) in files {
+            try await downloadCohereFile(
+                filename: name,
+                sourceURL: URL(string: base + name + "?download=true")!,
+                expectedSize: size,
+                expectedSHA256: sha,
+                sourceRevision: sourceRevision,
+                destinationDirectory: directory
+            )
+            completed += size
+            await MainActor.run {
+                self.downloadProgress = Double(completed) / Double(total)
+            }
+        }
+    }
+
+
 
     deinit {
         downloadTask?.cancel()

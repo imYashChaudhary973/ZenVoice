@@ -2,15 +2,10 @@
 
 ## Current privacy promise
 
-Local engines are the default. Application code does not send audio,
-transcripts, clipboard contents, or usage analytics over the network unless
-you opt in:
+Application code does not send audio, transcripts, clipboard contents, or
+usage analytics over the network. Speech and formatting stay on this Mac.
+There is no cloud speech engine and no BYO-key Cloud formatting.
 
-- **Cloud speech** — you tap Use on OpenAI Transcribe, Gemini Transcribe,
-  Scribe v2, or Grok Transcribe. That clip is uploaded after you stop and
-  billed to your key. Details: [Cloud speech](CLOUD_SPEECH.md).
-- **Cloud formatting** — you enable it and supply a key. Finished text plus
-  your prompt leave; audio does not.
 
 The Privacy screen shows live local counts for encrypted transcripts, retained
 recovery audio, correction rules, and installed speech models. These counts are
@@ -27,9 +22,7 @@ that window rather than the whole database.
   device identifier and follows the current macOS input.
 - Audio Doctor records an explicit three-second local fixture, validates its
   signal and format, deletes it immediately, and creates no History record.
-- Read in-process by the selected local engine. If you tapped Use on a cloud
-  engine, the WAV is uploaded after you stop instead; see
-  [Cloud speech](CLOUD_SPEECH.md).
+- Read in-process by the selected local engine.
 - Deleted after successful transcription, unless Audio History is enabled — see
   below.
 - Deleted immediately when a recording is cancelled.
@@ -69,25 +62,8 @@ that window rather than the whole database.
 - Export produces a ZIP of the audio plus a metadata manifest — timestamp,
   duration, size, language, model, target app, category. Transcript text is
   excluded unless the user explicitly turns it on for that export.
-- The Audio History archive never leaves the Mac unless you export it. A
-  selected cloud engine uploads the live dictation clip, not this archive.
+- The Audio History archive never leaves the Mac unless you export it.
 - Full rationale in [ADR 0010](decisions/0010-audio-history.md).
-
-### Meetings
-
-- Off until you tap Start on History → Meetings. The dictation hotkey never
-  creates a meeting.
-- Microphone audio is You. System audio (Them) uses ScreenCaptureKit and
-  needs Screen Recording permission. Without it, only You is kept.
-- WAVs live in private Application Support `Meetings/`, unencrypted, same
-  honesty as Audio History. Original transcript and recap are AES-GCM with
-  the vault key.
-- Meeting audio is never uploaded to a cloud speech engine. Recap sends
-  transcript text plus the meeting prompt after Cloud AI is enabled, same
-  gate as [ADR 0011](decisions/0011-cloud-ai-enhancement.md).
-- Delete a meeting removes both WAVs, the sidecar, the original, and the recap.
-- Tell everyone on the call that you are recording.
-- Full contract: [ADR 0016](decisions/0016-meeting-notetaker.md).
 
 ### Transcripts
 
@@ -103,8 +79,7 @@ that window rather than the whole database.
   Privacy or History. That transcript Delete does not remove Audio History,
   recovery recordings, or correction rules, and does not rotate the vault key.
   ZenVoice does not automatically expire transcript history.
-- Never synced or uploaded by ZenVoice, except Cloud formatting after you opt
-  in (finished text plus your prompt) or a selected cloud engine (the clip).
+- Never synced or uploaded by ZenVoice.
 
 ### Application context
 
@@ -180,30 +155,6 @@ that window rather than the whole database.
 - The former downloadable Qwen/llama.cpp path remains removed; ZenVoice
   downloads and loads no refinement weights.
 
-### Cloud AI Enhancement
-
-- **This is the only feature that sends transcript text off this Mac.** Cloud
-  speech is the only feature that sends audio. Both are off by default and do
-  nothing until you opt in and supply your own provider API key.
-- What is sent: the finished transcript text and your prompt.
-- What is never sent: audio, the application you dictated into (bundle
-  identifier or name), the next-dictation context, transcript history,
-  insights, voice-profile data, correction rules, and any device or install
-  identifier.
-- Requests go directly from your Mac to the provider you chose, authenticated
-  with your key. ZenVoice operates no proxy and holds no vendor account, so
-  there is no ZenVoice-side record of the request or its content.
-- The endpoint must be HTTPS. Choosing the custom provider lets you point at a
-  self-hosted or local model so the text stays on infrastructure you control.
-- Your API key is stored in the macOS Keychain, never in preferences and never
-  in the transcript database. Turning the feature off deletes it.
-- Enhanced text is shown next to the original and is applied only when you
-  accept it. A failed request leaves the local transcript untouched.
-- Once you opt in, your transcript text is subject to the chosen provider's
-  retention and training policies, which ZenVoice cannot control or promise
-  anything about.
-- Full rationale in [ADR 0011](decisions/0011-cloud-ai-enhancement.md).
-
 ### Updates
 
 - ZenVoice is distributed directly rather than through the Mac App Store, so
@@ -226,8 +177,7 @@ that window rather than the whole database.
   deterministic context join. It is held in memory and is never persisted or
   sent to a model.
 - No transcript or context is sent to a remote model, API, analytics service,
-  or Private Cloud Compute. Cloud formatting is the separate opt-in feature
-  described above.
+  or Private Cloud Compute.
 
 ### Command Mode
 
@@ -315,12 +265,13 @@ that window rather than the whole database.
   expected sizes, and SHA-256 digests before installation. ZenVoice constructs
   every download URL itself and installs only after the whole download verifies.
 - The `whisper.cpp` XCFramework is checksum-pinned; it runs in process.
-- Local engines require no API key. Cloud engines need a key you paste in
-  Models; see [Cloud speech](CLOUD_SPEECH.md).
+- Local engines require no API key.
 
 ## macOS permissions
 
 - **Microphone** is required to record speech.
+- **Speech Recognition** is required only if you select the Apple Speech engine.
+
 - **Accessibility** is required to place the transcript into the focused
   application. That is normally a simulated `Command + V`, but it also covers
   two narrower uses of the same permission:

@@ -658,11 +658,11 @@ for profile in [capableMac, intelMac] {
         }
     }
 }
-// Turbo, Large V3, Distil. Apex is retired.
-guard VerifiedModelCatalog.models.count == 3 else {
+// Turbo, Large V3, Distil, Small, Tiny EN, Tiny ML.
+guard VerifiedModelCatalog.models.count == 6 else {
     FileHandle.standardError.write(
         Data(
-            ("FAIL: expected 3 offered models, found "
+            ("FAIL: expected 6 offered models, found "
                 + "\(VerifiedModelCatalog.models.count)\n").utf8
         )
     )
@@ -672,8 +672,6 @@ guard VerifiedModelCatalog.models.count == 3 else {
 // installed" and discovery silently falls back to the legacy base.en path.
 for id in [
     "whisper-medium-en",
-    "whisper-tiny-en",
-    "whisper-tiny-multilingual",
     "whisper-base-en",
     "whisper-base-multilingual",
     "whisper-small-en"
@@ -856,83 +854,6 @@ guard preparedMarker == "prepared",
 
 print("ZenVoiceCoreChecks: atomic model/profile transitions passed")
 
-let mergedMeeting = MeetingTranscript.merging(
-    you: TranscriptionResult(
-        rawTranscript: "hello there",
-        finalTranscript: "hello there",
-        correctionCount: 0,
-        segments: [
-            TranscriptSegment(
-                text: "hello there",
-                startSeconds: 0,
-                endSeconds: 1
-            )
-        ]
-    ),
-    them: TranscriptionResult(
-        rawTranscript: "hi",
-        finalTranscript: "hi",
-        correctionCount: 0,
-        segments: [
-            TranscriptSegment(
-                text: "hi",
-                startSeconds: 0.4,
-                endSeconds: 1
-            )
-        ]
-    )
-)
-guard mergedMeeting == "You: hello there\nThem: hi" else {
-    FileHandle.standardError.write(
-        Data("FAIL: meeting You/Them merge is incorrect\n".utf8)
-    )
-    exit(1)
-}
-let youOnly = MeetingTranscript.merging(
-    you: TranscriptionResult(
-        rawTranscript: "solo",
-        finalTranscript: "solo",
-        correctionCount: 0
-    ),
-    them: nil
-)
-guard youOnly == "solo" else {
-    FileHandle.standardError.write(
-        Data("FAIL: meeting You-only merge is incorrect\n".utf8)
-    )
-    exit(1)
-}
-print("ZenVoiceCoreChecks: meeting transcript merge passed")
-
-guard MeetingDetection.kind(of: "https://zoom.us/j/123") == .zoom,
-      MeetingDetection.kind(of: "https://meet.google.com/abc-defg") == .meet,
-      MeetingDetection.kind(of: "https://teams.microsoft.com/l/meetup-join/x")
-        == .teams,
-      MeetingDetection.kind(of: "https://zoom.us/pricing") == .unknown,
-      MeetingDetection.kind(of: "https://meet.google.com.evil.com/xxx")
-        == .unknown,
-      MeetingDetection.kind(of: "https://evil.com/?q=meet.google.com")
-        == .unknown,
-      MeetingDetection.webJoinURL(from: "https://meet.google.com.evil.com/x")
-        == nil,
-      MeetingDetection.webJoinURL(from: "https://zoom.us/j/555?pwd=ab")?
-        .absoluteString == "https://app.zoom.us/wc/555/join?pwd=ab" else {
-    FileHandle.standardError.write(
-        Data("FAIL: meeting URL detection is incorrect\n".utf8)
-    )
-    exit(1)
-}
-let relabeled = SpeakerLabeling.applying(
-    SpeakerNameMap(you: "Ada", them: "Ben"),
-    to: "You: hello\nThem: hi"
-)
-guard relabeled == "Ada: hello\nBen: hi" else {
-    FileHandle.standardError.write(
-        Data("FAIL: speaker rename-once is incorrect\n".utf8)
-    )
-    exit(1)
-}
-print("ZenVoiceCoreChecks: meeting detection and speaker labels passed")
 
 // Paragraph structure from the speaker's pauses.
 //
@@ -1471,8 +1392,8 @@ print("ZenVoiceCoreChecks: multipart download cleanup passed")
 // Metadata is checked across offered *and* retired models, because a retired
 // entry is still resolved and verified for anyone who already installed it.
 let verifiedModels = VerifiedModelCatalog.allModels
-// Three offered, ten retired.
-guard VerifiedModelCatalog.models.count == 3,
+// Six offered, seven retired.
+guard VerifiedModelCatalog.models.count == 6,
       verifiedModels.count == 13,
       // Nothing retired may still be offered, and everything retired must
       // still resolve — by identifier and by filename — so that a model
@@ -2855,8 +2776,9 @@ guard VerifiedEngineCatalog.engine(
       )?.wrappedModelID == "nvidia/parakeet-tdt-0.6b-v3" else {
     failEngineCheck("TDT v3 does not wrap nvidia/parakeet-tdt-0.6b-v3")
 }
-guard VerifiedEngineCatalog.engine(id: "apple-speech") == nil else {
-    failEngineCheck("Apple Speech should be gone from the catalogue")
+guard VerifiedEngineCatalog.engine(id: EngineIdentifiers.appleSpeech) != nil,
+      EngineIdentifiers.isKnown(EngineIdentifiers.appleSpeech) else {
+    failEngineCheck("Apple Speech should be in the catalogue")
 }
 
 
@@ -3242,451 +3164,6 @@ guard AppVersion("1.10.0")! > AppVersion("1.9.9")! else {
 
 print("ZenVoiceCoreChecks: update feed verification passed")
 
-// MARK: - Cloud AI enhancement checks
-
-// Off by default, and inert until fully configured.
-let defaultCloudConfiguration = CloudAIConfiguration()
-guard !defaultCloudConfiguration.isEnabled else {
-    failEngineCheck("Cloud AI Enhancement was enabled by default")
-}
-
-let cloudEngine = CloudAIEnhancementEngine(
-    transport: URLSessionCloudAITransport()
-)
-do {
-    _ = try cloudEngine.makeRequest(
-        transcript: "hello there",
-        configuration: defaultCloudConfiguration
-    )
-    failEngineCheck("a request was built while Cloud AI was disabled")
-} catch {
-    // Expected.
-}
-
-var cloudConfiguration = CloudAIConfiguration()
-cloudConfiguration.isEnabled = true
-
-// HTTPS is mandatory, including for custom endpoints.
-cloudConfiguration.provider = .custom
-cloudConfiguration.baseURL = "http://internal.example.com/v1"
-cloudConfiguration.model = "local-model"
-do {
-    _ = try cloudConfiguration.resolvedEndpoint()
-    failEngineCheck("a non-HTTPS cloud endpoint was accepted")
-} catch {
-    // Expected.
-}
-
-// Loopback HTTP is allowed so local Ollama can run without TLS.
-cloudConfiguration.provider = .ollama
-cloudConfiguration.baseURL = "http://127.0.0.1:11434/v1"
-cloudConfiguration.model = "llama3.2"
-guard let ollamaEndpoint = try? cloudConfiguration.resolvedEndpoint(),
-      ollamaEndpoint.absoluteString
-        == "http://127.0.0.1:11434/v1/chat/completions" else {
-    failEngineCheck("a local Ollama endpoint was rejected")
-}
-guard CloudAIProvider.ollama.requiresAPIKey == false,
-      CloudAIProvider.ollama.acceptsAPIKey(""),
-      CloudAIProvider.ollama.acceptsAPIKey("   "),
-      !CloudAIProvider.openAI.acceptsAPIKey(""),
-      CloudAIProvider.openAI.acceptsAPIKey("sk-test"),
-      CloudAIProvider.openRouter.displayName == "OpenRouter",
-      CloudAIProvider.ollamaCloud.defaultBaseURL
-        == "https://ollama.com/v1" else {
-    failEngineCheck("new cloud providers are misconfigured")
-}
-cloudConfiguration.provider = .custom
-
-cloudConfiguration.baseURL = "https://api.openai.com/v1/"
-cloudConfiguration.model = "gpt-4o-mini"
-guard let endpoint = try? cloudConfiguration.resolvedEndpoint(),
-      endpoint.absoluteString
-        == "https://api.openai.com/v1/chat/completions" else {
-    failEngineCheck("the chat-completions endpoint was built incorrectly")
-}
-
-// The privacy rule from ADR 0011, asserted against the actual bytes: only the
-// transcript and prompt may leave. If someone later attaches app identity or
-// the next-dictation context to the body, this check fails.
-let cloudRequest = try! cloudEngine.makeRequest(
-    transcript: "  meeting notes for the design review  ",
-    configuration: cloudConfiguration
-)
-let encodedBody = try! cloudRequest.encodedBody()
-let bodyText = String(decoding: encodedBody, as: UTF8.self)
-guard bodyText.contains("meeting notes for the design review") else {
-    failEngineCheck("the transcript was not present in the request body")
-}
-let forbiddenInBody = [
-    "bundleIdentifier", "bundle_id", "targetApp", "com.apple",
-    "deviceID", "device_id", "installID", "install_id",
-    "nextDictationContext", "audio", "insights", "voiceProfile"
-]
-for token in forbiddenInBody where bodyText.contains(token) {
-    failEngineCheck("the cloud request body leaked \(token)")
-}
-
-// The API key must never be part of the request value itself.
-let requestDescription = "\(cloudRequest)"
-guard !requestDescription.contains("sk-") else {
-    failEngineCheck("an API key appeared in the CloudAIRequest value")
-}
-let authorized = try! cloudRequest.urlRequest(apiKey: "sk-test-key")
-guard authorized.value(forHTTPHeaderField: "Authorization")
-        == "Bearer sk-test-key",
-      authorized.httpShouldHandleCookies == false else {
-    failEngineCheck("the authorised URLRequest was not built correctly")
-}
-
-// Empty transcripts never reach the network.
-do {
-    _ = try cloudEngine.makeRequest(
-        transcript: "   ",
-        configuration: cloudConfiguration
-    )
-    failEngineCheck("an empty transcript produced a cloud request")
-} catch {
-    // Expected.
-}
-
-// Response parsing.
-let goodResponse = Data("""
-{"choices":[{"message":{"role":"assistant","content":"Meeting notes."}}]}
-""".utf8)
-guard let parsed = try? CloudAIEnhancementEngine
-        .firstMessageContent(from: goodResponse),
-      parsed == "Meeting notes." else {
-    failEngineCheck("a valid provider response was not parsed")
-}
-for malformed in [
-    Data("{}".utf8),
-    Data("{\"choices\":[]}".utf8),
-    Data("{\"choices\":[{\"message\":{\"content\":\"\"}}]}".utf8),
-    Data("not json".utf8)
-] {
-    do {
-        _ = try CloudAIEnhancementEngine.firstMessageContent(from: malformed)
-        failEngineCheck("a malformed provider response was accepted")
-    } catch {
-        // Expected.
-    }
-}
-
-// The key store round-trips and clears.
-let keyStore = InMemoryCloudAIKeyStore()
-try! keyStore.saveKey("sk-example")
-guard try! keyStore.loadKey() == "sk-example" else {
-    failEngineCheck("the cloud API key did not round-trip")
-}
-try! keyStore.saveKey("   ")
-guard try! keyStore.loadKey() == nil else {
-    failEngineCheck("a blank cloud API key was stored instead of cleared")
-}
-try! keyStore.saveKey("sk-example")
-try! keyStore.deleteKey()
-guard try! keyStore.loadKey() == nil else {
-    failEngineCheck("the cloud API key survived deletion")
-}
-
-// A configuration written before `autoApply` existed must still decode, and
-// must decode as "keep asking". Falling back to a default configuration here
-// would quietly disable the feature and discard the user's endpoint, model,
-// and prompt.
-let legacyCloudConfiguration = """
-{
-  "isEnabled": true,
-  "provider": "anthropic",
-  "baseURL": "https://api.anthropic.com/v1",
-  "model": "claude-3-5-haiku-20241022",
-  "prompt": "Legacy prompt."
-}
-"""
-guard let legacyCloudData = legacyCloudConfiguration.data(using: .utf8),
-      let decodedLegacyCloud = try? JSONDecoder().decode(
-        CloudAIConfiguration.self,
-        from: legacyCloudData
-      ) else {
-    failEngineCheck("a pre-autoApply cloud configuration failed to decode")
-}
-guard decodedLegacyCloud.isEnabled,
-      decodedLegacyCloud.provider == .anthropic,
-      decodedLegacyCloud.model == "claude-3-5-haiku-20241022",
-      decodedLegacyCloud.prompt == "Legacy prompt." else {
-    failEngineCheck("a pre-autoApply cloud configuration lost its settings")
-}
-guard decodedLegacyCloud.autoApply == false else {
-    failEngineCheck(
-        "a pre-autoApply cloud configuration opted into silent application"
-    )
-}
-
-let localCloudTranscript = "Keep this local transcript exactly."
-let dismissedCloudResolution = CloudTranscriptResolution.resolve(
-    localTranscript: localCloudTranscript,
-    acceptedTranscript: nil
-)
-let blankCloudResolution = CloudTranscriptResolution.resolve(
-    localTranscript: localCloudTranscript,
-    acceptedTranscript: "   \n"
-)
-let acceptedCloudResolution = CloudTranscriptResolution.resolve(
-    localTranscript: localCloudTranscript,
-    acceptedTranscript: "Accepted enhancement."
-)
-guard dismissedCloudResolution.transcript == localCloudTranscript,
-      !dismissedCloudResolution.didApply,
-      blankCloudResolution.transcript == localCloudTranscript,
-      !blankCloudResolution.didApply,
-      acceptedCloudResolution.transcript == "Accepted enhancement.",
-      acceptedCloudResolution.didApply else {
-    failEngineCheck("cloud review could lose the local transcript")
-}
-
-// autoApply survives a save/load round trip, so consent given once stays
-// given.
-let autoApplyConfiguration = CloudAIConfiguration(
-    isEnabled: true,
-    autoApply: true
-)
-guard let autoApplyData = try? JSONEncoder().encode(autoApplyConfiguration),
-      let autoApplyDecoded = try? JSONDecoder().decode(
-        CloudAIConfiguration.self,
-        from: autoApplyData
-      ),
-      autoApplyDecoded.autoApply else {
-    failEngineCheck("autoApply did not survive an encode/decode round trip")
-}
-
-var boundCloud = CloudAIConfiguration(isEnabled: true)
-boundCloud.bindStoredKey()
-guard boundCloud.credentialsBoundToCurrentDestination else {
-    failEngineCheck("a newly bound cloud key was not usable")
-}
-let originalOrigin = boundCloud.endpointOrigin
-boundCloud.provider = .anthropic
-if let anthropicURL = CloudAIProvider.anthropic.defaultBaseURL {
-    boundCloud.baseURL = anthropicURL
-}
-guard !boundCloud.credentialsBoundToCurrentDestination,
-      boundCloud.endpointOrigin != originalOrigin else {
-    failEngineCheck("changing provider still used the previous destination's key")
-}
-boundCloud.provider = .openAI
-boundCloud.baseURL = CloudAIProvider.openAI.defaultBaseURL ?? boundCloud.baseURL
-guard boundCloud.credentialsBoundToCurrentDestination else {
-    failEngineCheck("switching back to the bound provider rejected the key")
-}
-
-guard !TextInserter.shouldPaste(intoFrontmost: 2, originalTarget: 1),
-      TextInserter.shouldPaste(intoFrontmost: 1, originalTarget: 1),
-      TextInserter.shouldPaste(intoFrontmost: 9, originalTarget: nil) else {
-    failEngineCheck("dictation paste did not stay on the original target")
-}
-
-print("ZenVoiceCoreChecks: cloud AI enhancement passed")
-
-let speechAudio = Data("RIFF....WAVE".utf8)
-let speechRequest = CloudSpeechRequest(
-    model: CloudSpeechEngine.defaultModel,
-    languageCode: "en",
-    audio: speechAudio,
-    boundary: "testboundary"
-)
-let speechBody = String(
-    decoding: speechRequest.encodedBody(),
-    as: UTF8.self
-)
-guard speechBody.contains("gpt-4o-mini-transcribe"),
-      speechBody.contains("language"),
-      speechBody.contains("en"),
-      speechBody.contains("speech.wav") else {
-    failEngineCheck("cloud speech request omitted model, language, or file")
-}
-for token in [
-    "bundleIdentifier", "deviceID", "installID", "voiceProfile", "sk-"
-] where speechBody.contains(token) {
-    failEngineCheck("cloud speech body leaked \(token)")
-}
-let speechAuthorized = speechRequest.urlRequest(apiKey: "sk-test-key")
-guard speechAuthorized.value(forHTTPHeaderField: "Authorization")
-        == "Bearer sk-test-key",
-      speechAuthorized.httpShouldHandleCookies == false else {
-    failEngineCheck("cloud speech URLRequest was not built correctly")
-}
-guard EngineIdentifiers.isCloudSpeech(
-    EngineIdentifiers.openaiTranscribe
-),
-!EngineIdentifiers.isCloudSpeech(
-    EngineIdentifiers.parakeetTDTv3
-) else {
-    failEngineCheck("cloud speech engine id classification is wrong")
-}
-guard let parsedSpeech = try? CloudSpeechEngine.parseTranscript(
-    from: Data("{\"text\":\" Hello there. \"}".utf8)
-),
-parsedSpeech == "Hello there." else {
-    failEngineCheck("cloud speech transcript was not parsed")
-}
-do {
-    _ = try CloudSpeechEngine.parseTranscript(from: Data("{}".utf8))
-    failEngineCheck("empty cloud speech JSON was accepted")
-} catch {
-    // Expected.
-}
-let geminiRequest = GeminiSpeechRequest(
-    languageCode: "en",
-    audio: speechAudio
-)
-let geminiBody = String(decoding: geminiRequest.encodedBody(), as: UTF8.self)
-guard geminiBody.contains("mime_type"),
-      geminiBody.contains("inline_data"),
-      geminiBody.contains("Transcribe this audio"),
-      !geminiBody.contains("bundleIdentifier"),
-      !geminiBody.contains("deviceID") else {
-    failEngineCheck("gemini speech request shape is wrong")
-}
-let geminiAuthorized = geminiRequest.urlRequest(apiKey: "test-gemini-key")
-guard geminiAuthorized.value(forHTTPHeaderField: "x-goog-api-key")
-        == "test-gemini-key" else {
-    failEngineCheck("gemini speech URLRequest was not built correctly")
-}
-guard let parsedGemini = try? CloudSpeechEngine.parseGeminiTranscript(
-    from: Data(
-        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" Hi. \"}]}}]}"
-            .utf8
-    )
-),
-parsedGemini == "Hi." else {
-    failEngineCheck("gemini speech transcript was not parsed")
-}
-guard EngineIdentifiers.isCloudSpeech(
-    EngineIdentifiers.geminiTranscribe
-) else {
-    failEngineCheck("gemini engine id was not classified as cloud speech")
-}
-let scribeRequest = ElevenLabsSpeechRequest(
-    audio: speechAudio,
-    boundary: "testboundary"
-)
-let scribeBody = String(decoding: scribeRequest.encodedBody(), as: UTF8.self)
-guard scribeBody.contains("scribe_v2"),
-      scribeBody.contains("model_id"),
-      !scribeBody.contains("bundleIdentifier") else {
-    failEngineCheck("elevenlabs speech request shape is wrong")
-}
-let scribeAuthorized = scribeRequest.urlRequest(apiKey: "el-test-key")
-guard scribeAuthorized.value(forHTTPHeaderField: "xi-api-key")
-        == "el-test-key",
-      scribeAuthorized.url?.host == "api.elevenlabs.io" else {
-    failEngineCheck("elevenlabs speech URLRequest was not built correctly")
-}
-guard let parsedScribe = try? CloudSpeechEngine.parseElevenLabsTranscript(
-    from: Data("{\"text\":\" Hello Scribe. \"}".utf8)
-),
-parsedScribe == "Hello Scribe." else {
-    failEngineCheck("elevenlabs speech transcript was not parsed")
-}
-guard EngineIdentifiers.isCloudSpeech(
-    EngineIdentifiers.elevenLabsScribe
-) else {
-    failEngineCheck("elevenlabs engine id was not classified as cloud speech")
-}
-let grokRequest = GrokSpeechRequest(
-    languageCode: "en",
-    audio: speechAudio,
-    boundary: "testboundary"
-)
-let grokBody = String(decoding: grokRequest.encodedBody(), as: UTF8.self)
-let grokFileIndex = grokBody.range(of: "name=\"file\"")?.lowerBound
-let grokFormatIndex = grokBody.range(of: "name=\"format\"")?.lowerBound
-guard grokBody.contains("format"),
-      grokBody.contains("language"),
-      grokBody.contains("en"),
-      grokFileIndex != nil,
-      grokFormatIndex != nil,
-      grokFormatIndex! < grokFileIndex!,
-      !grokBody.contains("bundleIdentifier") else {
-    failEngineCheck("grok speech request shape is wrong")
-}
-let grokAuthorized = grokRequest.urlRequest(apiKey: "xai-test-key")
-guard grokAuthorized.value(forHTTPHeaderField: "Authorization")
-        == "Bearer xai-test-key",
-      grokAuthorized.url?.host == "api.x.ai" else {
-    failEngineCheck("grok speech URLRequest was not built correctly")
-}
-guard let parsedGrok = try? CloudSpeechEngine.parseGrokTranscript(
-    from: Data("{\"text\":\" Hello Grok. \"}".utf8)
-),
-parsedGrok == "Hello Grok." else {
-    failEngineCheck("grok speech transcript was not parsed")
-}
-guard EngineIdentifiers.isCloudSpeech(
-    EngineIdentifiers.grokTranscribe
-) else {
-    failEngineCheck("grok engine id was not classified as cloud speech")
-}
-print("ZenVoiceCoreChecks: cloud speech request passed")
-
-// MARK: - Anthropic request shape checks
-
-var anthropicConfiguration = CloudAIConfiguration()
-anthropicConfiguration.isEnabled = true
-anthropicConfiguration.provider = .anthropic
-anthropicConfiguration.baseURL = "https://api.anthropic.com/v1"
-anthropicConfiguration.model = "claude-3-5-sonnet-20241022"
-
-guard let anthropicEndpoint = try? anthropicConfiguration.resolvedEndpoint(),
-      anthropicEndpoint.absoluteString
-        == "https://api.anthropic.com/v1/messages" else {
-    failEngineCheck("Anthropic endpoint was built incorrectly")
-}
-
-let anthropicRequest = try! cloudEngine.makeRequest(
-    transcript: "anthropic test transcript",
-    configuration: anthropicConfiguration
-)
-let anthropicBodyData = try! anthropicRequest.encodedBody()
-let anthropicBody = try! JSONSerialization.jsonObject(
-    with: anthropicBodyData
-) as! [String: Any]
-guard anthropicBody["model"] as? String
-        == "claude-3-5-sonnet-20241022",
-      anthropicBody["max_tokens"] as? Int == 4096,
-      anthropicBody["system"] as? String
-        == CloudAIPromptTemplate.cleanUp.text,
-      let anthropicMessages = anthropicBody["messages"]
-        as? [[String: Any]],
-      anthropicMessages.first?["role"] as? String == "user",
-      let anthropicContent = anthropicMessages.first?["content"]
-        as? String,
-      anthropicContent.contains("anthropic test transcript") else {
-    failEngineCheck("Anthropic request body shape is wrong")
-}
-
-let anthropicURLRequest = try! anthropicRequest.urlRequest(
-    apiKey: "sk-ant-test"
-)
-guard anthropicURLRequest.value(forHTTPHeaderField: "x-api-key")
-        == "sk-ant-test",
-      anthropicURLRequest.value(forHTTPHeaderField: "anthropic-version")
-        == "2023-06-01" else {
-    failEngineCheck("Anthropic auth/version headers are wrong")
-}
-
-let anthropicResponse = Data("""
-{"content":[{"type":"text","text":"Anthropic notes."}]}
-""".utf8)
-guard let anthropicParsed = try? CloudAIEnhancementEngine
-        .firstMessageContent(
-            from: anthropicResponse,
-            provider: .anthropic
-        ),
-      anthropicParsed == "Anthropic notes." else {
-    failEngineCheck("Anthropic response was not parsed")
-}
-
-print("ZenVoiceCoreChecks: Anthropic request shape passed")
 
 // MARK: - Formatting migration checks
 
@@ -3761,27 +3238,24 @@ guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
 }
 
 // After migration, the new key is respected over any stale old keys.
-TranscriptFormattingPreferences.save(.cloud, defaults: formattingDefaults)
+TranscriptFormattingPreferences.save(.smart, defaults: formattingDefaults)
 guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
-        == .cloud else {
+        == .smart else {
     failEngineCheck("formatting save/load failed")
 }
 
-// Smart and Cloud must reach the context-aware enhancer, not plain `.format`.
-// `.format` left `ZenIntelligenceEngine`'s context join unreachable: the
-// `context:` argument threaded from AppDelegate through
-// TranscriptFormattingEngine and WriteModeEngine was accepted and ignored at
-// every call site, anyone migrated from ZenIntelligence = Context Aware lost
-// sentence joining with no setting left to restore it, and ADR 0007's
-// description of Smart stopped matching the code. Nothing about that failed to
-// compile, so it is asserted here instead.
-for rung in [TranscriptFormattingMode.smart, .cloud] {
-    guard rung.zenIntelligenceMode == .contextAware else {
-        failEngineCheck(
-            "\(rung.rawValue) maps to \(rung.zenIntelligenceMode.rawValue); "
-                + "the context join is unreachable again"
-        )
-    }
+formattingDefaults.set("cloud", forKey: TranscriptFormattingPreferences.preferenceKey)
+guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
+        == .smart else {
+    failEngineCheck("stored cloud formatting did not migrate to smart")
+}
+
+// Smart must reach the context-aware enhancer, not plain `.format`.
+guard TranscriptFormattingMode.smart.zenIntelligenceMode == .contextAware else {
+    failEngineCheck(
+        "smart maps to \(TranscriptFormattingMode.smart.zenIntelligenceMode.rawValue); "
+            + "the context join is unreachable again"
+    )
 }
 for rung in [TranscriptFormattingMode.off, .clean] {
     guard rung.zenIntelligenceMode == .off else {

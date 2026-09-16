@@ -27,21 +27,61 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
         public let engineID: String
         public let modelFilename: String
         public let displayName: String
-
+        let family: EngineFamily
         let languageCapability: ModelLanguageCapability
+        let supportedLanguages: [SupportedLanguage]
         let attribution: String
+        let license: String
+        let licenseURL: String
         let queueLabel: String
 
-        /// TDT 0.6B v3 (multilingual).
+        public static let v2 = Configuration(
+            engineID: EngineIdentifiers.parakeetTDTv2,
+            modelFilename: "tdt-0.6b-v2-q8_0.gguf",
+            displayName: "NVIDIA Parakeet TDT 0.6B V2",
+            family: .parakeetTDT,
+            languageCapability: .english,
+            supportedLanguages:
+                LanguageCatalog.language(code: "en").map { [$0] } ?? [],
+            attribution:
+                "Parakeet TDT 0.6B v2 by NVIDIA. English-only. Runtime: "
+                + "parakeet.cpp v0.5.0 (MIT).",
+            license: "CC-BY-4.0",
+            licenseURL: "https://creativecommons.org/licenses/by/4.0/",
+            queueLabel: "com.zenvoice.app.parakeet-tdt-v2"
+        )
+
         public static let v3 = Configuration(
             engineID: EngineIdentifiers.parakeetTDTv3,
             modelFilename: "tdt-0.6b-v3-q8_0.gguf",
-            displayName: "Parakeet TDT v3",
+            displayName: "NVIDIA Parakeet TDT 0.6B V3",
+            family: .parakeetTDT,
             languageCapability: .multilingual,
+            supportedLanguages: LanguageProfile.parakeetTDTv3Languages,
             attribution:
                 "Parakeet TDT 0.6B v3 by NVIDIA. Runtime: parakeet.cpp "
                 + "v0.5.0 (MIT) by Ettore Di Giacinto / LocalAI.",
+            license: "CC-BY-4.0",
+            licenseURL: "https://creativecommons.org/licenses/by/4.0/",
             queueLabel: "com.zenvoice.app.parakeet-tdt-v3"
+        )
+
+        public static let nemotron = Configuration(
+            engineID: EngineIdentifiers.nemotronSpeech,
+            modelFilename:
+                "nemotron-3.5-asr-streaming-0.6b-q8_0.gguf",
+            displayName: "NVIDIA Nemotron 3.5 Multilingual 0.6B",
+            family: .nemotronSpeech,
+            languageCapability: .multilingual,
+            supportedLanguages: [
+                "en", "es", "fr", "de", "zh", "ja", "ko", "pt"
+            ].compactMap(LanguageCatalog.language(code:)),
+            attribution:
+                "Nemotron 3.5 ASR Streaming 0.6B by NVIDIA. Runtime: "
+                + "parakeet.cpp v0.5.0 (MIT).",
+            license: "OpenMDW-1.1",
+            licenseURL: "https://openmdw.ai/license/1-1/",
+            queueLabel: "com.zenvoice.app.nemotron-speech"
         )
     }
 
@@ -51,14 +91,14 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
         EngineDescriptor(
             id: configuration.engineID,
             displayName: configuration.displayName,
-            family: .parakeetTDT,
-            supportedLanguages: LanguageProfile.parakeetTDTv3Languages,
+            family: configuration.family,
+            supportedLanguages: configuration.supportedLanguages,
             requiresDownload: true,
             requiresInternet: false,
             format: "GGUF (parakeet.cpp v0.5.0)",
             publisher: "NVIDIA",
-            license: "CC-BY-4.0",
-            licenseURL: "https://creativecommons.org/licenses/by/4.0/",
+            license: configuration.license,
+            licenseURL: configuration.licenseURL,
             attribution: configuration.attribution,
             privacyNote:
                 "Runs entirely on this Mac. No audio leaves the device."

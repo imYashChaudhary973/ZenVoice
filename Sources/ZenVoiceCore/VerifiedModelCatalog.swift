@@ -134,7 +134,7 @@ public enum VerifiedModelCatalog {
     public static let sourceRepository =
         "https://huggingface.co/ggerganov/whisper.cpp"
 
-    /// Three files, each one engine in the picker. Apex is retired.
+    /// Offered engines in the Models picker. Apex stays retired.
     public static let models: [VerifiedModel] = [
         model(
             id: EngineIdentifiers.whisperLargeV3Turbo,
@@ -146,8 +146,6 @@ public enum VerifiedModelCatalog {
                 "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
             size: 574_041_195
         ),
-        // ponytail: q5_0 not F16 (3.1 GB). Switch to ggml-large-v3.bin if
-        // q5_0 WER is too far from the F16 checkpoint.
         model(
             id: EngineIdentifiers.whisperLargeV3,
             name: "Whisper Large V3",
@@ -165,6 +163,36 @@ public enum VerifiedModelCatalog {
             sha256:
                 "2883a11b90fb10ed592d826edeaee7d2929bf1ab985109fe9e1e7b4d2b69a298",
             size: 1_519_521_155
+        ),
+        model(
+            id: "whisper-small-multilingual",
+            name: "Whisper Small",
+            filename: "ggml-small.bin",
+            tier: .balanced,
+            language: .multilingual,
+            sha256:
+                "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+            size: 487_601_967
+        ),
+        model(
+            id: "whisper-tiny-en",
+            name: "Whisper Tiny (English)",
+            filename: "ggml-tiny.en.bin",
+            tier: .fast,
+            language: .english,
+            sha256:
+                "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+            size: 77_704_715
+        ),
+        model(
+            id: "whisper-tiny-multilingual",
+            name: "Whisper Tiny",
+            filename: "ggml-tiny.bin",
+            tier: .fast,
+            language: .multilingual,
+            sha256:
+                "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+            size: 77_691_713
         )
     ]
 
@@ -207,16 +235,6 @@ public enum VerifiedModelCatalog {
             size: 874_188_075
         ),
         model(
-            id: "whisper-small-multilingual",
-            name: "Whisper Small",
-            filename: "ggml-small.bin",
-            tier: .balanced,
-            language: .multilingual,
-            sha256:
-                "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
-            size: 487_601_967
-        ),
-        model(
             id: "whisper-medium-multilingual",
             name: "Whisper Medium",
             filename: "ggml-medium.bin",
@@ -235,26 +253,6 @@ public enum VerifiedModelCatalog {
             sha256:
                 "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356",
             size: 1_533_774_781
-        ),
-        model(
-            id: "whisper-tiny-en",
-            name: "Whisper Tiny",
-            filename: "ggml-tiny.en.bin",
-            tier: .fast,
-            language: .english,
-            sha256:
-                "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
-            size: 77_704_715
-        ),
-        model(
-            id: "whisper-tiny-multilingual",
-            name: "Whisper Tiny",
-            filename: "ggml-tiny.bin",
-            tier: .fast,
-            language: .multilingual,
-            sha256:
-                "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
-            size: 77_691_713
         ),
         model(
             id: "whisper-base-en",

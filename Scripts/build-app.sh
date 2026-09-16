@@ -171,6 +171,26 @@ else
     echo "Error: Sparkle.framework not found for embedding." >&2
     exit 1
 fi
+onnx_framework="$build_dir/onnxruntime.framework"
+if [[ ! -d "$onnx_framework" ]]; then
+    onnx_framework="$project_dir/.build/artifacts/onnxruntime-swift-package-manager/onnxruntime/onnxruntime.xcframework/macos-arm64_x86_64/onnxruntime.framework"
+fi
+if [[ -d "$onnx_framework" ]]; then
+    cp -R "$onnx_framework" "$frameworks_dir/"
+else
+    echo "Error: onnxruntime.framework not found for embedding." >&2
+    exit 1
+fi
+
+# mlx-swift Metal shaders and Hugging Face tokenizer resources live in SPM
+# bundles next to the debug/release binary. Bundle.module looks in the app
+# Resources folder once we wrap the executable.
+for bundle in "$build_dir"/*.bundle(N); do
+    cp -R "$bundle" "$contents_dir/Resources/"
+done
+
+
+
 install_name_tool \
     -add_rpath "@executable_path/../Frameworks" \
     "$contents_dir/MacOS/ZenVoice"
@@ -203,6 +223,23 @@ if [[ -n "$signing_identity" ]]; then
         "$timestamp_flag" \
         --sign "$signing_identity" \
         "$frameworks_dir/libparakeet.dylib"
+    codesign \
+        --force \
+        --options runtime \
+        "$timestamp_flag" \
+        --sign "$signing_identity" \
+        "$frameworks_dir/onnxruntime.framework"
+    for bundle in "$contents_dir/Resources"/*.bundle(N); do
+        codesign \
+            --force \
+            --options runtime \
+            "$timestamp_flag" \
+            --sign "$signing_identity" \
+            "$bundle"
+    done
+
+
+
     # Sparkle ships nested helper binaries (Updater.app, Autoupdate,
     # XPCServices/*.xpc). Notarization rejects the framework if any nested
     # executable lacks Developer ID + timestamp, so sign every one of them

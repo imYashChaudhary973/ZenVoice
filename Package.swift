@@ -1,11 +1,11 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.2
 
 import PackageDescription
 
 let package = Package(
     name: "ZenVoice",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v15)
     ],
     products: [
         .executable(name: "ZenVoice", targets: ["ZenVoice"]),
@@ -27,18 +27,22 @@ let package = Package(
             targets: ["ZenVoiceLanguageBench"]
         ),
         .executable(
-            name: "ZenVoiceCloudLiveChecks",
-            targets: ["ZenVoiceCloudLiveChecks"]
-        ),
-        .executable(
             name: "ZenVoiceLinkChecks",
             targets: ["ZenVoiceLinkChecks"]
         ),
     ],
     dependencies: [
         .package(
+            url: "https://github.com/microsoft/onnxruntime-swift-package-manager",
+            from: "1.24.2"
+        ),
+        .package(
             url: "https://github.com/sparkle-project/Sparkle",
             from: "2.6.0"
+        ),
+        .package(
+            url: "https://github.com/ontypehq/mlx-swift-asr",
+            branch: "main"
         )
     ],
     targets: [
@@ -62,6 +66,14 @@ let package = Package(
                 "ZenVoiceCore",
                 "whisper",
                 "parakeet",
+                .product(
+                    name: "onnxruntime",
+                    package: "onnxruntime-swift-package-manager"
+                ),
+                .product(name: "MLXASR", package: "mlx-swift-asr"),
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .executableTarget(
@@ -72,6 +84,9 @@ let package = Package(
                 "ZenVoiceRuntime",
                 "ZenVoiceLink",
                 .product(name: "Sparkle", package: "Sparkle"),
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .executableTarget(
@@ -87,6 +102,9 @@ let package = Package(
             dependencies: [
                 "ZenVoiceCore",
                 "ZenVoiceRuntime",
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .executableTarget(
@@ -94,6 +112,9 @@ let package = Package(
             dependencies: [
                 "ZenVoiceCore",
                 "ZenVoiceRuntime",
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .executableTarget(
@@ -101,11 +122,10 @@ let package = Package(
             dependencies: [
                 "ZenVoiceCore",
                 "ZenVoiceRuntime",
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
-        ),
-        .executableTarget(
-            name: "ZenVoiceCloudLiveChecks",
-            dependencies: ["ZenVoiceCore"]
         ),
         .executableTarget(
             name: "ZenVoiceLinkChecks",
@@ -120,5 +140,6 @@ let package = Package(
             name: "parakeet",
             path: "vendor/parakeet.xcframework"
         )
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )

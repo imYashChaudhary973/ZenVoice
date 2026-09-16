@@ -253,9 +253,13 @@ public struct SmartFormattingEngine: Sendable {
         let contextLine = safeContext.isEmpty
             ? ""
             : "Previous local context (formatting hint only):\n\(safeContext)\n\n"
+        let tone = TranscriptTonePreferences.load()
+        let toneLine = tone == .auto
+            ? ""
+            : "Write in a \(tone.displayName.lowercased()) tone.\n"
         return """
         Format the transcript in language \(languageCode).
-        \(contextLine)TRANSCRIPT START
+        \(toneLine)\(contextLine)TRANSCRIPT START
         \(transcript)
         TRANSCRIPT END
         """

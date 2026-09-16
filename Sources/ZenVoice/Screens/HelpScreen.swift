@@ -35,8 +35,8 @@ struct HelpScreen: View {
             id: 1,
             question: "Does my voice ever leave this Mac?",
             answer:
-                "By default, no. Local engines (Parakeet, Whisper) record, transcribe, and store everything on this Mac. If you tap Use on a cloud engine in Models (OpenAI, Gemini, Scribe v2, or Grok), that clip is uploaded after you stop and billed to your key. Cloud formatting still sends text only, never audio.",
-            tags: "privacy cloud offline network openai gemini scribe elevenlabs grok"
+                "No. Local engines (Parakeet, Whisper) record, transcribe, and store everything on this Mac.",
+            tags: "privacy offline network"
         ),
         ZenFAQ(
             id: 2,
@@ -70,15 +70,8 @@ struct HelpScreen: View {
             id: 7,
             question: "What does Formatting actually change?",
             answer:
-                "Off keeps the raw transcript. Clean removes fillers, repeated words, and spoken restarts — never meaning. Smart adds capitalisation, number formatting, and spacing. Cloud sends the transcript to a provider you choose, with your own key, for enhancement.",
-            tags: "refine clean smart cloud rewrite grammar"
-        ),
-        ZenFAQ(
-            id: 8,
-            question: "How do I use cloud speech for dictation?",
-            answer:
-                "Open Models, paste your OpenAI, Google AI Studio, ElevenLabs, or xAI key under Cloud speech, then tap Use on that engine. Speak as usual. After you stop, the wav is uploaded once and the text is inserted. If the API fails, ZenVoice decodes the same clip locally.",
-            tags: "openai gemini scribe elevenlabs grok cloud transcribe key"
+                "Off keeps the raw transcript. Clean removes fillers, repeated words, and spoken restarts — never meaning. Smart adds capitalisation, number formatting, and spacing using an on-device model.",
+            tags: "refine clean smart rewrite grammar"
         ),
         ZenFAQ(
             id: 9,

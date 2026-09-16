@@ -24,7 +24,6 @@ struct PrivacyScreen: View {
         VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel:
         ModelManagerViewModel
-    @ObservedObject var meetingViewModel: MeetingViewModel
     let openModels: () -> Void
     var embedded = false
 
@@ -60,8 +59,7 @@ struct PrivacyScreen: View {
                 icon: "network.slash",
                 text:
                     "Model downloads use pinned revisions and SHA-256 verification. "
-                    + "Local engines keep audio on this Mac. Cloud speech engines "
-                    + "upload the clip after you stop, using your own key."
+                    + "Speech engines keep audio on this Mac."
             )
         }
     }
@@ -174,23 +172,6 @@ struct PrivacyScreen: View {
                         .buttonStyle(
                             ZenPrimaryButtonStyle(minWidth: 108)
                         )
-                }
-                ZenPanelDivider()
-                ZenRow(
-                    icon: "person.2",
-                    title: "Meetings",
-                    subtitle:
-                        "\(meetingViewModel.meetingCountDisplayString) · \(meetingViewModel.meetingAudioDisplayString) audio on this Mac"
-                ) {
-                    ZenHoldToDeleteButton(
-                        label: "Delete",
-                        minWidth: 108
-                    ) {
-                        for meeting in meetingViewModel.meetings {
-                            meetingViewModel.delete(meeting.id)
-                        }
-                    }
-                    .disabled(meetingViewModel.meetings.isEmpty)
                 }
                 ZenPanelDivider()
                 ZenRow(

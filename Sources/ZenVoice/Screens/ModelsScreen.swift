@@ -23,221 +23,482 @@ struct ModelMismatchAlert: Equatable {
 
 struct ModelsScreen: View {
     @ObservedObject var viewModel: ModelManagerViewModel
+    @ObservedObject var settingsViewModel: SettingsViewModel
     @Binding var mismatchAlert: ModelMismatchAlert?
 
     var body: some View {
-        ZenSection(title: "Speech engines") {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                Text(
-                    "Choose the engine. Use downloads its file if needed."
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
+            spokenLanguage
+            if !downloaded.isEmpty {
+                cardSection(title: "Downloaded", specs: downloaded)
+            }
+            Text(
+                "All models run entirely on this Mac. NVIDIA Parakeet stays loaded for instant dictation."
+            )
+            .font(ZenDesign.Typography.caption)
+            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+            if !available.isEmpty {
+                cardSection(title: "Available to download", specs: available)
+            }
+            if let error = viewModel.errorMessage,
+               !error.contains("Automatic detection requires") {
+                ZenBanner(
+                    kind: .danger,
+                    icon: "exclamationmark.triangle",
+                    text: error
                 )
-                .font(ZenDesign.Typography.body)
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
+            }
+        }
+    }
 
-                if viewModel.isVerifying {
-                    HStack(spacing: ZenDesign.Spacing.xs) {
-                        ProgressView().controlSize(.small)
-                        Text("Verifying installed models…")
+    private var spokenLanguage: some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+            Text("Language")
+                .font(ZenDesign.Typography.captionStrong)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            ZenPanel {
+                ZenRow(
+                    title: "Spoken language",
+                    subtitle:
+                        "ZenVoice uses this language for dictation. Engines that cannot handle it stay unavailable."
+                ) {
+                    ZenMenuPicker(
+                        label: "Spoken language",
+                        options: LanguageCatalog.languages.map(\.code),
+                        selection: Binding(
+                            get: {
+                                let code = settingsViewModel
+                                    .languageProfile.inputLanguageCode
+                                if code == LanguageProfile.automaticCode {
+                                    return "en"
+                                }
+                                return code
+                            },
+                            set: settingsViewModel.setSpokenLanguage
+                        ),
+                        minWidth: 160,
+                        title: { code in
+                            LanguageCatalog.language(code: code)?.displayName
+                                ?? code
+                        }
+                    )
+                }
+
+                ZenPanelDivider()
+
+                ZenRow(
+                    title: "Translate to English",
+                    subtitle:
+                        "Whisper translates while decoding. Other engines use Apple Intelligence on this Mac."
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: {
+                                settingsViewModel.languageProfile
+                                    .shouldTranslateToEnglish
+                            },
+                            set: { enabled in
+                                settingsViewModel.setOutputMode(
+                                    enabled
+                                        ? .englishTranslation
+                                        : .spokenLanguage
+                                )
+                            }
+                        ),
+                        label: "Translate to English"
+                    )
+                }
+            }
+        }
+    }
+
+    private func cardSection(
+        title: String,
+        specs: [EngineCardSpec]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+            Text(title.uppercased())
+                .font(ZenDesign.Typography.captionStrong)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            VStack(spacing: ZenDesign.Spacing.sm) {
+                ForEach(specs) { spec in
+                    engineRow(spec)
+                }
+            }
+        }
+    }
+
+    private var downloaded: [EngineCardSpec] {
+        EngineCardSpec.picker.filter { isDownloaded($0) }
+    }
+
+    private var available: [EngineCardSpec] {
+        EngineCardSpec.picker.filter { !isDownloaded($0) }
+    }
+
+    private func isDownloaded(_ spec: EngineCardSpec) -> Bool {
+        if spec.builtIn { return true }
+        if spec.comingSoon { return false }
+        return viewModel.installedEngineIDs.contains(spec.id)
+            || viewModel.installedModelIDs.contains(spec.id)
+    }
+
+    private func engineRow(_ spec: EngineCardSpec) -> some View {
+        let selected = viewModel.isSelectedEngine(spec.id)
+        let downloading = viewModel.downloadingModelID == spec.id
+        return Button {
+            guard !spec.comingSoon else { return }
+            viewModel.selectEngine(spec.id)
+        } label: {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
+                    engineGlyph(spec.glyph)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(spec.title)
+                                .font(ZenDesign.Typography.bodyStrong)
+                                .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                            if selected {
+                                ZenBadge(
+                                    text: "Active",
+                                    kind: .accent,
+                                    systemImage: "checkmark"
+                                )
+                            } else if let badge = spec.badge {
+                                ZenBadge(text: badge, kind: .accent)
+                            }
+                        }
+                        Text(spec.summary)
                             .font(ZenDesign.Typography.caption)
                             .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    VStack(alignment: .trailing, spacing: 6) {
+                        MeterBar(
+                            label: "Accuracy",
+                            value: spec.accuracy,
+                            tint: ZenDesign.Semantic.accent
+                        )
+                        MeterBar(
+                            label: "Speed",
+                            value: spec.speed,
+                            tint: ZenDesign.Semantic.warn
+                        )
                     }
                 }
-
-                if let error = viewModel.errorMessage,
-                   !error.contains("Automatic detection requires") {
-                    ZenBanner(
-                        kind: .danger,
-                        icon: "exclamationmark.triangle",
-                        text: error
-                    )
-                }
-
-                ZenPanel {
-                    if viewModel.engineAvailabilities.isEmpty {
-                        Text("Engine availability is loading…")
-                            .font(ZenDesign.Typography.caption)
-                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                            .padding(ZenDesign.Spacing.md)
-                    } else {
-                        ForEach(
-                            Array(viewModel.engineAvailabilities.enumerated()),
-                            id: \.element.engine.id
-                        ) { index, availability in
-                            if index > 0 { ZenPanelDivider() }
-                            engineRow(availability)
-                        }
-                    }
-                }
-
-                cloudSpeechKeySection
-            }
-        }
-    }
-
-    private var cloudSpeechKeySection: some View {
-        ZenSection(
-            title: "Cloud speech",
-            caption: "Optional. Audio leaves this Mac and is billed to your key."
-        ) {
-            ZenPanel {
-                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
-                    Text(
-                        "After you stop, ZenVoice uploads the clip once. "
-                            + "Local engines never send audio."
-                    )
-                    .font(ZenDesign.Typography.body)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    cloudKeyRow(
-                        title: "OpenAI",
-                        placeholder: "Paste your OpenAI API key",
-                        hasKey: viewModel.hasOpenAISpeechKey,
-                        draft: $viewModel.openAISpeechKeyDraft,
-                        save: viewModel.saveOpenAISpeechKey,
-                        delete: viewModel.deleteOpenAISpeechKey
-                    )
-                    ZenPanelDivider()
-                    cloudKeyRow(
-                        title: "Gemini",
-                        placeholder: "Paste your Google AI Studio key",
-                        hasKey: viewModel.hasGeminiSpeechKey,
-                        draft: $viewModel.geminiSpeechKeyDraft,
-                        save: viewModel.saveGeminiSpeechKey,
-                        delete: viewModel.deleteGeminiSpeechKey
-                    )
-                    ZenPanelDivider()
-                    cloudKeyRow(
-                        title: "Scribe v2",
-                        placeholder: "Paste your ElevenLabs API key",
-                        hasKey: viewModel.hasElevenLabsSpeechKey,
-                        draft: $viewModel.elevenLabsSpeechKeyDraft,
-                        save: viewModel.saveElevenLabsSpeechKey,
-                        delete: viewModel.deleteElevenLabsSpeechKey
-                    )
-                    ZenPanelDivider()
-                    cloudKeyRow(
-                        title: "Grok",
-                        placeholder: "Paste your xAI API key",
-                        hasKey: viewModel.hasGrokSpeechKey,
-                        draft: $viewModel.grokSpeechKeyDraft,
-                        save: viewModel.saveGrokSpeechKey,
-                        delete: viewModel.deleteGrokSpeechKey
-                    )
-                }
-                .padding(ZenDesign.Spacing.md)
-            }
-        }
-    }
-
-    private func cloudKeyRow(
-        title: String,
-        placeholder: String,
-        hasKey: Bool,
-        draft: Binding<String>,
-        save: @escaping () -> Void,
-        delete: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
-            Text(title)
-                .font(ZenDesign.Typography.bodyStrong)
-                .foregroundStyle(ZenDesign.Semantic.textPrimary)
-            if hasKey {
-                HStack(spacing: ZenDesign.Spacing.xs) {
-                    Text("Key stored in Keychain.")
+                Rectangle()
+                    .fill(ZenDesign.Semantic.border)
+                    .frame(height: 1)
+                    .opacity(0.5)
+                HStack(spacing: 8) {
+                    Image(systemName: "globe")
+                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                    Text(spec.languages)
                         .font(ZenDesign.Typography.caption)
                         .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    Spacer(minLength: 0)
-                    Button("Remove", action: delete)
-                        .buttonStyle(ZenDestructiveButtonStyle())
-                }
-            } else {
-                HStack(spacing: ZenDesign.Spacing.xs) {
-                    SecureField(placeholder, text: draft)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Save", action: save)
-                        .buttonStyle(ZenPrimaryButtonStyle())
-                        .disabled(
-                            draft.wrappedValue
-                                .trimmingCharacters(
-                                    in: .whitespacesAndNewlines
-                                )
-                                .isEmpty
-                        )
-                }
-            }
-        }
-    }
-
-    private func engineRow(_ availability: EngineAvailability) -> some View {
-        let selected = viewModel.isSelectedEngine(availability.engine.id)
-        let downloadable = viewModel.engines.first {
-            $0.descriptor.id == availability.engine.id
-        }
-        let downloadingEngine = downloadable.map(viewModel.isEngineDownloading) ?? false
-
-        return VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxs) {
-            ZenRow(
-                icon: "waveform",
-                iconTint: selected ? ZenDesign.Semantic.accent : nil,
-                title: availability.engine.displayName,
-                subtitle: availability.engine.privacyNote
-            ) {
-                if selected {
-                    ZenBadge(text: "Active", kind: .success)
-                } else if availability.isAvailable {
-                    if viewModel.isRecommendedEngine(availability.engine.id) {
-                        ZenBadge(
-                            text: "Recommended",
-                            kind: .accent,
-                            systemImage: "sparkles"
-                        )
+                    if spec.realtime {
+                        ZenBadge(text: "Real-time", kind: .accent)
                     }
-                    Button("Use") {
-                        viewModel.selectEngine(availability.engine.id)
-                    }
-                    .buttonStyle(ZenSecondaryButtonStyle())
-                } else if availability.reason == .requiresAPIKey {
-                    ZenBadge(text: "Needs key", kind: .warn)
-                } else if let downloadable,
-                          availability.engine.requiresDownload {
-                    if downloadingEngine {
-                        Button("Cancel") { viewModel.cancelDownload() }
-                            .buttonStyle(ZenSecondaryButtonStyle())
-                    } else {
-                        Button("Use") {
-                            viewModel.selectEngine(availability.engine.id)
-                        }
-                        .buttonStyle(ZenSecondaryButtonStyle())
-                        .disabled(viewModel.downloadingModelID != nil)
-                    }
-                } else {
-                    ZenBadge(text: "Unavailable", kind: .neutral)
+                    Spacer()
+                    cardAction(
+                        spec: spec,
+                        selected: selected,
+                        downloading: downloading
+                    )
                 }
-            }
-
-            if downloadingEngine {
-                VStack(alignment: .leading, spacing: 5) {
+                if downloading {
                     ZenProgressBar(value: viewModel.downloadProgress ?? 0)
                         .frame(height: 3)
-                    Text(
-                        viewModel.isVerifyingDownload
-                            ? "Verifying checksum…"
-                            : "Downloading \(Int(((viewModel.downloadProgress ?? 0) * 100).rounded()))%"
-                    )
-                    .font(ZenDesign.Typography.caption)
-                    .foregroundStyle(ZenDesign.Semantic.textTertiary)
                 }
-                .padding(
-                    .leading,
-                    ZenDesign.Spacing.md
-                        + ZenDesign.Layout.rowIcon
-                        + ZenDesign.Spacing.sm
+            }
+            .padding(ZenDesign.Spacing.md)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.large,
+                    style: .continuous
                 )
+                .fill(
+                    selected
+                        ? ZenDesign.Semantic.accentMuted
+                        : ZenDesign.Component.cardBackground
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.large,
+                        style: .continuous
+                    )
+                    .strokeBorder(
+                        selected
+                            ? ZenDesign.Semantic.accent
+                            : ZenDesign.Semantic.border,
+                        lineWidth: selected ? 1.5 : 1
+                    )
+                }
+            }
+        }
+        .buttonStyle(ZenPressButtonStyle())
+        .disabled(spec.comingSoon)
+        .accessibilityLabel(spec.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func cardAction(
+        spec: EngineCardSpec,
+        selected: Bool,
+        downloading: Bool
+    ) -> some View {
+        if spec.builtIn {
+            Label("Built in", systemImage: "checkmark.circle.fill")
+                .font(ZenDesign.Typography.captionStrong)
+                .foregroundStyle(ZenDesign.Semantic.success)
+        } else if spec.comingSoon {
+            Text("Coming soon")
+                .font(ZenDesign.Typography.captionStrong)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+        } else if downloading {
+            Button("Cancel") { viewModel.cancelDownload() }
+                .buttonStyle(ZenSecondaryButtonStyle())
+        } else if isDownloaded(spec) {
+            if selected {
+                EmptyView()
+            } else {
+                Text("Use")
+                    .font(ZenDesign.Typography.captionStrong)
+                    .foregroundStyle(ZenDesign.Semantic.accent)
+            }
+        } else {
+            Label("Download", systemImage: "arrow.down.circle")
+                .font(ZenDesign.Typography.captionStrong)
+                .foregroundStyle(ZenDesign.Semantic.accent)
+        }
+    }
+
+    private func engineGlyph(_ glyph: EngineCardSpec.Glyph) -> some View {
+        ZStack {
+            RoundedRectangle(
+                cornerRadius: 10,
+                style: .continuous
+            )
+            .fill(glyph.fill)
+            .frame(width: 36, height: 36)
+            Image(systemName: glyph.symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+    }
+}
+
+/// Display scores for the Models cards. Not measured WER.
+///
+/// ponytail: replace with benchmark medians when we have them.
+private struct EngineCardSpec: Identifiable {
+    enum Glyph {
+        case apple, nvidia, whisper, cohere, qwen
+
+        var symbol: String {
+            switch self {
+            case .apple: return "apple.logo"
+            case .nvidia: return "eye.fill"
+            case .whisper: return "sparkles"
+            case .cohere: return "waveform"
+            case .qwen: return "globe.asia.australia.fill"
+            }
+        }
+
+        var fill: Color {
+            switch self {
+            case .apple: return Color(white: 0.22)
+            case .nvidia: return Color(red: 0.29, green: 0.73, blue: 0.31)
+            case .whisper: return Color(red: 0.48, green: 0.42, blue: 0.92)
+            case .cohere: return Color(red: 0.22, green: 0.45, blue: 0.92)
+            case .qwen: return Color(red: 0.86, green: 0.35, blue: 0.18)
             }
         }
     }
 
+    let id: String
+    let title: String
+    let summary: String
+    let glyph: Glyph
+    let badge: String?
+    let languages: String
+    let realtime: Bool
+    let accuracy: Double
+    let speed: Double
+    let builtIn: Bool
+    let comingSoon: Bool
+
+    static let picker: [EngineCardSpec] = [
+        EngineCardSpec(
+            id: EngineIdentifiers.appleSpeech,
+            title: "Apple Speech Analyzer",
+            summary:
+                "Next-generation on-device speech recognition. Requires macOS 26+.",
+            glyph: .apple,
+            badge: nil,
+            languages: "System languages",
+            realtime: true,
+            accuracy: 0.82,
+            speed: 0.96,
+            builtIn: true,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: EngineIdentifiers.qwen3ASR,
+            title: "Qwen3-ASR 0.6B",
+            summary:
+                "On-device multilingual ASR. 6-bit MLX, ~822 MB. 30 languages.",
+            glyph: .qwen,
+            badge: "New",
+            languages: "30 languages",
+            realtime: false,
+            accuracy: 0.90,
+            speed: 0.74,
+            builtIn: false,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: EngineIdentifiers.nemotronSpeech,
+            title: "NVIDIA Nemotron 3.5 Multilingual 0.6B",
+            summary:
+                "True streaming transcription: words land while you speak, in 8 languages.",
+            glyph: .nvidia,
+            badge: "Streaming",
+            languages: "8 languages",
+            realtime: true,
+            accuracy: 0.78,
+            speed: 0.86,
+            builtIn: false,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: EngineIdentifiers.parakeetTDTv3,
+            title: "NVIDIA Parakeet TDT 0.6B V3",
+            summary:
+                "Ultra-fast NVIDIA FastConformer model for conversational speech and voice commands.",
+            glyph: .nvidia,
+            badge: "Fastest",
+            languages: "25 languages",
+            realtime: false,
+            accuracy: 0.80,
+            speed: 0.92,
+            builtIn: false,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: EngineIdentifiers.parakeetTDTv2,
+            title: "NVIDIA Parakeet TDT 0.6B V2",
+            summary:
+                "Ultra-fast English-only transcription on NVIDIA FastConformer V2.",
+            glyph: .nvidia,
+            badge: nil,
+            languages: "English only",
+            realtime: false,
+            accuracy: 0.78,
+            speed: 0.88,
+            builtIn: false,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: EngineIdentifiers.cohereTranscribe,
+            title: "Cohere Transcribe",
+            summary:
+                "2B on-device Conformer. 14 languages. ~3 GB ONNX download.",
+            glyph: .cohere,
+            badge: nil,
+            languages: "14 languages",
+            realtime: false,
+            accuracy: 0.86,
+            speed: 0.62,
+            builtIn: false,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: EngineIdentifiers.whisperLargeV3Turbo,
+            title: "Whisper Large v3 Turbo",
+            summary:
+                "Higher accuracy for longer offline dictations and complex speech.",
+            glyph: .whisper,
+            badge: nil,
+            languages: "99 languages",
+            realtime: false,
+            accuracy: 0.88,
+            speed: 0.70,
+            builtIn: false,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: "whisper-small-multilingual",
+            title: "Whisper Small",
+            summary:
+                "Balanced on-device dictation model for everyday use.",
+            glyph: .whisper,
+            badge: nil,
+            languages: "99 languages",
+            realtime: false,
+            accuracy: 0.62,
+            speed: 0.78,
+            builtIn: false,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: "whisper-tiny-en",
+            title: "Whisper Tiny (English)",
+            summary:
+                "Tiniest English-only model for instant voice notes. Limited accuracy.",
+            glyph: .whisper,
+            badge: nil,
+            languages: "English only",
+            realtime: false,
+            accuracy: 0.34,
+            speed: 0.96,
+            builtIn: false,
+            comingSoon: false
+        ),
+        EngineCardSpec(
+            id: "whisper-tiny-multilingual",
+            title: "Whisper Tiny",
+            summary:
+                "Tiniest multilingual model for instant voice notes. Accuracy limited on complex speech.",
+            glyph: .whisper,
+            badge: nil,
+            languages: "99 languages",
+            realtime: false,
+            accuracy: 0.30,
+            speed: 0.96,
+            builtIn: false,
+            comingSoon: false
+        )
+    ]
+}
+
+private struct MeterBar: View {
+    let label: String
+    let value: Double
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(ZenDesign.Typography.caption)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                .frame(width: 58, alignment: .trailing)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(ZenDesign.Semantic.border.opacity(0.45))
+                    Capsule()
+                        .fill(tint)
+                        .frame(
+                            width: max(6, geo.size.width * min(1, max(0, value)))
+                        )
+                }
+            }
+            .frame(width: 92, height: 6)
+        }
+    }
 }
 
 struct ModelMismatchToastOverlay: View {

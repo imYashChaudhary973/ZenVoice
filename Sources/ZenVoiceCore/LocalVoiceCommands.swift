@@ -217,6 +217,54 @@ public struct LocalVoiceCommandEngine: Sendable {
             Command(
                 phrases: ["comma"] + (localized["comma"] ?? []),
                 replacement: punctuation.comma
+            ),
+            Command(
+                phrases: [
+                    "open parenthesis", "open paren", "left parenthesis"
+                ],
+                replacement: "("
+            ),
+            Command(
+                phrases: [
+                    "close parenthesis", "close paren", "right parenthesis"
+                ],
+                replacement: ")"
+            ),
+            Command(
+                phrases: ["open bracket", "left bracket"],
+                replacement: "["
+            ),
+            Command(
+                phrases: ["close bracket", "right bracket"],
+                replacement: "]"
+            ),
+            Command(
+                phrases: ["colon"],
+                replacement: ":"
+            ),
+            Command(
+                phrases: ["semicolon"],
+                replacement: ";"
+            ),
+            Command(
+                phrases: ["thinking emoji"],
+                replacement: "🤔"
+            ),
+            Command(
+                phrases: ["thumbs up", "thumbs up emoji"],
+                replacement: "👍"
+            ),
+            Command(
+                phrases: ["heart emoji"],
+                replacement: "❤️"
+            ),
+            Command(
+                phrases: ["fire emoji"],
+                replacement: "🔥"
+            ),
+            Command(
+                phrases: ["rocket emoji"],
+                replacement: "🚀"
             )
         ]
     }

@@ -19,7 +19,6 @@ import ZenVoiceStorage
 enum OverviewDestination {
     case audio
     case models
-    case languages
     case history
     case insights
     case shortcuts
@@ -28,9 +27,8 @@ enum OverviewDestination {
 
 struct ZenVoiceSettingsView: View {
     private enum Section: String, CaseIterable, Identifiable, Hashable {
-        case home = "Home"
+        case home = "General"
         case dictation = "Dictation"
-        case language = "Language"
         case models = "Models"
         case personalisation = "Personalisation"
         case history = "History"
@@ -43,11 +41,9 @@ struct ZenVoiceSettingsView: View {
         var icon: String {
             switch self {
             case .home:
-                return "house"
+                return "slider.horizontal.3"
             case .dictation:
                 return "mic"
-            case .language:
-                return "globe"
             case .models:
                 return "cpu"
             case .personalisation:
@@ -65,8 +61,6 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
-    @ObservedObject var meetingViewModel: MeetingViewModel
-    @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var updatesViewModel: UpdatesViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
@@ -197,10 +191,8 @@ struct ZenVoiceSettingsView: View {
             return "overview status ready start today usage"
         case .dictation:
             return "hotkey microphone audio overlay waveform doctor shortcut"
-        case .language:
-            return "language hinglish automatic detection output script"
         case .models:
-            return "model engine whisper parakeet distil"
+            return "model engine whisper parakeet nemotron language speech"
         case .personalisation:
             return "formatting vocabulary corrections cloud"
         case .history:
@@ -409,8 +401,6 @@ struct ZenVoiceSettingsView: View {
                         selection = .dictation
                     case .models:
                         selection = .models
-                    case .languages:
-                        selection = .language
                     case .history, .insights:
                         selection = .history
                     case .help:
@@ -420,14 +410,6 @@ struct ZenVoiceSettingsView: View {
             )
         case .dictation:
             DictationScreen(viewModel: viewModel)
-        case .language:
-            ZenScreen(
-                icon: "globe",
-                title: "Language",
-                subtitle: "Choose what you speak and how ZenVoice writes it."
-            ) {
-                LanguagesScreen(viewModel: viewModel)
-            }
         case .models:
             ZenScreen(
                 icon: "cpu",
@@ -436,6 +418,7 @@ struct ZenVoiceSettingsView: View {
             ) {
                 ModelsScreen(
                     viewModel: modelManagerViewModel,
+                    settingsViewModel: viewModel,
                     mismatchAlert: $modelMismatch
                 )
             }
@@ -445,16 +428,13 @@ struct ZenVoiceSettingsView: View {
         case .personalisation:
             PersonalScreen(
                 viewModel: viewModel,
-                cloudAIViewModel: cloudAIViewModel,
                 voiceProfileViewModel: voiceProfileViewModel
             )
         case .history:
             HistoryContainerScreen(
                 historyViewModel: historyViewModel,
                 audioHistoryViewModel: audioHistoryViewModel,
-                insightsViewModel: insightsViewModel,
-                meetingViewModel: meetingViewModel,
-                cloudAIViewModel: cloudAIViewModel
+                insightsViewModel: insightsViewModel
             )
         case .updates:
             ZenScreen(
@@ -470,7 +450,6 @@ struct ZenVoiceSettingsView: View {
                 historyViewModel: historyViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
                 modelManagerViewModel: modelManagerViewModel,
-                meetingViewModel: meetingViewModel,
                 openModels: { selection = .models },
                 openShortcuts: { selection = .dictation }
             )
@@ -488,8 +467,6 @@ private extension AppState.Phase {
             return "waveform"
         case .transcribing:
             return "cpu"
-        case .awaitingCloudReview:
-            return "cloud"
         case .inserting:
             return "arrow.down.doc"
         case .success:
@@ -507,8 +484,6 @@ private extension AppState.Phase {
             return ZenDesign.Semantic.accent
         case .transcribing, .inserting:
             return ZenDesign.Semantic.warn
-        case .awaitingCloudReview:
-            return ZenDesign.Semantic.accent
         case .success:
             return ZenDesign.Semantic.success
         case .error:

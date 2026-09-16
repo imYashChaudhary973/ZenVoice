@@ -8,20 +8,20 @@
 
 <p align="center">
   <a href="https://git.io/typing-svg">
-    <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=20&duration=3200&pause=900&color=A78BFA&center=true&vCenter=true&width=780&lines=Speak.+It+types.+Local+by+default.;On-device+engines.+Optional+BYO-key+cloud.;A+capsule+on+the+display+you+are+working+on." alt="Speak. It types. Local by default." />
+    <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=20&duration=3200&pause=900&color=A78BFA&center=true&vCenter=true&width=780&lines=Speak.+It+types.+Nothing+leaves+this+Mac.;On-device+engines.+No+cloud+speech.;A+capsule+on+the+display+you+are+working+on." alt="Speak. It types. Nothing leaves this Mac." />
   </a>
 </p>
 
 <p align="center">
-  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-543EF5?style=for-the-badge">
+  <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-543EF5?style=for-the-badge">
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple_Silicon-111111?style=for-the-badge&logo=apple&logoColor=white">
-  <img alt="Swift 5.10" src="https://img.shields.io/badge/Swift-5.10-F05138?style=for-the-badge&logo=swift&logoColor=white">
+  <img alt="Swift 6.2" src="https://img.shields.io/badge/Swift-6.2-F05138?style=for-the-badge&logo=swift&logoColor=white">
   <img alt="Local-first" src="https://img.shields.io/badge/Privacy-Local--first-0D855E?style=for-the-badge">
   <img alt="Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-0D855E?style=for-the-badge">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Engines-Parakeet%20TDT%20v3%20%7C%20Whisper%20%7C%20opt--in%20cloud-543EF5?style=for-the-badge" alt="Supported engines">
+  <img src="https://img.shields.io/badge/Engines-Parakeet%20%7C%20Whisper%20%7C%20Apple%20Speech-543EF5?style=for-the-badge" alt="Supported engines">
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@
 
 ZenVoice is a native macOS menu-bar app. Press a shortcut, speak, press it again. The transcript is typed into whichever app has focus.
 
-Local engines record, decode, clean, and paste on this Mac. There is no account, no subscription, and no analytics. Cloud speech is off until you tap Use on OpenAI Transcribe, Gemini Transcribe, Scribe v2, or Grok Transcribe — then that clip is uploaded and billed to your key. Optional BYO-key Cloud formatting still sends finished text only, never audio.
+Local engines record, decode, clean, and paste on this Mac. There is no account, no subscription, no analytics, and no cloud speech.
 
 Public GitHub beta, 0.4.5. Apache-2.0.
 
@@ -46,9 +46,8 @@ Public GitHub beta, 0.4.5. Apache-2.0.
 
 - **Global shortcut** — `⌃⌥Space` by default. Hold-to-dictate and paste-last (`⌃⌥V`) are configurable.
 - **ZenBar** — a 108×36 capsule on the display you are working on. Controls appear on hover. A live audio meter runs while you dictate. An error is the one state that stays open.
-- **On-device engines** — Whisper and Parakeet TDT v3. The default path sends nothing to a speech API.
-- **Cloud speech (opt-in)** — OpenAI Transcribe, Gemini Transcribe, ElevenLabs Scribe v2, and Grok Transcribe. Bring-your-own key. Audio leaves this Mac only after you tap Use on that engine. If the API fails, the same clip is decoded locally.
-- **Formatting** — Off, deterministic Clean, guarded on-device Smart (macOS 26+), or opt-in BYO-key Cloud. Cloud formatting never sends audio.
+- **On-device engines** — Whisper, Parakeet TDT, Apple Speech, and other local runtimes. Audio never leaves this Mac.
+- **Formatting** — Off, deterministic Clean, or guarded on-device Smart (macOS 26+).
 - **Encrypted history** — AES-GCM transcripts, search, copy, retry, delete, Recovery Inbox.
 - **Insights** — WPM gauge, total words, fixes, app usage, and a GitHub-style contribution calendar. All derived locally. Share cards carry numbers only.
 - **Voice commands** — on-device phrase matching. Off until you turn it on.
@@ -102,7 +101,7 @@ NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Int
 2. **Allow Microphone and Accessibility.** Without Accessibility, text still lands on the clipboard.
 3. **Finish setup** — language, then the recommended engine/model, then a test dictation.
 4. **Put the caret** in any editable field. Press `⌃⌥Space`, speak, press it again.
-5. **(Optional)** Hold-to-dictate lives in Shortcuts. Cloud speech lives in Models. Cloud formatting lives in Personalisation. They stay off until you turn them on.
+5. **(Optional)** Hold-to-dictate lives in Shortcuts.
 
 ---
 
@@ -110,7 +109,7 @@ NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Int
 
 - Apple Silicon Mac for NVIDIA engines and the recommended path
 - Intel Macs: Distil-Whisper Large V3 (English) or Whisper Large V3 Turbo
-- Build target is macOS 14+. Certified on recent macOS; 14–26 are uncertified
+- Build target is macOS 15+. Certified on recent macOS; 15–26 are uncertified
 - Disk: one engine file, typically 547 MB–1.4 GB
 - Microphone access
 - Accessibility permission to type into other apps
@@ -122,11 +121,9 @@ NVIDIA engines run on open `parakeet.cpp`. Do not re-add FluidAudio or Fluid Int
 ```text
 Hotkey
   → local microphone (16 kHz mono)
-  → selected engine
-      local: Whisper / Parakeet TDT v3 on this Mac
-      cloud: upload clip once (only if you tapped Use)
+  → selected local engine
   → conservative cleanup
-  → Formatting (Off / Clean / Smart / Cloud text)
+  → Formatting (Off / Clean / Smart)
   → personal correction rules
   → clipboard + Accessibility paste
 ```
@@ -137,15 +134,15 @@ Closing the settings window does not quit. **⌘W** closes the window; **⌘Q** 
 
 ## Privacy
 
-Application code does not send audio, transcripts, clipboard contents, or usage analytics over the network unless you opt in to a cloud engine or Cloud formatting.
+Application code does not send audio, transcripts, clipboard contents, or usage analytics over the network.
 
 | What | Where it lives |
 |---|---|
 | Transcripts | AES-GCM in local SQLite; 256-bit key in the Keychain |
 | Recovery audio | Private Application Support, ≤ 24 hours, failed dictations only |
 | Audio History | Off. Unencrypted WAV archive if you turn it on. Never leaves the Mac unless you export it. |
-| Cloud speech | Off. After you tap Use, that clip is uploaded to the provider you chose and billed to your key. Local fallback if the API fails. |
-| Cloud formatting | Off. Sends finished text + your prompt to *your* HTTPS endpoint, with *your* Keychain key. Never audio, never the target app. |
+| Cloud speech | Removed. Audio never leaves this Mac. |
+| Cloud formatting | Removed. Use Off, Clean, or on-device Smart. |
 
 The Privacy screen counts what is on disk. Those counts are not telemetry.
 
@@ -202,7 +199,7 @@ flowchart LR
 |---|---|
 | `ZenVoice` | App, ZenBar, settings window, design system |
 | `ZenVoiceCore` | Cleanup, formatting, hotkeys, catalogues, insertion policy |
-| `ZenVoiceRuntime` | Local engines (Whisper, Parakeet TDT v3) and optional cloud speech |
+| `ZenVoiceRuntime` | Local engines (Whisper, Parakeet, Apple Speech, Cohere, Qwen3-ASR) |
 | `ZenVoiceStorage` | Encrypted vault, insights, voice profile, audio archive |
 | `ZenVoice*Checks` | Deterministic checks the compiler cannot see |
 
@@ -218,7 +215,7 @@ Start at the [documentation index](docs/README.md).
 |---|---|
 | [Design](docs/DESIGN.md) | Tokens, chrome, motion, the window shell |
 | [Architecture](docs/ARCHITECTURE.md) | Layers, memory, the dictation path |
-| [Privacy](docs/PRIVACY.md) | What stays local, and the opt-in cloud paths |
+| [Privacy](docs/PRIVACY.md) | What stays local |
 | [Model catalogue](docs/MODEL_CATALOG.md) | Pinned revisions and hashes |
 | [Development](docs/DEVELOPMENT.md) | Toolchain, checks, manual QA |
 | [Roadmap](docs/ROADMAP.md) | Direction, not a release promise |
