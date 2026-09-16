@@ -216,14 +216,16 @@ struct OverviewScreen: View {
             hudGradient
             UnevenRoundedRectangle(
                 topLeadingRadius: 0,
-                bottomLeadingRadius: 12,
-                bottomTrailingRadius: 12,
+                bottomLeadingRadius: 16,
+                bottomTrailingRadius: 16,
                 topTrailingRadius: 0
             )
             .fill(Color.black)
-            .frame(width: 88, height: 28)
-            .overlay {
-                waveformBars
+            .frame(width: 148, height: 52)
+            .overlay(alignment: .bottom) {
+                hudChromePreview
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
             }
         }
     }
@@ -233,11 +235,30 @@ struct OverviewScreen: View {
             hudGradient
             Capsule()
                 .fill(Color.black.opacity(0.72))
-                .frame(width: 108, height: 32)
+                .frame(width: 168, height: 36)
                 .overlay {
-                    waveformBars
+                    hudChromePreview
+                        .padding(.horizontal, 8)
                 }
         }
+    }
+
+    private var hudChromePreview: some View {
+        HStack(spacing: 6) {
+            previewCircle("xmark")
+            waveformBars
+            previewCircle("checkmark")
+        }
+    }
+
+    private func previewCircle(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 8, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 16, height: 16)
+            .overlay {
+                Circle().strokeBorder(Color.white, lineWidth: 1)
+            }
     }
 
     private var hudGradient: some View {

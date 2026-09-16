@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import AppKit
 import SwiftUI
 import ZenVoiceCore
 
@@ -41,14 +42,15 @@ struct LivePreviewOverlayView: View {
         Group {
             if isNotchHUD {
                 content
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .padding(.top, cameraInset > 0 ? cameraInset : 6)
+                    .padding(.bottom, 6)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background {
                         UnevenRoundedRectangle(
                             topLeadingRadius: 0,
-                            bottomLeadingRadius: 14,
-                            bottomTrailingRadius: 14,
+                            bottomLeadingRadius: 18,
+                            bottomTrailingRadius: 18,
                             topTrailingRadius: 0,
                             style: .continuous
                         )
@@ -56,7 +58,7 @@ struct LivePreviewOverlayView: View {
                     }
             } else {
                 content
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 8)
                     .zenGlassSurface(
                         cornerRadius: ZenDesign.Radius.pill,
@@ -68,35 +70,39 @@ struct LivePreviewOverlayView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Camera housing height on a notched Mac. Zero on plain displays.
+    private var cameraInset: CGFloat {
+        NSScreen.screens.first { $0.safeAreaInsets.top > 0 }?
+            .safeAreaInsets.top ?? 0
+    }
+
     @ViewBuilder
     private var content: some View {
-        if isNotchHUD {
-            WaveformView(model: state.audioLevel)
-                .frame(height: 14)
-                .opacity(state.phase == .listening ? 1 : 0.4)
-        } else {
-            switch state.phase {
-            case .idle:
-                idleContent
-            case .listening:
+        switch state.phase {
+        case .idle:
+            if isNotchHUD {
                 listeningContent
-            case .transcribing:
-                statusContent("transcribing…", pulses: true)
-            case .inserting:
-                statusContent(
-                    "inserting…",
-                    pulses: true,
-                    tint: ZenDesign.Semantic.success
-                )
-            case .success:
-                statusContent(
-                    successMessage,
-                    pulses: false,
-                    tint: ZenDesign.Semantic.success
-                )
-            case .error(let message):
-                errorContent(message)
+            } else {
+                idleContent
             }
+        case .listening:
+            listeningContent
+        case .transcribing:
+            statusContent("transcribing…", pulses: true)
+        case .inserting:
+            statusContent(
+                "inserting…",
+                pulses: true,
+                tint: ZenDesign.Semantic.success
+            )
+        case .success:
+            statusContent(
+                successMessage,
+                pulses: false,
+                tint: ZenDesign.Semantic.success
+            )
+        case .error(let message):
+            errorContent(message)
         }
     }
 
@@ -116,10 +122,23 @@ struct LivePreviewOverlayView: View {
         }
     }
 
+    /// Same chrome as ZenBar: cancel, voiceprint, finish.
     private var listeningContent: some View {
-        HStack(spacing: 8) {
-            WaveformView(model: state.audioLevel)
+        HStack(spacing: 0) {
+            OverlayCircleButton(
+                systemImage: "xmark",
+                label: "Cancel dictation",
+                action: cancelRecording
+            )
+            Spacer(minLength: 6)
+            WaveformView(model: state.audioLevel, style: .voiceprint)
                 .frame(height: 16)
+            Spacer(minLength: 6)
+            OverlayCircleButton(
+                systemImage: "checkmark",
+                label: "Finish dictation",
+                action: finishRecording
+            )
         }
     }
 
