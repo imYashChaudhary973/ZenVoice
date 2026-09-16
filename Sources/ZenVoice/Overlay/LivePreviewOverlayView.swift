@@ -143,7 +143,9 @@ struct LivePreviewOverlayView: View {
                 Text(
                     state.liveTranscriptPreview.isEmpty
                         ? "Listening…"
-                        : state.liveTranscriptPreview
+                        : LiveTranscriptPreview.visibleWords(
+                            state.liveTranscriptPreview
+                        )
                 )
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(

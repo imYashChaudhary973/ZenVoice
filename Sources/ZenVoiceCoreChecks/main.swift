@@ -2082,6 +2082,20 @@ guard LiveDictationPreferences.isPreviewEnabled(
     )
     exit(1)
 }
+guard LiveTranscriptPreview.visibleWords(
+    "we filed today the report", limit: 4
+) == "filed today the report",
+LiveTranscriptPreview.visibleWords("we filed today", limit: 5)
+    == "we filed today",
+LiveTranscriptPreview.visibleWords(
+    "  spaced   out   words   here   now  ", limit: 3
+) == "words here now",
+LiveTranscriptPreview.visibleWords("", limit: 5) == "" else {
+    FileHandle.standardError.write(
+        Data("FAIL: live HUD must show only the newest words\n".utf8)
+    )
+    exit(1)
+}
 
 print("ZenVoiceCoreChecks: live dictation preferences passed")
 

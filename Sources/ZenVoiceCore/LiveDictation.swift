@@ -93,6 +93,26 @@ public enum StableTranscriptComposer {
     }
 }
 
+/// What the live HUD shows: only the newest few words, so the pill stays a
+/// compact reference while the full transcript keeps accumulating underneath.
+public enum LiveTranscriptPreview {
+    public static let visibleWordLimit = 5
+
+    public static func visibleWords(
+        _ transcript: String,
+        limit: Int = visibleWordLimit
+    ) -> String {
+        let words = transcript.split(
+            separator: " ",
+            omittingEmptySubsequences: true
+        )
+        guard words.count > limit else {
+            return transcript
+        }
+        return words.suffix(limit).joined(separator: " ")
+    }
+}
+
 public enum StablePauseDetector {
     public static func isStable(
         segmentStart: Int,

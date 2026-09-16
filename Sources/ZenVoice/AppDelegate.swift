@@ -2142,7 +2142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let previewEngine = engineRegistry?.resolvePreview(
             for: activeDictationBehavior.languageProfile
         )
-        guard previewEngine != nil || whisperEngine != nil else {
+        guard previewEngine != nil else {
             return
         }
 
@@ -2152,13 +2152,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let correctionVault = dictationVault
         let appliesCorrectionRules =
             commits && learningPreferences.appliesCorrectionRules
-        let whisper = whisperEngine
         livePreviewTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let result = try await self.transcribePreview(
                     engine: previewEngine,
-                    whisperFallback: whisper,
                     samples: segment.samples,
                     languageProfile: behavior.languageProfile,
                     initialPrompt: behavior.context
@@ -2228,11 +2226,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func transcribePreview(
         engine: (any SpeechEngine)?,
-        whisperFallback: WhisperSpeechEngine?,
         samples: [Float],
         languageProfile: LanguageProfile,
         initialPrompt: String?
     ) async throws -> TranscriptionResult {
+        guard let engine else {
+            throw EngineError.noEngineAvailable
+        }
         if let whisper = engine as? WhisperSpeechEngine {
             return try await whisper.enqueuePreview(
                 samples: samples,
@@ -2246,14 +2246,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 languageProfile: languageProfile
             )
         }
-        if let whisper = whisperFallback {
-            return try await whisper.enqueuePreview(
-                samples: samples,
-                languageProfile: languageProfile,
-                initialPrompt: initialPrompt
+        // File-based engines (Apple Speech, Qwen3-ASR, Cohere): hand them a
+        // short temp clip through their existing WAV path. The preview never
+        // touches the recovery file the whole-recording decode reads.
+        guard !samples.isEmpty,
+              let format = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: 16_000,
+                channels: 1,
+                interleaved: false
+              ) else {
+            throw EngineError.noEngineAvailable
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenvoice-preview-\(UUID().uuidString)")
+            .appendingPathExtension("wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let file = try AVAudioFile(
+            forWriting: url,
+            settings: format.settings,
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: AVAudioFrameCount(samples.count)
+        ) else {
+            throw EngineError.noEngineAvailable
+        }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { source in
+            buffer.floatChannelData?.pointee.update(
+                from: source.baseAddress!,
+                count: samples.count
             )
         }
-        throw EngineError.noEngineAvailable
+        try file.write(from: buffer)
+        return try await engine.transcribe(
+            audioURL: url,
+            languageProfile: languageProfile,
+            initialPrompt: initialPrompt
+        )
     }
 
     private func acceptStablePhrase(

@@ -166,7 +166,9 @@ final class OverlayPanelController {
         guard state.livePreviewEnabled else { return minimum }
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
         let textWidth = ceil(
-            (state.liveTranscriptPreview as NSString).size(
+            (LiveTranscriptPreview.visibleWords(
+                state.liveTranscriptPreview
+            ) as NSString).size(
                 withAttributes: [.font: font]
             ).width
         )
