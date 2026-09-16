@@ -348,6 +348,11 @@ final class OverlayPanelController {
                 x: visible.minX + margin,
                 y: visible.maxY - size.height - margin
             )
+        case .topMiddle:
+            origin = NSPoint(
+                x: visible.midX - size.width / 2,
+                y: visible.maxY - size.height - margin
+            )
         case .topRight:
             origin = NSPoint(
                 x: visible.maxX - size.width - margin,
@@ -356,6 +361,11 @@ final class OverlayPanelController {
         case .bottomLeft:
             origin = NSPoint(
                 x: visible.minX + margin,
+                y: visible.minY + margin
+            )
+        case .bottomMiddle:
+            origin = NSPoint(
+                x: visible.midX - size.width / 2,
                 y: visible.minY + margin
             )
         case .bottomRight:
@@ -368,17 +378,16 @@ final class OverlayPanelController {
     }
 
 
-    /// Grows a recording pill out of the camera housing.
+    /// Fills the camera housing and hangs a control strip below it.
     ///
-    /// The hardware notch is the gap between the two menu-bar strips. The HUD
-    /// is slightly wider than that gap and hangs just below it, overlapping a
-    /// few points so it reads as the notch extending downward. The waveform
-    /// lives in that hanging part — pixels over the camera itself are dead.
+    /// Width and top edge match `NSScreen` auxiliary areas. Height is the
+    /// housing plus a hang so cancel / waveform / finish sit below the camera.
+    /// 14-inch and 16-inch MacBook Pro housings are ~185–200 pt × 32 pt.
     private func positionInCameraHousing(screen: NSScreen) {
         panel.appearance = OverlayPreferences.nsAppearance()
         let frame = screen.frame
         guard let housing = cameraHousing(on: screen) else {
-            let size = CGSize(width: 200, height: 34)
+            let size = CGSize(width: 268, height: 44)
             var window = panel.frame
             window.size = size
             window.origin = clampedOrigin(
@@ -391,16 +400,16 @@ final class OverlayPanelController {
             panel.setFrame(window, display: true, animate: false)
             return
         }
-        let overlap: CGFloat = 6
+        let hang: CGFloat = 36
         let size = CGSize(
-            width: max(housing.width + 20, 168),
-            height: 32
+            width: housing.width,
+            height: housing.height + hang
         )
         var window = panel.frame
         window.size = size
         window.origin = NSPoint(
-            x: housing.midX - size.width / 2,
-            y: housing.minY - size.height + overlap
+            x: housing.minX,
+            y: housing.maxY - size.height
         )
         panel.setFrame(window, display: true, animate: false)
     }
