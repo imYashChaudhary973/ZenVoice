@@ -33,40 +33,70 @@ struct LivePreviewOverlayView: View {
     /// Motion is reduced when either the system or ZenVoice asks for it.
     private var motionReduced: Bool { reduceMotion || systemReduceMotion }
 
+    private var isNotchHUD: Bool {
+        OverlayPreferences.loadHUDStyle() == .notch
+    }
+
     var body: some View {
-        content
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .zenGlassSurface(
-                cornerRadius: ZenDesign.Radius.bar,
-                interactive: true
-            )
-            .shadow(color: Color.black.opacity(0.22), radius: 12, y: 6)
-            .preferredColorScheme(ZenAppearance.colorScheme)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            if isNotchHUD {
+                content
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background {
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0,
+                            bottomLeadingRadius: 14,
+                            bottomTrailingRadius: 14,
+                            topTrailingRadius: 0,
+                            style: .continuous
+                        )
+                        .fill(Color.black)
+                    }
+            } else {
+                content
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .zenGlassSurface(
+                        cornerRadius: ZenDesign.Radius.pill,
+                        interactive: true
+                    )
+            }
+        }
+        .preferredColorScheme(OverlayPreferences.colorScheme())
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
     private var content: some View {
-        switch state.phase {
-        case .idle:
-            idleContent
-        case .listening:
-            listeningContent
-        case .transcribing:
-            statusContent("transcribing…", pulses: true)
-        case .awaitingCloudReview:
-            statusContent(
-                "review cloud text…",
-                pulses: false,
-                tint: ZenDesign.Semantic.accent
-            )
-        case .inserting:
-            statusContent("inserting…", pulses: true, tint: ZenDesign.Semantic.success)
-        case .success:
-            statusContent(successMessage, pulses: false, tint: ZenDesign.Semantic.success)
-        case .error(let message):
-            errorContent(message)
+        if isNotchHUD {
+            WaveformView(model: state.audioLevel)
+                .frame(height: 14)
+                .opacity(state.phase == .listening ? 1 : 0.4)
+        } else {
+            switch state.phase {
+            case .idle:
+                idleContent
+            case .listening:
+                listeningContent
+            case .transcribing:
+                statusContent("transcribing…", pulses: true)
+            case .inserting:
+                statusContent(
+                    "inserting…",
+                    pulses: true,
+                    tint: ZenDesign.Semantic.success
+                )
+            case .success:
+                statusContent(
+                    successMessage,
+                    pulses: false,
+                    tint: ZenDesign.Semantic.success
+                )
+            case .error(let message):
+                errorContent(message)
+            }
         }
     }
 
@@ -87,27 +117,9 @@ struct LivePreviewOverlayView: View {
     }
 
     private var listeningContent: some View {
-        VStack(spacing: ZenDesign.Spacing.xs) {
-            HStack(spacing: 10) {
-                ZenStatusLabel(
-                    text: "listening",
-                    tint: ZenDesign.Semantic.accent,
-                    pulses: !motionReduced
-                )
-                Spacer()
-                OverlayBarButton(title: "Cancel", action: cancelRecording)
-                OverlayBarButton(
-                    title: "Finish",
-                    emphasized: true,
-                    action: finishRecording
-                )
-            }
-
-            HStack(spacing: ZenDesign.Spacing.xs) {
-                WaveformView(model: state.audioLevel)
-                    .frame(height: 24)
-                Spacer()
-            }
+        HStack(spacing: 8) {
+            WaveformView(model: state.audioLevel)
+                .frame(height: 16)
         }
     }
 

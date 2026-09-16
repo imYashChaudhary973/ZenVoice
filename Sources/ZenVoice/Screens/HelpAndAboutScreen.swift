@@ -21,7 +21,6 @@ struct HelpAndAboutScreen: View {
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
-    @ObservedObject var meetingViewModel: MeetingViewModel
     let openModels: () -> Void
     let openShortcuts: () -> Void
     var body: some View {
@@ -36,7 +35,6 @@ struct HelpAndAboutScreen: View {
                     historyViewModel: historyViewModel,
                     voiceProfileViewModel: voiceProfileViewModel,
                     modelManagerViewModel: modelManagerViewModel,
-                    meetingViewModel: meetingViewModel,
                     openModels: openModels,
                     embedded: true
                 )

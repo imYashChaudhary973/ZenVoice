@@ -38,7 +38,7 @@ struct OnboardingScreen: View {
             case .permissions: return "Permissions"
             case .shortcut: return "Shortcut"
             case .language: return "Language"
-            case .model: return "Model"
+            case .model: return "Engine"
             case .test: return "Try it"
             }
         }
@@ -66,13 +66,18 @@ struct OnboardingScreen: View {
             return true
         case .language:
             return true
-        case .model:
-            guard let featuredModel else { return false }
-            return modelManagerViewModel.isInstalled(featuredModel)
-        case .test:
-            guard let featuredModel else { return false }
-            return modelManagerViewModel.isInstalled(featuredModel)
+        case .model, .test:
+            return hasReadySpeechEngine
         }
+    }
+
+    private var hasReadySpeechEngine: Bool {
+        let id = modelManagerViewModel.selectedEngineID
+            ?? EngineIdentifiers.appleSpeech
+        if id == EngineIdentifiers.appleSpeech {
+            return true
+        }
+        return modelManagerViewModel.installedEngineIDs.contains(id)
     }
 
     var body: some View {
@@ -125,7 +130,7 @@ struct OnboardingScreen: View {
                         test
                     }
                 }
-                .frame(maxWidth: 560, alignment: .leading)
+                .frame(maxWidth: step == .model ? 760 : 560, alignment: .leading)
                 .padding(.horizontal, ZenDesign.Spacing.xxl)
                 .padding(.vertical, ZenDesign.Spacing.xxl)
                 .frame(maxWidth: .infinity)
@@ -305,7 +310,7 @@ struct OnboardingScreen: View {
                 )
             }
             Text(
-                "64 more languages live in Languages. Auto-detect uses a multilingual model. The next step recommends the right download."
+                "More spoken languages live in Models. Next: pick a speech engine."
             )
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(
@@ -358,133 +363,206 @@ struct OnboardingScreen: View {
     }
 
     /* ---- 6 · model ---- */
-    private var featuredModel: VerifiedModel? {
-        modelManagerViewModel.models.first {
-            modelManagerViewModel.isLanguageCompatible($0)
-                && modelManagerViewModel
-                    .recommendation(for: $0).level
-                    == .recommended
-        } ?? modelManagerViewModel.models.first {
-            modelManagerViewModel.isLanguageCompatible($0)
-        }
+    private var chosenEngineID: String {
+        modelManagerViewModel.selectedEngineID
+            ?? EngineIdentifiers.appleSpeech
     }
+
 
     private var model: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
             onboardingHeading(
-                icon: "cpu",
-                title: "One verified download.",
+                icon: "waveform",
+                title: "Choose your speech engine.",
                 detail:
-                    "ZenVoice measured this Mac and picked the best fit. Every download is pinned to an exact revision and SHA-256 checked before use."
+                    "All three run entirely on this Mac. Apple Speech is ready now, so the first dictation just works."
             )
-            if let model = featuredModel {
-                ZenPanel(padding: ZenDesign.Spacing.lg) {
-                    VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
-                        HStack(spacing: ZenDesign.Spacing.xs) {
-                            Text(model.displayName)
-                                .font(ZenDesign.Typography.bodyStrong)
-                                .foregroundStyle(
-                                    ZenDesign.Semantic.textPrimary
-                                )
-                            ZenBadge(
-                                text: "Recommended",
-                                kind: .success,
-                                showsDot: true
-                            )
-                            Spacer()
-                            modelAction(model)
-                        }
-                        Text(
-                            ByteCountFormatter.string(
-                                fromByteCount: model.fileSizeBytes,
-                                countStyle: .file
-                            )
-                            + " · rev \(model.sourceRevision.prefix(9))"
-                            + " · sha256 \(model.sha256.prefix(8))…"
-                        )
-                        .font(ZenDesign.Typography.monoSmall)
-                        .foregroundStyle(
-                            ZenDesign.Semantic.textTertiary
-                        )
+            HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
+                engineCard(
+                    icon: "apple.logo",
+                    title: "Apple Speech",
+                    badge: "Built in",
+                    badgeKind: .success,
+                    detail: "Built into macOS. Nothing to download.",
+                    selected: chosenEngineID == EngineIdentifiers.appleSpeech,
+                    enabled: true
+                ) {
+                    modelManagerViewModel.selectEngine(
+                        EngineIdentifiers.appleSpeech
+                    )
+                } footer: {
+                    ZenBadge(
+                        text: "Built in",
+                        kind: .success,
+                        showsDot: true
+                    )
+                }
 
-                        if modelManagerViewModel
-                            .downloadingModelID == model.id {
-                            ZenProgressBar(
-                                value:
-                                    modelManagerViewModel
-                                        .downloadProgress ?? 0
-                            )
-                        }
+                engineCard(
+                    icon: "hare.fill",
+                    title: "Parakeet V3",
+                    badge: "Fastest",
+                    badgeKind: .accent,
+                    detail: "Fastest local engine. 25 languages.",
+                    selected: chosenEngineID == EngineIdentifiers.parakeetTDTv3,
+                    enabled: true
+                ) {
+                    modelManagerViewModel.selectEngine(
+                        EngineIdentifiers.parakeetTDTv3
+                    )
+                } footer: {
+                    parakeetCardFooter
+                }
 
-                        if let error =
-                            modelManagerViewModel.errorMessage {
-                            ErrorBanner(message: error)
-                        }
-
-                        if let recommendation = modelManagerViewModel.engineRecommendation() {
-                            ZenPanelDivider()
-                            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
-                                HStack(spacing: ZenDesign.Spacing.xs) {
-                                    Text("Recommended engine")
-                                        .font(ZenDesign.Typography.bodyStrong)
-                                        .foregroundStyle(
-                                            ZenDesign.Semantic.textPrimary
-                                        )
-                                    Spacer()
-                                    ZenBadge(
-                                        text: modelManagerViewModel.engines.first {
-                                            $0.descriptor.id == recommendation.preferredEngineID
-                                        }?.descriptor.displayName ?? recommendation.preferredEngineID,
-                                        kind: .accent
-                                    )
-                                }
-                                Text(recommendation.rationale)
-                                    .font(ZenDesign.Typography.caption)
-                                    .foregroundStyle(
-                                        ZenDesign.Semantic.textSecondary
-                                    )
-                                    .fixedSize(horizontal: false, vertical: true)
-                                if !modelManagerViewModel.isSelectedEngine(recommendation.preferredEngineID) {
-                                    Button("Use recommended engine") {
-                                        modelManagerViewModel.selectEngine(recommendation.preferredEngineID)
-                                    }
-                                    .buttonStyle(ZenPrimaryButtonStyle())
-                                }
-                            }
-                        }
-                    }
+                engineCard(
+                    icon: "globe",
+                    title: "Nemotron 3.5",
+                    badge: "Streaming",
+                    badgeKind: .accent,
+                    detail: "True live streaming. 8 languages, including Chinese and Japanese.",
+                    selected: chosenEngineID == EngineIdentifiers.nemotronSpeech,
+                    enabled: true
+                ) {
+                    modelManagerViewModel.selectEngine(
+                        EngineIdentifiers.nemotronSpeech
+                    )
+                } footer: {
+                    nemotronCardFooter
                 }
             }
+
+            if let error = modelManagerViewModel.errorMessage {
+                ErrorBanner(message: error)
+            }
+
             Text(
-                "Download the recommended model before continuing. You can add more models later in Models."
+                "Whisper models stay in Models if you want them later."
             )
             .font(ZenDesign.Typography.caption)
-            .foregroundStyle(
-                ZenDesign.Semantic.textTertiary
-            )
+            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+        }
+        .onAppear {
+            if modelManagerViewModel.selectedEngineID == nil {
+                modelManagerViewModel.selectEngine(
+                    EngineIdentifiers.appleSpeech
+                )
+            }
         }
     }
 
     @ViewBuilder
-    private func modelAction(_ model: VerifiedModel) -> some View {
-        if modelManagerViewModel.isInstalled(model) {
-            ZenBadge(
-                text: "Verified & ready",
-                kind: .success,
-                showsDot: true
-            )
-        } else if modelManagerViewModel.downloadingModelID
-            == model.id {
-            Button("Cancel") {
-                modelManagerViewModel.cancelDownload()
+    private var parakeetCardFooter: some View {
+        downloadFooter(id: EngineIdentifiers.parakeetTDTv3)
+    }
+
+    @ViewBuilder
+    private var nemotronCardFooter: some View {
+        downloadFooter(id: EngineIdentifiers.nemotronSpeech)
+    }
+
+    @ViewBuilder
+    private func downloadFooter(id: String) -> some View {
+        let installed = modelManagerViewModel.installedEngineIDs.contains(id)
+        let downloading = modelManagerViewModel.downloadingModelID == id
+        if downloading {
+            VStack(alignment: .leading, spacing: 6) {
+                ZenProgressBar(
+                    value: modelManagerViewModel.downloadProgress ?? 0
+                )
+                Button("Cancel") {
+                    modelManagerViewModel.cancelDownload()
+                }
+                .buttonStyle(ZenSecondaryButtonStyle())
             }
-            .buttonStyle(ZenSecondaryButtonStyle())
+        } else if installed {
+            ZenBadge(text: "Ready", kind: .success, showsDot: true)
         } else {
-            Button("Download") {
-                modelManagerViewModel.download(model)
+            Button(downloadLabel(id: id)) {
+                modelManagerViewModel.selectEngine(id)
             }
             .buttonStyle(ZenPrimaryButtonStyle())
         }
+    }
+
+    private func downloadLabel(id: String) -> String {
+        guard let bytes = VerifiedEngineCatalog.engine(id: id)?.fileSizeBytes
+        else {
+            return "Download"
+        }
+        return "Download · "
+            + ByteCountFormatter.string(
+                fromByteCount: bytes,
+                countStyle: .file
+            )
+    }
+
+    private func engineCard<Footer: View>(
+        icon: String,
+        title: String,
+        badge: String?,
+        badgeKind: ZenBadge.Kind,
+        detail: String,
+        selected: Bool,
+        enabled: Bool,
+        select: @escaping () -> Void,
+        @ViewBuilder footer: () -> Footer
+    ) -> some View {
+        Button(action: select) {
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.medium,
+                        style: .continuous
+                    )
+                    .fill(ZenDesign.Component.cardBackground)
+                    .frame(height: 72)
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                }
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(ZenDesign.Typography.bodyStrong)
+                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    if let badge {
+                        ZenBadge(text: badge, kind: badgeKind)
+                    }
+                }
+                Text(detail)
+                    .font(ZenDesign.Typography.caption)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(minHeight: 36, alignment: .top)
+                footer()
+            }
+            .padding(ZenDesign.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.large,
+                    style: .continuous
+                )
+                .fill(ZenDesign.Component.cardBackground)
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.large,
+                        style: .continuous
+                    )
+                    .strokeBorder(
+                        selected
+                            ? ZenDesign.Semantic.accent
+                            : ZenDesign.Semantic.borderStrong,
+                        lineWidth: selected ? 2 : 1
+                    )
+                }
+            }
+        }
+        .buttonStyle(ZenPressButtonStyle())
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.55)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     /* ---- 6 · test drive ---- */

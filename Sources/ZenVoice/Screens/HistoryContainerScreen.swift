@@ -24,11 +24,9 @@ struct HistoryContainerScreen: View {
     @ObservedObject var historyViewModel: HistoryViewModel
     @ObservedObject var audioHistoryViewModel: AudioHistoryViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
-    @ObservedObject var meetingViewModel: MeetingViewModel
-    @ObservedObject var cloudAIViewModel: CloudAIViewModel
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case dictations, meetings, audio, insights
+        case dictations, audio, insights
 
         var id: String { rawValue }
 
@@ -36,8 +34,6 @@ struct HistoryContainerScreen: View {
             switch self {
             case .dictations:
                 return "Dictations"
-            case .meetings:
-                return "Meetings"
             case .audio:
                 return "Audio"
             case .insights:
@@ -53,7 +49,7 @@ struct HistoryContainerScreen: View {
             icon: "clock.fill",
             title: "History",
             subtitle:
-                "Dictations, meetings, recordings, and statistics — kept on this Mac.",
+                "Dictations, recordings, and statistics — kept on this Mac.",
             tabs: {
                 ZenTabStrip(
                     items: Tab.allCases.map { tab in
@@ -66,11 +62,6 @@ struct HistoryContainerScreen: View {
             switch selection {
             case .dictations:
                 HistoryScreen(viewModel: historyViewModel)
-            case .meetings:
-                MeetingsScreen(
-                    viewModel: meetingViewModel,
-                    cloudAIViewModel: cloudAIViewModel
-                )
             case .audio:
                 AudioHistoryScreen(viewModel: audioHistoryViewModel)
             case .insights:

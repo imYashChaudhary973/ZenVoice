@@ -22,38 +22,31 @@ import Foundation
 /// - `smart`:    local cleanup followed by Apple's on-device language model
 ///               behind strict semantic guards. It falls back to the existing
 ///               deterministic formatter when the model is unavailable.
-/// - `cloud`:    send the transcript to the configured cloud provider for
-///               enhancement, with a preview/apply step so the original is
-///               never lost.
 public enum TranscriptFormattingMode: String, Codable, CaseIterable, Sendable {
     case off
     case clean
     case smart
-    case cloud
+
 
     public var displayName: String {
         switch self {
         case .off:
-            return "Off"
+            return "Verbatim"
         case .clean:
             return "Clean"
         case .smart:
-            return "Smart"
-        case .cloud:
-            return "Cloud"
+            return "Polished"
         }
     }
 
     public var detail: String {
         switch self {
         case .off:
-            return "Keep the transcript exactly as the decoder produced it."
+            return "Your exact words, untouched."
         case .clean:
-            return "Remove fillers, repeated words, and clear spoken restarts."
+            return "Filter fillers and fix numbers."
         case .smart:
-            return "Use the on-device model for punctuation and layout, with a local fallback."
-        case .cloud:
-            return "Enhance the transcript with the configured cloud provider."
+            return "Read like you wrote it. Apple Intelligence on this Mac."
         }
     }
 
@@ -63,7 +56,7 @@ public enum TranscriptFormattingMode: String, Codable, CaseIterable, Sendable {
         switch self {
         case .off:
             return .off
-        case .clean, .smart, .cloud:
+        case .clean, .smart:
             return .clean
         }
     }
@@ -88,7 +81,7 @@ public enum TranscriptFormattingMode: String, Codable, CaseIterable, Sendable {
         switch self {
         case .off, .clean:
             return .off
-        case .smart, .cloud:
+        case .smart:
             return .contextAware
         }
     }
@@ -112,6 +105,48 @@ public enum TranscriptFormattingMode: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum TranscriptTone: String, Codable, CaseIterable, Sendable {
+    case auto
+    case casual
+    case veryCasual
+    case neutral
+    case professional
+    case enthusiastic
+
+    public var displayName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .casual: return "Casual"
+        case .veryCasual: return "Very casual"
+        case .neutral: return "Neutral"
+        case .professional: return "Professional"
+        case .enthusiastic: return "Enthusiastic"
+        }
+    }
+}
+
+public enum TranscriptTonePreferences {
+    public static let preferenceKey = "ZenVoice.formatting.tone"
+
+    public static func load(
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
+    ) -> TranscriptTone {
+        guard let raw = defaults.string(forKey: preferenceKey),
+              let tone = TranscriptTone(rawValue: raw) else {
+            return .auto
+        }
+        return tone
+    }
+
+    public static func save(
+        _ tone: TranscriptTone,
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
+    ) {
+        defaults.set(tone.rawValue, forKey: preferenceKey)
+    }
+}
+
+
 /// Persistent preference for the unified formatting ladder.
 public enum TranscriptFormattingPreferences {
     public static let preferenceKey = "ZenVoice.formatting.mode"
@@ -121,11 +156,13 @@ public enum TranscriptFormattingPreferences {
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> TranscriptFormattingMode {
         migrateIfNeeded(defaults: defaults)
-        guard let rawValue = defaults.string(forKey: preferenceKey),
-              let mode = TranscriptFormattingMode(rawValue: rawValue) else {
+        guard let rawValue = defaults.string(forKey: preferenceKey) else {
             return .clean
         }
-        return mode
+        if rawValue == "cloud" {
+            return .smart
+        }
+        return TranscriptFormattingMode(rawValue: rawValue) ?? .clean
     }
 
     public static func save(
@@ -172,7 +209,6 @@ public struct TranscriptFormattingResult: Equatable, Sendable {
     public let text: String
     public let mode: TranscriptFormattingMode
     public let changed: Bool
-    public let cloudUsed: Bool
     public let localModelUsed: Bool
     public let smartFallback: SmartFormattingFallback?
 
@@ -180,14 +216,12 @@ public struct TranscriptFormattingResult: Equatable, Sendable {
         text: String,
         mode: TranscriptFormattingMode,
         changed: Bool,
-        cloudUsed: Bool = false,
         localModelUsed: Bool = false,
         smartFallback: SmartFormattingFallback? = nil
     ) {
         self.text = text
         self.mode = mode
         self.changed = changed
-        self.cloudUsed = cloudUsed
         self.localModelUsed = localModelUsed
         self.smartFallback = smartFallback
     }
@@ -196,7 +230,7 @@ public struct TranscriptFormattingResult: Equatable, Sendable {
 /// Unified formatting engine.
 ///
 /// For `.off` and `.clean` work stays deterministic. `.smart` invokes the
-/// on-device model asynchronously; `.cloud` requires a valid API key.
+/// on-device model asynchronously.
 public struct TranscriptFormattingEngine: Sendable {
     private let smartFormatter: SmartFormattingEngine
 
@@ -215,11 +249,16 @@ public struct TranscriptFormattingEngine: Sendable {
         voiceCommandsEnabled: Bool = false,
         context: String? = nil
     ) async -> TranscriptFormattingResult {
-        guard mode != .off else {
+        if mode == .off {
+            let commands = LocalVoiceCommandEngine().apply(
+                to: transcript,
+                languageCode: languageCode,
+                isEnabled: voiceCommandsEnabled
+            )
             return TranscriptFormattingResult(
-                text: transcript,
+                text: commands.text,
                 mode: .off,
-                changed: false
+                changed: commands.text != transcript
             )
         }
 
@@ -268,50 +307,4 @@ public struct TranscriptFormattingEngine: Sendable {
         )
     }
 
-    /// Formats a transcript asynchronously, including the cloud rung.
-    ///
-    /// For `.cloud` this sends the already-cleaned local transcript to the
-    /// configured provider and returns the enhanced text. The original is
-    /// preserved inside `result.text` only if enhancement succeeds; on failure
-    /// the caller should keep the original.
-    public func format(
-        _ transcript: String,
-        mode: TranscriptFormattingMode,
-        languageCode: String = "en",
-        voiceCommandsEnabled: Bool = false,
-        context: String? = nil,
-        cloudConfiguration: CloudAIConfiguration,
-        apiKey: String
-    ) async throws -> TranscriptFormattingResult {
-        guard mode == .cloud else {
-            return await format(
-                transcript,
-                mode: mode,
-                languageCode: languageCode,
-                voiceCommandsEnabled: voiceCommandsEnabled,
-                context: context
-            )
-        }
-
-        let local = await format(
-            transcript,
-            mode: .clean,
-            languageCode: languageCode,
-            voiceCommandsEnabled: voiceCommandsEnabled,
-            context: context
-        )
-
-        let enhanced = try await CloudAIEnhancementEngine().enhance(
-            transcript: local.text,
-            configuration: cloudConfiguration,
-            apiKey: apiKey
-        )
-
-        return TranscriptFormattingResult(
-            text: enhanced.enhanced,
-            mode: .cloud,
-            changed: enhanced.isChanged,
-            cloudUsed: true
-        )
-    }
 }

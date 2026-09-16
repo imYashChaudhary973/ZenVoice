@@ -17,7 +17,6 @@ import AVFoundation
 import Combine
 import Foundation
 import os
-import UserNotifications
 import ZenVoiceCore
 import ZenVoiceRuntime
 import ZenVoiceStorage
@@ -180,248 +179,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsViewModel: SettingsViewModel!
     private var historyViewModel: HistoryViewModel!
     private var audioHistoryViewModel: AudioHistoryViewModel!
-    private var meetingViewModel: MeetingViewModel!
-    private var meetingWatcher: MeetingWatcher?
-    private var cloudAIViewModel: CloudAIViewModel!
-    private var cloudPreviewWindowController:
-        CloudAIPreviewWindowController?
-
-    /// Applies cloud enhancement to a finished local transcript.
-    ///
-    /// Consent to send text off-device is given once, in Formatting: enabling
-    /// the feature, storing a key, and choosing the Cloud rung. When the user
-    /// has also asked for enhancements to apply automatically, this runs the
-    /// request and returns the result without interrupting them. Otherwise it
-    /// shows the review panel — which deliberately does not take focus.
-    /// The transcript to carry forward, and whether a provider produced it.
-    ///
-    /// `didApply` is what lets `complete` tell "the cloud rewrote this" from
-    /// "the cloud rung was selected but nothing happened" — the two need
-    /// different local formatting and used to be indistinguishable.
-    fileprivate struct CloudEnhancementOutcome {
-        let processed: ProcessedTranscription
-        let didApply: Bool
-    }
-
-    /// Inserts the locally formatted result before an optional cloud request.
-    /// The cloud result may replace this exact text later, but never blocks the
-    /// first useful output and never targets a different application.
-    private func insertLocalBeforeCloud(
-        _ processed: ProcessedTranscription,
-        formattingMode: TranscriptFormattingMode,
-        targetProcessIdentifier: pid_t?
-    ) async -> String {
-        guard formattingMode == .cloud,
-              let targetProcessIdentifier,
-              AXIsProcessTrusted(),
-              NSWorkspace.shared.frontmostApplication?.processIdentifier
-                == targetProcessIdentifier else {
-            return ""
-        }
-        let text = await enhanceForMode(
-            processed.result.finalTranscript,
-            formattingMode: formattingMode
-        )
-        guard !text.isEmpty else {
-            return ""
-        }
-        let candidate = text + " "
-        guard case .pasted = inserter.insert(candidate) else {
-            return ""
-        }
-        state.phase = .inserting
-        os_signpost(
-            .event,
-            log: Self.dictationPerformanceLog,
-            name: "LocalTextInserted"
-        )
-        return candidate
-    }
-
-    private func processCloudEnhancement(
-        localProcessed: ProcessedTranscription,
-        formattingMode: TranscriptFormattingMode
-    ) async -> CloudEnhancementOutcome {
-
-        guard formattingMode == .cloud else {
-            return CloudEnhancementOutcome(
-                processed: localProcessed,
-                didApply: false
-            )
-        }
-        guard cloudAIViewModel.isReady else {
-            // Cloud is the selected rung but it cannot run. Silently using
-            // local formatting made the app look like it had enhanced the
-            // text when it never left the Mac, so say so instead.
-            showError(cloudNotReadyMessage())
-            return CloudEnhancementOutcome(
-                processed: localProcessed,
-                didApply: false
-            )
-        }
-
-        let original = localProcessed.result.finalTranscript
-        if CloudAIPreferences.load().autoApply {
-            guard let enhanced = await enhanceWithoutPrompting(original)
-            else {
-                return CloudEnhancementOutcome(
-                    processed: localProcessed,
-                    didApply: false
-                )
-            }
-            return CloudEnhancementOutcome(
-                processed: localProcessed
-                    .replacingFinalTranscript(with: enhanced),
-                didApply: true
-            )
-        }
-
-        return await awaitCloudReview(localProcessed: localProcessed)
-    }
-
-    /// Shows the review panel and waits for an answer.
-    ///
-    /// The wait holds the whole dictation open: `complete` has not run, so
-    /// `state.phase` is still `.transcribing`, `state.isBusy` is true, and the
-    /// dictation shortcut, hold-to-dictate and the menu item are all inert.
-    /// The panel is a non-activating one that deliberately does not take
-    /// focus, so a user who does not notice it just sees a hotkey that stopped
-    /// working, with nothing on screen explaining why. Three things keep that
-    /// from being a dead end:
-    ///
-    ///   * the ZenBar says what it is waiting for;
-    ///   * pressing the dictation shortcut dismisses the panel and keeps the
-    ///     local transcript, so the way out is the key you already pressed;
-    ///   * `cloudReviewTimeout` resolves it anyway if nobody answers.
-    private func awaitCloudReview(
-        localProcessed: ProcessedTranscription
-    ) async -> CloudEnhancementOutcome {
-        let original = localProcessed.result.finalTranscript
-        return await withCheckedContinuation { continuation in
-            // Whichever of answer, dismissal or timeout arrives first wins;
-            // the rest become no-ops. Resuming a continuation twice traps.
-            var hasResumed = false
-            let finish: (String?) -> Void = { [weak self] acceptedText in
-                guard !hasResumed else { return }
-                hasResumed = true
-                self?.cloudReviewTimeoutTask?.cancel()
-                self?.cloudReviewTimeoutTask = nil
-                self?.dismissCloudReviewPanel()
-                let resolution = CloudTranscriptResolution.resolve(
-                    localTranscript: original,
-                    acceptedTranscript: acceptedText
-                )
-                continuation.resume(
-                    returning: CloudEnhancementOutcome(
-                        processed: resolution.didApply
-                            ? localProcessed.replacingFinalTranscript(
-                                with: resolution.transcript
-                            )
-                            : localProcessed,
-                        didApply: resolution.didApply
-                    )
-                )
-            }
-
-            let controller = CloudAIPreviewWindowController(
-                original: original,
-                keyStore: makeCloudAIKeyStore()
-            ) { acceptedText in
-                finish(acceptedText)
-            }
-            cloudPreviewWindowController = controller
-            cancelPendingCloudReview = { finish(nil) }
-            state.phase = .awaitingCloudReview
-            updateStartStopMenuTitle()
-            controller.show()
-
-            cloudReviewTimeoutTask = Task { [weak self] in
-                try? await Task.sleep(
-                    nanoseconds: UInt64(Self.cloudReviewTimeout * 1_000_000_000)
-                )
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    guard self != nil else { return }
-                    finish(nil)
-                }
-            }
-        }
-    }
-
-    /// How long the review panel waits before keeping the local transcript.
-    ///
-    /// Long enough to read a paragraph and decide, short enough that an
-    /// unnoticed panel cannot hold dictation open indefinitely.
-    private static let cloudReviewTimeout: TimeInterval = 120
-
-    /// Resolves a pending review with the local transcript. Set only while a
-    /// panel is on screen.
-    private var cancelPendingCloudReview: (() -> Void)?
-
-    private var cloudReviewTimeoutTask: Task<Void, Never>?
-
-    private func dismissCloudReviewPanel() {
-        cancelPendingCloudReview = nil
-        cloudPreviewWindowController?.close()
-        cloudPreviewWindowController = nil
-    }
-
-    /// Whether a review panel is waiting for an answer right now.
-    private var isAwaitingCloudReview: Bool {
-        cancelPendingCloudReview != nil
-    }
-
-    /// Runs the enhancement request with no UI at all, for the auto-apply
-    /// path. Returns nil when the transcript should be left as it is; the
-    /// failure is reported without stealing focus or blocking insertion.
-    private func enhanceWithoutPrompting(
-        _ transcript: String
-    ) async -> String? {
-        let configuration = CloudAIPreferences.load()
-        let key = (try? makeCloudAIKeyStore().loadKey()) ?? ""
-        guard configuration.provider.acceptsAPIKey(key) else {
-            showError(cloudNotReadyMessage())
-            return nil
-        }
-        guard configuration.credentialsBoundToCurrentDestination else {
-            showError(cloudNotReadyMessage())
-            return nil
-        }
-        do {
-            let result = try await CloudAIEnhancementEngine().enhance(
-                transcript: transcript,
-                configuration: configuration,
-                apiKey: key
-            )
-            return result.enhanced
-        } catch {
-            showError(
-                "Cloud enhancement failed — kept your local transcript. "
-                + error.localizedDescription
-            )
-            return nil
-        }
-    }
-
-    private func cloudNotReadyMessage() -> String {
-        let configuration = CloudAIPreferences.load()
-        if !configuration.isEnabled {
-            return "Formatting is set to Cloud but Cloud AI is off — used "
-                + "local formatting. Turn it on in Formatting."
-        }
-        let key = (try? makeCloudAIKeyStore().loadKey()) ?? ""
-        if !configuration.provider.acceptsAPIKey(key) {
-            return "Formatting is set to Cloud but no API key is stored — "
-                + "used local formatting. Add a key in Formatting."
-        }
-        if !configuration.credentialsBoundToCurrentDestination {
-            return "Formatting is set to Cloud but the saved key belongs to "
-                + "another provider or endpoint — used local formatting. "
-                + "Save a key for this destination in Formatting."
-        }
-        return "Formatting is set to Cloud but the provider endpoint is "
-            + "invalid — used local formatting. Check it in Formatting."
-    }
 
     private var updatesViewModel: UpdatesViewModel!
     private var insightsViewModel: InsightsViewModel!
@@ -527,8 +284,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let processingHistoryID = transcribingHistoryID
         activeHistoryID = nil
         transcribingHistoryID = nil
-        meetingViewModel?.markIncompleteForTermination()
-        meetingWatcher?.stop()
         let recordedAudio = recorder.stop()
         if let historyID {
             if nonPersistentHistoryIDs.contains(historyID)
@@ -608,25 +363,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func makeEngineRegistry(whisper: WhisperSpeechEngine?) -> EngineRegistry {
-        var engines: [any SpeechEngine] = []
+        var engines: [any SpeechEngine] = [AppleSpeechEngine()]
         if let whisper {
             engines.append(whisper)
         }
         if let parakeetTDTv3 = makeParakeetTDTEngine(.v3) {
             engines.append(parakeetTDTv3)
         }
-        engines.append(
-            CloudSpeechEngine.openAI(keyStore: makeOpenAISpeechKeyStore())
-        )
-        engines.append(
-            CloudSpeechEngine.gemini(keyStore: makeGeminiSpeechKeyStore())
-        )
-        engines.append(
-            CloudSpeechEngine.elevenLabs(keyStore: makeElevenLabsSpeechKeyStore())
-        )
-        engines.append(
-            CloudSpeechEngine.grok(keyStore: makeGrokSpeechKeyStore())
-        )
+        if let parakeetTDTv2 = makeParakeetTDTEngine(.v2) {
+            engines.append(parakeetTDTv2)
+        }
+        if let nemotron = makeParakeetTDTEngine(.nemotron) {
+            engines.append(nemotron)
+        }
+        if let cohere = makeCohereTranscribeEngine() {
+            engines.append(cohere)
+        }
+        if let qwen3 = makeQwen3ASREngine() {
+            engines.append(qwen3)
+        }
         let temporary = EngineRegistry(engines: engines)
         let fallbackOrder = EngineRecommendationEngine.fallbackOrder(
             for: LanguagePreferences.load(),
@@ -648,6 +403,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ParakeetTDTEngine(configuration: configuration, modelURL: url)
         }
     }
+
+    private func makeCohereTranscribeEngine() -> CohereTranscribeEngine? {
+        guard let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+        else {
+            return nil
+        }
+        let engine = CohereTranscribeEngine(modelsDirectory: modelsDirectory)
+        return engine.isAvailable ? engine : nil
+    }
+
+    private func makeQwen3ASREngine() -> Qwen3ASREngine? {
+        guard let modelsDirectory = try? VerifiedModelCatalog.modelsDirectory()
+        else {
+            return nil
+        }
+        let engine = Qwen3ASREngine(modelsDirectory: modelsDirectory)
+        return engine.isAvailable ? engine : nil
+    }
+
+
 
     private func makeEngineIfModelExists<Engine: SpeechEngine>(
         filename: String,
@@ -794,141 +569,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// The Keychain store for the Cloud AI provider key.
-    ///
-    /// Falls back to an in-memory store if the runtime identity cannot be
-    /// resolved, so a misconfigured build cannot silently write a live
-    /// third-party credential somewhere unexpected.
-    private func makeCloudAIKeyStore() -> CloudAIKeyStoring {
-        guard let policy = try? RuntimeIdentity.policy() else {
-            return InMemoryCloudAIKeyStore()
-        }
-        return CloudAIKeychainKeyStore(policy: policy)
-    }
-
-    private func makeMeetingViewModel() -> MeetingViewModel {
-        let store: MeetingStore
-        if let policy = try? RuntimeIdentity.policy(),
-           let live = try? MeetingStore.live(policy: policy) {
-            store = live
-        } else {
-            store = MeetingStore(
-                directoryURL: FileManager.default.temporaryDirectory
-                    .appendingPathComponent(
-                        "ZenVoiceMeetings",
-                        isDirectory: true
-                    )
-            )
-        }
-        return MeetingViewModel(
-            store: store,
-            isDictationRecording: { [weak self] in
-                self?.recorder.isRecording == true
-            },
-            keyProvider: (try? RuntimeIdentity.policy()).map {
-                KeychainVaultKeyProvider(policy: $0)
-            },
-            transcribeFile: { [weak self] url in
-                guard let self else {
-                    throw MeetingStore.StoreError.io(
-                        "ZenVoice is no longer running."
-                    )
-                }
-                await self.waitForEngineConfiguration()
-                guard let registry = self.engineRegistry else {
-                    throw MeetingStore.StoreError.io(
-                        "No speech engine is available."
-                    )
-                }
-                let profile = LanguagePreferences.load()
-                let selected = SelectedEnginePreferences.load(
-                    for: profile,
-                    defaults: RuntimeIdentity.userDefaults()
-                )
-                let localID: String?
-                if let selected, EngineIdentifiers.isCloudSpeech(selected) {
-                    localID = EngineIdentifiers.whisperLargeV3Turbo
-                } else {
-                    localID = selected
-                }
-                return try await registry.transcribe(
-                    audioURL: url,
-                    profile: profile,
-                    selectedID: localID
-                )
-            },
-            summarizeTranscript: { [weak self] transcript in
-                guard let self else {
-                    throw MeetingStore.StoreError.io(
-                        "ZenVoice is no longer running."
-                    )
-                }
-                var configuration = CloudAIPreferences.load()
-                configuration.prompt = CloudAIPromptTemplate.meeting.text
-                let key = ((try? self.makeCloudAIKeyStore().loadKey()) ?? nil)
-                    ?? ""
-                let result = try await CloudAIEnhancementEngine().enhance(
-                    transcript: transcript,
-                    configuration: configuration,
-                    apiKey: key
-                )
-                return result.enhanced
-            }
-        )
-    }
-
-    private func notifyMeetingDetected(
-        _ detection: MeetingWatcher.Detection
-    ) {
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-            if settings.authorizationStatus == .notDetermined {
-                _ = try? await center.requestAuthorization(
-                    options: [.alert, .sound]
-                )
-            }
-            let content = UNMutableNotificationContent()
-            content.title = "Meeting detected"
-            if meetingViewModel.autoRecordEnabled {
-                content.body =
-                    "\(detection.title) — recording started. Tell everyone on the call."
-            } else {
-                content.body =
-                    "\(detection.title) — Start notes in History → Meetings."
-            }
-            let request = UNNotificationRequest(
-                identifier: "meeting-\(UUID().uuidString)",
-                content: content,
-                trigger: nil
-            )
-            try? await center.add(request)
-        }
-    }
-
-
-    private func makeOpenAISpeechKeyStore() -> CloudAIKeyStoring {
-        cloudSpeechKeyStore(account: "cloud-speech-openai-api-key")
-    }
-
-    private func makeGeminiSpeechKeyStore() -> CloudAIKeyStoring {
-        cloudSpeechKeyStore(account: "cloud-speech-gemini-api-key")
-    }
-
-    private func makeElevenLabsSpeechKeyStore() -> CloudAIKeyStoring {
-        cloudSpeechKeyStore(account: "cloud-speech-elevenlabs-api-key")
-    }
-
-    private func makeGrokSpeechKeyStore() -> CloudAIKeyStoring {
-        cloudSpeechKeyStore(account: "cloud-speech-xai-api-key")
-    }
-
-    private func cloudSpeechKeyStore(account: String) -> CloudAIKeyStoring {
-        guard let policy = try? RuntimeIdentity.policy() else {
-            return InMemoryCloudAIKeyStore()
-        }
-        return CloudAIKeychainKeyStore(policy: policy, account: account)
-    }
 
     /// Copies a completed recording into the Audio History archive.
     ///
@@ -1380,11 +1020,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             engineRegistryProvider: { [weak self] in
                 self?.engineRegistry
-            },
-            openAISpeechKeyStore: makeOpenAISpeechKeyStore(),
-            geminiSpeechKeyStore: makeGeminiSpeechKeyStore(),
-            elevenLabsSpeechKeyStore: makeElevenLabsSpeechKeyStore(),
-            grokSpeechKeyStore: makeGrokSpeechKeyStore()
+            }
         )
         settingsViewModel = SettingsViewModel(
             currentShortcut: currentHotKeyConfiguration,
@@ -1498,24 +1134,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return try await self.resolvedVault()
             }
         )
-        cloudAIViewModel = CloudAIViewModel(
-            keyStore: makeCloudAIKeyStore()
-        )
         updatesViewModel = UpdatesViewModel()
-        meetingViewModel = makeMeetingViewModel()
-        let watcher = MeetingWatcher()
-        watcher.onDetected = { [weak self] detection in
-            self?.meetingViewModel.handleDetection(detection)
-            self?.notifyMeetingDetected(detection)
-        }
-        watcher.start()
-        meetingWatcher = watcher
         settingsWindowController = SettingsWindowController(
             viewModel: settingsViewModel,
             historyViewModel: historyViewModel,
             audioHistoryViewModel: audioHistoryViewModel,
-            meetingViewModel: meetingViewModel,
-            cloudAIViewModel: cloudAIViewModel,
             updatesViewModel: updatesViewModel,
             insightsViewModel: insightsViewModel,
             voiceProfileViewModel: voiceProfileViewModel,
@@ -1721,15 +1344,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleRecording() {
-        // A pending cloud review holds the previous dictation open behind a
-        // panel that never takes focus. The shortcut is the key the user has
-        // already pressed, so it is the one that has to get them out: it
-        // resolves the review with the local transcript rather than starting
-        // a second dictation on top of an unfinished one.
-        if isAwaitingCloudReview {
-            cancelPendingCloudReview?()
-            return
-        }
         if recorder.isRecording {
             finishRecording()
         } else {
@@ -1739,10 +1353,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func beginRecording(startedByHold: Bool = false) {
         guard !state.isBusy else {
-            return
-        }
-        if meetingViewModel?.isSessionActive == true {
-            showError("Stop the meeting before dictating.")
             return
         }
         guard HoldKeyChoice.shouldOpenMicrophone(
@@ -2008,21 +1618,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     durationSeconds: recordedAudio.durationSeconds
                 )
             }
-            if EngineIdentifiers.isCloudSpeech(
-                behavior.modelID
-            ) {
-                Task { try? await mark() }
-            } else {
-                do {
-                    try await mark()
-                } catch {
-                    handleTranscriptionFailure(
-                        error,
-                        recordedAudio: recordedAudio,
-                        historyID: historyID
-                    )
-                    return
-                }
+            do {
+                try await mark()
+            } catch {
+                handleTranscriptionFailure(
+                    error,
+                    recordedAudio: recordedAudio,
+                    historyID: historyID
+                )
+                return
             }
         }
 
@@ -2190,92 +1794,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             )
                             : nil
                 )
-                if EngineIdentifiers.isCloudSpeech(result.modelID) {
-                    await MainActor.run { [weak self] in
-                        self?.complete(
-                            processed: processed,
-                            recordedAudio: recordedAudio,
-                            historyID: historyID,
-                            formattingMode: behavior.formattingMode,
-                            cloudDidApply: false
-                        )
-                    }
-                    return
-                }
-                let insertedBeforeCloud: String
-                if insertedPreview.isEmpty {
-                    insertedBeforeCloud = await Task {
-                        @MainActor [weak self] in
-                        guard let self else { return "" }
-                        return await self.insertLocalBeforeCloud(
-                            processed,
-                            formattingMode: behavior.formattingMode,
-                            targetProcessIdentifier: insertionTargetProcess
-                        )
-                    }.value
-                } else {
-                    insertedBeforeCloud = insertedPreview
-                }
-                os_signpost(
-                    .event,
-                    log: Self.dictationPerformanceLog,
-                    name: "CloudEnhancementStarted"
-                )
-                let cloudOutcome = await Task { @MainActor [weak self] in
-                    guard let self else {
-                        return CloudEnhancementOutcome(
-                            processed: processed,
-                            didApply: false
-                        )
-                    }
-                    return await self.processCloudEnhancement(
-                        localProcessed: processed,
-                        formattingMode: behavior.formattingMode
-                    )
-                }.value
-                os_signpost(
-                    .event,
-                    log: Self.dictationPerformanceLog,
-                    name: "CloudEnhancementFinished"
-                )
-                let cloudProcessed = cloudOutcome.processed
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    guard !insertedBeforeCloud.isEmpty else {
-                        self.complete(
-                            processed: cloudProcessed,
-                            recordedAudio: recordedAudio,
-                            historyID: historyID,
-                            formattingMode: behavior.formattingMode,
-                            cloudDidApply: cloudOutcome.didApply
-                        )
-                        return
-                    }
-                    // Only swap while the caret is still where the preview
-                    // text was typed. Cloud enhancement can take seconds, and
-                    // if the user has moved to another application in the
-                    // meantime this would overwrite whatever happens to sit
-                    // before *that* caret.
-                    if NSWorkspace.shared.frontmostApplication?
-                        .processIdentifier == insertionTargetProcess {
-                        _ = self.inserter.replaceTextBeforeCaret(
-                            insertedBeforeCloud,
-                            with: cloudProcessed.result.finalTranscript + " "
-                        )
-                    }
-                    // Whether or not the swap succeeded, preview text is
-                    // already on screen. Inserting again would give the user
-                    // their dictation twice, which is worse than either
-                    // failure on its own — so the accurate transcript is
-                    // recorded in history and nothing further is typed.
-                    self.complete(
-                        processed: cloudProcessed,
+                    self?.complete(
+                        processed: processed,
                         recordedAudio: recordedAudio,
                         historyID: historyID,
-                        insertionText: "",
-                        hasPriorInsertion: true,
-                        formattingMode: behavior.formattingMode,
-                        cloudDidApply: cloudOutcome.didApply
+                        insertionText: insertedPreview.isEmpty ? nil : "",
+                        hasPriorInsertion: !insertedPreview.isEmpty,
+                        formattingMode: behavior.formattingMode
                     )
                 }
             } catch {
@@ -2861,71 +2387,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
             : finalTranscript
         let formattingMode = activeDictationBehavior.formattingMode
-        let insertedSoFar = liveInsertedStableTranscript
-        let previewTargetProcess = liveTargetProcessIdentifier
         resetLivePreviewSession()
 
-        guard formattingMode == .cloud else {
-            complete(
-                processed: processed,
-                recordedAudio: recordedAudio,
-                historyID: historyID,
-                insertionText: insertionText,
-                hasPriorInsertion: hasPriorInsertion,
-                formattingMode: formattingMode
-            )
-            return
-        }
-
-        // The live-preview routes never ran cloud enhancement. With Formatting
-        // set to Cloud and streaming insertion on, no request was made, no
-        // review panel appeared, and the "Cloud AI is off" warning never
-        // fired — the user got the local transcript believing their provider
-        // had rewritten it.
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let outcome = await self.processCloudEnhancement(
-                localProcessed: processed,
-                formattingMode: formattingMode
-            )
-            guard outcome.didApply, hasPriorInsertion else {
-                self.complete(
-                    processed: outcome.processed,
-                    recordedAudio: recordedAudio,
-                    historyID: historyID,
-                    insertionText: outcome.didApply
-                        ? outcome.processed.result.finalTranscript
-                        : insertionText,
-                    hasPriorInsertion: hasPriorInsertion,
-                    formattingMode: formattingMode,
-                    cloudDidApply: outcome.didApply
-                )
-                return
-            }
-            // Text is already on screen, so swap rather than append — and only
-            // while the caret is still where it was typed. Enhancement takes
-            // seconds; if the user has moved on, this would overwrite whatever
-            // sits before *that* caret.
-            if NSWorkspace.shared.frontmostApplication?
-                .processIdentifier == previewTargetProcess {
-                _ = self.inserter.replaceTextBeforeCaret(
-                    insertedSoFar,
-                    with: outcome.processed.result.finalTranscript + " "
-                )
-            }
-            // Whether or not the swap landed, inserting again would give the
-            // user their dictation twice. History keeps the accurate text and
-            // nothing further is typed.
-            self.complete(
-                processed: outcome.processed,
-                recordedAudio: recordedAudio,
-                historyID: historyID,
-                insertionText: "",
-                hasPriorInsertion: true,
-                formattingMode: formattingMode,
-                cloudDidApply: true
-            )
-        }
+        complete(
+            processed: processed,
+            recordedAudio: recordedAudio,
+            historyID: historyID,
+            insertionText: insertionText,
+            hasPriorInsertion: hasPriorInsertion,
+            formattingMode: formattingMode
+        )
     }
 
     private func resetLivePreviewSession() {
@@ -2943,18 +2414,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         liveTargetProcessIdentifier = nil
     }
 
-    /// - Parameter cloudDidApply: whether a cloud provider actually produced
-    ///   `processed.result.finalTranscript`. Only true when the request ran
-    ///   *and* its result was kept, so a discarded suggestion or an unreachable
-    ///   provider still gets local formatting rather than raw refined text.
     private func complete(
         processed: ProcessedTranscription,
         recordedAudio: AudioRecorder.RecordedAudio,
         historyID: UUID?,
         insertionText: String? = nil,
         hasPriorInsertion: Bool = false,
-        formattingMode: TranscriptFormattingMode? = nil,
-        cloudDidApply: Bool = false
+        formattingMode: TranscriptFormattingMode? = nil
     ) {
         Task {
             await completeNow(
@@ -2963,8 +2429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 historyID: historyID,
                 insertionText: insertionText,
                 hasPriorInsertion: hasPriorInsertion,
-                formattingMode: formattingMode,
-                cloudDidApply: cloudDidApply
+                formattingMode: formattingMode
             )
         }
     }
@@ -2975,11 +2440,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         historyID: UUID?,
         insertionText: String?,
         hasPriorInsertion: Bool,
-        formattingMode: TranscriptFormattingMode?,
-        cloudDidApply: Bool
+        formattingMode: TranscriptFormattingMode?
     ) async {
         let result = processed.result
-        let requestedEngineID = activeDictationBehavior.modelID
         let resolvedFormattingMode = formattingMode ?? activeDictationBehavior.formattingMode
         transcribingHistoryID = nil
         let insertionTarget = dictationTargetProcessIdentifier
@@ -3026,33 +2489,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
 
-        let cloudFellBackToLocal =
-            EngineIdentifiers.isCloudSpeech(requestedEngineID)
-            && !EngineIdentifiers.isCloudSpeech(result.modelID)
         state.recordSuccessfulDictation(
             transcript: result.finalTranscript,
             durationSeconds: recordedAudio.durationSeconds,
-            runawayWordsCut: result.runawayWordsCut,
-            decodeWarning: cloudFellBackToLocal
-                ? "cloud speech failed — used the local engine"
-                : nil
+            runawayWordsCut: result.runawayWordsCut
         )
         state.phase = .inserting
 
         let textToInsert: String
         if let insertionText {
             textToInsert = insertionText
-        } else if resolvedFormattingMode == .cloud, cloudDidApply {
-            // The provider already rewrote this text; running the local
-            // enhancer over its output would re-format someone else's work.
-            textToInsert = result.finalTranscript
         } else {
-            // Reached for every rung below Cloud, and for Cloud when the
-            // request did not happen — no key, provider unreachable, or the
-            // user discarded the suggestion. Skipping the local enhancer here
-            // unconditionally made the top rung produce *less* formatting than
-            // the one beneath it: the text came out only `.clean`-refined
-            // while the app said it had "used local formatting".
             textToInsert = await enhanceForMode(
                 result.finalTranscript,
                 formattingMode: resolvedFormattingMode
@@ -3248,23 +2695,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         formattingMode: TranscriptFormattingMode? = nil
     ) async -> String {
         let formattingMode = formattingMode ?? activeDictationBehavior.formattingMode
+        var text: String
         if formattingMode == .smart {
-            return await SmartFormattingEngine().format(
+            text = await SmartFormattingEngine().format(
                 transcript,
                 languageCode: state.languageProfile.inputLanguageCode,
                 context: settingsViewModel?.sanitizedNextDictationContext
             ).text
+        } else {
+            let mode = formattingMode.zenIntelligenceMode
+            guard mode != .off else {
+                text = transcript
+                return await translatedIfNeeded(text)
+            }
+            text = ZenIntelligenceEngine().enhance(
+                transcript,
+                mode: mode,
+                languageCode: state.languageProfile.inputLanguageCode,
+                context: settingsViewModel?.sanitizedNextDictationContext
+            ).text
         }
+        return await translatedIfNeeded(text)
+    }
 
-        let mode = formattingMode.zenIntelligenceMode
-        guard mode != .off else { return transcript }
-        let result = ZenIntelligenceEngine().enhance(
-            transcript,
-            mode: mode,
-            languageCode: state.languageProfile.inputLanguageCode,
-            context: settingsViewModel?.sanitizedNextDictationContext
-        )
-        return result.wasRejected ? transcript : result.text
+    private func translatedIfNeeded(_ transcript: String) async -> String {
+        guard state.languageProfile.shouldTranslateToEnglish else {
+            return transcript
+        }
+        let engineID = engineRegistry?.resolve(
+            for: state.languageProfile,
+            selectedID: SelectedEnginePreferences.load(
+                for: state.languageProfile
+            )
+        )?.descriptor.id ?? ""
+        if EngineIdentifiers.isWhisperFamily(engineID) {
+            return transcript
+        }
+        let model = AppleOnDeviceLanguageModel()
+        guard model.availability == .available else {
+            return transcript
+        }
+        do {
+            return try await model.generate(
+                prompt: """
+                Translate to English. Return only the translation.
+
+                \(transcript)
+                """,
+                maximumResponseTokens: 512
+            )
+        } catch {
+            return transcript
+        }
     }
 
     private func handleCommandModeTranscript(
@@ -3929,7 +3411,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     ) {
         let showsForActiveDictation: Bool
         switch phase {
-        case .listening, .transcribing, .awaitingCloudReview, .inserting,
+        case .listening, .transcribing, .inserting,
              .error:
             showsForActiveDictation = true
         case .idle, .success:
@@ -4011,10 +3493,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// or toggles live previews off. The panel's kind is fixed at construction,
     /// so a change means building a new one and restoring its visibility.
     @objc private func overlayPreferencesChanged() {
-        guard !zenBarController.matches(
-            kind: resolvedOverlayKind(),
+        let kind = resolvedOverlayKind()
+        if zenBarController.matches(
+            kind: kind,
             reduceMotion: OverlayPreferences.loadReduceMotion()
-        ) else {
+        ) {
+            zenBarController.reposition()
             return
         }
         zenBarController.hide()
@@ -4025,9 +3509,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }
 
-    /// ZenBar is the only overlay. Live-transcript overlays are no longer shown.
     private func resolvedOverlayKind() -> OverlayKind {
-        .zenBar
+        .livePreviewPill
     }
 
     @objc private func quit() {

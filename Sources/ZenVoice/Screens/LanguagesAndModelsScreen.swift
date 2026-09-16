@@ -31,6 +31,7 @@ struct LanguagesAndModelsScreen: View {
             LanguagesScreen(viewModel: viewModel)
             ModelsScreen(
                 viewModel: modelManagerViewModel,
+                settingsViewModel: viewModel,
                 mismatchAlert: $modelMismatch
             )
         }

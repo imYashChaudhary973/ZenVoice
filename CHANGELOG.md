@@ -6,30 +6,21 @@ All notable ZenVoice changes are recorded here.
 
 ### Added
 
-- Meeting capture (Phase 1): History → Meetings start / pause / resume / stop.
-  Microphone is You; ScreenCaptureKit system audio is Them. Whole-file local
-  decode on Stop. Optional BYO-key recap. Dictation hotkey unchanged.
-- Meeting auto-detect (calendar + Zoom/Teams/Slack). Optional auto-record,
-  You/Them rename-once, FTS search, speaker gallery, Gmail/Slack connectors,
-  Playwright guest join as ZenVoice Notetaker, enroll-from-You, and recap
-  commands (email, Slack, calendar).
-- Public OAuth homepage and privacy policy at
-  `https://zenvoice-meeting-oauth.onrender.com`, with Google Search Console
-  ownership verification and explicitly allowlisted static routes.
-- Google Calendar and Gmail production-audience configuration and least-privilege
-  scope justifications. Google brand/scope approval is still pending: the
-  unverified-app warning and 100-user cap remain, and review submission requires
-  a real OAuth/data-use demo video. Gmail may also require a security assessment.
+- On-device Apple Speech, Parakeet TDT v2, Nemotron 3.5, Cohere Transcribe,
+  and Qwen3-ASR 0.6B.
+
+### Changed
+
+- Minimum macOS is 15.
+
+### Removed
+
+- Meetings, meeting insights, MCP relay, meeting OAuth, and the notetaker bot.
+- Cloud speech (OpenAI, Gemini, ElevenLabs Scribe, Grok) and BYO-key Cloud formatting.
+  Speech and formatting stay on this Mac.
 
 ### Fixed
 
-
-- Cloud AI keys are bound to provider and endpoint origin; changing either
-  requires saving a key for the new destination.
-- Final insertion stays in the app that was frontmost when dictation started;
-  a switch copies instead of pasting.
-- Dictation can start with only Parakeet or a cloud engine installed.
-- Overlapping start/stop no longer shares one recording session.
 - Parakeet is limited to its 25 spoken languages and does not claim
   translation or auto-detect.
 - History Delete all deletes every matching database row, not just the 500
@@ -37,7 +28,6 @@ All notable ZenVoice changes are recorded here.
 - Turning Audio History off stops new archives but still shows existing
   recordings and enforces age/size cleanup.
 - Canceled multipart model downloads delete retained .part files.
-- Keyless local Ollama can enhance; empty-key rejection is only for providers that need a key.
 - A failed Audio History export no longer deletes the previous ZIP.
 - Privacy has an explicit Reset local vault control for the full wipe.
 

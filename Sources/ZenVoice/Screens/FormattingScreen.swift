@@ -18,11 +18,12 @@ import ZenVoiceStorage
 
 struct FormattingScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
-    @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
 
     @AppStorage(TranscriptFormattingPreferences.preferenceKey)
     private var modeRawValue = TranscriptFormattingMode.clean.rawValue
+    @AppStorage(TranscriptTonePreferences.preferenceKey)
+    private var toneRawValue = TranscriptTone.auto.rawValue
     @State private var heardPhrase = ""
     @State private var replacementPhrase = ""
     @State private var correctionScope = CorrectionLanguageScope.all
@@ -41,23 +42,12 @@ struct FormattingScreen: View {
         textFormatting
         textReplacement
 
-        if mode == .cloud {
-            if !cloudAIViewModel.isReady {
-                ZenBanner(
-                    kind: .warn,
-                    icon: "exclamationmark.triangle",
-                    text: "Cloud formatting needs a provider and key below."
-                )
-            }
-            CloudAIConfigurationView(viewModel: cloudAIViewModel)
-        } else {
-            ZenBanner(
-                kind: .info,
-                icon: "hand.raised",
-                text:
-                    "Replacements stay on this Mac. Cloud mode sends finished text only."
-            )
-        }
+        ZenBanner(
+            kind: .info,
+            icon: "hand.raised",
+            text:
+                "Replacements stay on this Mac."
+        )
     }
 
     private var textFormatting: some View {
@@ -76,6 +66,44 @@ struct FormattingScreen: View {
                             get: { mode },
                             set: { modeRawValue = $0.rawValue }
                         )
+                    )
+                }
+
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "theatermasks",
+                    title: "Tone",
+                    subtitle: "Used when Polished rewrites with Apple Intelligence"
+                ) {
+                    ZenMenuPicker(
+                        label: "Tone",
+                        options: TranscriptTone.allCases,
+                        selection: Binding(
+                            get: {
+                                TranscriptTone(rawValue: toneRawValue) ?? .auto
+                            },
+                            set: { toneRawValue = $0.rawValue }
+                        ),
+                        minWidth: 150,
+                        title: { $0.displayName }
+                    )
+                }
+
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "quote.bubble",
+                    title: "Spoken commands",
+                    subtitle:
+                        "“thinking emoji” becomes 🤔, “open parenthesis” becomes ("
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: { viewModel.voiceCommandsEnabled },
+                            set: viewModel.setVoiceCommandsEnabled
+                        ),
+                        label: "Spoken commands"
                     )
                 }
 

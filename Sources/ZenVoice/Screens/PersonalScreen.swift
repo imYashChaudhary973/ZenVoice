@@ -23,7 +23,6 @@ import ZenVoiceStorage
 /// removed.
 struct PersonalScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
-    @ObservedObject var cloudAIViewModel: CloudAIViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
 
     private enum Tab: String, CaseIterable, Identifiable {
@@ -61,7 +60,6 @@ struct PersonalScreen: View {
             case .formatting:
                 FormattingScreen(
                     viewModel: viewModel,
-                    cloudAIViewModel: cloudAIViewModel,
                     voiceProfileViewModel: voiceProfileViewModel
                 )
             case .vocabulary:

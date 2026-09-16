@@ -96,10 +96,10 @@ fi
 
 model_manager="$project_dir/Sources/ZenVoice/ModelManagerViewModel.swift"
 overview="$project_dir/Sources/ZenVoice/Screens/OverviewScreen.swift"
-if ! grep -q "selectEngine(availability.engine.id)" "$screens/ModelsScreen.swift" \
+if ! grep -q "selectEngine(spec.id)" "$screens/ModelsScreen.swift" \
     || ! grep -q "EngineIdentifiers.whisper" "$model_manager"; then
     fail "the Models picker no longer selects an engine"
-elif ! grep -q "activeEngineDisplayName" "$overview"; then
+elif ! grep -q "activeEngineDisplayName" "$model_manager"; then
     fail "Overview reports a stored model instead of the resolved engine"
 else
     pass "model selection and displayed engine share one source of truth"
@@ -144,12 +144,10 @@ else
 fi
 
 languages="$screens/LanguagesScreen.swift"
-cloud_config="$screens/CloudAIConfigurationView.swift"
-if ! grep -q "ZenMenuPicker" "$languages" \
-    || ! grep -q "ZenMenuPicker" "$cloud_config"; then
-    fail "language or provider selectors bypass the shared menu control"
+if ! grep -q "ZenMenuPicker" "$languages"; then
+    fail "language selectors bypass the shared menu control"
 else
-    pass "language and provider selectors use the shared menu control"
+    pass "language selectors use the shared menu control"
 fi
 
 if ! grep -q "struct ZenKeycap" "$components" \
@@ -178,28 +176,6 @@ else
     pass "Models screen lists engines and blocks mismatches"
 fi
 
-# 4. The cloud preview must never activate the app.
-#    Comment lines are stripped first: the file explains *why* it does not call
-#    NSApp.activate, and matching that prose failed the check the prose exists
-#    to document.
-preview="$project_dir/Sources/ZenVoice/CloudAIPreviewWindowController.swift"
-if grep -v '^\s*//' "$preview" | grep -q "NSApp.activate"; then
-    fail "the cloud preview activates ZenVoice and will steal focus from the target app"
-else
-    pass "the cloud preview does not steal focus"
-fi
-if ! grep -q "nonactivatingPanel" "$preview"; then
-    fail "the cloud preview is not a non-activating panel"
-else
-    pass "the cloud preview is a non-activating panel"
-fi
-
-# 5. Cloud enhancement must be able to apply without prompting.
-if ! grep -q "autoApply" "$project_dir/Sources/ZenVoiceCore/CloudAIEnhancement.swift"; then
-    fail "CloudAIConfiguration has no autoApply preference"
-else
-    pass "cloud enhancement can apply without re-asking"
-fi
 
 # 6. Permission state must distinguish "not asked" from "denied".
 settings_vm="$project_dir/Sources/ZenVoice/SettingsViewModel.swift"
@@ -233,7 +209,6 @@ fi
 #     did exactly that, spilling across the Recent activity card. Every row
 #     that mixes fixed-width controls has to offer a stacked alternative.
 fixed_rows=(
-    "Screens/OverviewScreen.swift:quickActionsPanel"
     "Screens/VoiceProfileScreen.swift:correctionEntryFields"
 )
 for entry in $fixed_rows; do

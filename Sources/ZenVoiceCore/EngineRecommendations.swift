@@ -73,37 +73,41 @@ public enum EngineRecommendationEngine {
         {
             return firstAvailable(
                 [
+                    EngineIdentifiers.appleSpeech,
                     EngineIdentifiers.whisperDistilLargeV3,
                     EngineIdentifiers.whisperLargeV3Turbo
                 ],
                 in: active,
                 rationale:
-                    hardware.hasGPUAcceleratedTranscription
-                    ? "Under 12 GB: Distil-Whisper, not TDT v3."
-                    : "Intel has no Metal path. Distil-Whisper is the English "
-                        + "speed option; Turbo covers other languages."
+                    "Apple Speech is built in. Distil-Whisper is the local "
+                    + "download if Speech is unavailable."
             )
         }
 
         if profile.prefersParakeetTDTv3 {
             return firstAvailable(
                 [
+                    EngineIdentifiers.appleSpeech,
                     EngineIdentifiers.parakeetTDTv3,
                     EngineIdentifiers.whisperLargeV3Turbo
                 ],
                 in: active,
                 rationale:
-                    "Parakeet TDT v3 is the measured English/European default "
-                    + "(6.9% WER, 73×). Whisper Large V3 Turbo covers 99 "
+                    "Apple Speech is ready now. Parakeet TDT v3 is the "
+                    + "fastest download; Whisper Large V3 Turbo covers 99 "
                     + "languages."
             )
         }
 
         return firstAvailable(
-            [EngineIdentifiers.whisperLargeV3Turbo],
+            [
+                EngineIdentifiers.appleSpeech,
+                EngineIdentifiers.whisperLargeV3Turbo
+            ],
             in: active,
             rationale:
-                "Whisper Large V3 Turbo is the 99-language default."
+                "Apple Speech is built in. Whisper Large V3 Turbo covers 99 "
+                + "languages."
         )
     }
 

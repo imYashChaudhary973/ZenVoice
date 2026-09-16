@@ -107,7 +107,10 @@ public extension SpeechEngine {
 public enum EngineFamily: String, Codable, CaseIterable, Sendable {
     case whisper
     case parakeetTDT
-    case cloud
+    case appleSpeech
+    case nemotronSpeech
+    case cohereTranscribe
+    case qwen3ASR
 
     public var displayName: String {
         switch self {
@@ -115,8 +118,14 @@ public enum EngineFamily: String, Codable, CaseIterable, Sendable {
             return "Whisper"
         case .parakeetTDT:
             return "Parakeet TDT"
-        case .cloud:
-            return "Cloud"
+        case .appleSpeech:
+            return "Apple Speech"
+        case .nemotronSpeech:
+            return "Nemotron Speech"
+        case .cohereTranscribe:
+            return "Cohere Transcribe"
+        case .qwen3ASR:
+            return "Qwen3-ASR"
         }
     }
 }

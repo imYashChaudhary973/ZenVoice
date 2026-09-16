@@ -38,12 +38,10 @@ runtime truth lives in the code and executable checks.
 | [Accuracy harness](ACCURACY_HARNESS.md) | How to measure a change to the dictation path. |
 | [Real-speech corpus](REAL_SPEECH_CORPUS.md) | Public and consented evaluation corpora, licences, and baseline procedure. |
 | [Consented dictation model cycle](CONSENTED_DICTATION_MODEL_CYCLE.md) | The training-and-promotion cycle for product-specific models, and its gates. |
-| [Cloud providers](CLOUD_PROVIDERS.md) | Cloud refinement providers, wire shapes, and the privacy boundary. |
 | [PR and merge policy](PR_AND_MERGE_POLICY.md) | How changes get reviewed and landed. |
 | [Build order](BUILD_ORDER.md) | Milestone ledger and verification gates. |
 | [Phased plan](PHASED_PLAN.md) | Feature phases and their status. |
 | [Phase 6](PHASE_6.md) | The phase currently in progress. |
-| [Meeting notetaker](decisions/0016-meeting-notetaker.md) | Local You/Them capture. Full product contract. |
 | [Engine gap analysis](FluidVoice_Gap_Analysis_Report.md) | Which engine wins each language, and the rules that keep the catalogue honest. |
 
 ## Shipping
@@ -82,6 +80,3 @@ record for the shipped implementation.
 [`decisions/`](decisions/) holds the architecture decision records, numbered in
 the order they were accepted. An ADR states what was decided and why, and is
 not rewritten when the code moves on — a superseding ADR is added instead.
-
-[ADR 0016](decisions/0016-meeting-notetaker.md) is **Accepted**. Phase 1 is
-local meeting capture. ADR 0014 remains the lecture-invariants source.

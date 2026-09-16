@@ -144,9 +144,10 @@ final class OverlayPanelController {
         positionOverlay()
     }
 
-    /// Rebuilds the panel size to match the current overlay kind's default.
+    /// Rebuilds the panel size to match the current overlay kind on this display.
     func resizeToDefault() {
-        let size = kind.defaultSize
+        let available = NSScreen.main?.visibleFrame.size ?? kind.defaultSize
+        let size = kind.size(fitting: available)
         var frame = panel.frame
         frame.size.width = size.width
         frame.size.height = size.height
@@ -305,20 +306,21 @@ final class OverlayPanelController {
             return
         }
 
-        let adaptiveSize = kind.size(fitting: screen.visibleFrame.size)
-        if panel.frame.size != adaptiveSize {
-            var frame = panel.frame
-            frame.size = adaptiveSize
-            panel.setFrame(frame, display: true, animate: false)
-        }
-
-        switch kind {
-        case .zenBar:
-            positionAtBottomCenter(screen: screen)
-        case .livePreviewPill,
-             .livePreviewMedium,
-             .livePreviewLarge:
-            positionAtTopCenterOrNotch(screen: screen)
+        switch OverlayPreferences.loadHUDStyle() {
+        case .notch:
+            positionInCameraHousing(screen: screen)
+        case .floatingPanel:
+            let hudSize = CGSize(width: 268, height: 44)
+            if panel.frame.size != hudSize {
+                var frame = panel.frame
+                frame.size = hudSize
+                panel.setFrame(frame, display: true, animate: false)
+            }
+            panel.appearance = OverlayPreferences.nsAppearance()
+            positionAtCorner(
+                OverlayPreferences.loadHUDPosition(),
+                screen: screen
+            )
         }
     }
 
@@ -332,56 +334,102 @@ final class OverlayPanelController {
         )
     }
 
-    /// Positions the panel near the notch when present, otherwise top-center.
+    private func positionAtCorner(
+        _ position: RecordingHUDPosition,
+        screen: NSScreen
+    ) {
+        let visible = screen.visibleFrame
+        let margin: CGFloat = 16
+        let size = panel.frame.size
+        let origin: NSPoint
+        switch position {
+        case .topLeft:
+            origin = NSPoint(
+                x: visible.minX + margin,
+                y: visible.maxY - size.height - margin
+            )
+        case .topRight:
+            origin = NSPoint(
+                x: visible.maxX - size.width - margin,
+                y: visible.maxY - size.height - margin
+            )
+        case .bottomLeft:
+            origin = NSPoint(
+                x: visible.minX + margin,
+                y: visible.minY + margin
+            )
+        case .bottomRight:
+            origin = NSPoint(
+                x: visible.maxX - size.width - margin,
+                y: visible.minY + margin
+            )
+        }
+        panel.setFrameOrigin(clampedOrigin(origin, on: screen))
+    }
+
+
+    /// Grows a recording pill out of the camera housing.
     ///
-    /// A notched display reports a non-zero `safeAreaInsets.top` and exposes the
-    /// usable strips beside the camera housing as `auxiliaryTopLeftArea` and
-    /// `auxiliaryTopRightArea`. The pill is small enough to sit in one of those
-    /// strips; the taller variants clear the housing entirely and sit below it.
-    private func positionAtTopCenterOrNotch(screen: NSScreen) {
+    /// The hardware notch is the gap between the two menu-bar strips. The HUD
+    /// is slightly wider than that gap and hangs just below it, overlapping a
+    /// few points so it reads as the notch extending downward. The waveform
+    /// lives in that hanging part — pixels over the camera itself are dead.
+    private func positionInCameraHousing(screen: NSScreen) {
+        panel.appearance = OverlayPreferences.nsAppearance()
         let frame = screen.frame
-        let panelWidth = panel.frame.width
-        let panelHeight = panel.frame.height
-        let topMargin: CGFloat = 8
-
-        guard let notch = notchMetrics(for: screen) else {
-            // No notch: center at the top of the display, below the menu bar.
-            let y = screen.visibleFrame.maxY - panelHeight - topMargin
-            panel.setFrameOrigin(
-                clampedOrigin(
-                    NSPoint(x: frame.midX - panelWidth / 2, y: y),
-                    on: screen
-                )
-            )
-            return
-        }
-
-        // Below the camera housing for anything taller than the menu bar strip.
-        let belowNotchY = frame.maxY - notch.safeAreaTop - panelHeight
-            - topMargin
-
-        if kind == .livePreviewPill,
-           let strip = widestAuxiliaryArea(for: screen),
-           strip.width >= panelWidth {
-            // The pill fits beside the notch, vertically centered in the strip.
-            let x = min(
-                max(strip.minX, strip.midX - panelWidth / 2),
-                strip.maxX - panelWidth
-            )
-            let y = strip.midY - panelHeight / 2
-            panel.setFrameOrigin(
-                clampedOrigin(NSPoint(x: x, y: y), on: screen)
-            )
-            return
-        }
-
-        panel.setFrameOrigin(
-            clampedOrigin(
-                NSPoint(x: frame.midX - panelWidth / 2, y: belowNotchY),
+        guard let housing = cameraHousing(on: screen) else {
+            let size = CGSize(width: 200, height: 34)
+            var window = panel.frame
+            window.size = size
+            window.origin = clampedOrigin(
+                NSPoint(
+                    x: frame.midX - size.width / 2,
+                    y: screen.visibleFrame.maxY - size.height - 8
+                ),
                 on: screen
             )
+            panel.setFrame(window, display: true, animate: false)
+            return
+        }
+        let overlap: CGFloat = 6
+        let size = CGSize(
+            width: max(housing.width + 20, 168),
+            height: 32
+        )
+        var window = panel.frame
+        window.size = size
+        window.origin = NSPoint(
+            x: housing.midX - size.width / 2,
+            y: housing.minY - size.height + overlap
+        )
+        panel.setFrame(window, display: true, animate: false)
+    }
+
+    /// The camera housing in AppKit coordinates, or nil on a display with no notch.
+    private func cameraHousing(on screen: NSScreen) -> NSRect? {
+        let inset = screen.safeAreaInsets.top
+        guard inset > 0 else { return nil }
+        let frame = screen.frame
+        let left = screen.auxiliaryTopLeftArea
+        let right = screen.auxiliaryTopRightArea
+        let minX: CGFloat
+        let maxX: CGFloat
+        if let left, let right, right.minX - left.maxX > 80 {
+            minX = left.maxX
+            maxX = right.minX
+        } else {
+            let width: CGFloat = 185
+            minX = frame.midX - width / 2
+            maxX = frame.midX + width / 2
+        }
+        return NSRect(
+            x: minX,
+            y: frame.maxY - inset,
+            width: maxX - minX,
+            height: inset
         )
     }
+
 
     /// Safe-area facts for a screen, or nil when the screen has no notch.
     private func notchMetrics(

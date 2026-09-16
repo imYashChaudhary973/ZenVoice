@@ -17,8 +17,8 @@ import ApplicationServices
 import AVFoundation
 import Combine
 import Foundation
+import ServiceManagement
 import ZenVoiceCore
-
 @MainActor
 final class SettingsViewModel: ObservableObject {
     enum ShortcutTarget {
@@ -141,6 +141,11 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var activeOverlayKind: OverlayKind
     @Published private(set) var livePreviewOverlayEnabled: Bool
     @Published private(set) var overlayReduceMotion: Bool
+    @Published private(set) var recordingHUDStyle: RecordingHUDStyle
+    @Published private(set) var recordingHUDPosition: RecordingHUDPosition
+    @Published private(set) var recordingHUDAppearance: RecordingHUDAppearance
+    @Published private(set) var launchAtLoginEnabled: Bool
+    @Published var launchAtLoginError: String?
     @Published var nextDictationContext = ""
 
     private let applyShortcut:
@@ -229,6 +234,10 @@ final class SettingsViewModel: ObservableObject {
         activeOverlayKind = OverlayPreferences.loadActiveOverlay()
         livePreviewOverlayEnabled = OverlayPreferences.loadLivePreviewEnabled()
         overlayReduceMotion = OverlayPreferences.loadReduceMotion()
+        recordingHUDStyle = OverlayPreferences.loadHUDStyle()
+        recordingHUDPosition = OverlayPreferences.loadHUDPosition()
+        recordingHUDAppearance = OverlayPreferences.loadHUDAppearance()
+        launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
         selectedMicrophoneUID =
             MicrophonePreferences.selectedDeviceUID()
         refreshMicrophones()
@@ -484,24 +493,57 @@ final class SettingsViewModel: ObservableObject {
         OverlayPreferences.saveReduceMotion(reduce)
         overlayReduceMotion = reduce
     }
-
-    /// Reloads overlay preferences from storage.
-    ///
-    /// The menu bar can toggle the live-preview overlay while the settings
-    /// window is open; this keeps the Overlay screen in step with it.
     func syncOverlayPreferences() {
         activeOverlayKind = OverlayPreferences.loadActiveOverlay()
         livePreviewOverlayEnabled = OverlayPreferences.loadLivePreviewEnabled()
         overlayReduceMotion = OverlayPreferences.loadReduceMotion()
+        recordingHUDStyle = OverlayPreferences.loadHUDStyle()
+        recordingHUDPosition = OverlayPreferences.loadHUDPosition()
+        recordingHUDAppearance = OverlayPreferences.loadHUDAppearance()
     }
 
-    func setInputLanguage(_ code: String) {
+    func setRecordingHUDStyle(_ style: RecordingHUDStyle) {
+        OverlayPreferences.saveHUDStyle(style)
+        recordingHUDStyle = style
+    }
+
+    func setRecordingHUDPosition(_ position: RecordingHUDPosition) {
+        OverlayPreferences.saveHUDPosition(position)
+        recordingHUDPosition = position
+    }
+
+    func setRecordingHUDAppearance(_ appearance: RecordingHUDAppearance) {
+        OverlayPreferences.saveHUDAppearance(appearance)
+        recordingHUDAppearance = appearance
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+            launchAtLoginError = nil
+        } catch {
+            launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+            launchAtLoginError = error.localizedDescription
+        }
+    }
+
+
+    func setSpokenLanguage(_ code: String) {
         setLanguageProfile(
             LanguageProfile(
                 inputLanguageCode: code,
-                outputMode: languageProfile.outputMode
+                outputMode: .spokenLanguage
             )
         )
+    }
+
+    func setInputLanguage(_ code: String) {
+        setSpokenLanguage(code)
     }
 
     func setOutputMode(_ mode: TranscriptionOutputMode) {
