@@ -10,6 +10,7 @@ Screenshot *.heic
 /clipboard-*.heic
 /clipboard-*.jpg
 .claude/
+.codex/
 PrivateBenchmarks/
 __pycache__/
 *.pyc

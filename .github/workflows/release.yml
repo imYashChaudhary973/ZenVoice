@@ -42,15 +42,19 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Cache SwiftPM dependencies
+        # Keep in sync with the invariant documented in ci.yml:
+        # workspace-state.json must be cached together with .build/artifacts,
+        # and restore-keys stays omitted to avoid partial-restore mismatches.
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             .build/checkouts
             .build/repositories
+            .build/artifacts
             .build/workspace-state.json
-          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.swift') }}
-          restore-keys: |
-            ${{ runner.os }}-swiftpm-
+          key: >-
+            ${{ runner.os }}-swiftpm-${{ hashFiles('Package.swift',
+            'Package.resolved') }}
 
       - name: Install Developer ID certificate
         env:
@@ -72,11 +76,24 @@ jobs:
           rm -f "$CERT_PATH"
 
       - name: Configure release identity
-        run: |
-          echo "ZENVOICE_SIGNING_IDENTITY=${{ secrets.ZENVOICE_SIGNING_IDENTITY }}" >> "$GITHUB_ENV"
+        env:
+          ZENVOICE_SIGNING_IDENTITY: ${{ secrets.ZENVOICE_SIGNING_IDENTITY }}
+        run: echo "ZENVOICE_SIGNING_IDENTITY=$ZENVOICE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
 
       - name: Build and sign app
         run: ./Scripts/build-app.sh
+
+      - name: Verify built version matches dispatch input
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          built_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/ZenVoice.app/Contents/Info.plist)
+          if [[ "$built_version" != "$VERSION" ]]; then
+            echo "Error: built app version ($built_version) does not match dispatched version ($VERSION)." >&2
+            echo "Update CFBundleShortVersionString in Resources/Info.plist before dispatching a release for $VERSION." >&2
+            exit 1
+          fi
+          echo "Built app version matches dispatch input: $VERSION"
 
       - name: Verify signatures before notarization
         run: codesign --verify --deep --strict --verbose=2 build/ZenVoice.app
@@ -144,9 +161,9 @@ jobs:
       - name: Sign and generate Sparkle appcast
         env:
           VERSION: ${{ github.event.inputs.version }}
+          SPARKLE_KEY_B64: ${{ secrets.ZENVOICE_SPARKLE_PRIVATE_KEY }}
         run: |
           export KEY_PATH="$RUNNER_TEMP/sparkle_private_key.pem"
-          export SPARKLE_KEY_B64='${{ secrets.ZENVOICE_SPARKLE_PRIVATE_KEY }}'
           python3 -c "import base64,os; open(os.environ['KEY_PATH'],'wb').write(base64.b64decode(''.join(os.environ['SPARKLE_KEY_B64'].split())))"
           key_path="$KEY_PATH"
           ./Scripts/generate-appcast.rb \
