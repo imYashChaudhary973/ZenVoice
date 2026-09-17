@@ -99,6 +99,7 @@ final class AppState: ObservableObject {
     @Published private(set) var lastDecodeWarning: String?
     @Published var languageProfile: LanguageProfile
     @Published var liveTranscriptPreview = ""
+    @Published var livePreviewEnabled = false
     @Published var mode: ZenBarMode = .dictation
     @Published var agenticGoalTitle: String?
     @Published var agenticStatusEvent: GoalStatusEvent?
@@ -106,6 +107,7 @@ final class AppState: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         languageProfile = LanguagePreferences.load(defaults: defaults)
+        livePreviewEnabled = LiveDictationPreferences.isPreviewEnabled()
         showsZenVoiceAtAllTimes =
             ZenBarPreferences.showsAtAllTimes(defaults: defaults)
         if defaults.object(forKey: Self.statusMessagePreferenceKey) == nil {

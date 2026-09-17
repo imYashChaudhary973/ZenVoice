@@ -115,6 +115,21 @@ struct OverviewScreen: View {
                 }
                 .padding(.horizontal, ZenDesign.Spacing.md)
 
+                ZenPanelDivider()
+
+                ZenRow(
+                    title: "Live transcript",
+                    subtitle: "On-device preview next to the bars. The pill grows with the words. Stop still decodes the whole clip for paste."
+                ) {
+                    ZenSwitch(
+                        isOn: Binding(
+                            get: { viewModel.livePreviewEnabled },
+                            set: viewModel.setLivePreviewEnabled
+                        ),
+                        label: "Live transcript"
+                    )
+                }
+
                 if viewModel.recordingHUDStyle == .floatingPanel {
                     ZenPanelDivider()
 
@@ -222,7 +237,10 @@ struct OverviewScreen: View {
                 style: .continuous
             )
             .fill(Color.black)
-            .frame(width: 168, height: 56)
+            .frame(
+                width: viewModel.livePreviewEnabled ? 200 : 168,
+                height: 56
+            )
             .overlay(alignment: .bottom) {
                 hudListeningChrome
                     .padding(.horizontal, 8)
@@ -238,7 +256,10 @@ struct OverviewScreen: View {
             hudListeningChrome
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
-                .frame(width: 200, height: 44)
+                .frame(
+                    width: viewModel.livePreviewEnabled ? 240 : 200,
+                    height: 44
+                )
                 .zenGlassSurface(
                     cornerRadius: ZenDesign.Radius.pill,
                     interactive: false
@@ -252,11 +273,19 @@ struct OverviewScreen: View {
     }
 
     private var hudListeningChrome: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 6) {
             previewCircle("xmark")
-            Spacer(minLength: 6)
-            waveformBars
-            Spacer(minLength: 6)
+            if viewModel.livePreviewEnabled {
+                compactPreviewBars
+                Text("meet at 10:30…")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .lineLimit(1)
+            } else {
+                Spacer(minLength: 6)
+                waveformBars
+                Spacer(minLength: 6)
+            }
             previewCircle("checkmark")
         }
     }
@@ -273,6 +302,18 @@ struct OverviewScreen: View {
                         lineWidth: 1.4
                     )
             }
+    }
+
+    private var compactPreviewBars: some View {
+        HStack(spacing: 2) {
+            ForEach(Array([8, 14, 10, 16].enumerated()), id: \.offset) {
+                _,
+                height in
+                Capsule()
+                    .fill(ZenDesign.Semantic.accent)
+                    .frame(width: 2.5, height: CGFloat(height))
+            }
+        }
     }
 
     private var waveformBars: some View {

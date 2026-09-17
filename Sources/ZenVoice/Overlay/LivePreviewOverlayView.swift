@@ -122,24 +122,63 @@ struct LivePreviewOverlayView: View {
         }
     }
 
-    /// Same chrome as ZenBar: cancel, voiceprint, finish.
+    /// Compact voice bars on the left, live words growing to the right.
     private var listeningContent: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 6) {
             OverlayCircleButton(
                 systemImage: "xmark",
                 label: "Cancel dictation",
                 action: cancelRecording
             )
-            Spacer(minLength: 6)
-            WaveformView(model: state.audioLevel, style: .voiceprint)
-                .frame(height: 16)
-            Spacer(minLength: 6)
+            if state.livePreviewEnabled {
+                WaveformView(
+                    model: state.audioLevel,
+                    style: .voiceprint,
+                    voiceprintBarWidth: 2.5,
+                    voiceprintSpacing: 2,
+                    voiceprintMaxHeight: 16,
+                    voiceprintBarCount: 4
+                )
+                .frame(width: 16, height: 16)
+                Text(
+                    state.liveTranscriptPreview.isEmpty
+                        ? "Listening…"
+                        : LiveTranscriptPreview.visibleWords(
+                            state.liveTranscriptPreview
+                        )
+                )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(
+                        state.liveTranscriptPreview.isEmpty
+                            ? ZenDesign.Semantic.textSecondary
+                            : ZenDesign.Semantic.textPrimary
+                    )
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
+                    .animation(
+                        listeningMotion,
+                        value: state.liveTranscriptPreview
+                    )
+            } else {
+                Spacer(minLength: 6)
+                WaveformView(model: state.audioLevel, style: .voiceprint)
+                    .frame(height: 16)
+                Spacer(minLength: 6)
+            }
             OverlayCircleButton(
                 systemImage: "checkmark",
                 label: "Finish dictation",
                 action: finishRecording
             )
         }
+        .animation(listeningMotion, value: state.livePreviewEnabled)
+    }
+
+    private var listeningMotion: Animation {
+        motionReduced
+            ? .easeOut(duration: 0.2)
+            : .spring(response: 0.35, dampingFraction: 1.0)
     }
 
     private func statusContent(

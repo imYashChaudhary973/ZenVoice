@@ -352,6 +352,14 @@ final class AudioRecorder: NSObject,
         }
     }
 
+    func setCapturesLiveSamples(_ enabled: Bool) {
+        capturesLiveSamples = enabled
+        guard enabled else { return }
+        sampleLock.withLock {
+            capturedSamples.reserveCapacity(60 * 16_000)
+        }
+    }
+
     func releaseCapturedSamples() {
         sampleLock.withLock {
             capturedSamples.removeAll(keepingCapacity: false)
