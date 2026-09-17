@@ -17,7 +17,13 @@ concurrency:
 jobs:
   verify:
     name: Build and verify
-    runs-on: macos-latest
+    # Self-hosted runner: never execute fork pull-request code on this
+    # machine — only same-repo branches and pushes to main.
+    if: >-
+      github.event_name == 'push'
+      || github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork != true)
+    runs-on: [self-hosted, macos-selfhosted]
     timeout-minutes: 30
 
     steps:

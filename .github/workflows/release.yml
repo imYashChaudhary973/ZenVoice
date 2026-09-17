@@ -34,7 +34,7 @@ concurrency:
 jobs:
   release:
     name: Build, sign, notarize, and publish
-    runs-on: macos-15
+    runs-on: [self-hosted, macos-selfhosted]
     timeout-minutes: 60
 
     steps:
