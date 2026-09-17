@@ -56,6 +56,7 @@ private final class WhisperAbortState {
 public final class WhisperTranscriber: @unchecked Sendable {
     public enum TranscriptionError: LocalizedError {
         case invalidAudio
+        case audioTooLong
         case modelLoadFailed
         case runtimeFailed
         case noSpeech
@@ -65,6 +66,9 @@ public final class WhisperTranscriber: @unchecked Sendable {
             switch self {
             case .invalidAudio:
                 return "The recorded audio could not be decoded."
+            case .audioTooLong:
+                return
+                    "The recording is too long to transcribe in one pass."
             case .modelLoadFailed:
                 return "The selected local model could not be loaded."
             case .runtimeFailed:
@@ -530,12 +534,18 @@ public final class WhisperTranscriber: @unchecked Sendable {
         guard format.sampleRate == 16_000,
               format.channelCount == 1,
               format.commonFormat == .pcmFormatFloat32,
-              file.length > 0,
-              file.length <= AVAudioFramePosition(UInt32.max),
-              let buffer = AVAudioPCMBuffer(
-                pcmFormat: format,
-                frameCapacity: AVAudioFrameCount(file.length)
-              ) else {
+              file.length > 0 else {
+            throw TranscriptionError.invalidAudio
+        }
+        // The sample count is narrowed to Int32 for whisper_full; anything
+        // past that limit cannot be decoded in one pass.
+        guard file.length <= AVAudioFramePosition(Int32.max) else {
+            throw TranscriptionError.audioTooLong
+        }
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: format,
+            frameCapacity: AVAudioFrameCount(file.length)
+        ) else {
             throw TranscriptionError.invalidAudio
         }
         try file.read(into: buffer)

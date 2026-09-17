@@ -234,10 +234,27 @@ public final class AppleSpeechEngine: @unchecked Sendable, SpeechEngine {
             return last
         }
         do {
-            if let lastSample = try await analyzer.analyzeSequence(from: audioFile) {
-                try await analyzer.finalizeAndFinish(through: lastSample)
-            } else {
-                await analyzer.cancelAndFinishNow()
+            // Mirrors the SFSpeechRecognizer path's 120 s guard: the
+            // analyzer has no internal deadline, so a wedged decode would
+            // hang dictation forever.
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    if let lastSample = try await analyzer.analyzeSequence(
+                        from: audioFile
+                    ) {
+                        try await analyzer.finalizeAndFinish(
+                            through: lastSample
+                        )
+                    } else {
+                        await analyzer.cancelAndFinishNow()
+                    }
+                }
+                group.addTask {
+                    try await Task.sleep(for: .seconds(120))
+                    throw AppleSpeechError.timedOut
+                }
+                try await group.next()
+                group.cancelAll()
             }
             let text = try await collected.value
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

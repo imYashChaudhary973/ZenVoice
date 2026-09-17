@@ -17,6 +17,7 @@ import MLXLMCommon
 import MLXLLM
 import Tokenizers
 import ZenVoiceCore
+import os
 
 /// Bridges swift-transformers' tokenizer to the loader MLXLMCommon expects.
 /// mlx-swift-lm ships no production loader; the official docs leave this to
@@ -153,9 +154,13 @@ public struct ZenPolishLanguageModel: LocalLanguageModel {
             return .modelNotReady
         }
         for file in Self.files {
-            guard FileManager.default.fileExists(
-                atPath: directory.appendingPathComponent(file.name).path
-            ) else {
+            // Download time verified hashes; this cheap size re-check
+            // catches truncated or corrupted files without re-hashing on
+            // every poll.
+            let values = try? directory
+                .appendingPathComponent(file.name)
+                .resourceValues(forKeys: [.fileSizeKey])
+            guard Int64(values?.fileSize ?? -1) == file.sizeBytes else {
                 return .modelNotReady
             }
         }
@@ -196,6 +201,11 @@ public struct ZenPolishLanguageModel: LocalLanguageModel {
 actor ZenPolishRuntime {
     static let shared = ZenPolishRuntime()
 
+    private static let loadLogger = Logger(
+        subsystem: "com.zenvoice.app",
+        category: "ZenPolish"
+    )
+
     private var container: ModelContainer?
     private var loadedDirectory: URL?
     private var unloadTask: Task<Void, Never>?
@@ -207,7 +217,18 @@ actor ZenPolishRuntime {
     ) async throws -> String {
         unloadTask?.cancel()
         defer { scheduleUnload() }
-        let container = try await preparedContainer(directory: directory)
+        let container: ModelContainer
+        do {
+            container = try await preparedContainer(directory: directory)
+        } catch {
+            // Load failures are otherwise invisible: the caller surfaces a
+            // generic unavailable error. One line, no prompt or transcript
+            // content.
+            Self.loadLogger.error(
+                "ZenPolish model load failed: \(error.localizedDescription, privacy: .public)"
+            )
+            throw error
+        }
         // A fresh session per call: dictation requests are independent and
         // must not see each other's transcripts.
         let session = ChatSession(
@@ -229,7 +250,6 @@ actor ZenPolishRuntime {
         if let container, loadedDirectory == directory {
             return container
         }
-        let configuration = ModelConfiguration(directory: directory)
         let loaded = try await LLMModelFactory.shared.loadContainer(
             from: directory,
             using: ZenPolishTokenizerLoader()
@@ -254,13 +274,20 @@ actor ZenPolishRuntime {
     }
 
     /// Qwen3 emits a reasoning block when the chat template defaults to
-    /// thinking mode. Dictation output must never contain it.
+    /// thinking mode. Dictation output must never contain it. An
+    /// unterminated block is dropped wholesale — from the opening tag to
+    /// the end of the output — rather than letting reasoning text leak.
     static func stripReasoning(_ text: String) -> String {
         var output = text
-        if let start = output.range(of: "<think>"),
-           let end = output.range(of: "</think>"),
-           start.lowerBound < end.lowerBound {
-            output.removeSubrange(start.lowerBound..<end.upperBound)
+        if let start = output.range(of: "<think>") {
+            if let end = output.range(
+                of: "</think>",
+                range: start.upperBound..<output.endIndex
+            ) {
+                output.removeSubrange(start.lowerBound..<end.upperBound)
+            } else {
+                output.removeSubrange(start.lowerBound..<output.endIndex)
+            }
         }
         return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -25,13 +25,6 @@ import ZenVoiceCore
 public actor Qwen3ASREngine: SpeechEngine {
     public static let engineID = EngineIdentifiers.qwen3ASR
     public static let directoryName = "qwen3-asr-0.6b-6bit"
-    public static let requiredFiles = [
-        "config.json",
-        "model.safetensors",
-        "vocab.json",
-        "merges.txt",
-        "tokenizer_config.json"
-    ]
 
     nonisolated public var descriptor: EngineDescriptor {
         EngineDescriptor(
@@ -69,20 +62,35 @@ public actor Qwen3ASREngine: SpeechEngine {
     /// Bumped by every `release()` so a load that finishes after its release
     /// cannot adopt the model back into `stt`.
     private var loadGeneration = 0
+    /// Number of `transcribe` calls currently past `preparedSTT()`.
+    private var transcribesInFlight = 0
 
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
     }
 
     public static func isInstalled(in modelsDirectory: URL) -> Bool {
+        // Download time verified hashes; this cheap size re-check catches
+        // truncated or corrupted files without re-hashing on every poll.
+        let sizes: [(String, Int64)] = [
+            ("config.json", VerifiedEngineCatalog.qwen3ConfigSizeBytes),
+            ("model.safetensors", VerifiedEngineCatalog.qwen3WeightsSizeBytes),
+            ("vocab.json", VerifiedEngineCatalog.qwen3VocabSizeBytes),
+            ("merges.txt", VerifiedEngineCatalog.qwen3MergesSizeBytes),
+            (
+                "tokenizer_config.json",
+                VerifiedEngineCatalog.qwen3TokenizerConfigSizeBytes
+            ),
+        ]
         let directory = modelsDirectory.appendingPathComponent(
             directoryName,
             isDirectory: true
         )
-        return requiredFiles.allSatisfy { name in
-            FileManager.default.fileExists(
-                atPath: directory.appendingPathComponent(name).path
-            )
+        return sizes.allSatisfy { name, expectedBytes in
+            let values = try? directory
+                .appendingPathComponent(name)
+                .resourceValues(forKeys: [.fileSizeKey])
+            return Int64(values?.fileSize ?? -1) == expectedBytes
         }
     }
 
@@ -102,6 +110,10 @@ public actor Qwen3ASREngine: SpeechEngine {
         loadTask?.cancel()
         loadTask = nil
         stt = nil
+        // The pool is process-global: flushing while another transcription
+        // is mid-flight could free buffers it is still using, so defer the
+        // flush to the next release.
+        guard transcribesInFlight == 0 else { return }
         Qwen3ASRSTT.flushMemoryPool()
     }
 
@@ -149,6 +161,8 @@ public actor Qwen3ASREngine: SpeechEngine {
         initialPrompt: String?
     ) async throws -> ZenVoiceCore.TranscriptionResult {
         let stt = try await preparedSTT()
+        transcribesInFlight += 1
+        defer { transcribesInFlight -= 1 }
         let samples = try AudioSampleLoader.load16kHzMonoFloatSamples(
             from: audioURL
         )
