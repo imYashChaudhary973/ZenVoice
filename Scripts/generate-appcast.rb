@@ -143,7 +143,9 @@ sparkle_short_version.text = options[:version]
 item << sparkle_short_version
 
 description = REXML::Element.new('description')
-description.text = REXML::CData.new(release_notes)
+# A changelog line containing ']]>' would terminate the CDATA section early
+# and corrupt the appcast; split it across adjacent CDATA sections.
+description.text = REXML::CData.new(release_notes.gsub(']]>', ']]]]><![CDATA[>'))
 item << description
 
 enclosure = REXML::Element.new('enclosure')
