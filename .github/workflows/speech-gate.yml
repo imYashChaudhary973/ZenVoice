@@ -20,7 +20,7 @@ concurrency:
 jobs:
   real-speech:
     name: Real-speech smoke gate
-    runs-on: macos-latest
+    runs-on: [self-hosted, macos-selfhosted]
     timeout-minutes: 30
 
     steps:
