@@ -14,7 +14,7 @@ WHISPER_CLI = "whisper-cli"
 FFMPEG = "ffmpeg"
 
 
-def to_wav(src: Path, wav: Path, workdir: Path) -> Path | None:
+def to_wav(src: Path, workdir: Path) -> Path | None:
     """Convert any audio to 16k mono wav. Returns wav path or None on failure.
 
     src inside workdir means it is already a wav-shaped temp file.
@@ -23,7 +23,6 @@ def to_wav(src: Path, wav: Path, workdir: Path) -> Path | None:
         target = workdir / f"{src.stem}_16k.wav"
     else:
         target = workdir / f"{src.stem}.wav"
-        src = src
     # ffmpeg -y would follow a pre-planted symlink at target; refuse instead.
     if target.is_symlink():
         return None

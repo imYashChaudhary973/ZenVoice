@@ -119,7 +119,13 @@ class Noisifier:
         self.homophones = homophones
 
     def degrade(self, sentence: str) -> str:
-        text = spoken_forms(sentence).lower()
+        try:
+            text = spoken_forms(sentence).lower()
+        except (ValueError, OverflowError, NotImplementedError):
+            # num2words raises on absurd values (thousand-digit integers,
+            # out-of-currency-range floats); skipping the sample beats
+            # killing the whole synthetic-build run.
+            return ""
 
         # ASR emits almost no punctuation; contractions keep their apostrophe.
         text = re.sub(r"[^a-z0-9'\s]", " ", text.replace("&", " and "))

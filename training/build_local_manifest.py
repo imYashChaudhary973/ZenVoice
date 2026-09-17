@@ -24,20 +24,19 @@ import json
 import sys
 from pathlib import Path
 
-from decode import FFMPEG, to_wav, transcribe
+from common import load_jsonl
+from decode import to_wav, transcribe
 
 
 def consented_rows(manifests: list[Path]) -> list[tuple[Path, str]]:
     rows: list[tuple[Path, str]] = []
     for manifest in manifests:
-        repo_root = Path.cwd().parent
-        for line in manifest.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            item = json.loads(line)
+        for item in load_jsonl(manifest):
             audio = Path(item["audio"])
             if not audio.is_absolute() and not audio.exists():
-                audio = repo_root / audio
+                # Relative manifest paths are relative to the manifest that
+                # named them, not to whatever cwd the script ran from.
+                audio = manifest.parent / audio
             rows.append((audio, item["text"].strip()))
     return rows
 
@@ -105,7 +104,7 @@ def main() -> None:
         for index, (audio, reference) in enumerate(pairs):
             checkpoint.write(json.dumps({"next_index": start + index + 1}) + "\n")
             checkpoint.flush()
-            wav = to_wav(audio, audio, args.workdir)
+            wav = to_wav(audio, args.workdir)
             if wav is None:
                 failed += 1
                 continue
