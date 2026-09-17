@@ -71,7 +71,8 @@ struct ZenPolishTokenizerAdapter: MLXLMCommon.Tokenizer {
 }
 
 /// ZenVoice's own fine-tuned dictation-enhancement model (ZenPolish v2,
-/// Qwen3-1.7B base, 4-bit MLX). Loads from the verified download under the
+/// fine-tuned from a Qwen3-1.7B base, 4-bit MLX). Loads from the verified
+/// download under the
 /// models directory and runs fully in-process: no network at inference time,
 /// no child process.
 public struct ZenPolishLanguageModel: LocalLanguageModel {
