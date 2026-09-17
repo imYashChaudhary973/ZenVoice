@@ -14,6 +14,7 @@
 
 import SwiftUI
 import ZenVoiceCore
+import ZenVoiceRuntime
 import ZenVoiceStorage
 
 struct FormattingScreen: View {
@@ -30,6 +31,24 @@ struct FormattingScreen: View {
 
     private var mode: TranscriptFormattingMode {
         TranscriptFormattingMode(rawValue: modeRawValue) ?? .clean
+    }
+
+    @State private var zenPolishEnabled = ZenPolishPreferences.load()
+
+    private var isZenPolishInstalled: Bool {
+        let model = ZenPolishLanguageModel(
+            modelsDirectory: try? VerifiedModelCatalog.modelsDirectory()
+        )
+        return model.availability == .available
+    }
+
+    private var zenPolishSubtitle: String {
+        if !isZenPolishInstalled {
+            return "Download ZenPolish from the Models screen to use it."
+        }
+        return zenPolishEnabled
+            ? "Polished uses the ZenPolish on-device model."
+            : "Polished uses Apple's on-device model."
     }
 
     var body: some View {
@@ -66,6 +85,34 @@ struct FormattingScreen: View {
                             get: { mode },
                             set: { modeRawValue = $0.rawValue }
                         )
+                    )
+                }
+
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "brain",
+                    title: "Formatting model",
+                    subtitle: zenPolishSubtitle
+                ) {
+                    ZenMenuPicker(
+                        label: "Formatting model",
+                        options: isZenPolishInstalled
+                            ? FormattingModelChoice.allCases
+                            : [FormattingModelChoice.none],
+                        selection: Binding(
+                            get: {
+                                zenPolishEnabled
+                                    ? .zenPolishV2
+                                    : .none
+                            },
+                            set: {
+                                ZenPolishPreferences.save($0 == .zenPolishV2)
+                                zenPolishEnabled = $0 == .zenPolishV2
+                            }
+                        ),
+                        minWidth: 170,
+                        title: { $0.displayName }
                     )
                 }
 
@@ -267,4 +314,21 @@ struct FormattingScreen: View {
 
 extension TranscriptFormattingMode: Identifiable {
     public var id: String { rawValue }
+}
+
+/// Selection for the Smart rung's enhancement model. Backed by the same
+/// `ZenPolishPreferences.preferenceKey` as the former toggle, so the runtime
+/// wiring is unchanged.
+private enum FormattingModelChoice: String, CaseIterable, Identifiable {
+    case none
+    case zenPolishV2
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .none: return "None"
+        case .zenPolishV2: return "ZenPolish 1.7B v2"
+        }
+    }
 }

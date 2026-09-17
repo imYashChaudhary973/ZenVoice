@@ -43,6 +43,14 @@ let package = Package(
         .package(
             url: "https://github.com/ontypehq/mlx-swift-asr",
             branch: "main"
+        ),
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift-lm",
+            branch: "main"
+        ),
+        .package(
+            url: "https://github.com/huggingface/swift-transformers",
+            from: "1.1.6"
         )
     ],
     targets: [
@@ -71,6 +79,9 @@ let package = Package(
                     package: "onnxruntime-swift-package-manager"
                 ),
                 .product(name: "MLXASR", package: "mlx-swift-asr"),
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
             ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)

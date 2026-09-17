@@ -526,6 +526,8 @@ final class ModelManagerViewModel: ObservableObject {
     private var verificationTask: Task<Void, Never>?
     private var enginePrepareTask: Task<Void, Never>?
     private var engineDownloadTasks: [String: Task<Void, Never>] = [:]
+    private var zenPolishDownloadTask: Task<Void, Never>?
+    private var zenPolishDownloadID: UUID?
 
     init(
         downloader: VerifiedModelDownloader = VerifiedModelDownloader(),
@@ -790,7 +792,8 @@ final class ModelManagerViewModel: ObservableObject {
 
     func download(_ model: VerifiedModel) {
         guard downloadTask == nil,
-              engineDownloadTasks.isEmpty else {
+              engineDownloadTasks.isEmpty,
+              zenPolishDownloadTask == nil else {
             return
         }
         errorMessage = nil
@@ -864,6 +867,10 @@ final class ModelManagerViewModel: ObservableObject {
             task.cancel()
         }
         engineDownloadTasks.removeAll()
+        zenPolishDownloadTask?.cancel()
+        zenPolishDownloadTask = nil
+        zenPolishDownloadID = nil
+        isDownloadingZenPolish = false
         downloadingModelID = nil
         downloadProgress = nil
         isVerifyingDownload = false
@@ -1055,7 +1062,8 @@ final class ModelManagerViewModel: ObservableObject {
     func downloadEngine(_ engine: VerifiedEngine, thenSelect: Bool = false) {
         let id = EngineIdentifiers.canonical(engine.descriptor.id)
         guard engineDownloadTasks[id] == nil,
-              downloadTask == nil else {
+              downloadTask == nil,
+              zenPolishDownloadTask == nil else {
             return
         }
         errorMessage = nil
@@ -1204,7 +1212,9 @@ final class ModelManagerViewModel: ObservableObject {
                 expectedSize: size,
                 expectedSHA256: sha,
                 sourceRevision: sourceRevision,
-                destinationDirectory: directory
+                destinationDirectory: directory,
+                completedBytes: completed,
+                totalBytes: total
             )
             completed += size
             await MainActor.run {
@@ -1219,11 +1229,24 @@ final class ModelManagerViewModel: ObservableObject {
         expectedSize: Int64,
         expectedSHA256: String,
         sourceRevision: String,
-        destinationDirectory: URL
+        destinationDirectory: URL,
+        completedBytes: Int64,
+        totalBytes: Int64
     ) async throws {
-        let (_, progress) =
+        let (progressStream, progress) =
             AsyncStream<VerifiedModelDownloadPhase>.makeStream()
         defer { progress.finish() }
+        let progressTask = Task { [weak self] in
+            for await phase in progressStream {
+                guard case .downloading(let fraction) = phase else {
+                    continue
+                }
+                self?.downloadProgress =
+                    (Double(completedBytes) + fraction * Double(expectedSize))
+                    / Double(totalBytes)
+            }
+        }
+        defer { progressTask.cancel() }
         _ = try await downloader.download(
             sourceURL: sourceURL,
             sourceRevision: sourceRevision,
@@ -1290,7 +1313,9 @@ final class ModelManagerViewModel: ObservableObject {
                 expectedSize: size,
                 expectedSHA256: sha,
                 sourceRevision: sourceRevision,
-                destinationDirectory: directory
+                destinationDirectory: directory,
+                completedBytes: completed,
+                totalBytes: total
             )
             completed += size
             await MainActor.run {
@@ -1301,10 +1326,94 @@ final class ModelManagerViewModel: ObservableObject {
 
 
 
+    // MARK: ZenPolish
+
+    @Published private(set) var isDownloadingZenPolish = false
+
+    /// Downloads the ZenPolish bundle (config, tokenizer, weights) from the
+    /// pinned Hugging Face revision into the models directory.
+    func downloadZenPolish() {
+        guard !isDownloadingZenPolish,
+              downloadTask == nil,
+              engineDownloadTasks.isEmpty,
+              zenPolishDownloadTask == nil else {
+            return
+        }
+        isDownloadingZenPolish = true
+        downloadProgress = 0
+        let downloadID = UUID()
+        zenPolishDownloadID = downloadID
+        zenPolishDownloadTask = Task { [weak self] in
+            defer {
+                Task { @MainActor in
+                    guard let self,
+                          self.zenPolishDownloadID == downloadID else {
+                        return
+                    }
+                    self.isDownloadingZenPolish = false
+                    self.zenPolishDownloadID = nil
+                    self.zenPolishDownloadTask = nil
+                }
+            }
+            do {
+                try await self?.downloadZenPolishModel()
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func isZenPolishInstalled() -> Bool {
+        let model = ZenPolishLanguageModel(
+            modelsDirectory: try? VerifiedModelCatalog.modelsDirectory(
+                fileManager: fileManager
+            )
+        )
+        return model.availability == .available
+    }
+
+    private func downloadZenPolishModel() async throws {
+        let base =
+            "https://huggingface.co/imYashChaudhary973/zen-polish-v2-1.7b-4bit/resolve/main/"
+        let root = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        let directory = root.appendingPathComponent(
+            ZenPolishLanguageModel.directoryName,
+            isDirectory: true
+        )
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        var completed: Int64 = 0
+        let total = ZenPolishLanguageModel.bundleSizeBytes
+        for file in ZenPolishLanguageModel.files {
+            try await downloadCohereFile(
+                filename: file.name,
+                sourceURL: URL(string: base + file.name + "?download=true")!,
+                expectedSize: file.sizeBytes,
+                expectedSHA256: file.sha256,
+                sourceRevision: "main",
+                destinationDirectory: directory,
+                completedBytes: completed,
+                totalBytes: total
+            )
+            completed += file.sizeBytes
+            let progress = Double(completed) / Double(total)
+            await MainActor.run {
+                self.downloadProgress = progress
+            }
+        }
+    }
+
     deinit {
         downloadTask?.cancel()
         verificationTask?.cancel()
         engineDownloadTasks.values.forEach { $0.cancel() }
+        zenPolishDownloadTask?.cancel()
     }
 
     @discardableResult

@@ -2744,11 +2744,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let formattingMode = formattingMode ?? activeDictationBehavior.formattingMode
         var text: String
         if formattingMode == .smart {
-            text = await SmartFormattingEngine().format(
-                transcript,
-                languageCode: state.languageProfile.inputLanguageCode,
-                context: settingsViewModel?.sanitizedNextDictationContext
-            ).text
+            let zenPolish = ZenPolishLanguageModel(
+                modelsDirectory: try? VerifiedModelCatalog.modelsDirectory()
+            )
+            if ZenPolishPreferences.load(),
+               zenPolish.availability == .available {
+                text = await SmartFormattingEngine(
+                    model: zenPolish,
+                    timeoutSeconds: 10,
+                    sendsRawTranscript: true
+                ).format(
+                    transcript,
+                    languageCode: state.languageProfile.inputLanguageCode,
+                    context: settingsViewModel?.sanitizedNextDictationContext
+                ).text
+            } else {
+                text = await SmartFormattingEngine().format(
+                    transcript,
+                    languageCode: state.languageProfile.inputLanguageCode,
+                    context: settingsViewModel?.sanitizedNextDictationContext
+                ).text
+            }
         } else {
             let mode = formattingMode.zenIntelligenceMode
             guard mode != .off else {

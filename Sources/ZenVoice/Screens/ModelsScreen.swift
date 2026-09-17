@@ -14,6 +14,7 @@
 
 import SwiftUI
 import ZenVoiceCore
+import ZenVoiceRuntime
 
 struct ModelMismatchAlert: Equatable {
     var title: String
@@ -29,8 +30,29 @@ struct ModelsScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             spokenLanguage
-            if !downloaded.isEmpty {
-                cardSection(title: "Downloaded", specs: downloaded)
+            let downloadedEngines = downloaded.filter {
+                $0.id != ZenPolishLanguageModel.modelID
+            }
+            let downloadedEnhancement = downloaded.filter {
+                $0.id == ZenPolishLanguageModel.modelID
+            }
+            if !downloadedEnhancement.isEmpty {
+                cardSection(
+                    title: "Downloaded dictation enhancement",
+                    specs: downloadedEnhancement
+                )
+            }
+            let availableEnhancement = available.filter {
+                $0.id == ZenPolishLanguageModel.modelID
+            }
+            if !availableEnhancement.isEmpty {
+                cardSection(
+                    title: "Available dictation enhancement",
+                    specs: availableEnhancement
+                )
+            }
+            if !downloadedEngines.isEmpty {
+                cardSection(title: "Downloaded speech-to-text", specs: downloadedEngines)
             }
             Text(
                 "All models run entirely on this Mac. NVIDIA Parakeet stays loaded for instant dictation."
@@ -38,7 +60,12 @@ struct ModelsScreen: View {
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(ZenDesign.Semantic.textSecondary)
             if !available.isEmpty {
-                cardSection(title: "Available to download", specs: available)
+                cardSection(
+                    title: "Available speech-to-text",
+                    specs: available.filter {
+                        $0.id != ZenPolishLanguageModel.modelID
+                    }
+                )
             }
             if let error = viewModel.errorMessage,
                !error.contains("Automatic detection requires") {
@@ -139,15 +166,27 @@ struct ModelsScreen: View {
     private func isDownloaded(_ spec: EngineCardSpec) -> Bool {
         if spec.builtIn { return true }
         if spec.comingSoon { return false }
+        if spec.id == ZenPolishLanguageModel.modelID {
+            return viewModel.isZenPolishInstalled()
+        }
         return viewModel.installedEngineIDs.contains(spec.id)
             || viewModel.installedModelIDs.contains(spec.id)
     }
 
     private func engineRow(_ spec: EngineCardSpec) -> some View {
         let selected = viewModel.isSelectedEngine(spec.id)
-        let downloading = viewModel.downloadingModelID == spec.id
+        let isZenPolish = spec.id == ZenPolishLanguageModel.modelID
+        let downloading = isZenPolish
+            ? viewModel.isDownloadingZenPolish
+            : viewModel.downloadingModelID == spec.id
         return Button {
             guard !spec.comingSoon else { return }
+            if isZenPolish {
+                if !viewModel.isZenPolishInstalled() {
+                    viewModel.downloadZenPolish()
+                }
+                return
+            }
             viewModel.selectEngine(spec.id)
         } label: {
             VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
@@ -258,10 +297,21 @@ struct ModelsScreen: View {
                 .font(ZenDesign.Typography.captionStrong)
                 .foregroundStyle(ZenDesign.Semantic.textTertiary)
         } else if downloading {
-            Button("Cancel") { viewModel.cancelDownload() }
-                .buttonStyle(ZenSecondaryButtonStyle())
+            if spec.id == ZenPolishLanguageModel.modelID {
+                // Cancellation lands with the v3 download refactor.
+                Button("Cancel") {}
+                    .buttonStyle(ZenSecondaryButtonStyle())
+                    .disabled(true)
+            } else {
+                Button("Cancel") { viewModel.cancelDownload() }
+                    .buttonStyle(ZenSecondaryButtonStyle())
+            }
         } else if isDownloaded(spec) {
-            if selected {
+            if spec.id == ZenPolishLanguageModel.modelID {
+                Label("Ready", systemImage: "checkmark.circle.fill")
+                    .font(ZenDesign.Typography.captionStrong)
+                    .foregroundStyle(ZenDesign.Semantic.success)
+            } else if selected {
                 EmptyView()
             } else {
                 Text("Use")
@@ -295,7 +345,7 @@ struct ModelsScreen: View {
 /// ponytail: replace with benchmark medians when we have them.
 private struct EngineCardSpec: Identifiable {
     enum Glyph {
-        case apple, nvidia, whisper, cohere, qwen
+        case apple, nvidia, whisper, cohere, qwen, zenpolish
 
         var symbol: String {
             switch self {
@@ -304,6 +354,7 @@ private struct EngineCardSpec: Identifiable {
             case .whisper: return "sparkles"
             case .cohere: return "waveform"
             case .qwen: return "globe.asia.australia.fill"
+            case .zenpolish: return "brain"
             }
         }
 
@@ -314,6 +365,7 @@ private struct EngineCardSpec: Identifiable {
             case .whisper: return Color(red: 0.48, green: 0.42, blue: 0.92)
             case .cohere: return Color(red: 0.22, green: 0.45, blue: 0.92)
             case .qwen: return Color(red: 0.86, green: 0.35, blue: 0.18)
+            case .zenpolish: return Color(red: 0.38, green: 0.28, blue: 0.86)
             }
         }
     }
@@ -331,6 +383,22 @@ private struct EngineCardSpec: Identifiable {
     let comingSoon: Bool
 
     static let picker: [EngineCardSpec] = [
+        EngineCardSpec(
+            id: ZenPolishLanguageModel.modelID,
+            title: "ZenPolish 1.7B",
+            summary:
+                "ZenVoice's own fine-tuned formatting model. Punctuation, "
+                + "capitalization, fillers, and numbers for the Smart level. "
+                + "934 MB. Runs on this Mac.",
+            glyph: .zenpolish,
+            badge: "Smart",
+            languages: "English",
+            realtime: false,
+            accuracy: 0.85,
+            speed: 0.70,
+            builtIn: false,
+            comingSoon: false
+        ),
         EngineCardSpec(
             id: EngineIdentifiers.appleSpeech,
             title: "Apple Speech Analyzer",

@@ -145,13 +145,16 @@ public struct SmartFormattingResult: Equatable, Sendable {
 public struct SmartFormattingEngine: Sendable {
     private let model: any LocalLanguageModel
     private let timeoutNanoseconds: UInt64
+    private let sendsRawTranscript: Bool
 
     public init(
         model: any LocalLanguageModel = AppleOnDeviceLanguageModel(),
-        timeoutSeconds: Double = 4
+        timeoutSeconds: Double = 4,
+        sendsRawTranscript: Bool = false
     ) {
         self.model = model
         self.timeoutNanoseconds = UInt64(max(timeoutSeconds, 0.01) * 1_000_000_000)
+        self.sendsRawTranscript = sendsRawTranscript
     }
 
     public func format(
@@ -176,12 +179,17 @@ public struct SmartFormattingEngine: Sendable {
         }
 
         do {
+            // The fine-tuned ZenPolish model was trained on the raw noisy
+            // transcript as the user message; the wrapper is only for the
+            // Apple model path.
             let generated = try await generateWithTimeout(
-                prompt: Self.prompt(
-                    transcript: transcript,
-                    languageCode: languageCode,
-                    context: context
-                )
+                prompt: sendsRawTranscript
+                    ? transcript
+                    : Self.prompt(
+                        transcript: transcript,
+                        languageCode: languageCode,
+                        context: context
+                    )
             )
             let candidate = Self.candidateText(from: generated)
             guard !candidate.isEmpty else {
