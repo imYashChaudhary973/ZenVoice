@@ -262,13 +262,20 @@ public struct TranscriptFormattingEngine: Sendable {
             )
         }
 
+        // Normalize common colloquial phrases and acoustic homophones before
+        // the guarded stages: every gate must see — and approve — exactly the
+        // text that gets delivered.
+        let normalized = BuiltInSlangLexicon.normalizeColloquialPhrases(
+            transcript
+        )
+
         let refined = TranscriptRefinement.refine(
-            transcript,
+            normalized,
             mode: mode.instantRefineMode,
             languageCode: languageCode,
             voiceCommandsEnabled: voiceCommandsEnabled
         )
-        let localText = refined.wasRejected ? transcript : refined.text
+        let localText = refined.wasRejected ? normalized : refined.text
 
         var finalText = localText
         var localModelUsed = false
@@ -294,9 +301,6 @@ public struct TranscriptFormattingEngine: Sendable {
                 finalText = enhanced.wasRejected ? localText : enhanced.text
             }
         }
-
-        // Normalize common colloquial phrases and acoustic homophones
-        finalText = BuiltInSlangLexicon.normalizeColloquialPhrases(finalText)
 
         return TranscriptFormattingResult(
             text: finalText,
