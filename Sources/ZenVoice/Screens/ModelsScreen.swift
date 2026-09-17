@@ -178,7 +178,7 @@ struct ModelsScreen: View {
         let isZenPolish = spec.id == ZenPolishLanguageModel.modelID
         let downloading = isZenPolish
             ? viewModel.isDownloadingZenPolish
-            : viewModel.downloadingModelID == spec.id
+            : viewModel.isDownloadingEngine(id: spec.id)
         return Button {
             guard !spec.comingSoon else { return }
             if isZenPolish {
@@ -247,8 +247,14 @@ struct ModelsScreen: View {
                     )
                 }
                 if downloading {
-                    ZenProgressBar(value: viewModel.downloadProgress ?? 0)
-                        .frame(height: 3)
+                    ZenProgressBar(
+                        value: isZenPolish
+                            ? viewModel.downloadProgress ?? 0
+                            : viewModel.engineDownloadProgress(
+                                for: spec.id
+                            ) ?? 0
+                    )
+                    .frame(height: 3)
                 }
             }
             .padding(ZenDesign.Spacing.md)

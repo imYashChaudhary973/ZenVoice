@@ -463,11 +463,13 @@ struct OnboardingScreen: View {
     @ViewBuilder
     private func downloadFooter(id: String) -> some View {
         let installed = modelManagerViewModel.installedEngineIDs.contains(id)
-        let downloading = modelManagerViewModel.downloadingModelID == id
+        let downloading = modelManagerViewModel.isDownloadingEngine(id: id)
         if downloading {
             VStack(alignment: .leading, spacing: 6) {
                 ZenProgressBar(
-                    value: modelManagerViewModel.downloadProgress ?? 0
+                    value: modelManagerViewModel.engineDownloadProgress(
+                        for: id
+                    ) ?? 0
                 )
                 Button("Cancel") {
                     modelManagerViewModel.cancelDownload()

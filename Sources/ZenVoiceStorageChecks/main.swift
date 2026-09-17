@@ -2052,6 +2052,116 @@ private func checkAgenticLoaderHealsStaleRows() async throws {
     )
 }
 
+/// One corrupt transcript row must not throw away the whole history
+/// listing. records() skips and heals rows whose blobs fail
+/// authentication — the same pattern loadActiveAgenticTasks uses.
+private func checkHistorySkipsCorruptRows() async throws {
+    let fixture = try await VaultFixture()
+    defer { fixture.cleanup() }
+
+    var ids: [UUID] = []
+    for index in 0..<3 {
+        let id = UUID()
+        ids.append(id)
+        let audioURL = await fixture.vault.recoveryAudioURL(for: id)
+        try Data("audio \(index)".utf8).write(to: audioURL)
+        try await fixture.vault.begin(
+            DictationDraft(
+                id: id,
+                startedAt: Date(timeIntervalSince1970: TimeInterval(1_000 + index)),
+                language: "en",
+                modelID: "whisper-base.en",
+                targetBundleID: "com.apple.TextEdit",
+                targetAppName: "TextEdit",
+                recoveryAudioURL: audioURL
+            )
+        )
+        try await fixture.vault.storeTranscript(
+            id: id,
+            rawTranscript: "row \(index)",
+            finalTranscript: "Row \(index).",
+            completedAt: Date(timeIntervalSince1970: TimeInterval(1_030 + index))
+        )
+    }
+
+    // Corrupt one row's transcript blob directly in SQL, the way a key
+    // rotation or truncated write would: it can never decrypt again.
+    try executeSQL(
+        "UPDATE dictations SET final_transcript = X'00DEADBEEF' "
+            + "WHERE id = '\(ids[1].uuidString)';",
+        databaseURL: fixture.databaseURL
+    )
+
+    let recent = try await fixture.vault.recent()
+    try await require(
+        recent.map { $0.id } == [ids[2], ids[0]],
+        "a corrupt row broke the history listing or dropped good rows"
+    )
+    // The healed listing removed the poisoned row: a second pass is clean.
+    let secondPass = try await fixture.vault.recent()
+    try await require(
+        secondPass.map { $0.id } == [ids[2], ids[0]],
+        "the corrupt row was not healed on disk"
+    )
+}
+
+/// The vault database, its WAL/SHM sidecars, and the audio directories
+/// must be excluded from backups.
+private func checkVaultFilesExcludedFromBackup() async throws {
+    let fixture = try await VaultFixture()
+    defer { fixture.cleanup() }
+
+    // Give SQLite a reason to create the WAL and SHM sidecars.
+    let id = UUID()
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
+    try Data("audio".utf8).write(to: audioURL)
+    try await fixture.vault.begin(
+        DictationDraft(
+            id: id,
+            startedAt: Date(timeIntervalSince1970: 1_000),
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: "com.apple.TextEdit",
+            targetAppName: "TextEdit",
+            recoveryAudioURL: audioURL
+        )
+    )
+
+    for suffix in ["", "-wal", "-shm"] {
+        let url = URL(fileURLWithPath: fixture.databaseURL.path + suffix)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw CheckError.failed(
+                "vault database sidecar \(suffix) was not created"
+            )
+        }
+        let values = try url.resourceValues(forKeys: [
+            .isExcludedFromBackupKey
+        ])
+        try await require(
+            values.isExcludedFromBackup == true,
+            "vault database\(suffix) is not excluded from backups"
+        )
+    }
+    for directory in [
+        fixture.directoryURL.appendingPathComponent(
+            "Recovery",
+            isDirectory: true
+        ),
+        fixture.directoryURL.appendingPathComponent(
+            "AudioHistory",
+            isDirectory: true
+        ),
+    ] {
+        let values = try directory.resourceValues(forKeys: [
+            .isExcludedFromBackupKey
+        ])
+        try await require(
+            values.isExcludedFromBackup == true,
+            "\(directory.lastPathComponent) is not excluded from backups"
+        )
+    }
+}
+
 
 do {
     try await checkEncryptedStorage()
@@ -2082,7 +2192,9 @@ do {
     try await checkAgenticTaskPersistence()
     try await checkDeleteAllClearsAgenticTasks()
     try await checkAgenticLoaderHealsStaleRows()
-    print("ZenVoiceStorageChecks: 27 checks passed")
+    try await checkHistorySkipsCorruptRows()
+    try await checkVaultFilesExcludedFromBackup()
+    print("ZenVoiceStorageChecks: 29 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)
