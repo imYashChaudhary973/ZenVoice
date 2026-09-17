@@ -136,7 +136,7 @@ public struct ZenVoiceConfiguration {
         let model: String
         if let override = environment["ZENVOICE_MODEL_PATH"],
            fileManager.fileExists(atPath: override) {
-            model = override
+            model = try Self.verifiedOverridePath(override)
         } else if let selectedModel,
                   let selectedModelPath,
                   (try? VerifiedModelCatalog.verify(
@@ -147,6 +147,24 @@ public struct ZenVoiceConfiguration {
             model = selectedModelPath
         } else if legacyModelPath != selectedModelPath,
                   fileManager.fileExists(atPath: legacyModelPath) {
+            // Legacy installs predate the catalogue, but the file is a known
+            // catalogue entry — hold it to the same verification bar as a
+            // selected model, and never degrade silently to an unverified
+            // file.
+            let legacyURL = URL(fileURLWithPath: legacyModelPath)
+            let legacyModel = VerifiedModelCatalog.model(
+                filename: legacyURL.lastPathComponent
+            )
+            guard let legacyModel,
+                  (try? VerifiedModelCatalog.verify(
+                    legacyURL,
+                    for: legacyModel,
+                    fileManager: fileManager
+                  )) == true else {
+                throw ConfigurationError.modelVerificationFailed(
+                    legacyURL.lastPathComponent
+                )
+            }
             model = legacyModelPath
         } else {
             throw ConfigurationError.modelMissing
@@ -176,6 +194,31 @@ public struct ZenVoiceConfiguration {
             modelURL: URL(fileURLWithPath: model),
             languageProfile: resolvedLanguageProfile
         )
+    }
+
+    /// `ZENVOICE_MODEL_PATH` bypasses the installer entirely, which makes it
+    /// a trust boundary: whatever it points at is handed to the decoder as a
+    /// model. Hash the file and require it to match a catalogue entry, and
+    /// throw on mismatch instead of silently degrading to a model the user
+    /// did not ask for.
+    private static func verifiedOverridePath(_ path: String) throws -> String {
+        let modelURL = URL(fileURLWithPath: path)
+        let hash: String
+        do {
+            hash = try VerifiedModelCatalog.sha256Hex(of: modelURL)
+        } catch {
+            throw ConfigurationError.modelVerificationFailed(
+                modelURL.lastPathComponent
+            )
+        }
+        guard VerifiedModelCatalog.allModels.contains(
+            where: { $0.sha256 == hash }
+        ) else {
+            throw ConfigurationError.modelVerificationFailed(
+                modelURL.lastPathComponent
+            )
+        }
+        return path
     }
 
     public enum ConfigurationError: LocalizedError {

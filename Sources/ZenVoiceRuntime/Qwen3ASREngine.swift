@@ -17,7 +17,12 @@ import MLXASR
 import ZenVoiceCore
 
 /// Qwen3-ASR 0.6B (6-bit MLX) via `mlx-swift-asr`.
-public final class Qwen3ASREngine: @unchecked Sendable, SpeechEngine {
+///
+/// An actor because the loaded `Qwen3ASRSTT` is mutable MLX state that
+/// `prepare`, `release`, and `transcribe` all touch from arbitrary tasks;
+/// actor isolation gives the load-release-use sequence a single serialized
+/// owner where a plain `@unchecked Sendable` class raced on all three.
+public actor Qwen3ASREngine: SpeechEngine {
     public static let engineID = EngineIdentifiers.qwen3ASR
     public static let directoryName = "qwen3-asr-0.6b-6bit"
     public static let requiredFiles = [
@@ -28,7 +33,7 @@ public final class Qwen3ASREngine: @unchecked Sendable, SpeechEngine {
         "tokenizer_config.json"
     ]
 
-    public var descriptor: EngineDescriptor {
+    nonisolated public var descriptor: EngineDescriptor {
         EngineDescriptor(
             id: Self.engineID,
             displayName: "Qwen3-ASR 0.6B",
@@ -48,16 +53,22 @@ public final class Qwen3ASREngine: @unchecked Sendable, SpeechEngine {
         )
     }
 
-    public var transformsSpokenLanguage: Bool { false }
-    public var detectsLanguageAutomatically: Bool { true }
-    public var languageCapability: ModelLanguageCapability { .multilingual }
+    nonisolated public var transformsSpokenLanguage: Bool { false }
+    nonisolated public var detectsLanguageAutomatically: Bool { true }
+    nonisolated public var languageCapability: ModelLanguageCapability {
+        .multilingual
+    }
 
-    public var isAvailable: Bool {
+    nonisolated public var isAvailable: Bool {
         Self.isInstalled(in: modelsDirectory)
     }
 
     private let modelsDirectory: URL
     private var stt: Qwen3ASRSTT?
+    private var loadTask: Task<Qwen3ASRSTT, Error>?
+    /// Bumped by every `release()` so a load that finishes after its release
+    /// cannot adopt the model back into `stt`.
+    private var loadGeneration = 0
 
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
@@ -83,16 +94,53 @@ public final class Qwen3ASREngine: @unchecked Sendable, SpeechEngine {
     }
 
     public func prepare() async throws {
-        if stt != nil { return }
-        guard isAvailable else {
-            throw EngineError.engineUnavailable(Self.engineID)
-        }
-        stt = try await Qwen3ASRSTT.loadWithWarmup(from: modelDirectory)
+        _ = try await preparedSTT()
     }
 
     public func release() async {
+        loadGeneration += 1
+        loadTask?.cancel()
+        loadTask = nil
         stt = nil
         Qwen3ASRSTT.flushMemoryPool()
+    }
+
+    /// The resident model, loading it first when needed.
+    ///
+    /// `loadTask` deduplicates concurrent prepares into one load, and the
+    /// generation check keeps a load that outlived its `release()` from
+    /// repopulating `stt`.
+    private func preparedSTT() async throws -> Qwen3ASRSTT {
+        if let stt { return stt }
+        if let loadTask {
+            return try await loadTask.value
+        }
+        guard isAvailable else {
+            throw EngineError.engineUnavailable(Self.engineID)
+        }
+        loadGeneration += 1
+        let generation = loadGeneration
+        let task = Task {
+            try await Qwen3ASRSTT.loadWithWarmup(from: modelDirectory)
+        }
+        loadTask = task
+        do {
+            let loaded = try await task.value
+            guard generation == loadGeneration else {
+                // release() ran while the load was in flight. Respect it and
+                // hand this caller the model without caching it; the next
+                // idle unload or release clears it again.
+                return loaded
+            }
+            stt = loaded
+            loadTask = nil
+            return loaded
+        } catch {
+            if generation == loadGeneration {
+                loadTask = nil
+            }
+            throw error
+        }
     }
 
     public func transcribe(
@@ -100,10 +148,7 @@ public final class Qwen3ASREngine: @unchecked Sendable, SpeechEngine {
         languageProfile: LanguageProfile,
         initialPrompt: String?
     ) async throws -> ZenVoiceCore.TranscriptionResult {
-        try await prepare()
-        guard let stt else {
-            throw EngineError.engineUnavailable(Self.engineID)
-        }
+        let stt = try await preparedSTT()
         let samples = try AudioSampleLoader.load16kHzMonoFloatSamples(
             from: audioURL
         )
