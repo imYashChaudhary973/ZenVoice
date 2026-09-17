@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import ApplicationServices
+import AppKit
 import CryptoKit
 import Foundation
 import ZenVoiceCore
@@ -3381,9 +3382,18 @@ formattingDefaults.set(
     false,
     forKey: TranscriptFormattingPreferences.migratedKey
 )
+// The migration must carry the layout commands across: agentPrompt users
+// relied on "new paragraph" and friends, and the collapsed Clean rung does
+// not apply them unless the command pass is enabled.
+LocalVoiceCommandPreferences.setEnabled(false, defaults: formattingDefaults)
 guard TranscriptFormattingPreferences.load(defaults: formattingDefaults)
         == .clean else {
     failEngineCheck("formatting migration from agentPrompt/off failed")
+}
+guard LocalVoiceCommandPreferences.isEnabled(defaults: formattingDefaults) else {
+    failEngineCheck(
+        "agentPrompt migration did not enable the voice command pass"
+    )
 }
 
 // After migration, the new key is respected over any stale old keys.
@@ -3440,6 +3450,85 @@ guard try !VerifiedModelCatalog.verify(listingURL, for: verifierModel) else {
 }
 
 print("ZenVoiceCoreChecks: formatting migration passed")
+
+// MARK: - Legacy whisper engine selection (M17)
+
+// A stale pre-unification `whisper` selection must canonicalize to the
+// current default whisper engine during resolution. With Large V3 listed
+// first, a raw `whisper` ID falls through the selected-engine pass and
+// registry order hands transcription to V3 instead of Turbo.
+let staleV3Engine = fakeEngine(
+    id: EngineIdentifiers.whisperLargeV3,
+    capability: .multilingual
+)
+let staleTurboEngine = fakeEngine(
+    id: EngineIdentifiers.whisperLargeV3Turbo,
+    capability: .multilingual
+)
+let staleSelectionRegistry = EngineRegistry(
+    engines: [staleV3Engine, staleTurboEngine]
+)
+let staleSelectionResult = try await staleSelectionRegistry.transcribe(
+    audioURL: URL(fileURLWithPath: "/dev/null"),
+    profile: englishProfile,
+    selectedID: EngineIdentifiers.whisper
+)
+guard staleSelectionResult.modelID == EngineIdentifiers.whisperLargeV3Turbo else {
+    failEngineCheck(
+        "legacy whisper selection resolved to \(staleSelectionResult.modelID) "
+            + "instead of \(EngineIdentifiers.whisperLargeV3Turbo)"
+    )
+}
+
+print("ZenVoiceCoreChecks: legacy whisper selection passed")
+
+// MARK: - Pasteboard save/restore (M15)
+
+// insert() writes the transcript over the user's clipboard, so the snapshot
+// must put the previous contents back, and a restore that lost the
+// changeCount race must leave a newer write alone.
+let pasteboard = NSPasteboard.general
+let machineClipboard = TextInserter.capturePasteboard(pasteboard)
+defer {
+    TextInserter.restorePasteboard(
+        machineClipboard,
+        to: pasteboard,
+        ifUnchangedSince: pasteboard.changeCount
+    )
+}
+
+pasteboard.clearContents()
+pasteboard.setString("ZenVoice user clipboard", forType: .string)
+let userSnapshot = TextInserter.capturePasteboard(pasteboard)
+pasteboard.clearContents()
+pasteboard.setString("transcript", forType: .string)
+// Nothing wrote between the transcript and now — the insert() happy path —
+// so the restore proceeds.
+TextInserter.restorePasteboard(
+    userSnapshot,
+    to: pasteboard,
+    ifUnchangedSince: pasteboard.changeCount
+)
+guard pasteboard.string(forType: .string) == "ZenVoice user clipboard" else {
+    failEngineCheck(
+        "pasteboard restore did not put the user's clipboard back"
+    )
+}
+// A write that landed after the transcript — a clipboard manager grabbing
+// it, or the user copying — wins over the stale snapshot.
+let staleCount = pasteboard.changeCount
+pasteboard.clearContents()
+pasteboard.setString("fresh copy", forType: .string)
+TextInserter.restorePasteboard(
+    userSnapshot,
+    to: pasteboard,
+    ifUnchangedSince: staleCount
+)
+guard pasteboard.string(forType: .string) == "fresh copy" else {
+    failEngineCheck("stale pasteboard restore clobbered a newer write")
+}
+
+print("ZenVoiceCoreChecks: pasteboard restore passed")
 
 // MARK: - Agentic planner and validator checks
 
