@@ -78,7 +78,7 @@ func makeSummary(
         state: state,
         plan: plan,
         planVersion: 1,
-        planSHA256: GoalPlanDigest.sha256(plan),
+        planSHA256: try! GoalPlanDigest.sha256(plan),
         lastSequence: lastSequence,
         awaitingPlanApproval: awaitingPlanApproval,
         awaitingStepNumber: awaitingStepNumber
@@ -311,7 +311,7 @@ require(
 
 let approval = ApprovalDecision(
     planID: lowPlan.id,
-    planSHA256: GoalPlanDigest.sha256(lowPlan),
+    planSHA256: try! GoalPlanDigest.sha256(lowPlan),
     planVersion: 1,
     action: .approved,
     mode: .all,
@@ -364,7 +364,7 @@ do {
     _ = try await phone.decide(
         ApprovalDecision(
             planID: highPlan.id,
-            planSHA256: GoalPlanDigest.sha256(highPlan),
+            planSHA256: try! GoalPlanDigest.sha256(highPlan),
             planVersion: 1,
             action: .approved,
             mode: .all,
@@ -378,7 +378,7 @@ do {
 let rejectAck = try await phone.decide(
     ApprovalDecision(
         planID: highPlan.id,
-        planSHA256: GoalPlanDigest.sha256(highPlan),
+        planSHA256: try! GoalPlanDigest.sha256(highPlan),
         planVersion: 1,
         action: .rejected
     )

@@ -365,7 +365,10 @@ public actor GoalOrchestrator {
 
     private func obtainStepApproval(step: GoalStep, goalID: UUID) async -> Bool {
         guard var record = records[goalID] else { return false }
-        record.steps[index(of: step.number, in: record)].state = .awaitingApproval
+        guard let stepIndex = index(of: step.number, in: record) else {
+            return false
+        }
+        record.steps[stepIndex].state = .awaitingApproval
         appendEvent(
             .stepApprovalRequired,
             step: step.number,
@@ -407,8 +410,14 @@ public actor GoalOrchestrator {
         stepNumber: Int?
     ) -> Bool {
         guard decision.planID == plan.id,
-              decision.planSHA256 == GoalPlanDigest.sha256(plan),
               decision.planVersion == version
+        else {
+            return false
+        }
+        // A plan that cannot be encoded cannot be bound to an approval; a
+        // thrown digest yields nil, which fails the match.
+        guard let planDigest = try? GoalPlanDigest.sha256(plan),
+              decision.planSHA256 == planDigest
         else {
             return false
         }
@@ -450,9 +459,11 @@ public actor GoalOrchestrator {
 
     private func markStepRunning(step: GoalStep, goalID: UUID) async {
         guard var record = records[goalID] else { return }
-        let index = index(of: step.number, in: record)
-        record.steps[index].state = .running
-        record.steps[index].startedAt = Date()
+        guard let stepIndex = index(of: step.number, in: record) else {
+            return
+        }
+        record.steps[stepIndex].state = .running
+        record.steps[stepIndex].startedAt = Date()
         appendEvent(
             .stepStarted,
             step: step.number,
@@ -460,7 +471,7 @@ public actor GoalOrchestrator {
             to: &record
         )
         records[goalID] = record
-        try? await persistAndPublish(record)
+        await persistStepRecord(record, stepNumber: step.number, goalID: goalID)
     }
 
     private func appendOutput(
@@ -508,9 +519,11 @@ public actor GoalOrchestrator {
         goalID: UUID
     ) async {
         guard var record = records[goalID] else { return }
-        let index = index(of: stepNumber, in: record)
-        let combined = record.steps[index].retainedOutput + redacted
-        record.steps[index].retainedOutput = Self.cappedOutput(combined)
+        guard let stepIndex = index(of: stepNumber, in: record) else {
+            return
+        }
+        let combined = record.steps[stepIndex].retainedOutput + redacted
+        record.steps[stepIndex].retainedOutput = Self.cappedOutput(combined)
         let preview = Self.cappedOutput(redacted, maxBytes: 8 * 1024)
         appendEvent(
             .stepOutput,
@@ -540,11 +553,13 @@ public actor GoalOrchestrator {
         goalID: UUID
     ) async {
         guard var record = records[goalID] else { return }
-        let index = index(of: step.number, in: record)
-        record.steps[index].state = .succeeded
-        record.steps[index].completedAt = Date()
-        record.steps[index].exitStatus = outcome.exitStatus
-        record.steps[index].summary = outcome.summary
+        guard let stepIndex = index(of: step.number, in: record) else {
+            return
+        }
+        record.steps[stepIndex].state = .succeeded
+        record.steps[stepIndex].completedAt = Date()
+        record.steps[stepIndex].exitStatus = outcome.exitStatus
+        record.steps[stepIndex].summary = outcome.summary
         appendEvent(
             .stepSucceeded,
             step: step.number,
@@ -552,7 +567,7 @@ public actor GoalOrchestrator {
             to: &record
         )
         records[goalID] = record
-        try? await persistAndPublish(record)
+        await persistStepRecord(record, stepNumber: step.number, goalID: goalID)
     }
 
     private func markStepFailed(
@@ -561,11 +576,13 @@ public actor GoalOrchestrator {
         goalID: UUID
     ) async {
         guard var record = records[goalID] else { return }
-        let index = index(of: step.number, in: record)
-        record.steps[index].state = .failed
-        record.steps[index].completedAt = Date()
-        record.steps[index].exitStatus = outcome.exitStatus
-        record.steps[index].summary = outcome.summary
+        guard let stepIndex = index(of: step.number, in: record) else {
+            return
+        }
+        record.steps[stepIndex].state = .failed
+        record.steps[stepIndex].completedAt = Date()
+        record.steps[stepIndex].exitStatus = outcome.exitStatus
+        record.steps[stepIndex].summary = outcome.summary
         appendEvent(
             .stepFailed,
             step: step.number,
@@ -573,15 +590,17 @@ public actor GoalOrchestrator {
             to: &record
         )
         records[goalID] = record
-        try? await persistAndPublish(record)
+        await persistStepRecord(record, stepNumber: step.number, goalID: goalID)
     }
 
     private func markSkipped(step: GoalStep, goalID: UUID) async {
         guard var record = records[goalID] else { return }
-        let index = index(of: step.number, in: record)
-        record.steps[index].state = .skipped
-        record.steps[index].completedAt = Date()
-        record.steps[index].summary = "Dependency did not succeed."
+        guard let stepIndex = index(of: step.number, in: record) else {
+            return
+        }
+        record.steps[stepIndex].state = .skipped
+        record.steps[stepIndex].completedAt = Date()
+        record.steps[stepIndex].summary = "Dependency did not succeed."
         records[goalID] = record
         try? await persist(record)
     }
@@ -643,8 +662,8 @@ public actor GoalOrchestrator {
         }
     }
 
-    private func index(of stepNumber: Int, in record: AgenticTaskRecord) -> Int {
-        record.steps.firstIndex(where: { $0.number == stepNumber })!
+    private func index(of stepNumber: Int, in record: AgenticTaskRecord) -> Int? {
+        record.steps.firstIndex(where: { $0.number == stepNumber })
     }
 
     private func appendEvent(
@@ -671,6 +690,27 @@ public actor GoalOrchestrator {
         try await persist(record)
         if let event = record.events.last {
             await statusHandler(event)
+        }
+    }
+
+    /// Step state transitions must not lose their persistence failure: it is
+    /// counted into `persistenceFailures` (the run loop stops the goal on it)
+    /// and surfaced as one stderr line with the step number.
+    private func persistStepRecord(
+        _ record: AgenticTaskRecord,
+        stepNumber: Int,
+        goalID: UUID
+    ) async {
+        do {
+            try await persistAndPublish(record)
+        } catch {
+            persistenceFailures[goalID] = error.localizedDescription
+            FileHandle.standardError.write(
+                Data(
+                    "ZenVoice: goal \(goalID.uuidString) step \(stepNumber) persistence failed: \(error.localizedDescription)\n"
+                        .utf8
+                )
+            )
         }
     }
 

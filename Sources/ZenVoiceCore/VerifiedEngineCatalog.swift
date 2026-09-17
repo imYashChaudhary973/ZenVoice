@@ -50,11 +50,14 @@ public struct VerifiedEngine: Equatable, Sendable {
     /// Hugging Face model this engine loads, e.g. `nvidia/parakeet-tdt-0.6b-v3`.
     public var wrappedModelID: String? {
         guard let sourceRepository,
-              let host = sourceRepository.range(of: "huggingface.co/")
+              let url = URL(string: sourceRepository),
+              url.host() == "huggingface.co",
+              url.pathComponents.count >= 3
         else {
             return nil
         }
-        return String(sourceRepository[host.upperBound...])
+        // pathComponents starts with "/", so this is the org/model path.
+        return url.pathComponents[1...].joined(separator: "/")
     }
 
     public var downloadFilename: String? {
@@ -319,6 +322,10 @@ public enum VerifiedEngineCatalog {
             sourceRepository:
                 "https://huggingface.co/cstr/cohere-transcribe-onnx-int8",
             sourceRevision: "main",
+            // This engine is a five-file bundle (see the cohere* constants).
+            // downloadURL + sha256 verify only the primary encoder file; the
+            // remaining files are verified file-by-file at download time and
+            // the full layout is asserted when the engine is loaded.
             downloadURL: URL(
                 string:
                     "https://huggingface.co/cstr/cohere-transcribe-onnx-int8/"
@@ -352,6 +359,10 @@ public enum VerifiedEngineCatalog {
             sourceRepository:
                 "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-6bit",
             sourceRevision: "main",
+            // This engine is a five-file bundle (see the qwen3* constants).
+            // downloadURL + sha256 verify only the weights file; the
+            // remaining files are verified file-by-file at download time and
+            // the full layout is asserted when the engine is loaded.
             downloadURL: URL(
                 string:
                     "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-6bit/"

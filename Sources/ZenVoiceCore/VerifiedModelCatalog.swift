@@ -304,8 +304,12 @@ public enum VerifiedModelCatalog {
     }
 
     public static func modelsDirectory(
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        policy: BundleIdentifierPolicy? = nil
     ) throws -> URL {
+        let resolved = policy
+            ?? (try? RuntimeIdentity.policy())
+            ?? BundleIdentifierPolicy(kind: .production)
         let supportDirectory = try fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -313,7 +317,10 @@ public enum VerifiedModelCatalog {
             create: true
         )
         return supportDirectory
-            .appendingPathComponent("ZenVoice", isDirectory: true)
+            .appendingPathComponent(
+                RuntimeIdentity.modelsFolderName(policy: resolved),
+                isDirectory: true
+            )
             .appendingPathComponent("Models", isDirectory: true)
     }
 

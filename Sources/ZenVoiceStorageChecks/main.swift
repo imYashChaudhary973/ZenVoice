@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import CryptoKit
 import Foundation
 import SQLite3
 import ZenVoiceCore
@@ -866,8 +867,17 @@ private func checkPartialAndCipherBinding() async throws {
         throw CheckError.failed("swapped ciphertext fields were accepted")
     } catch let checkError as CheckError {
         throw checkError
+    } catch let cryptoError as CryptoKitError {
+        // Expected: authenticated field context rejects the swap via GCM.
+        guard case .authenticationFailure = cryptoError else {
+            throw CheckError.failed(
+                "expected GCM authentication failure, got \(cryptoError)"
+            )
+        }
     } catch {
-        // Expected: authenticated field context rejects the swap.
+        throw CheckError.failed(
+            "swapped ciphertext fields raised an unexpected error type: \(error)"
+        )
     }
 
     try await fixture.vault.deleteAll()
@@ -1919,7 +1929,8 @@ private func checkAgenticTaskPersistence() async throws {
         "agentic plan changed across encryption"
     )
     try await require(
-        GoalPlanDigest.sha256(active[0].plan) == GoalPlanDigest.sha256(plan),
+        try GoalPlanDigest.sha256(active[0].plan)
+            == GoalPlanDigest.sha256(plan),
         "agentic plan hash changed across encryption"
     )
     try await require(

@@ -258,12 +258,15 @@ public enum SecretRedactor {
 /// of who computed it: the Mac, the vault after a reload, or the phone
 /// checking what it was shown.
 public enum GoalPlanDigest {
-    public static func sha256(_ plan: GoalPlan) -> String {
+    /// - Throws: if the plan cannot be encoded. Callers that cannot propagate
+    ///   the error must treat it as an invariant violation (precondition
+    ///   failure), never fall back to a digest of empty data: that would
+    ///   validate approvals against a plan that was never serialized.
+    public static func sha256(_ plan: GoalPlan) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = AgenticTimestamp.encoding
-        let data = (try? encoder.encode(plan)) ?? Data()
-        return SHA256.hash(data: data)
+        return SHA256.hash(data: try encoder.encode(plan))
             .map { String(format: "%02x", $0) }
             .joined()
     }

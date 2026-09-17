@@ -32,7 +32,15 @@ public struct TranscriptCleaner {
         "subtitles by the amara.org community"
     ]
 
-    private static let bracketsRegex = try? NSRegularExpression(pattern: #"\s*\[[^\]]+\]\s*"#)
+    /// Whisper emits bracketed non-speech tags like [BLANK_AUDIO] from room
+    /// noise, and empty bracket pairs (`[]`, `[ ]`) from truncated output —
+    /// both are artifacts, not speech. Everything else inside brackets is the
+    /// user's own dictation ("[note to self]") and must survive cleaning.
+    /// Whisper's convention makes the distinction mechanical: its tags are
+    /// all-caps, human notes are not.
+    private static let bracketsRegex = try? NSRegularExpression(
+        pattern: #"\s*\[(?:\s*|[A-Z][A-Z0-9 _-]*)\]\s*"#
+    )
     private static let spacesRegex = try? NSRegularExpression(pattern: #"\s+"#)
     private static let fillerRegex = try? NSRegularExpression(
         pattern: #"(?i)(^|(?<=[.!?]\s))(?:(?:um+|uh+|erm+)[,.\s]+)+"#
