@@ -88,9 +88,14 @@ public enum AudioArchiveExporter {
             )
         let payloadDirectory = stagingRoot
             .appendingPathComponent("ZenVoiceAudioHistory", isDirectory: true)
+        // Intermediate directories inherit the attributes, so the whole
+        // staging tree is 0700: plaintext audio never sits in a
+        // world-readable temp directory. The tree is removed as soon as
+        // `export` returns (the save panel completes before staging starts).
         try fileManager.createDirectory(
             at: payloadDirectory,
-            withIntermediateDirectories: true
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
         )
         defer { try? fileManager.removeItem(at: stagingRoot) }
 

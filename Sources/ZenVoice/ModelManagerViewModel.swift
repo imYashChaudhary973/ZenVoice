@@ -78,10 +78,16 @@ private final class MultiPartDownloadHandle: @unchecked Sendable {
         return finished || wasCancelled || exceededExpectedSize
     }
 
-    var activeTasks: [URLSessionDownloadTask] {
+    /// Bytes received across every installed part. A completed download
+    /// task keeps its final `countOfBytesReceived`, so summing all tasks —
+    /// not just the running ones — never regresses when a range part
+    /// finishes ahead of the others.
+    var receivedBytes: Int64 {
         lock.lock()
         defer { lock.unlock() }
-        return tasks.filter { $0.state == .running }
+        return tasks.reduce(Int64(0)) {
+            $0 + max(0, $1.countOfBytesReceived)
+        }
     }
 
     func setExpectedTotalBytes(_ bytes: Int64) {
@@ -262,9 +268,7 @@ struct VerifiedModelDownloader {
 
         let poller = Task.detached(priority: .utility) {
             while !handle.isFinished {
-                let received = handle.activeTasks.reduce(Int64(0)) {
-                    $0 + max(0, $1.countOfBytesReceived)
-                }
+                let received = handle.receivedBytes
                 if received > expectedSize {
                     handle.cancelForUnexpectedSize()
                     return
@@ -513,6 +517,11 @@ final class ModelManagerViewModel: ObservableObject {
     @Published private(set) var selectedEngineID: String?
     @Published private(set) var engineAvailabilities: [EngineAvailability] = []
     @Published private(set) var installedEngineIDs: Set<String> = []
+    /// Progress for each in-flight engine download, keyed by engine id.
+    /// Concurrent engine downloads each get their own slot instead of
+    /// clobbering the shared model-download fields.
+    @Published private(set) var engineDownloadStates:
+        [String: EngineDownloadState] = [:]
     @Published var errorMessage: String?
 
     private let downloader: VerifiedModelDownloader
@@ -525,7 +534,16 @@ final class ModelManagerViewModel: ObservableObject {
     private var activeDownloadID: UUID?
     private var verificationTask: Task<Void, Never>?
     private var enginePrepareTask: Task<Void, Never>?
-    private var engineDownloadTasks: [String: Task<Void, Never>] = [:]
+    /// Visible progress for one engine download.
+    struct EngineDownloadState: Equatable {
+        var progress: Double
+        var isVerifying: Bool
+    }
+    private struct EngineDownloadSlot {
+        let downloadID: UUID
+        let task: Task<Void, Never>
+    }
+    private var engineDownloadTasks: [String: EngineDownloadSlot] = [:]
     private var zenPolishDownloadTask: Task<Void, Never>?
     private var zenPolishDownloadID: UUID?
 
@@ -863,10 +881,11 @@ final class ModelManagerViewModel: ObservableObject {
         activeDownloadID = nil
         downloadTask?.cancel()
         downloadTask = nil
-        for task in engineDownloadTasks.values {
-            task.cancel()
+        for slot in engineDownloadTasks.values {
+            slot.task.cancel()
         }
         engineDownloadTasks.removeAll()
+        engineDownloadStates.removeAll()
         zenPolishDownloadTask?.cancel()
         zenPolishDownloadTask = nil
         zenPolishDownloadID = nil
@@ -982,7 +1001,11 @@ final class ModelManagerViewModel: ObservableObject {
     }
 
     func remove(_ model: VerifiedModel) {
-        guard downloadingModelID != model.id else {
+        // Only block removal of a model whose own download is in flight;
+        // per-engine slots keep one download from masking another.
+        guard downloadingModelID != model.id,
+              engineDownloadTasks[EngineIdentifiers.canonical(model.id)]
+                  == nil else {
             return
         }
         do {
@@ -1055,8 +1078,12 @@ final class ModelManagerViewModel: ObservableObject {
         )
     }
 
-    func isEngineDownloading(_ engine: VerifiedEngine) -> Bool {
-        engineDownloadTasks[engine.descriptor.id]?.isCancelled == false
+    func isDownloadingEngine(id: String) -> Bool {
+        engineDownloadStates[EngineIdentifiers.canonical(id)] != nil
+    }
+
+    func engineDownloadProgress(for id: String) -> Double? {
+        engineDownloadStates[EngineIdentifiers.canonical(id)]?.progress
     }
 
     func downloadEngine(_ engine: VerifiedEngine, thenSelect: Bool = false) {
@@ -1067,52 +1094,62 @@ final class ModelManagerViewModel: ObservableObject {
             return
         }
         errorMessage = nil
-        downloadingModelID = id
-        downloadProgress = 0
-        isVerifyingDownload = false
-        engineDownloadTasks[id] = Task { [weak self] in
-            defer {
-                self?.engineDownloadTasks.removeValue(forKey: id)
-                self?.downloadingModelID = nil
-                self?.downloadProgress = nil
-                self?.isVerifyingDownload = false
-                self?.refreshEngineInstallStatus()
-                self?.refreshEngineSelection()
-            }
-            do {
-                if id == EngineIdentifiers.cohereTranscribe {
-                    try await self?.downloadCohereModel()
-                } else if id == EngineIdentifiers.qwen3ASR {
-                    try await self?.downloadQwen3Model()
-                } else {
-                    guard let filename = engine.downloadFilename
-                        ?? VerifiedModelCatalog.model(id: id)?.filename
-                    else {
-                        throw VerifiedModelDownloadError.invalidSource
+        engineDownloadStates[id] = EngineDownloadState(
+            progress: 0,
+            isVerifying: false
+        )
+        let downloadID = UUID()
+        engineDownloadTasks[id] = EngineDownloadSlot(
+            downloadID: downloadID,
+            task: Task { [weak self] in
+                defer {
+                    // The identity check mirrors the ZenPolish pattern: a
+                    // stale task must never tear down a newer download's
+                    // slot.
+                    if let self,
+                       self.engineDownloadTasks[id]?.downloadID
+                           == downloadID {
+                        self.engineDownloadTasks.removeValue(forKey: id)
+                        self.engineDownloadStates[id] = nil
+                        self.refreshEngineInstallStatus()
+                        self.refreshEngineSelection()
                     }
-                    try await self?.downloadEngineModel(
-                        engineID: id,
-                        filename: filename
-                    )
                 }
-                await MainActor.run {
-                    self?.refreshEngineInstallStatus()
-                    if let model = VerifiedModelCatalog.model(id: id) {
-                        self?.installedModelIDs.insert(model.id)
-                    }
-                    if thenSelect {
-                        self?.selectEngine(id)
+                do {
+                    if id == EngineIdentifiers.cohereTranscribe {
+                        try await self?.downloadCohereModel(engineID: id)
+                    } else if id == EngineIdentifiers.qwen3ASR {
+                        try await self?.downloadQwen3Model(engineID: id)
                     } else {
-                        self?.selectionInvalidated()
+                        guard let filename = engine.downloadFilename
+                            ?? VerifiedModelCatalog.model(id: id)?.filename
+                        else {
+                            throw VerifiedModelDownloadError.invalidSource
+                        }
+                        try await self?.downloadEngineModel(
+                            engineID: id,
+                            filename: filename
+                        )
+                    }
+                    await MainActor.run {
+                        self?.refreshEngineInstallStatus()
+                        if let model = VerifiedModelCatalog.model(id: id) {
+                            self?.installedModelIDs.insert(model.id)
+                        }
+                        if thenSelect {
+                            self?.selectEngine(id)
+                        } else {
+                            self?.selectionInvalidated()
+                        }
+                    }
+                } catch is CancellationError {
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = error.localizedDescription
                     }
                 }
-            } catch is CancellationError {
-            } catch {
-                await MainActor.run {
-                    self?.errorMessage = error.localizedDescription
-                }
             }
-        }
+        )
     }
 
     private func downloadEngineModel(
@@ -1137,11 +1174,11 @@ final class ModelManagerViewModel: ObservableObject {
                 guard let self else { return }
                 switch phase {
                 case .downloading(let fraction):
-                    self.downloadProgress = fraction
-                    self.isVerifyingDownload = false
+                    self.engineDownloadStates[engineID]?.progress = fraction
+                    self.engineDownloadStates[engineID]?.isVerifying = false
                 case .verifying:
-                    self.downloadProgress = 1
-                    self.isVerifyingDownload = true
+                    self.engineDownloadStates[engineID]?.progress = 1
+                    self.engineDownloadStates[engineID]?.isVerifying = true
                 }
             }
         }
@@ -1160,7 +1197,7 @@ final class ModelManagerViewModel: ObservableObject {
         )
     }
 
-    private func downloadCohereModel() async throws {
+    private func downloadCohereModel(engineID: String) async throws {
         let base =
             "https://huggingface.co/cstr/cohere-transcribe-onnx-int8/resolve/main/"
         guard let sourceRevision = VerifiedEngineCatalog.engine(
@@ -1214,12 +1251,12 @@ final class ModelManagerViewModel: ObservableObject {
                 sourceRevision: sourceRevision,
                 destinationDirectory: directory,
                 completedBytes: completed,
-                totalBytes: total
+                totalBytes: total,
+                engineID: engineID
             )
             completed += size
-            await MainActor.run {
-                self.downloadProgress = Double(completed) / Double(total)
-            }
+            engineDownloadStates[engineID]?.progress =
+                Double(completed) / Double(total)
         }
     }
 
@@ -1231,7 +1268,8 @@ final class ModelManagerViewModel: ObservableObject {
         sourceRevision: String,
         destinationDirectory: URL,
         completedBytes: Int64,
-        totalBytes: Int64
+        totalBytes: Int64,
+        engineID: String? = nil
     ) async throws {
         let (progressStream, progress) =
             AsyncStream<VerifiedModelDownloadPhase>.makeStream()
@@ -1241,9 +1279,15 @@ final class ModelManagerViewModel: ObservableObject {
                 guard case .downloading(let fraction) = phase else {
                     continue
                 }
-                self?.downloadProgress =
-                    (Double(completedBytes) + fraction * Double(expectedSize))
+                let overall = (Double(completedBytes)
+                    + fraction * Double(expectedSize))
                     / Double(totalBytes)
+                guard let self else { return }
+                if let engineID {
+                    self.engineDownloadStates[engineID]?.progress = overall
+                } else {
+                    self.downloadProgress = overall
+                }
             }
         }
         defer { progressTask.cancel() }
@@ -1258,7 +1302,7 @@ final class ModelManagerViewModel: ObservableObject {
         )
     }
 
-    private func downloadQwen3Model() async throws {
+    private func downloadQwen3Model(engineID: String) async throws {
         let base =
             "https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-6bit/resolve/main/"
         guard let sourceRevision = VerifiedEngineCatalog.engine(
@@ -1315,12 +1359,12 @@ final class ModelManagerViewModel: ObservableObject {
                 sourceRevision: sourceRevision,
                 destinationDirectory: directory,
                 completedBytes: completed,
-                totalBytes: total
+                totalBytes: total,
+                engineID: engineID
             )
             completed += size
-            await MainActor.run {
-                self.downloadProgress = Double(completed) / Double(total)
-            }
+            engineDownloadStates[engineID]?.progress =
+                Double(completed) / Double(total)
         }
     }
 
@@ -1412,7 +1456,7 @@ final class ModelManagerViewModel: ObservableObject {
     deinit {
         downloadTask?.cancel()
         verificationTask?.cancel()
-        engineDownloadTasks.values.forEach { $0.cancel() }
+        engineDownloadTasks.values.forEach { $0.task.cancel() }
         zenPolishDownloadTask?.cancel()
     }
 

@@ -134,6 +134,16 @@ public actor DictationVault {
             [.posixPermissions: 0o600],
             ofItemAtPath: databaseURL.path
         )
+        // Keep the vault out of backups from the moment it exists. The WAL
+        // and SHM sidecars are best-effort here because SQLite creates them
+        // lazily; the next launch hardens them after the fact.
+        for suffix in ["", "-wal", "-shm"] {
+            Self.hardenVaultFile(
+                URL(fileURLWithPath: databaseURL.path + suffix)
+            )
+        }
+        Self.hardenVaultFile(recoveryDirectoryURL)
+        Self.hardenVaultFile(self.archiveDirectoryURL)
     }
 
     deinit {
@@ -319,6 +329,7 @@ public actor DictationVault {
             [.posixPermissions: 0o600],
             ofItemAtPath: destinationURL.path
         )
+        Self.hardenVaultFile(destinationURL)
         let fileSize = Int64(sealed.count)
 
 
@@ -781,7 +792,8 @@ public actor DictationVault {
             orderAndLimit: "ORDER BY started_at DESC LIMIT ?",
             bindWhere: { statement in
                 sqlite3_bind_int64(statement, 1, Int64(max(1, limit)))
-            }
+            },
+            healsPoisonedRows: true
         )
     }
 
@@ -1161,7 +1173,8 @@ public actor DictationVault {
     private func records(
         whereClause: String,
         orderAndLimit: String,
-        bindWhere: ((OpaquePointer?) -> Void)? = nil
+        bindWhere: ((OpaquePointer?) -> Void)? = nil,
+        healsPoisonedRows: Bool = false
     ) throws -> [DictationRecord] {
         let statement = try prepare(
             """
@@ -1180,8 +1193,29 @@ public actor DictationVault {
         bindWhere?(statement)
 
         var result: [DictationRecord] = []
+        // A row that fails decryption or decoding can never be read again
+        // (the usual cause: the vault key was rotated around it by
+        // deleteAll()). The history listing skips and heals such rows
+        // instead of throwing the whole list away — mirroring
+        // loadActiveAgenticTasks. Single-record lookups stay strict: a
+        // targeted read must fail loudly, never silently delete.
+        var poisonedIDs: [String] = []
         while sqlite3_step(statement) == SQLITE_ROW {
-            result.append(try decodeRecord(statement))
+            do {
+                result.append(try decodeRecord(statement))
+            } catch {
+                guard healsPoisonedRows,
+                      let id = text(at: 0, in: statement) else {
+                    throw error
+                }
+                poisonedIDs.append(id)
+            }
+        }
+        for id in poisonedIDs {
+            let delete = try prepare("DELETE FROM dictations WHERE id = ?;")
+            defer { sqlite3_finalize(delete) }
+            bind(id, at: 1, in: delete)
+            try stepDone(delete)
         }
         return result
     }
@@ -1526,6 +1560,7 @@ public actor DictationVault {
             [.posixPermissions: 0o600],
             ofItemAtPath: url.path
         )
+        Self.hardenVaultFile(url)
     }
 
     private func openAudioFile(
@@ -1727,6 +1762,23 @@ public actor DictationVault {
     private var databaseMessage: String {
         database.map { String(cString: sqlite3_errmsg($0)) }
             ?? "Unknown SQLite error"
+    }
+
+    /// Best-effort hardening for vault-created files and directories: keep
+    /// them out of iCloud and Time Machine backups, and mark them
+    /// complete-when-locked where the volume supports file protection.
+    private static func hardenVaultFile(_ url: URL) {
+        var url = url
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        try? url.setResourceValues(resourceValues)
+        try? FileManager.default.setAttributes(
+            [
+                FileAttributeKey(rawValue: "NSFileProtectionKey"):
+                    "NSFileProtectionComplete",
+            ],
+            ofItemAtPath: url.path
+        )
     }
 
     /// Removes recovery audio older than ``recoveryLifetime`` regardless of
