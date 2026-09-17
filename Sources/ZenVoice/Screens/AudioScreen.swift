@@ -21,6 +21,15 @@ struct AudioScreen: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+            if let device = viewModel.lastQuietDevice {
+                ZenBanner(
+                    kind: .warn,
+                    icon: "waveform.slash",
+                    text: "No audible speech from \(device). Check that "
+                        + "the mic is not muted, or pick another input "
+                        + "device below."
+                )
+            }
             inputSection
             doctorSection
         }
@@ -178,6 +187,18 @@ struct AudioScreen: View {
                             Text(viewModel.audioDoctorState.title)
                                 .font(ZenDesign.Typography.caption)
                                 .foregroundStyle(audioDoctorTint)
+                            if case .quiet = viewModel.audioDoctorState {
+                                Text(
+                                    "The microphone picked up almost "
+                                        + "nothing. Check that it is not "
+                                        + "muted, or pick another input "
+                                        + "device above."
+                                )
+                                .font(ZenDesign.Typography.caption)
+                                .foregroundStyle(
+                                    ZenDesign.Semantic.textSecondary
+                                )
+                            }
                         }
                         Spacer(minLength: ZenDesign.Spacing.sm)
                         Button(audioDoctorButtonTitle) {

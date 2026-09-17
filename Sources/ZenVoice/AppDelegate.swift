@@ -215,6 +215,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var liveStreamingInsertionBlocked = false
     private var liveTargetProcessIdentifier: pid_t?
     private var liveSamplesEnabledForRecording = false
+    /// Name of the device the active session records from, captured at
+    /// recorder start — `recorder.activeDeviceUID` is nilled on stop, before
+    /// the completion flow runs.
+    private var recordingDeviceName: String?
     private var dictationTargetProcessIdentifier: pid_t?
     private var activeDictationBehavior =
         ActiveDictationBehavior.global
@@ -490,6 +494,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Retry interval when the timeout expires mid-dictation.
     private static let modelIdleRetryInterval: TimeInterval = 30
+
+    /// Peak level below which a dictation counted as a near-silent input —
+    /// the same bar the Audio Doctor uses for its "very quiet" verdict.
+    private static let quietInputPeakThreshold = 0.08
 
     private var modelIdleTimer: Timer?
 
@@ -1493,7 +1501,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
             liveSamplesEnabledForRecording = capturesLiveSamples
+            recordingDeviceName = MicrophoneCatalog.devices().first(
+                where: { $0.id == recorder.activeDeviceUID }
+            )?.name
             settingsViewModel.clearNextDictationContext()
+            settingsViewModel.clearQuietDevice()
             state.phase = .listening
             beginLivePreviewSession()
             holdStartedRecording = startedByHold
@@ -2492,6 +2504,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let result = processed.result
         let resolvedFormattingMode = formattingMode ?? activeDictationBehavior.formattingMode
         transcribingHistoryID = nil
+        // A session whose input never rose above the Audio Doctor's quiet
+        // threshold produced no speech the user can act on — usually a
+        // muted or very quiet input device (Bluetooth headsets are the
+        // repeat offender). Name the device and the remedy instead of
+        // pasting nothing.
+        if result.finalTranscript.isEmpty,
+           insertionText == nil,
+           !hasPriorInsertion,
+           state.audioLevel.sessionPeak < Self.quietInputPeakThreshold {
+            let deviceName = recordingDeviceName ?? "your microphone"
+            if let historyID {
+                if nonPersistentHistoryIDs.remove(historyID) == nil,
+                   historyPreferences.isHistoryEnabled {
+                    try? await resolvedVault().markFailed(
+                        id: historyID,
+                        message: "No audible speech captured.",
+                        retainAudio: historyPreferences.retainsFailedAudio
+                    )
+                    scheduleRecoveryExpiry()
+                } else {
+                    try? await resolvedVault().discard(id: historyID)
+                    try? FileManager.default.removeItem(at: recordedAudio.url)
+                }
+            }
+            resetActiveDictationBehavior()
+            dictationTargetProcessIdentifier = nil
+            settingsViewModel.reportQuietInput(deviceName: deviceName)
+            // Short on purpose: this renders inside the window-toolbar phase
+            // pill, which collapses the toolbar when the label overflows.
+            // The full remedy lives in the Dictation screen banner.
+            showError("No audible speech")
+            return
+        }
         let insertionTarget = dictationTargetProcessIdentifier
         resetActiveDictationBehavior()
         ModelBenchmarkStore.record(

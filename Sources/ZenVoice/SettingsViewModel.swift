@@ -126,6 +126,18 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var microphones: [MicrophoneDevice] = []
     @Published private(set) var selectedMicrophoneUID: String?
     @Published private(set) var audioDoctorState: AudioDoctorState = .idle
+    /// Device named by the most recent near-silent dictation. Non-nil shows
+    /// the remediation banner on the Dictation screen; cleared when the next
+    /// session starts or the Audio Doctor passes.
+    @Published private(set) var lastQuietDevice: String?
+
+    func reportQuietInput(deviceName: String?) {
+        lastQuietDevice = deviceName ?? "your microphone"
+    }
+
+    func clearQuietDevice() {
+        lastQuietDevice = nil
+    }
     @Published private(set) var audioDoctorLevel = 0.0
     let audioDoctorMeter = AudioLevelModel()
     @Published private(set) var audioDoctorRemainingSeconds = 10.0
@@ -735,6 +747,9 @@ final class SettingsViewModel: ObservableObject {
         }
         audioDoctorState =
             audioDoctorLevel >= 0.08 ? .passed : .quiet
+        if audioDoctorState == .passed {
+            clearQuietDevice()
+        }
         audioDoctorTask = nil
     }
 

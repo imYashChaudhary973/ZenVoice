@@ -31,9 +31,13 @@ final class AudioLevelModel: ObservableObject {
         repeating: 0,
         count: AudioSpectrumMeter.barCount
     )
+    /// Loudest level seen since the last `reset()`. Lets the dictation
+    /// flow tell a dead-quiet input apart from speech the decoder missed.
+    private(set) var sessionPeak: Double = 0
 
     func update(_ value: Double) {
         level = max(0, min(1, value))
+        sessionPeak = max(sessionPeak, level)
     }
 
     func updateBands(_ value: [Double]) {
@@ -43,6 +47,7 @@ final class AudioLevelModel: ObservableObject {
     func reset() {
         level = 0
         bands = Array(repeating: 0, count: AudioSpectrumMeter.barCount)
+        sessionPeak = 0
     }
 }
 
