@@ -1144,6 +1144,16 @@ struct ZenTextArea: View {
 }
 
 /// Select-style picker. Chevron rotates like Opensource UI `SelectFieldInput`;
+struct ZenMenuSection<Option: Hashable> {
+    let title: String?
+    let options: [Option]
+
+    init(title: String? = nil, options: [Option]) {
+        self.title = title
+        self.options = options
+    }
+}
+
 /// the menu panel uses a spring popover to match the dropdowns.
 struct ZenMenuPicker<Option: Hashable>: View {
     let label: String
@@ -1151,6 +1161,9 @@ struct ZenMenuPicker<Option: Hashable>: View {
     @Binding var selection: Option
     var minWidth: CGFloat = 190
     var compact = false
+    /// Optional grouped rendering; `options` is ignored when set.
+    var sections: [ZenMenuSection<Option>]? = nil
+    var isEnabled: (Option) -> Bool = { _ in true }
     let title: (Option) -> String
 
     @State private var open = false
@@ -1186,26 +1199,26 @@ struct ZenMenuPicker<Option: Hashable>: View {
         .buttonStyle(.plain)
         .popover(isPresented: $open, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(options, id: \.self) { option in
-                    Button {
-                        selection = option
-                        open = false
-                    } label: {
-                        HStack {
-                            Text(title(option))
-                                .font(ZenDesign.Typography.body)
-                            Spacer()
-                            if option == selection {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .semibold))
-                            }
+                if let sections {
+                    ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                        if let title = section.title {
+                            Text(title.uppercased())
+                                .font(ZenDesign.Typography.captionStrong)
+                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 6)
+                                .padding(.bottom, 2)
                         }
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 32)
-                        .contentShape(Rectangle())
+                        ForEach(section.options, id: \.self) { option in
+                            menuRow(option)
+                                .disabled(!isEnabled(option))
+                        }
                     }
-                    .buttonStyle(.plain)
+                } else {
+                    ForEach(options, id: \.self) { option in
+                        menuRow(option)
+                            .disabled(!isEnabled(option))
+                    }
                 }
             }
             .padding(4)
@@ -1216,6 +1229,28 @@ struct ZenMenuPicker<Option: Hashable>: View {
         .accessibilityLabel(label)
         .accessibilityValue(title(selection))
         .accessibilityAddTraits(.isButton)
+    }
+
+    private func menuRow(_ option: Option) -> some View {
+        Button {
+            selection = option
+            open = false
+        } label: {
+            HStack {
+                Text(title(option))
+                    .font(ZenDesign.Typography.body)
+                Spacer()
+                if option == selection {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+            }
+            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 32)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

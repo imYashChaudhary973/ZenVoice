@@ -98,19 +98,51 @@ struct FormattingScreen: View {
                 ) {
                     ZenMenuPicker(
                         label: "Formatting model",
-                        options: isZenPolishInstalled
-                            ? FormattingModelChoice.allCases
-                            : [FormattingModelChoice.none],
+                        options: [],
                         selection: Binding(
                             get: {
                                 zenPolishEnabled
-                                    ? .zenPolishV2
+                                    ? .release(ZenPolishLanguageModel.modelID)
                                     : .none
                             },
-                            set: { zenPolishEnabled = $0 == .zenPolishV2 }
+                            set: { zenPolishEnabled = $0 != .none }
                         ),
                         minWidth: 170,
-                        title: { $0.displayName }
+                        sections: [
+                            ZenMenuSection(options: [FormattingModelOption.none]),
+                            isZenPolishInstalled
+                                ? ZenMenuSection(
+                                    title: "Downloaded dictation enhancement",
+                                    options: zenPolishReleases.map {
+                                        FormattingModelOption.release($0.id)
+                                    })
+                                : nil,
+                            isZenPolishInstalled
+                                ? nil
+                                : ZenMenuSection(
+                                    title: "Available dictation enhancement",
+                                    options: zenPolishReleases.map {
+                                        FormattingModelOption.release($0.id)
+                                    })
+                        ].compactMap { $0 },
+                        isEnabled: { option in
+                            switch option {
+                            case .none: return true
+                            case .release: return isZenPolishInstalled
+                            }
+                        },
+                        title: { option in
+                            switch option {
+                            case .none:
+                                return "None"
+                            case .release(let id):
+                                let name = zenPolishReleases.first { $0.id == id }?
+                                    .name ?? id
+                                return isZenPolishInstalled
+                                    ? name
+                                    : name + " — not downloaded"
+                            }
+                        }
                     )
                 }
 
@@ -314,19 +346,22 @@ extension TranscriptFormattingMode: Identifiable {
     public var id: String { rawValue }
 }
 
-/// Selection for the Smart rung's enhancement model. Backed by the same
-/// `ZenPolishPreferences.preferenceKey` as the former toggle, so the runtime
-/// wiring is unchanged.
-private enum FormattingModelChoice: String, CaseIterable, Identifiable {
+/// Known ZenPolish releases shown in the Formatting model picker, grouped
+/// by install state: "Downloaded dictation enhancement" vs "Available
+/// dictation enhancement". A new release lands here plus its runtime model
+/// in ZenVoiceRuntime and appears in the picker automatically.
+/// ponytail: single-release catalog — per-release install checks when v3
+/// actually exists.
+private struct ZenPolishRelease: Hashable {
+    let id: String
+    let name: String
+}
+
+private let zenPolishReleases: [ZenPolishRelease] = [
+    ZenPolishRelease(id: ZenPolishLanguageModel.modelID, name: "ZenPolish 1.7B v2")
+]
+
+private enum FormattingModelOption: Hashable {
     case none
-    case zenPolishV2
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .none: return "None"
-        case .zenPolishV2: return "ZenPolish 1.7B v2"
-        }
-    }
+    case release(String)
 }
