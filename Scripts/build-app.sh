@@ -288,11 +288,20 @@ else
         --sign - \
         "$frameworks_dir/onnxruntime.framework"
     for bundle in "$contents_dir/Resources"/*.bundle(N); do
-        codesign \
-            --force \
-            --options runtime \
-            --sign - \
-            "$bundle"
+        # SwiftPM resource bundles carry no executable, so newer codesign
+        # builds (macos-latest runners) reject "--options runtime" on them
+        # with "bundle format unrecognized, invalid, or unsuitable". Try the
+        # hardened form first, then fall back to a plain signature and
+        # finally to removing any stale one — the app's own signature seals
+        # these resources either way.
+        if ! codesign --force --options runtime --sign - "$bundle" 2>/dev/null; then
+            codesign --remove-signature "$bundle" 2>/dev/null || true
+            if ! codesign --force --sign - "$bundle" 2>&1; then
+                echo "Warning: could not sign resource bundle $bundle" >&2
+                codesign --remove-signature "$bundle" 2>/dev/null || true
+                echo "Bundle contents for diagnosis: $(find "$bundle" -maxdepth 2 | head -20)" >&2
+            fi
+        fi
     done
     while IFS= read -r helper; do
         codesign \
