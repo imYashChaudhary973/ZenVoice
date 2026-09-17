@@ -147,14 +147,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     )
     private let recorder = AudioRecorder()
     private let inserter = TextInserter()
-    private lazy var commandExecutor: CommandModeExecutorImpl = {
-        CommandModeExecutorImpl(
-            state: state,
-            pasteLast: { [weak self] in self?.pasteLastTranscript() },
-            showSettings: { [weak self] in self?.settingsWindowController.show() }
-        )
-    }()
-    private lazy var writeReader = WriteModeTextReaderImpl()
 
     private var statusItem: NSStatusItem!
     private var startStopMenuItem: NSMenuItem!
@@ -224,6 +216,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// recorder start — `recorder.activeDeviceUID` is nilled on stop, before
     /// the completion flow runs.
     private var recordingDeviceName: String?
+    // Set when Esc lands during startRecorder's async gap, before the
+    // recorder has actually opened the mic and cancelRecording's
+    // isRecording guard can act on it.
+    private var cancelRequested = false
+    // Set synchronously before the retry's first await so a double-click on
+    // Retry cannot start two decodes of the same record.
+    private var retryInFlight = false
     private var dictationTargetProcessIdentifier: pid_t?
     private var activeDictationBehavior =
         ActiveDictationBehavior.global
@@ -243,6 +242,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { await configureHistoryStorage() }
         configureHotKey()
         configureHoldToDictate()
+        // The global Esc-cancel monitor only observes keystrokes with
+        // Accessibility trust; without it it silently never fires. Say so
+        // once instead of leaving the user to discover the gap.
+        if !AXIsProcessTrusted() {
+            Logger(subsystem: RuntimeIdentity.productionBundleID, category: "EscCancel")
+                .error("Accessibility permission not granted — Esc cannot cancel dictations started outside ZenVoice's own windows.")
+        }
         configureAnticipatoryWarmup()
         configureSettingsWindow()
         SparkleUpdater.shared.start()
@@ -1432,6 +1438,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func startRecorder(startedByHold: Bool = false) async {
+        // A failed start must not leave the previous session's device name
+        // behind for the quiet-input diagnosis to report.
+        recordingDeviceName = nil
+        cancelRequested = false
         guard !recorder.isRecording, !state.isBusy else {
             return
         }
@@ -1489,10 +1499,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         dictationTargetProcessIdentifier = targetApplication?.processIdentifier
-        guard HoldKeyChoice.shouldOpenMicrophone(
-            startedByHold: startedByHold,
-            holdKeyPressed: holdKeyPressed
-        ) else {
+        guard !cancelRequested,
+              HoldKeyChoice.shouldOpenMicrophone(
+                  startedByHold: startedByHold,
+                  holdKeyPressed: holdKeyPressed
+              ) else {
+            // Either Esc landed during the async gap above, or the hold key
+            // was released before the mic opened — bail either way.
             if let historyID = historyDraft?.id {
                 try? await dictationVault?.discard(id: historyID)
                 activeHistoryID = nil
@@ -2049,7 +2062,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func cancelRecording() {
+        guard recorder.isRecording || state.isStartingRecording else {
+            return
+        }
         guard recorder.isRecording else {
+            // The recorder has not opened the mic yet; flag it so the
+            // in-flight startRecorder bails instead of starting anyway.
+            cancelRequested = true
             return
         }
 
@@ -2839,10 +2858,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         dictationTargetProcessIdentifier = nil
     }
 
-    private func activeZenIntelligenceMode() -> ZenIntelligenceMode {
-        TranscriptFormattingPreferences.load().zenIntelligenceMode
-    }
-
     private func enhanceForMode(
         _ transcript: String,
         formattingMode: TranscriptFormattingMode? = nil
@@ -2915,209 +2930,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
         } catch {
             return transcript
-        }
-    }
-
-    private func handleCommandModeTranscript(
-        _ transcript: String,
-        historyID: UUID?,
-        shouldPersist: Bool,
-        historySaveError: Error?
-    ) {
-        guard CommandModePreferences.isEnabled() else {
-            showError("Command Mode is disabled. Enable it in settings.")
-            return
-        }
-        let manifest = CommandModePreferences.loadManifest()
-            ?? CommandModeEngine.defaultManifest
-        let action = CommandModeEngine().parse(
-            transcript: transcript,
-            manifest: manifest
-        )
-        if action != .none {
-            Task { [weak self] in
-                do {
-                    try await self?.commandExecutor.execute(action)
-                    await MainActor.run {
-                        self?.state.phase = .success
-                        self?.scheduleIdleReset(
-                            after: self?.successResetDelay ?? 1.2
-                        )
-                    }
-                } catch {
-                    await MainActor.run {
-                        self?.showError(error.localizedDescription)
-                    }
-                }
-            }
-            return
-        }
-
-        guard AgenticModePreferences.isEffectivelyEnabled(),
-              let agenticModeCoordinator
-        else {
-            showError("No command matched what you said.")
-            return
-        }
-        state.phase = .idle
-        agenticModeCoordinator.handleTranscript(transcript) { [weak self] in
-            guard let self else { return }
-            self.state.phase = .inserting
-            self.insertText(
-                transcript,
-                historyID: historyID,
-                shouldPersist: shouldPersist,
-                historySaveError: historySaveError
-            )
-        }
-    }
-
-    private func handleWriteModeTranscript(
-        _ transcript: String,
-        recordedAudio: AudioRecorder.RecordedAudio,
-        historyID: UUID?,
-        shouldPersist: Bool,
-        historySaveError: Error?
-    ) {
-        let subMode = activeWriteModeSubMode()
-        switch subMode {
-        case .compose:
-            insertText(
-                transcript,
-                historyID: historyID,
-                shouldPersist: shouldPersist,
-                historySaveError: historySaveError
-            )
-        case .rewrite:
-            Task { [weak self] in
-                await self?.rewriteAndInsert(
-                    prompt: transcript,
-                    historyID: historyID,
-                    shouldPersist: shouldPersist,
-                    historySaveError: historySaveError
-                )
-            }
-        }
-    }
-
-    private func activeWriteModeSubMode() -> WriteModeSubMode {
-        WriteModePreferences.loadSubMode()
-    }
-
-    private func rewriteAndInsert(
-        prompt: String,
-        historyID: UUID?,
-        shouldPersist: Bool,
-        historySaveError: Error?
-    ) async {
-        let request = WriteModeReadRequest(
-            sourceBundleIdentifier: NSWorkspace.shared.frontmostApplication?
-                .bundleIdentifier,
-            fallbackToClipboard: true
-        )
-        let readResult: WriteModeReadResult
-        do {
-            readResult = try await writeReader.read(request)
-        } catch {
-            await MainActor.run {
-                showError(error.localizedDescription)
-            }
-            return
-        }
-
-        let mode = activeZenIntelligenceMode()
-        let rewrite = WriteModeEngine().rewrite(
-            selectedText: readResult.text,
-            prompt: prompt,
-            mode: mode,
-            languageCode: state.languageProfile.inputLanguageCode
-        )
-
-        await MainActor.run { [rewrite] in
-            if rewrite.wasRejected {
-                showError("Rewrite was rejected to preserve meaning.")
-                return
-            }
-            if rewrite.requiresPreview {
-                // For now, copy the rewritten text to the clipboard so the
-                // user can preview and paste manually. A future UI will show a
-                // diff preview before applying.
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(
-                    rewrite.text,
-                    forType: .string
-                )
-                showError(
-                    "Rewrite copied to clipboard — large change, please preview."
-                )
-                return
-            }
-            insertText(
-                rewrite.text,
-                historyID: historyID,
-                shouldPersist: shouldPersist,
-                historySaveError: historySaveError
-            )
-        }
-    }
-
-    private func insertText(
-        _ text: String,
-        historyID: UUID?,
-        shouldPersist: Bool,
-        historySaveError: Error?
-    ) {
-        if text.isEmpty {
-            state.phase = .success
-            scheduleIdleReset(after: successResetDelay)
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            guard let self else { return }
-            switch self.inserter.insert(text) {
-            case .pasted:
-                if let historyID, shouldPersist, historySaveError == nil {
-                    Task {
-                        try? await self.resolvedVault().markInsertion(
-                            id: historyID,
-                            outcome: .inserted
-                        )
-                    }
-                }
-                self.state.phase = .success
-            case .copiedOnly:
-                if let historyID, shouldPersist, historySaveError == nil {
-                    Task {
-                        try? await self.resolvedVault().markInsertion(
-                            id: historyID,
-                            outcome: .copiedOnly
-                        )
-                    }
-                }
-                self.showError("Copied—enable Accessibility to auto-paste.")
-                return
-            case .blockedBySecureInput:
-                if let historyID, shouldPersist, historySaveError == nil {
-                    Task {
-                        try? await self.resolvedVault().markInsertion(
-                            id: historyID,
-                            outcome: .copiedOnly
-                        )
-                    }
-                }
-                self.showError("Copied—\(self.secureInputAdvice())")
-                return
-            }
-            self.historyViewModel?.refresh()
-            self.insightsViewModel?.refresh()
-            self.voiceProfileViewModel?.refresh()
-            self.scheduleIdleReset(after: self.successResetDelay)
-            if let historySaveError {
-                self.showError(
-                    "Inserted, but history was not saved: "
-                    + historySaveError.localizedDescription
-                )
-            }
         }
     }
 
@@ -3376,13 +3188,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func retryHistoryRecord(
         _ record: DictationRecord
     ) async -> Result<Void, Error> {
-        guard !state.isBusy, state.phase != .listening else {
+        guard !state.isBusy, state.phase != .listening, !retryInFlight else {
             return .failure(
                 DictationVaultError.database(
                     "Finish the current dictation before retrying."
                 )
             )
         }
+        // A pending idle reset would flip the phase to .idle in the middle
+        // of the decode below; cancel it like the dictation path does.
+        resetWorkItem?.cancel()
+        retryInFlight = true
+        defer { retryInFlight = false }
         guard record.recoveryAudioURL != nil else {
             return .failure(
                 DictationVaultError.database(

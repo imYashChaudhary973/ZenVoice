@@ -34,6 +34,9 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
     private let preferences: AudioHistoryPreferences
     private let vaultProvider: () async throws -> DictationVault
     private var player: AVAudioPlayer?
+    // Cancelled whenever playback stops or a new play starts, so a task
+    // resuming after its vault awaits cannot clobber a newer one.
+    private var playTask: Task<Void, Never>?
 
     init(
         preferences: AudioHistoryPreferences = AudioHistoryPreferences(),
@@ -136,19 +139,21 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
             return
         }
         stopPlayback()
-        Task { await play(record) }
+        playTask = Task { await play(record) }
     }
 
     private func play(_ record: AudioArchiveRecord) async {
         do {
             let vault = try await vaultProvider()
             let wav = try await vault.archiveAudioData(id: record.id)
+            guard !Task.isCancelled else { return }
             let player = try AVAudioPlayer(data: wav)
             player.delegate = self
             guard player.play() else {
                 errorMessage = "That recording could not be played."
                 return
             }
+            guard !Task.isCancelled else { return }
             self.player = player
             playingRecordID = record.id
             errorMessage = nil
@@ -159,6 +164,8 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
 
 
     func stopPlayback() {
+        playTask?.cancel()
+        playTask = nil
         player?.stop()
         player = nil
         playingRecordID = nil

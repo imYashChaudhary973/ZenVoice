@@ -120,6 +120,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var shortcutError: String?
     @Published private(set) var microphoneStatus: PermissionStatus = .notRequested
     @Published private(set) var accessibilityStatus: PermissionStatus = .notRequested
+    @Published private(set) var screenRecordingStatus: PermissionStatus = .notRequested
     @Published private(set) var isLocalModelReady = false
     @Published private(set) var languageProfile: LanguageProfile
     @Published var languageError: String?
@@ -311,6 +312,13 @@ final class SettingsViewModel: ObservableObject {
         accessibilityStatus = AXIsProcessTrusted()
             ? .allowed
             : (hasRequestedAccessibility ? .denied : .notRequested)
+        // Screen Recording has no readable "not determined" state: preflight
+        // is a plain boolean, and the system prompt only fires the first
+        // time something captures the screen. Either way the remedy is
+        // System Settings, which is what the row's button opens.
+        screenRecordingStatus = CGPreflightScreenCaptureAccess()
+            ? .allowed
+            : .denied
         if accessibilityStatus == .allowed,
            previousAccessibilityStatus != .allowed,
            holdToDictateEnabled {
