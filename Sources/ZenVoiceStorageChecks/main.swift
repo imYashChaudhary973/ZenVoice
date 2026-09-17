@@ -1958,6 +1958,100 @@ private func checkAgenticTaskPersistence() async throws {
     )
 }
 
+/// Regression for the Delete All key-rotation bug: agentic task rows are
+/// encrypted under the vault key, so deleteAll() must remove them together
+/// with the key — otherwise every future goal-recovery load fails GCM
+/// authentication and silently no-ops forever.
+private func checkDeleteAllClearsAgenticTasks() async throws {
+    let fixture = try await VaultFixture()
+    defer { fixture.cleanup() }
+
+    let plan = GoalPlan(
+        title: "Recover me after Delete All",
+        createdAt: Date(timeIntervalSince1970: 1_700_000_100),
+        transcript: "run the suite and tell me the result",
+        steps: [
+            GoalStep(
+                number: 1,
+                agent: .codex,
+                command: "Run the suite",
+                description: "Run",
+                workingDirectory: FileManager.default
+                    .temporaryDirectory.path,
+                plannedRisk: .low,
+                computedRisk: .low
+            )
+        ]
+    )
+    var record = AgenticTaskRecord(plan: plan)
+    record.steps[0].state = .running
+    try await fixture.vault.saveAgenticTask(record)
+
+    try await fixture.vault.deleteAll()
+
+    let active = try await fixture.vault.loadActiveAgenticTasks()
+    try await require(
+        active.isEmpty,
+        "deleteAll left an agentic task behind — recovery is poisoned"
+    )
+}
+
+/// A row encrypted under a rotated-away key can never be decrypted again.
+/// loadActiveAgenticTasks must skip and heal such rows instead of failing
+/// the whole recovery load.
+private func checkAgenticLoaderHealsStaleRows() async throws {
+    let fixture = try await VaultFixture()
+    defer { fixture.cleanup() }
+
+    let plan = GoalPlan(
+        title: "Stale row canary",
+        createdAt: Date(timeIntervalSince1970: 1_700_000_200),
+        transcript: "stale row canary",
+        steps: [
+            GoalStep(
+                number: 1,
+                agent: .notification,
+                command: "Notify",
+                description: "Notify",
+                workingDirectory: FileManager.default
+                    .temporaryDirectory.path,
+                plannedRisk: .low,
+                computedRisk: .low
+            )
+        ]
+    )
+    var staleRecord = AgenticTaskRecord(plan: plan)
+    staleRecord.steps[0].state = .running
+    try await fixture.vault.saveAgenticTask(staleRecord)
+
+    // Reopen the same database under a brand-new key: the stored blob was
+    // encrypted with the old key and is now undecryptable — exactly the
+    // post-Delete All residue this loader must tolerate.
+    let freshKeyProvider = StaticKeyProvider()
+    // StaticKeyProvider seeds a constant key; force different bytes so the
+    // reopened vault genuinely cannot decrypt the old blob.
+    try freshKeyProvider.deleteKey()
+    _ = try freshKeyProvider.loadOrCreateKeyData()
+    let reopened = try await DictationVault(
+        databaseURL: fixture.databaseURL,
+        recoveryDirectoryURL: fixture.directoryURL
+            .appendingPathComponent("Recovery", isDirectory: true),
+        keyProvider: freshKeyProvider
+    )
+
+    let recovered = try await reopened.loadActiveAgenticTasks()
+    try await require(
+        recovered.isEmpty,
+        "a stale row broke the whole recovery load"
+    )
+    // The healed load removed the poisoned row: a second load is clean too.
+    let secondPass = try await reopened.loadActiveAgenticTasks()
+    try await require(
+        secondPass.isEmpty,
+        "the stale row was not healed on disk"
+    )
+}
+
 
 do {
     try await checkEncryptedStorage()
@@ -1986,7 +2080,9 @@ do {
     try await checkAudioHistoryPreferenceDefaults()
     try await checkTodayUsageInsight()
     try await checkAgenticTaskPersistence()
-    print("ZenVoiceStorageChecks: 25 checks passed")
+    try await checkDeleteAllClearsAgenticTasks()
+    try await checkAgenticLoaderHealsStaleRows()
+    print("ZenVoiceStorageChecks: 27 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

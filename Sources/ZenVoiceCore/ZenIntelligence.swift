@@ -191,25 +191,40 @@ public struct ZenIntelligenceEngine: Sendable {
         // sentence boundary. This keeps standalone fragments such as profile
         // names or command phrases untouched while still fixing multi-sentence
         // dictation.
+        //
+        // A boundary capitalizes the next *letter that begins a new run of
+        // text*. A non-letter directly attached to the ender (the dot in
+        // "3.5", "v2.1") is an internal token boundary, not a sentence start,
+        // and cancels the pending capitalization.
         let hasSentenceEnder = text.contains(where: { sentenceEnders.contains($0) })
         var changed = 0
         var result = ""
         var capitalizeNext = hasSentenceEnder
+        var boundaryIsAttached = false
         for character in text {
-            if capitalizeNext, character.isLetter {
-                result.append(character.uppercased())
-                capitalizeNext = false
-                if result.count > 1 || text.first == character {
+            let isEnder = sentenceEnders.contains(character)
+            if capitalizeNext, !isEnder {
+                if character.isWhitespace {
+                    // Whitespace after the ender: the boundary stays pending.
+                } else if character.isLetter, !boundaryIsAttached {
+                    result.append(character.uppercased())
                     changed += 1
-                }
-            } else {
-                result.append(character)
-                if sentenceEnders.contains(character) {
-                    capitalizeNext = true
-                } else if !character.isWhitespace && !capitalizeNext {
-                    // Nothing
+                    capitalizeNext = false
+                    continue
+                } else {
+                    // Digit/symbol attached to the ender — internal token.
+                    capitalizeNext = false
                 }
             }
+            if isEnder {
+                capitalizeNext = true
+                boundaryIsAttached = false
+            } else if !character.isWhitespace {
+                boundaryIsAttached = true
+            } else {
+                boundaryIsAttached = false
+            }
+            result.append(character)
         }
         if result != text {
             text = result
@@ -271,6 +286,11 @@ public struct ZenIntelligenceEngine: Sendable {
     }
 
     /// Collapse multiple spaces and fix spacing around punctuation.
+    ///
+    /// Whitespace *after* punctuation is collapsed to a single space, and
+    /// whitespace *before* punctuation is removed. A space is never created
+    /// where none existed: `3.5`, `v2.1`, and `example.com` are attached
+    /// tokens that must survive untouched.
     private static func collapseWhitespace(in text: inout String) -> Int {
         let original = text
         text = text
@@ -280,7 +300,7 @@ public struct ZenIntelligenceEngine: Sendable {
                 options: .regularExpression
             )
             .replacingOccurrences(
-                of: #"\s*([,.!?。，？！،؟])\s*"#,
+                of: #"\s*([,.!?。，？！،؟])\s+"#,
                 with: "$1 ",
                 options: .regularExpression
             )

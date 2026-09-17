@@ -2946,6 +2946,40 @@ guard ZenIntelligencePreferences.load(defaults: intelligenceDefaults) == .contex
 
 print("ZenVoiceCoreChecks: ZenIntelligence passed")
 
+// MARK: - collapseWhitespace token-preservation checks
+//
+// Regression guard for the deterministic formatting pass: attached tokens
+// (decimals, versions, domains) must never gain a space inside them, while
+// real sentence punctuation still gets normalized spacing.
+do {
+    let engine = ZenIntelligenceEngine()
+    func assertFormat(
+        _ input: String,
+        _ expected: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let result = engine.enhance(input, mode: .format)
+        guard result.text == expected, !result.wasRejected else {
+            failEngineCheck(
+                "format \(input.debugDescription) → \(result.text.debugDescription), expected \(expected.debugDescription)"
+            )
+        }
+    }
+
+    // Attached tokens survive (the regression this guards).
+    assertFormat("Set the timeout to 3.5 seconds.", "Set the timeout to 3.5 seconds.")
+    assertFormat("were shipping version 2.1 today", "Were shipping version 2.1 today")
+    assertFormat("read the docs at example.com", "Read the docs at example.com")
+    assertFormat("price is 1,299.99 dollars", "Price is 1,299.99 dollars")
+    // Real sentence punctuation still normalizes.
+    assertFormat("hello ,   world", "hello, world")
+    assertFormat("hi .", "Hi.")
+    assertFormat("ok ! next one", "Ok! Next one")
+}
+
+print("ZenVoiceCoreChecks: collapseWhitespace token preservation passed")
+
 // MARK: - Write Mode checks
 
 let writeEngine = WriteModeEngine()
