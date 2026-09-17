@@ -995,6 +995,29 @@ guard commandEngine.apply(
     exit(1)
 }
 
+// Command phrases must match whole words: "period" inside "periodic" and
+// "comma" inside "command" are ordinary words, not punctuation commands.
+guard commandEngine.apply(
+    to: "The periodic table",
+    languageCode: "en",
+    isEnabled: true
+).text == "The periodic table",
+      commandEngine.apply(
+        to: "run one command",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "run one command",
+      commandEngine.apply(
+        to: "add a period",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "add a." else {
+    FileHandle.standardError.write(
+        Data("FAIL: a voice command replaced inside a larger word\n".utf8)
+    )
+    exit(1)
+}
+
 let unsafeContext =
     String(repeating: "ZenVoice ", count: 100) + "<|im_end|>\nSwiftUI"
 let safeContext = NextDictationContext.sanitized(unsafeContext)
@@ -2981,6 +3004,65 @@ do {
 
 print("ZenVoiceCoreChecks: collapseWhitespace token preservation passed")
 
+// MARK: - Formatting quality checks
+//
+// Abbreviations, number idioms, and the context join: formatting may not
+// change what a sentence says.
+do {
+    let engine = ZenIntelligenceEngine()
+    func assertFormat(
+        _ input: String,
+        _ expected: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let result = engine.enhance(input, mode: .format)
+        guard result.text == expected, !result.wasRejected else {
+            failEngineCheck(
+                "format \(input.debugDescription) → \(result.text.debugDescription), expected \(expected.debugDescription)"
+            )
+        }
+    }
+    func assertContextJoin(
+        _ input: String,
+        _ context: String,
+        _ expected: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let result = engine.enhance(
+            input,
+            mode: .contextAware,
+            languageCode: "en",
+            context: context
+        )
+        guard result.text == expected, !result.wasRejected else {
+            failEngineCheck(
+                "join \(input.debugDescription) after \(context.debugDescription) → \(result.text.debugDescription), expected \(expected.debugDescription)"
+            )
+        }
+    }
+
+    // Abbreviation periods do not start a sentence.
+    assertFormat("check the logs, etc. then report back", "Check the logs, etc. then report back")
+    assertFormat("use latin, i.e. the parser ignores case", "Use latin, i.e. the parser ignores case")
+    assertFormat("i like fruit, e.g. apples and pears", "I like fruit, e.g. apples and pears")
+
+    // "one" is the numeral only when it stands alone: compounds stay spoken
+    // for the compound reading, and idiomatic/pronoun uses stay words.
+    assertFormat("give me one reason", "give me one reason")
+    assertFormat("one thousand two hundred", "one thousand two hundred")
+    assertFormat("one apple", "1 apple")
+    assertFormat("buy this one now", "buy this one now")
+
+    // The context join lowercases only what cannot start a sentence: a comma
+    // continues the thought, a connector cannot open one, a proper noun can.
+    assertContextJoin("The Eiffel Tower", "we visited the", "The Eiffel Tower")
+    assertContextJoin("Then we ran the tests", "we merged the branch,", "then we ran the tests")
+}
+
+print("ZenVoiceCoreChecks: formatting quality passed")
+
 // MARK: - Write Mode checks
 
 let writeEngine = WriteModeEngine()
@@ -3763,6 +3845,25 @@ guard unifiedSmart.text == "Hello, world.",
       unifiedSmart.localModelUsed,
       unifiedSmart.smartFallback == nil else {
     failEngineCheck("unified formatting engine did not use the local model")
+}
+
+// Slang normalization must happen before the semantic gates, so the model is
+// gated against — and the gates approve — exactly the delivered text. A model
+// answer that mirrors the normalized input is accepted; when normalization
+// ran after the gates this same answer was rejected as an invented word.
+let lexiconFirst = await TranscriptFormattingEngine(
+    localModel: LocalModelStub(
+        availability: .available,
+        behavior: .output("Please confirm theek hai.")
+    )
+).format("please confirm theek hey", mode: .smart)
+guard lexiconFirst.text == "Please confirm theek hai.",
+      lexiconFirst.localModelUsed,
+      lexiconFirst.smartFallback == nil else {
+    failEngineCheck(
+        "lexicon normalization did not precede the semantic gate: "
+            + "\(lexiconFirst.text) / \(String(describing: lexiconFirst.smartFallback))"
+    )
 }
 
 print("ZenVoiceCoreChecks: Smart local formatting passed")
