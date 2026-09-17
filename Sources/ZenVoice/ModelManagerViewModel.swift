@@ -1376,7 +1376,7 @@ final class ModelManagerViewModel: ObservableObject {
 
     private func downloadZenPolishModel() async throws {
         let base =
-            "https://huggingface.co/imYashChaudhary973/zen-polish-v2-1.7b-4bit/resolve/main/"
+            "https://huggingface.co/imYChaudhary22/zen-polish-v2-1.7b-4bit/resolve/main/"
         let root = try VerifiedModelCatalog.modelsDirectory(
             fileManager: fileManager
         )
