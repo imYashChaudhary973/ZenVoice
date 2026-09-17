@@ -170,6 +170,7 @@ final class SettingsViewModel: ObservableObject {
         (LanguageProfile) -> Result<Void, Error>
     private let canRunAudioDoctor: () -> Bool
     private let isSpeechEngineReady: () -> Bool
+    private let isDictationActive: () -> Bool
     private let audioDoctorRecorder = AudioRecorder()
     private var audioDoctorTask: Task<Void, Never>?
     private var microphoneObserverTokens: [NSObjectProtocol] = []
@@ -212,7 +213,8 @@ final class SettingsViewModel: ObservableObject {
         applyLanguageProfile: @escaping
             (LanguageProfile) -> Result<Void, Error>,
         canRunAudioDoctor: @escaping () -> Bool,
-        isSpeechEngineReady: @escaping () -> Bool
+        isSpeechEngineReady: @escaping () -> Bool,
+        isDictationActive: @escaping () -> Bool
     ) {
         self.currentShortcut = currentShortcut
         self.pasteLastShortcut = pasteLastShortcut
@@ -226,6 +228,7 @@ final class SettingsViewModel: ObservableObject {
         self.applyLanguageProfile = applyLanguageProfile
         self.canRunAudioDoctor = canRunAudioDoctor
         self.isSpeechEngineReady = isSpeechEngineReady
+        self.isDictationActive = isDictationActive
         _ = TranscriptFormattingPreferences.load()
         languageProfile = LanguagePreferences.load()
         livePreviewEnabled =
@@ -424,7 +427,17 @@ final class SettingsViewModel: ObservableObject {
         applyZenBarPreference(enabled)
     }
 
+    /// Live preview rebases on the whole recording at stop, so flipping it
+    /// mid-session would change what the user already saw inserted. The
+    /// toggle is locked while a dictation is active instead.
+    var livePreviewToggleDisabled: Bool {
+        isDictationActive()
+    }
+
     func setLivePreviewEnabled(_ enabled: Bool) {
+        guard !isDictationActive() else {
+            return
+        }
         livePreviewEnabled = enabled
         LiveDictationPreferences.setPreviewEnabled(enabled)
         OverlayPreferences.saveLivePreviewEnabled(enabled)

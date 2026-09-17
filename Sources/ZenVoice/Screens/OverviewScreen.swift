@@ -128,6 +128,12 @@ struct OverviewScreen: View {
                         ),
                         label: "Live transcript"
                     )
+                    .disabled(viewModel.livePreviewToggleDisabled)
+                    .help(
+                        viewModel.livePreviewToggleDisabled
+                            ? "Unavailable while dictating."
+                            : ""
+                    )
                 }
 
                 if viewModel.recordingHUDStyle == .floatingPanel {
