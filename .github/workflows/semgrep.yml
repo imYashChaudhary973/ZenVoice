@@ -40,4 +40,4 @@ jobs:
           "$RUNNER_TEMP/semgrep-venv/bin/pip" install --quiet semgrep==1.164.0
 
       - name: Scan tracked source
-        run: "$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --config auto --error .
+        run: '"$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --config auto --error .'
