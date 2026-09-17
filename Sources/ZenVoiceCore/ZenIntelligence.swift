@@ -187,15 +187,17 @@ public struct ZenIntelligenceEngine: Sendable {
         let sentenceEnders: Set<Character> = languageCode == "zh"
             ? [".", "。", "!", "?", "！", "？"]
             : [".", "!", "?"]
+        // Periods that close a common abbreviation do not close a sentence.
+        let abbreviationStems: Set<String> = ["e.g", "i.e", "etc"]
         // Only capitalize the opening word when the text actually contains a
         // sentence boundary. This keeps standalone fragments such as profile
         // names or command phrases untouched while still fixing multi-sentence
         // dictation.
         //
         // A boundary capitalizes the next *letter that begins a new run of
-        // text*. A non-letter directly attached to the ender (the dot in
-        // "3.5", "v2.1") is an internal token boundary, not a sentence start,
-        // and cancels the pending capitalization.
+        // text*. A character directly attached to the ender (the digits in
+        // "3.5", "v2.1", the letters in "example.com") continues the same
+        // token and cancels the pending capitalization.
         let hasSentenceEnder = text.contains(where: { sentenceEnders.contains($0) })
         var changed = 0
         var result = ""
@@ -207,18 +209,27 @@ public struct ZenIntelligenceEngine: Sendable {
                 if character.isWhitespace {
                     // Whitespace after the ender: the boundary stays pending.
                 } else if character.isLetter, !boundaryIsAttached {
-                    result.append(character.uppercased())
-                    changed += 1
-                    capitalizeNext = false
-                    continue
+                    let preceding = result.trimmingCharacters(in: .whitespaces)
+                    let stem = String(preceding.dropLast()).lowercased()
+                    if preceding.last == ".",
+                       abbreviationStems.contains(where: stem.hasSuffix) {
+                        // "e.g. apples", "etc. then" — the run continues the
+                        // same sentence.
+                        capitalizeNext = false
+                    } else {
+                        result.append(character.uppercased())
+                        changed += 1
+                        capitalizeNext = false
+                        continue
+                    }
                 } else {
-                    // Digit/symbol attached to the ender — internal token.
+                    // Digit/symbol or attached letter — internal token.
                     capitalizeNext = false
                 }
             }
             if isEnder {
                 capitalizeNext = true
-                boundaryIsAttached = false
+                boundaryIsAttached = true
             } else if !character.isWhitespace {
                 boundaryIsAttached = true
             } else {
@@ -250,21 +261,36 @@ public struct ZenIntelligenceEngine: Sendable {
             "nine": "9",
             "ten": "10"
         ]
+        // "one" reads as the pronoun or the numeral depending on its
+        // neighbors ("one apple" vs "give me one reason"), and a digit word
+        // beside a scale word ("one thousand") belongs to a compound the
+        // converter cannot safely count. Leave both spoken.
+        let scaleWords: Set<String> = [
+            "hundred", "thousand", "million", "billion", "trillion"
+        ]
+        let oneIdiomWords: Set<String> = [
+            "reason", "time", "moment", "of", "more",
+            "this", "that", "next", "last", "no", "another", "every", "each"
+        ]
         let punctuation = CharacterSet.punctuationCharacters
             .union(.symbols)
+        func normalize(_ word: String) -> String {
+            word.trimmingCharacters(in: punctuation).lowercased()
+        }
         var changed = 0
         var result = ""
-        for rawWord in text.split(
-            whereSeparator: \.isWhitespace
-        ) {
-            let word = String(rawWord)
-            let lowercased = word.lowercased()
-            if let digit = spokenDigits[lowercased] {
-                result += digit
-                changed += 1
-            } else if let digit = spokenDigits[
-                word.trimmingCharacters(in: punctuation).lowercased()
-            ], !word.isEmpty {
+        let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        for (index, word) in words.enumerated() {
+            let previous = index > 0 ? normalize(words[index - 1]) : ""
+            let next = index + 1 < words.count
+                ? normalize(words[index + 1]) : ""
+            let lowercased = normalize(word)
+            let inCompound = scaleWords.contains(previous)
+                || scaleWords.contains(next)
+            let idiomaticOne = lowercased == "one"
+                && (oneIdiomWords.contains(previous)
+                    || oneIdiomWords.contains(next))
+            if let digit = spokenDigits[lowercased], !inCompound, !idiomaticOne {
                 let leading = word.prefix(
                     while: { $0.unicodeScalars.first.map { punctuation.contains($0) } ?? false }
                 )
@@ -338,6 +364,17 @@ public struct ZenIntelligenceEngine: Sendable {
             : [".", "!", "?"]
         guard let last = lastContextCharacter,
               !sentenceEnders.contains(last) else {
+            return 0
+        }
+        // A capitalized fragment after unfinished context is usually a proper
+        // noun or a fresh thought, not a continuation. Join only when the
+        // context clearly keeps going (comma) or the fragment opens with a
+        // connector that cannot start a proper sentence.
+        let connectors: Set<String> = ["and", "but", "so", "then", "or"]
+        let firstWord = String(
+            text.prefix(while: { !$0.isWhitespace })
+        ).trimmingCharacters(in: .punctuationCharacters).lowercased()
+        guard last == "," || connectors.contains(firstWord) else {
             return 0
         }
         if first.isUppercase {
