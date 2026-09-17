@@ -48,8 +48,8 @@ struct FormattingScreen: View {
             return "Download ZenPolish from the Models screen to use it."
         }
         return zenPolishEnabled
-            ? "Smart uses the ZenPolish on-device model."
-            : "Smart uses Apple's on-device model."
+            ? "Polished uses the ZenPolish on-device model."
+            : "Polished uses Apple's on-device model."
     }
 
     var body: some View {
@@ -93,16 +93,25 @@ struct FormattingScreen: View {
 
                 ZenRow(
                     icon: "brain",
-                    title: "ZenPolish model",
+                    title: "Formatting model",
                     subtitle: zenPolishSubtitle
                 ) {
-                    Toggle("", isOn: Binding(
-                        get: { zenPolishEnabled },
-                        set: { zenPolishEnabled = $0 }
-                    ))
-                    .labelsHidden()
-                    .fixedSize()
-                    .disabled(!isZenPolishInstalled)
+                    ZenMenuPicker(
+                        label: "Formatting model",
+                        options: isZenPolishInstalled
+                            ? FormattingModelChoice.allCases
+                            : [FormattingModelChoice.none],
+                        selection: Binding(
+                            get: {
+                                zenPolishEnabled
+                                    ? .zenPolishV2
+                                    : .none
+                            },
+                            set: { zenPolishEnabled = $0 == .zenPolishV2 }
+                        ),
+                        minWidth: 170,
+                        title: { $0.displayName }
+                    )
                 }
 
                 ZenPanelDivider()
@@ -303,4 +312,21 @@ struct FormattingScreen: View {
 
 extension TranscriptFormattingMode: Identifiable {
     public var id: String { rawValue }
+}
+
+/// Selection for the Smart rung's enhancement model. Backed by the same
+/// `ZenPolishPreferences.preferenceKey` as the former toggle, so the runtime
+/// wiring is unchanged.
+private enum FormattingModelChoice: String, CaseIterable, Identifiable {
+    case none
+    case zenPolishV2
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .none: return "None"
+        case .zenPolishV2: return "ZenPolish 1.7B v2"
+        }
+    }
 }

@@ -30,8 +30,20 @@ struct ModelsScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             spokenLanguage
-            if !downloaded.isEmpty {
-                cardSection(title: "Downloaded", specs: downloaded)
+            let downloadedEngines = downloaded.filter {
+                $0.id != ZenPolishLanguageModel.modelID
+            }
+            let downloadedEnhancement = downloaded.filter {
+                $0.id == ZenPolishLanguageModel.modelID
+            }
+            if !downloadedEngines.isEmpty {
+                cardSection(title: "Downloaded speech-to-text", specs: downloadedEngines)
+            }
+            if !downloadedEnhancement.isEmpty {
+                cardSection(
+                    title: "Downloaded dictation enhancement",
+                    specs: downloadedEnhancement
+                )
             }
             Text(
                 "All models run entirely on this Mac. NVIDIA Parakeet stays loaded for instant dictation."
@@ -39,7 +51,21 @@ struct ModelsScreen: View {
             .font(ZenDesign.Typography.caption)
             .foregroundStyle(ZenDesign.Semantic.textSecondary)
             if !available.isEmpty {
-                cardSection(title: "Available to download", specs: available)
+                cardSection(
+                    title: "Available speech-to-text",
+                    specs: available.filter {
+                        $0.id != ZenPolishLanguageModel.modelID
+                    }
+                )
+            }
+            let availableEnhancement = available.filter {
+                $0.id == ZenPolishLanguageModel.modelID
+            }
+            if !availableEnhancement.isEmpty {
+                cardSection(
+                    title: "Available dictation enhancement",
+                    specs: availableEnhancement
+                )
             }
             if let error = viewModel.errorMessage,
                !error.contains("Automatic detection requires") {
