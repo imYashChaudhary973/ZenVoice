@@ -291,9 +291,13 @@ public struct EngineRegistry: Sendable {
             ordered.append(engine)
         }
 
-        if let selectedID,
+        // A preference saved before the whisper engines were unified holds
+        // the pre-unification `whisper` ID. Canonicalize it so the stale
+        // selection still resolves to the current default whisper engine
+        // instead of silently falling through to the registry order.
+        if let canonicalID = selectedID.map(EngineIdentifiers.canonical),
            let selected = engines.first(where: {
-               $0.descriptor.id == selectedID
+               $0.descriptor.id == canonicalID
            }) {
             append(selected)
         }

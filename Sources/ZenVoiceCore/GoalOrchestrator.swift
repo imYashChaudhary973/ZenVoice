@@ -55,6 +55,10 @@ public actor GoalOrchestrator {
     private var activeGoalID: UUID?
     private var cancelledGoalIDs = Set<UUID>()
     private var persistenceFailures: [UUID: String] = [:]
+    /// Trailing partial line per goal, held back until its newline arrives.
+    /// Chunks split arbitrarily, so redacting per chunk lets a secret
+    /// written across a chunk boundary escape the patterns.
+    private var pendingOutputLines: [UUID: String] = [:]
 
     public init(
         validator: PlanValidator = PlanValidator(),
@@ -243,6 +247,10 @@ public actor GoalOrchestrator {
                     goalID: goalID
                 )
             }
+            await flushPendingOutput(
+                stepNumber: step.number,
+                goalID: goalID
+            )
 
             if let persistenceFailure = persistenceFailures[goalID] {
                 await fail(
@@ -460,8 +468,46 @@ public actor GoalOrchestrator {
         stepNumber: Int,
         goalID: UUID
     ) async {
+        var buffer = pendingOutputLines[goalID] ?? ""
+        buffer += chunk.text
+        var completeLines = ""
+        while let newline = buffer.firstIndex(of: "\n") {
+            let line = String(buffer[..<newline])
+            buffer.removeSubrange(...newline)
+            completeLines += SecretRedactor.redact(line) + "\n"
+        }
+        pendingOutputLines[goalID] = buffer
+        guard !completeLines.isEmpty else { return }
+        await recordRedactedOutput(
+            completeLines,
+            stepNumber: stepNumber,
+            goalID: goalID
+        )
+    }
+
+    /// Flushes the trailing partial line once a step's stream has ended, so
+    /// a secret at EOF without a trailing newline is still redacted.
+    private func flushPendingOutput(
+        stepNumber: Int,
+        goalID: UUID
+    ) async {
+        guard let buffer = pendingOutputLines.removeValue(forKey: goalID),
+              !buffer.isEmpty else {
+            return
+        }
+        await recordRedactedOutput(
+            SecretRedactor.redact(buffer),
+            stepNumber: stepNumber,
+            goalID: goalID
+        )
+    }
+
+    private func recordRedactedOutput(
+        _ redacted: String,
+        stepNumber: Int,
+        goalID: UUID
+    ) async {
         guard var record = records[goalID] else { return }
-        let redacted = SecretRedactor.redact(chunk.text)
         let index = index(of: stepNumber, in: record)
         let combined = record.steps[index].retainedOutput + redacted
         record.steps[index].retainedOutput = Self.cappedOutput(combined)
