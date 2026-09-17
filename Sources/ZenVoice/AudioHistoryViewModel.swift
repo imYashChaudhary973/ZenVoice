@@ -247,28 +247,36 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
     // MARK: - Export
 
     /// Exports the current selection — or everything, when nothing is
-    /// selected — through a save panel.
-    func export() {
-        let targets = selection.isEmpty
-            ? records
-            : records.filter { selection.contains($0.id) }
-        guard !targets.isEmpty else {
-            errorMessage = AudioArchiveExportError.noRecords
-                .localizedDescription
-            return
+    /// selected — through a save panel. Export-all loads the full archive
+    /// list (not just the 500 shown in the UI) and streams each recording's
+    /// audio out of the vault one file at a time, so memory stays bounded
+    /// no matter how large the archive is.
+    func export() async {
+        do {
+            let vault = try await vaultProvider()
+            let targets = selection.isEmpty
+                ? try await vault.audioArchiveRecent(limit: Int.max)
+                : records.filter { selection.contains($0.id) }
+            guard !targets.isEmpty else {
+                errorMessage = AudioArchiveExportError.noRecords
+                    .localizedDescription
+                return
+            }
+
+            let panel = NSSavePanel()
+            panel.title = "Export Audio History"
+            panel.nameFieldStringValue = defaultExportFileName()
+            panel.allowedContentTypes = [.zip]
+            panel.canCreateDirectories = true
+
+            guard panel.runModal() == .OK, let destination = panel.url else {
+                return
+            }
+
+            await exportNow(targets, to: destination)
+        } catch {
+            errorMessage = error.localizedDescription
         }
-
-        let panel = NSSavePanel()
-        panel.title = "Export Audio History"
-        panel.nameFieldStringValue = defaultExportFileName()
-        panel.allowedContentTypes = [.zip]
-        panel.canCreateDirectories = true
-
-        guard panel.runModal() == .OK, let destination = panel.url else {
-            return
-        }
-
-        Task { await exportNow(targets, to: destination) }
     }
 
     private func exportNow(
@@ -287,11 +295,7 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
                     }
                 }
             }
-            var wavs: [UUID: Data] = [:]
-            for record in targets {
-                wavs[record.id] = try await vault.archiveAudioData(id: record.id)
-            }
-            try AudioArchiveExporter.export(
+            try await AudioArchiveExporter.export(
                 records: targets,
                 options: AudioArchiveExportOptions(
                     includeTranscripts: includeTranscriptsInExport
@@ -300,7 +304,9 @@ final class AudioHistoryViewModel: NSObject, ObservableObject {
                 transcriptProvider: { dictationID in
                     transcripts[dictationID]
                 },
-                audioDataProvider: { wavs[$0] }
+                audioDataProvider: { id in
+                    try await vault.archiveAudioData(id: id)
+                }
             )
             statusMessage = targets.count == 1
                 ? "Exported 1 recording."

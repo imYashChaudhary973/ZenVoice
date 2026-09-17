@@ -69,14 +69,18 @@ public enum AudioArchiveExporter {
     ///   - destinationURL: Where to write the `.zip`. Overwritten if present.
     ///   - transcriptProvider: Resolves a dictation ID to its final transcript.
     ///     Consulted only when `options.includeTranscripts` is true.
+    ///   - audioDataProvider: Resolves an archive ID to its decrypted audio.
+    ///     Consulted one record at a time while staging, so exporting an
+    ///     arbitrarily large archive never holds more than one file's bytes
+    ///     in memory.
     public static func export(
         records: [AudioArchiveRecord],
         options: AudioArchiveExportOptions = AudioArchiveExportOptions(),
         to destinationURL: URL,
         fileManager: FileManager = .default,
         transcriptProvider: ((UUID) -> String?)? = nil,
-        audioDataProvider: ((UUID) -> Data?)? = nil
-    ) throws {
+        audioDataProvider: ((UUID) async throws -> Data?)? = nil
+    ) async throws {
         guard !records.isEmpty else {
             throw AudioArchiveExportError.noRecords
         }
@@ -99,7 +103,7 @@ public enum AudioArchiveExporter {
         )
         defer { try? fileManager.removeItem(at: stagingRoot) }
 
-        let entries = try stage(
+        let entries = try await stage(
             records: records,
             options: options,
             into: payloadDirectory,
@@ -129,8 +133,8 @@ public enum AudioArchiveExporter {
         into payloadDirectory: URL,
         fileManager: FileManager,
         transcriptProvider: ((UUID) -> String?)?,
-        audioDataProvider: ((UUID) -> Data?)?
-    ) throws -> [ManifestEntry] {
+        audioDataProvider: ((UUID) async throws -> Data?)?
+    ) async throws -> [ManifestEntry] {
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.dateFormat = "yyyy-MM-dd-HHmmss"
@@ -156,7 +160,7 @@ public enum AudioArchiveExporter {
             }
             usedNames.insert(fileName)
 
-            let wav = try audioDataProvider?(record.id)
+            let wav = try await audioDataProvider?(record.id)
                 ?? Data(contentsOf: record.audioURL)
             try wav.write(
                 to: payloadDirectory.appendingPathComponent(fileName)

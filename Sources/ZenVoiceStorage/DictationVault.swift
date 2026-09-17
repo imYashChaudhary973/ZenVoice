@@ -310,6 +310,15 @@ public actor DictationVault {
         archiveID: UUID = UUID(),
         now: Date = Date()
     ) throws {
+        // A retried dictation must not archive the same audio twice.
+        guard try archiveEntries(
+            whereClause: "dictation_id = ?",
+            bindWhere: { statement in
+                self.bind(id.uuidString, at: 1, in: statement)
+            }
+        ).isEmpty else {
+            return
+        }
         let sourceURL = recoveryAudioURL(for: id)
         let destinationURL = archiveAudioURL(for: archiveID)
         guard FileManager.default.fileExists(atPath: sourceURL.path) else {
@@ -602,17 +611,27 @@ public actor DictationVault {
         defer { sqlite3_finalize(statement) }
         bind(id.uuidString, at: 1, in: statement)
         try stepDone(statement)
+        // Every deletion funnels through here, so the WAL never holds pages
+        // for rows the user removed. Cheap when the WAL is already empty.
+        try execute("PRAGMA wal_checkpoint(TRUNCATE);")
     }
 
     public func deleteRecord(id: UUID) throws {
-        try discard(id: id)
+        try deleteRecords(ids: [id])
     }
 
+    /// History deletion (single or scoped) reads each row first and refuses
+    /// rows still owned by the live dictation session; those are cleaned up
+    /// by ``discard`` when the session ends or by ``recoverInterrupted``.
     @discardableResult
     public func deleteRecords(ids: [UUID]) throws -> Int {
         var deletedCount = 0
         for id in Set(ids) {
-            guard try record(id: id) != nil else {
+            guard let record = try record(id: id) else {
+                continue
+            }
+            guard record.status != .recording,
+                  record.status != .transcribing else {
                 continue
             }
             try discard(id: id)

@@ -16,11 +16,13 @@ import Foundation
 
 /// A single archived full recording in the Audio History feature.
 ///
-/// Audio archives are stored as plain WAV files in private Application Support
-/// storage. Metadata is kept in the same SQLite database as transcripts, but
-/// only references the file path, size, and non-sensitive capture facts. The
-/// audio file itself is not encrypted; the archive is gated by the user's
-/// opt-in and bounded by size/age budgets.
+/// Audio archives are stored as sealed (encrypted) files in private
+/// Application Support storage: the audio is encrypted with the vault key
+/// before it reaches disk and the file is written with 0600 permissions.
+/// Metadata is kept in the same SQLite database as transcripts, but
+/// only references the file path, size, and non-sensitive capture facts.
+/// The archive is gated by the user's opt-in and bounded by size/age
+/// budgets.
 public struct AudioArchiveRecord: Identifiable, Sendable {
     public let id: UUID
     public let dictationID: UUID
