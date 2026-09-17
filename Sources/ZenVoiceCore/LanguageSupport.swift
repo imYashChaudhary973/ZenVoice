@@ -353,7 +353,9 @@ public enum LanguagePreferences {
         defaults.set(data, forKey: preferenceKey)
     }
 
-    public static func reset(defaults: UserDefaults = .standard) {
+    public static func reset(
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
+    ) {
         defaults.removeObject(forKey: preferenceKey)
     }
 }

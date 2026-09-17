@@ -2162,6 +2162,63 @@ private func checkVaultFilesExcludedFromBackup() async throws {
     }
 }
 
+/// Crash-orphaned recovery audio has no database row, so the DB-driven
+/// expiry never sees it. The launch-time sweep in the vault init must age
+/// out stale `*.wav` files while leaving fresh audio and non-audio files
+/// alone.
+private func checkRecoveryAudioOrphanSweep() async throws {
+    let rootURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: rootURL) }
+    let recoveryDirectory = rootURL
+        .appendingPathComponent("Recovery", isDirectory: true)
+    try FileManager.default.createDirectory(
+        at: recoveryDirectory,
+        withIntermediateDirectories: true
+    )
+
+    let staleAudio = recoveryDirectory
+        .appendingPathComponent(UUID().uuidString.lowercased())
+        .appendingPathExtension("wav")
+    let freshAudio = recoveryDirectory
+        .appendingPathComponent(UUID().uuidString.lowercased())
+        .appendingPathExtension("wav")
+    let staleNote = recoveryDirectory
+        .appendingPathComponent("notes.txt")
+    let staleDate = Date().addingTimeInterval(
+        -(DictationVault.recoveryLifetime + 60 * 60)
+    )
+    try Data("stale".utf8).write(to: staleAudio)
+    try Data("fresh".utf8).write(to: freshAudio)
+    try Data("note".utf8).write(to: staleNote)
+    try FileManager.default.setAttributes(
+        [.modificationDate: staleDate],
+        ofItemAtPath: staleAudio.path
+    )
+    try FileManager.default.setAttributes(
+        [.modificationDate: staleDate],
+        ofItemAtPath: staleNote.path
+    )
+
+    _ = try await DictationVault(
+        databaseURL: rootURL.appendingPathComponent("test.sqlite"),
+        recoveryDirectoryURL: recoveryDirectory,
+        keyProvider: StaticKeyProvider()
+    )
+
+    try await require(
+        !FileManager.default.fileExists(atPath: staleAudio.path),
+        "stale orphaned recovery audio survived the launch sweep"
+    )
+    try await require(
+        FileManager.default.fileExists(atPath: freshAudio.path),
+        "fresh recovery audio was removed by the launch sweep"
+    )
+    try await require(
+        FileManager.default.fileExists(atPath: staleNote.path),
+        "non-audio file was removed by the launch sweep"
+    )
+}
 
 do {
     try await checkEncryptedStorage()
@@ -2194,7 +2251,8 @@ do {
     try await checkAgenticLoaderHealsStaleRows()
     try await checkHistorySkipsCorruptRows()
     try await checkVaultFilesExcludedFromBackup()
-    print("ZenVoiceStorageChecks: 29 checks passed")
+    try await checkRecoveryAudioOrphanSweep()
+    print("ZenVoiceStorageChecks: 30 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

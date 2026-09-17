@@ -116,6 +116,13 @@ public actor DictationVault {
             recoveryDirectoryURL,
             fileManager: .default
         )
+        // Launch-time sweep: recovery audio whose database row was lost to a
+        // crash mid-write is invisible to purgeExpiredRecoveryAudio and would
+        // otherwise sit on disk forever.
+        Self.sweepOrphanedRecoveryAudio(
+            in: recoveryDirectoryURL,
+            fileManager: .default
+        )
         try Self.createPrivateDirectory(
             archiveDirectoryURL ?? databaseURL.deletingLastPathComponent()
                 .appendingPathComponent("AudioHistory", isDirectory: true),
@@ -1772,6 +1779,31 @@ public actor DictationVault {
             ],
             ofItemAtPath: url.path
         )
+    }
+
+    /// Removes recovery audio older than ``recoveryLifetime`` regardless of
+    /// database state. Conservative by design: only `*.wav` files, and only
+    /// once the same lifetime the database-driven expiry enforces has passed
+    /// since last modification.
+    private static func sweepOrphanedRecoveryAudio(
+        in directory: URL,
+        now: Date = Date(),
+        fileManager: FileManager
+    ) {
+        let contents = (try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        for url in contents where url.pathExtension.lowercased() == "wav" {
+            let modified = (try? url.resourceValues(
+                forKeys: [.contentModificationDateKey]
+            ))?.contentModificationDate ?? now
+            guard now.timeIntervalSince(modified) >= recoveryLifetime else {
+                continue
+            }
+            try? fileManager.removeItem(at: url)
+        }
     }
 
     private static func createPrivateDirectory(

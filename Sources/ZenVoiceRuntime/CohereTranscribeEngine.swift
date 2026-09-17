@@ -33,6 +33,19 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
     public static let decoderDataFilename = "cohere-decoder.int8.onnx.data"
     public static let tokenizerFilename = "tokens.txt"
 
+    /// Total decoder positions the KV cache is sized for — the export's
+    /// configured context window. The per-transcript ceiling is this window
+    /// minus the fixed prompt template; anything lower silently truncates
+    /// long dictations.
+    public static let maxDecoderContextTokens = 1024
+
+    /// Decoder steps one transcript may take: the context window minus the
+    /// prompt template. Exposed for the runtime checks, which pin the
+    /// derivation so the cap cannot quietly fall back to a fixed constant.
+    public static func maxNewTokens(promptTokenCount: Int) -> Int {
+        maxDecoderContextTokens - promptTokenCount
+    }
+
     /// Languages supported by `CohereLabs/cohere-transcribe-03-2026`.
     private static let supportedLanguageCodes: Set<String> = [
         "en", "de", "fr", "it", "es", "pt", "nl", "pl", "el",
@@ -305,7 +318,7 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
         let nLayers = 8
         let heads = 8
         let headDim = 128
-        let maxContext = 1024
+        let maxContext = Self.maxDecoderContextTokens
 
         let promptTokens: [Int] = [
             tokenizer.id(for: "<|startofcontext|>") ?? 7,
@@ -332,7 +345,9 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
         )
 
         let endOfTextID = tokenizer.id(for: "<|endoftext|>") ?? 3
-        let maxNewTokens = 256
+        let maxNewTokens = Self.maxNewTokens(
+            promptTokenCount: promptTokens.count
+        )
 
         for step in 0..<maxNewTokens {
             let inputIDs: [Int]
@@ -462,7 +477,7 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
         let nLayers = 8
         let heads = 8
         let headDim = 128
-        let maxContext = 1024
+        let maxContext = Self.maxDecoderContextTokens
         return [
             NSNumber(value: nLayers),
             1,

@@ -172,6 +172,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var whisperEngine: WhisperSpeechEngine?
     private var engineConfigurationTask: Task<Void, Never>?
     private var resetWorkItem: DispatchWorkItem?
+    // Orders partial-transcript stores against finalization: a fire-and-
+    // forget partial store scheduled before `storeTranscript` must not land
+    // after it and flip the finalized record back to is_partial.
+    private var partialStoreSequence = 0
+    private var finalizedPartialStoreSequence = 0
     private var stateObservers: Set<AnyCancellable> = []
     private var currentHotKeyConfiguration = HotKeyPreferences.load()
     private var pasteLastHotKeyConfiguration =
@@ -360,7 +365,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             whisperEngine = nil
             engineRegistry = makeEngineRegistry(whisper: nil)
         } catch {
-            state.phase = .error(error.localizedDescription)
+            // Same recovery as every other error surface: show the banner,
+            // then reset to idle so the phase pill does not stick on error.
+            showError(error.localizedDescription)
         }
         modelManagerViewModel?.refreshEngineSelection()
         settingsViewModel?.refreshSystemStatus()
@@ -1085,6 +1092,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     for: profile,
                     selectedID: selectedID
                 ) != nil
+            },
+            isDictationActive: { [weak self] in
+                self?.state.phase == .listening
             }
         )
         historyViewModel = HistoryViewModel(
@@ -1578,10 +1588,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func finishRecording() {
+        // Double-tap guard: set synchronously before the Task hops, so a
+        // second stop event cannot enqueue a duplicate finish. Cleared by
+        // finishRecordingNow's defer on every exit path.
+        guard !state.isStoppingRecording else {
+            return
+        }
+        state.isStoppingRecording = true
         Task { await finishRecordingNow() }
     }
 
     private func finishRecordingNow() async {
+        defer { state.isStoppingRecording = false }
         holdStartedRecording = false
         let usesLivePreview = liveSamplesEnabledForRecording
         liveSamplesEnabledForRecording = false
@@ -2350,7 +2368,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let rawTranscript = liveStableRawTranscript
             let finalTranscript = liveStableFinalTranscript
             let correctionCount = liveStableCorrectionCount
+            partialStoreSequence += 1
+            let partialSequence = partialStoreSequence
             Task {
+                // Finalized already? This partial is stale — skip the write.
+                guard partialSequence > finalizedPartialStoreSequence else {
+                    return
+                }
                 try? await dictationVault?.storePartialTranscript(
                     id: historyID,
                     rawTranscript: rawTranscript,
@@ -2543,6 +2567,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     try? await resolvedVault().discard(id: historyID)
                     try? FileManager.default.removeItem(at: recordedAudio.url)
                 }
+            } else {
+                try? FileManager.default.removeItem(at: recordedAudio.url)
             }
             resetActiveDictationBehavior()
             dictationTargetProcessIdentifier = nil
@@ -2569,6 +2595,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let historyID, shouldPersist {
             do {
                 let vault = try await resolvedVault()
+                // Any partial store scheduled before this point is stale
+                // once the final transcript lands.
+                finalizedPartialStoreSequence = partialStoreSequence
                 try await vault.storeTranscript(
                     id: historyID,
                     rawTranscript: result.rawTranscript,
@@ -2782,6 +2811,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
         historyViewModel?.refresh()
+        // Live-preview sessions route noSpeech here instead of through
+        // completeNow's quiet-input guard, so re-derive the same diagnosis:
+        // a silent session is a device problem, not a transcription one.
+        if case WhisperTranscriber.TranscriptionError.noSpeech = error,
+           state.audioLevel.sessionPeak < Self.quietInputPeakThreshold {
+            settingsViewModel.reportQuietInput(
+                deviceName: recordingDeviceName ?? "your microphone"
+            )
+        }
         showError(error.localizedDescription)
     }
 
@@ -3338,7 +3376,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func retryHistoryRecord(
         _ record: DictationRecord
     ) async -> Result<Void, Error> {
-        guard !state.isBusy else {
+        guard !state.isBusy, state.phase != .listening else {
             return .failure(
                 DictationVaultError.database(
                     "Finish the current dictation before retrying."
@@ -3352,18 +3390,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 )
             )
         }
-        let plaintextURL = FileManager.default.temporaryDirectory
+        // Decrypted recovery audio must not sit world-readable in the shared
+        // temp directory while the decoder runs. Park it in a 0700 directory
+        // (macOS has no FileProtectionType; permissions are the mechanism)
+        // and remove the directory as soon as the decode finishes or fails.
+        let retryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(
-                "zenvoice-retry-\(record.id.uuidString).wav"
+                "zenvoice-retry-\(record.id.uuidString)",
+                isDirectory: true
             )
+        let plaintextURL = retryDirectory.appendingPathComponent("audio.wav")
         do {
+            try FileManager.default.createDirectory(
+                at: retryDirectory,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
             let wav = try await resolvedVault().recoveryAudioData(id: record.id)
             try wav.write(to: plaintextURL, options: .atomic)
         } catch {
+            try? FileManager.default.removeItem(at: retryDirectory)
             return .failure(error)
         }
         guard let registry = engineRegistry else {
-            try? FileManager.default.removeItem(at: plaintextURL)
+            try? FileManager.default.removeItem(at: retryDirectory)
             return .failure(
                 DictationVaultError.database(
                     "No speech engine is available."
@@ -3384,7 +3434,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               recordedLanguageProfile.isCompatible(
                   with: resolvedEngine.languageCapability
               ) else {
-            try? FileManager.default.removeItem(at: plaintextURL)
+            try? FileManager.default.removeItem(at: retryDirectory)
             return .failure(
                 DictationVaultError.database(
                     "This recording used \(recordedLanguageProfile.displayName). "
@@ -3399,7 +3449,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 durationSeconds: record.durationSeconds
             )
         } catch {
-            try? FileManager.default.removeItem(at: plaintextURL)
+            try? FileManager.default.removeItem(at: retryDirectory)
             return .failure(error)
         }
 
@@ -3427,7 +3477,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let voiceCommandsEnabled =
             LocalVoiceCommandPreferences.isEnabled()
         Task { [weak self] in
-            defer { try? FileManager.default.removeItem(at: plaintextURL) }
+            defer { try? FileManager.default.removeItem(at: retryDirectory) }
             do {
                 let result = try await registry.transcribe(
                     audioURL: plaintextURL,

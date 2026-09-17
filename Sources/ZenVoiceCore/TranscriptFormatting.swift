@@ -192,7 +192,10 @@ public enum TranscriptFormattingPreferences {
             mode = .smart
         case (.agentPrompt, _):
             // Agent prompt handled layout commands; those moved to Commands.
+            // Re-enable the command pass so installs that relied on "new
+            // paragraph" and friends keep them after the rung collapses.
             mode = .clean
+            LocalVoiceCommandPreferences.setEnabled(true, defaults: defaults)
         case (.clean, .off):
             mode = .clean
         case (.off, _):

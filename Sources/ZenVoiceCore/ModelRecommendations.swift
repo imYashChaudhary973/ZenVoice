@@ -293,7 +293,7 @@ public enum ModelBenchmarkStore {
         audioDurationSeconds: TimeInterval,
         processingDurationSeconds: TimeInterval,
         recordedAt: Date = Date(),
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
         guard audioDurationSeconds > 0,
               processingDurationSeconds > 0,
@@ -317,7 +317,7 @@ public enum ModelBenchmarkStore {
 
     public static func summary(
         for modelID: String,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> ModelBenchmarkSummary? {
         let samples = load(defaults: defaults).filter {
             $0.modelID == modelID
