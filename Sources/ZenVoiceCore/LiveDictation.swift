@@ -18,15 +18,11 @@ public enum LiveDictationPreferences {
     public static let previewKey = "ZenVoice.livePreviewEnabled"
     public static let commitOnPauseKey = "ZenVoice.commitOnPauseEnabled"
 
-    /// Always off. Live transcript UI was removed; leftover `true` values in
-    /// defaults must not keep Whisper decoding in the background.
+    /// Opt-in. Off until Recording HUD → Live transcript is on.
     public static func isPreviewEnabled(
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) -> Bool {
-        if defaults.object(forKey: previewKey) != nil {
-            defaults.set(false, forKey: previewKey)
-        }
-        return false
+        defaults.bool(forKey: previewKey)
     }
 
     public static func isCommitOnPauseEnabled(
@@ -39,7 +35,7 @@ public enum LiveDictationPreferences {
         _ enabled: Bool,
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
-        defaults.set(false, forKey: previewKey)
+        defaults.set(enabled, forKey: previewKey)
     }
 
     public static func setCommitOnPauseEnabled(
@@ -94,6 +90,26 @@ public enum StableTranscriptComposer {
             return phrase
         }
         return transcript + " " + phrase
+    }
+}
+
+/// What the live HUD shows: only the newest few words, so the pill stays a
+/// compact reference while the full transcript keeps accumulating underneath.
+public enum LiveTranscriptPreview {
+    public static let visibleWordLimit = 5
+
+    public static func visibleWords(
+        _ transcript: String,
+        limit: Int = visibleWordLimit
+    ) -> String {
+        let words = transcript.split(
+            separator: " ",
+            omittingEmptySubsequences: true
+        )
+        guard words.count > limit else {
+            return transcript
+        }
+        return words.suffix(limit).joined(separator: " ")
     }
 }
 

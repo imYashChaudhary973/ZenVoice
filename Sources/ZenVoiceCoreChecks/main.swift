@@ -2035,12 +2035,11 @@ DictationCompletionStrategy.resolve(
     exit(1)
 }
 liveDefaults.set(true, forKey: LiveDictationPreferences.previewKey)
-guard !LiveDictationPreferences.isPreviewEnabled(
+guard LiveDictationPreferences.isPreviewEnabled(
     defaults: liveDefaults
-),
-!(liveDefaults.bool(forKey: LiveDictationPreferences.previewKey)) else {
+) else {
     FileHandle.standardError.write(
-        Data("FAIL: leftover live preview must stay off\n".utf8)
+        Data("FAIL: stored live preview opt-in must be honoured\n".utf8)
     )
     exit(1)
 }
@@ -2048,14 +2047,26 @@ LiveDictationPreferences.setCommitOnPauseEnabled(
     true,
     defaults: liveDefaults
 )
-guard !LiveDictationPreferences.isPreviewEnabled(
+guard LiveDictationPreferences.isPreviewEnabled(
     defaults: liveDefaults
 ),
 LiveDictationPreferences.isCommitOnPauseEnabled(
     defaults: liveDefaults
 ) else {
     FileHandle.standardError.write(
-        Data("FAIL: commit-on-pause must not turn live preview back on\n".utf8)
+        Data("FAIL: commit-on-pause must not turn live preview off\n".utf8)
+    )
+    exit(1)
+}
+LiveDictationPreferences.setPreviewEnabled(
+    false,
+    defaults: liveDefaults
+)
+guard !LiveDictationPreferences.isPreviewEnabled(
+    defaults: liveDefaults
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: live preview must turn off\n".utf8)
     )
     exit(1)
 }
@@ -2063,11 +2074,25 @@ LiveDictationPreferences.setPreviewEnabled(
     true,
     defaults: liveDefaults
 )
-guard !LiveDictationPreferences.isPreviewEnabled(
+guard LiveDictationPreferences.isPreviewEnabled(
     defaults: liveDefaults
 ) else {
     FileHandle.standardError.write(
-        Data("FAIL: live preview cannot be enabled\n".utf8)
+        Data("FAIL: live preview must turn on\n".utf8)
+    )
+    exit(1)
+}
+guard LiveTranscriptPreview.visibleWords(
+    "we filed today the report", limit: 4
+) == "filed today the report",
+LiveTranscriptPreview.visibleWords("we filed today", limit: 5)
+    == "we filed today",
+LiveTranscriptPreview.visibleWords(
+    "  spaced   out   words   here   now  ", limit: 3
+) == "words here now",
+LiveTranscriptPreview.visibleWords("", limit: 5) == "" else {
+    FileHandle.standardError.write(
+        Data("FAIL: live HUD must show only the newest words\n".utf8)
     )
     exit(1)
 }
@@ -2769,6 +2794,14 @@ let previewRegistry = EngineRegistry(
 guard previewRegistry.resolvePreview(for: .english)?.descriptor.id
         == EngineIdentifiers.whisperLargeV3Turbo else {
     failEngineCheck("Live preview should use Whisper, not TDT")
+}
+let tdtOnlyPreview = EngineRegistry(
+    engines: [fakeTDTv3],
+    fallbackOrder: [EngineIdentifiers.parakeetTDTv3]
+)
+guard tdtOnlyPreview.resolvePreview(for: .english)?.descriptor.id
+        == EngineIdentifiers.parakeetTDTv3 else {
+    failEngineCheck("Live preview should use TDT when Whisper is missing")
 }
 
 guard VerifiedEngineCatalog.engine(

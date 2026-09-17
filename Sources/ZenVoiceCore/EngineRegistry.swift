@@ -100,23 +100,28 @@ public struct EngineRegistry: Sendable {
         return resolve(for: profile, selectedID: selectedID)
     }
 
-    /// Live-preview engine: the selected Whisper file if it is available,
-    /// otherwise any compatible Whisper-family engine.
+    /// Live-preview engine: the user's selected engine when installed, then
+    /// Whisper, then any other installed engine.
     public func resolvePreview(
         for profile: LanguageProfile
     ) -> (any SpeechEngine)? {
         let selectedID = SelectedEnginePreferences.load(for: profile)
             .map(EngineIdentifiers.canonical)
         if let selectedID,
-           EngineIdentifiers.isWhisperFamily(selectedID),
            let engine = engines.first(where: { $0.descriptor.id == selectedID }),
            engine.isAvailable(for: profile),
            isCompatible(engine: engine, profile: profile) {
             return engine
         }
-        return engines.first {
+        if let whisper = engines.first(where: {
             EngineIdentifiers.isWhisperFamily($0.descriptor.id)
                 && $0.isAvailable(for: profile)
+                && isCompatible(engine: $0, profile: profile)
+        }) {
+            return whisper
+        }
+        return engines.first {
+            $0.isAvailable(for: profile)
                 && isCompatible(engine: $0, profile: profile)
         }
     }

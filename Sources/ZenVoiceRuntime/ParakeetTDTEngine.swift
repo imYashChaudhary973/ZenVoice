@@ -257,6 +257,43 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
         }
     }
 
+    /// Queued PCM decode for live preview fragments.
+    public func enqueuePreview(
+        samples: [Float],
+        languageProfile: LanguageProfile
+    ) async throws -> TranscriptionResult {
+        guard isAvailable else {
+            throw EngineError.noEngineAvailable
+        }
+        let context = try await loadedContext()
+        return try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<TranscriptionResult, Error>)
+            in
+            queue.async {
+                do {
+                    let transcript = try context.transcribe(
+                        samples: samples,
+                        languageCode: Self.targetLanguageCode(
+                            for: languageProfile
+                        )
+                    )
+                    continuation.resume(
+                        returning: TranscriptionResult(
+                            rawTranscript: transcript,
+                            finalTranscript: transcript,
+                            correctionCount: 0,
+                            isPartial: true,
+                            modelID: self.configuration.engineID,
+                            processingDurationSeconds: 0
+                        )
+                    )
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     private static func targetLanguageCode(
         for profile: LanguageProfile
     ) -> String? {
