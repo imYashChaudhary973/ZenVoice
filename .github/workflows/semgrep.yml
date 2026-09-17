@@ -35,7 +35,9 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Install pinned semgrep
-        run: python3 -m pip install --user --quiet semgrep==1.164.0
+        run: |
+          python3 -m venv "$RUNNER_TEMP/semgrep-venv"
+          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --quiet semgrep==1.164.0
 
       - name: Scan tracked source
-        run: python3 -m semgrep scan --config auto --error .
+        run: "$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --config auto --error .
