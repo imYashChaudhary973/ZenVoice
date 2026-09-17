@@ -17,16 +17,27 @@ concurrency:
 jobs:
   semgrep:
     name: Swift security scan
-    if: github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    # Self-hosted runner: never execute fork pull-request code on this
+    # machine — only same-repo branches and pushes to main.
+    if: >-
+      github.actor != 'dependabot[bot]'
+      && (github.event_name == 'push'
+          || github.event_name == 'workflow_dispatch'
+          || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork != true))
+    # Self-hosted macOS runner (no hosted-minute billing). Semgrep runs via
+    # the user's Python instead of the Linux OCI container the hosted runner
+    # used, pinned to the same version the container image carried.
+    runs-on: [self-hosted, macos-selfhosted]
     timeout-minutes: 15
-    container:
-      # semgrep/semgrep:1.164.0, pinned to its Linux/amd64 OCI manifest.
-      image: semgrep/semgrep@sha256:5ac65e5366465438a5408699584c605b77f125908adaa5620d8c3e56cfa36e5b
 
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
+      - name: Install pinned semgrep
+        run: |
+          python3 -m venv "$RUNNER_TEMP/semgrep-venv"
+          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --quiet semgrep==1.164.0
+
       - name: Scan tracked source
-        run: semgrep scan --config auto --error .
+        run: '"$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --config auto --error .'
