@@ -20,6 +20,13 @@ __pycache__/
 # Local evaluation corpora are fetched on demand and never belong in git.
 /Datasets/
 
+# Training runs and generated pair files never belong in git.
+/training/data/*.jsonl
+/training/data/hyps_*.txt
+/training/adapters/
+/training/fused/
+/training/zen-polish-4bit/
+
 # Website design prototypes do not belong in the native app repository.
 /ZenVoiceNewDesign/
 /*.html

@@ -14,6 +14,7 @@
 
 import SwiftUI
 import ZenVoiceCore
+import ZenVoiceRuntime
 import ZenVoiceStorage
 
 struct FormattingScreen: View {
@@ -30,6 +31,25 @@ struct FormattingScreen: View {
 
     private var mode: TranscriptFormattingMode {
         TranscriptFormattingMode(rawValue: modeRawValue) ?? .clean
+    }
+
+    @AppStorage(ZenPolishPreferences.preferenceKey)
+    private var zenPolishEnabled = true
+
+    private var isZenPolishInstalled: Bool {
+        let model = ZenPolishLanguageModel(
+            modelsDirectory: try? VerifiedModelCatalog.modelsDirectory()
+        )
+        return model.availability == .available
+    }
+
+    private var zenPolishSubtitle: String {
+        if !isZenPolishInstalled {
+            return "Download ZenPolish from the Models screen to use it."
+        }
+        return zenPolishEnabled
+            ? "Smart uses the ZenPolish on-device model."
+            : "Smart uses Apple's on-device model."
     }
 
     var body: some View {
@@ -67,6 +87,22 @@ struct FormattingScreen: View {
                             set: { modeRawValue = $0.rawValue }
                         )
                     )
+                }
+
+                ZenPanelDivider()
+
+                ZenRow(
+                    icon: "brain",
+                    title: "ZenPolish model",
+                    subtitle: zenPolishSubtitle
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { zenPolishEnabled },
+                        set: { zenPolishEnabled = $0 }
+                    ))
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(!isZenPolishInstalled)
                 }
 
                 ZenPanelDivider()

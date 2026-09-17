@@ -1301,6 +1301,70 @@ final class ModelManagerViewModel: ObservableObject {
 
 
 
+    // MARK: ZenPolish
+
+    @Published private(set) var isDownloadingZenPolish = false
+
+    /// Downloads the ZenPolish bundle (config, tokenizer, weights) from the
+    /// pinned Hugging Face revision into the models directory.
+    func downloadZenPolish() {
+        guard !isDownloadingZenPolish else { return }
+        isDownloadingZenPolish = true
+        downloadProgress = 0
+        Task { [weak self] in
+            defer { Task { @MainActor in self?.isDownloadingZenPolish = false } }
+            do {
+                try await self?.downloadZenPolishModel()
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func isZenPolishInstalled() -> Bool {
+        let model = ZenPolishLanguageModel(
+            modelsDirectory: try? VerifiedModelCatalog.modelsDirectory(
+                fileManager: fileManager
+            )
+        )
+        return model.availability == .available
+    }
+
+    private func downloadZenPolishModel() async throws {
+        let base =
+            "https://huggingface.co/imYashChaudhary973/zen-polish-v2-1.7b-4bit/resolve/main/"
+        let root = try VerifiedModelCatalog.modelsDirectory(
+            fileManager: fileManager
+        )
+        let directory = root.appendingPathComponent(
+            ZenPolishLanguageModel.directoryName,
+            isDirectory: true
+        )
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        var completed: Int64 = 0
+        let total = ZenPolishLanguageModel.bundleSizeBytes
+        for file in ZenPolishLanguageModel.files {
+            try await downloadCohereFile(
+                filename: file.name,
+                sourceURL: URL(string: base + file.name + "?download=true")!,
+                expectedSize: file.sizeBytes,
+                expectedSHA256: file.sha256,
+                sourceRevision: "main",
+                destinationDirectory: directory
+            )
+            completed += file.sizeBytes
+            let progress = Double(completed) / Double(total)
+            await MainActor.run {
+                self.downloadProgress = progress
+            }
+        }
+    }
+
     deinit {
         downloadTask?.cancel()
         verificationTask?.cancel()

@@ -17,6 +17,41 @@ import Foundation
 import ZenVoiceCore
 import ZenVoiceRuntime
 
+/// ZenPolish smoke: when `ZENVOICE_ZENPOLISH_PATH` points at an unpacked
+/// model directory, runs one real in-process generation and asserts the
+/// output is clean formatted text (no reasoning blocks, no empty response).
+if let zenPolishPath = ProcessInfo.processInfo.environment["ZENVOICE_ZENPOLISH_PATH"] {
+    let model = ZenPolishLanguageModel(directory: URL(fileURLWithPath: zenPolishPath))
+    guard model.availability == .available else {
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 21,
+            userInfo: [NSLocalizedDescriptionKey: "ZenPolish model not present at \(zenPolishPath)"]
+        )
+    }
+    let startedAt = Date()
+    let output = try await model.generate(
+        prompt: "um yeah so we need to fix this bug by tuesday right check the pull request",
+        maximumResponseTokens: 120
+    )
+    let elapsed = Date().timeIntervalSince(startedAt)
+    guard !output.isEmpty else {
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 22,
+            userInfo: [NSLocalizedDescriptionKey: "ZenPolish returned an empty response"]
+        )
+    }
+    guard !output.contains("<think>") else {
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 23,
+            userInfo: [NSLocalizedDescriptionKey: "ZenPolish leaked a reasoning block: \(output)"]
+        )
+    }
+    print("ZenPolish smoke (\(String(format: "%.2f", elapsed))s): \(output)")
+}
+
 private func makeSilentFixture() throws -> URL {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("zenvoice-runtime-\(UUID().uuidString).wav")

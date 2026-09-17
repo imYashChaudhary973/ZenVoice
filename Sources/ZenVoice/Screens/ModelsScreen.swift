@@ -29,6 +29,7 @@ struct ModelsScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ZenDesign.Spacing.xl) {
             spokenLanguage
+            zenPolishSection
             if !downloaded.isEmpty {
                 cardSection(title: "Downloaded", specs: downloaded)
             }
@@ -108,6 +109,82 @@ struct ModelsScreen: View {
                         label: "Translate to English"
                     )
                 }
+            }
+        }
+    }
+
+    private var zenPolishSection: some View {
+        let installed = viewModel.isZenPolishInstalled()
+        return VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+            Text("Dictation enhancement")
+                .font(ZenDesign.Typography.captionStrong)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+            ZenPanel {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+                    HStack(alignment: .top, spacing: ZenDesign.Spacing.sm) {
+                        ZStack {
+                            RoundedRectangle(
+                                cornerRadius: 10,
+                                style: .continuous
+                            )
+                            .fill(ZenDesign.Semantic.accentMuted)
+                            .frame(width: 40, height: 40)
+                            Image(systemName: "brain")
+                                .foregroundStyle(ZenDesign.Semantic.accent)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                Text("ZenPolish 1.7B")
+                                    .font(ZenDesign.Typography.bodyStrong)
+                                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                                if installed {
+                                    ZenBadge(
+                                        text: "Installed",
+                                        kind: .accent,
+                                        systemImage: "checkmark"
+                                    )
+                                }
+                            }
+                            Text(
+                                "ZenVoice's own fine-tuned formatting model. "
+                                    + "Punctuation, capitalization, fillers, and "
+                                    + "numbers for the Smart level. 1.0 GB. "
+                                    + "Runs on this Mac."
+                            )
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 12)
+                        if installed {
+                            Label("Ready", systemImage: "checkmark.circle.fill")
+                                .font(ZenDesign.Typography.captionStrong)
+                                .foregroundStyle(ZenDesign.Semantic.success)
+                        } else if viewModel.isDownloadingZenPolish {
+                            Button("Cancel") {
+                                // Cancellation lands with the v3 download
+                                // refactor; the run is small.
+                            }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+                            .disabled(true)
+                        } else {
+                            Button {
+                                viewModel.downloadZenPolish()
+                            } label: {
+                                Label(
+                                    "Download",
+                                    systemImage: "arrow.down.circle"
+                                )
+                            }
+                            .buttonStyle(ZenSecondaryButtonStyle())
+                        }
+                    }
+                    if viewModel.isDownloadingZenPolish {
+                        ZenProgressBar(value: viewModel.downloadProgress ?? 0)
+                            .frame(height: 3)
+                    }
+                }
+                .padding(ZenDesign.Spacing.md)
             }
         }
     }
