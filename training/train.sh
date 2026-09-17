@@ -18,8 +18,8 @@ BATCH="${BATCH:-8}"
 ADAPTERS="${ADAPTERS:-adapters}"
 # RESUME=1 continues from $ADAPTERS/adapters.safetensors (adapter weights are
 # restored; the iteration counter and LR schedule restart from zero).
-RESUME_FLAG=""
-[ -n "${RESUME:-}" ] && RESUME_FLAG="--resume-adapter-file $ADAPTERS/adapters.safetensors"
+RESUME_ARGS=()
+[ "${RESUME:-0}" = 1 ] && RESUME_ARGS=(--resume-adapter-file "$ADAPTERS/adapters.safetensors")
 
 [ -f data/synthetic_train.jsonl ] || { echo "data/synthetic_train.jsonl missing — run build_synthetic.py first"; exit 1; }
 python3 -c "import mlx_lm" 2>/dev/null || { echo "mlx-lm missing — python3 -m pip install -r requirements.txt"; exit 1; }
@@ -31,13 +31,14 @@ cat data/synthetic_valid.jsonl data/real_valid.jsonl > data/valid.jsonl
 echo "train: $(wc -l < data/train.jsonl | tr -d ' ') rows, valid: $(wc -l < data/valid.jsonl | tr -d ' ') rows"
 
 # 1. LoRA fine-tune (runs locally on Apple Silicon; mlx-lm prints periodic samples)
-# shellcheck disable=SC2086
+# ${arr[@]+...} guards the empty case: bash 3.2 (stock macOS) rejects "${arr[@]}"
+# for an empty array under set -u.
 python3 -m mlx_lm lora --train \
   --model "$MODEL" \
   --data data \
   --iters "$ITERS" \
   --batch-size "$BATCH" \
-  $RESUME_FLAG \
+  ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"} \
   --adapter-path "$ADAPTERS"
 
 # 2. Merge adapters into the base weights (keeps base quantization)
