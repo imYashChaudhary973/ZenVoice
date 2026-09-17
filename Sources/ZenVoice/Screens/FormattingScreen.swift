@@ -33,8 +33,7 @@ struct FormattingScreen: View {
         TranscriptFormattingMode(rawValue: modeRawValue) ?? .clean
     }
 
-    @AppStorage(ZenPolishPreferences.preferenceKey)
-    private var zenPolishEnabled = true
+    @State private var zenPolishEnabled = ZenPolishPreferences.load()
 
     private var isZenPolishInstalled: Bool {
         let model = ZenPolishLanguageModel(
@@ -107,7 +106,10 @@ struct FormattingScreen: View {
                                     ? .zenPolishV2
                                     : .none
                             },
-                            set: { zenPolishEnabled = $0 == .zenPolishV2 }
+                            set: {
+                                ZenPolishPreferences.save($0 == .zenPolishV2)
+                                zenPolishEnabled = $0 == .zenPolishV2
+                            }
                         ),
                         minWidth: 170,
                         title: { $0.displayName }

@@ -73,6 +73,14 @@ def main() -> None:
     parser.add_argument("--eval-frac", type=float, default=0.01)
     args = parser.parse_args()
 
+    for name, frac in (("--valid-frac", args.valid_frac),
+                       ("--eval-frac", args.eval_frac)):
+        if not 0.0 <= frac < 1.0:
+            parser.error(f"{name} must be in [0, 1), got {frac}")
+    if args.valid_frac + args.eval_frac >= 1.0:
+        parser.error("--valid-frac + --eval-frac must be < 1.0, got "
+                     f"{args.valid_frac + args.eval_frac}")
+
     all_sentences = sentences_from_corpus(args.corpus)
     if len(all_sentences) < 500:
         print(f"warning: only {len(all_sentences)} sentences; "

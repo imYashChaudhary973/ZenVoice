@@ -2702,7 +2702,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
             if ZenPolishPreferences.load(),
                zenPolish.availability == .available {
-                text = await SmartFormattingEngine(model: zenPolish, timeoutSeconds: 10).format(
+                text = await SmartFormattingEngine(
+                    model: zenPolish,
+                    timeoutSeconds: 10,
+                    sendsRawTranscript: true
+                ).format(
                     transcript,
                     languageCode: state.languageProfile.inputLanguageCode,
                     context: settingsViewModel?.sanitizedNextDictationContext

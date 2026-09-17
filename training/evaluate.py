@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Score formatting hypotheses against the frozen eval set.
 
-One token-level Levenshtein alignment serves every metric:
+Word-only alignment drives wer/new_content_rate; a token-level alignment
+serves the punctuation and case metrics:
   - wer                  word error rate vs reference (the no-regression gate)
   - exact_match          casefolded whole-string equality rate
   - punct_precision/recall/f1   punctuation mark recovery
@@ -66,31 +67,31 @@ def score(reference: str, hypothesis: str) -> dict:
     ref_tokens, hyp_tokens = TOKEN.findall(reference), TOKEN.findall(hypothesis)
     ops = align(ref_tokens, hyp_tokens)
 
+    # Word-only alignment drives WER and inserted-word metrics; the token
+    # alignment above stays for punctuation and case metrics.
+    ref_words = [t for t in ref_tokens if WORD.match(t)]
+    hyp_words = [t for t in hyp_tokens if WORD.match(t)]
     subs = dels = inss = 0
-    for op, r, h in ops:
+    for op, _, _ in align(ref_words, hyp_words):
         if op == "sub":
-            if WORD.match(r) and WORD.match(h):
-                subs += 1
-            elif WORD.match(r):   # punctuation replaced a word
-                dels += 1
-            elif WORD.match(h):   # a word replaced punctuation
-                inss += 1
+            subs += 1
         elif op == "del":
-            if WORD.match(r):
-                dels += 1
+            dels += 1
         elif op == "ins":
-            if WORD.match(h):
-                inss += 1
-    ref_words = sum(1 for t in ref_tokens if WORD.match(t))
-    ref_word_count = max(ref_words, 1)
+            inss += 1
+    ref_word_count = max(len(ref_words), 1)
 
     matched = [(r, h) for op, r, h in ops if op == "match"]
     matched_words = [(r, h) for r, h in matched if WORD.match(r)]
     same_case = sum(1 for r, h in matched_words if r == h)
 
     punct_matched = sum(1 for r, h in matched if not WORD.match(r))
-    punct_missed = sum(1 for op, r, _ in ops if op == "del" and not WORD.match(r))
-    punct_false = sum(1 for op, _, h in ops if op == "ins" and not WORD.match(h))
+    punct_subs = sum(1 for op, r, h in ops
+                     if op == "sub" and not WORD.match(r) and not WORD.match(h))
+    punct_missed = (sum(1 for op, r, _ in ops if op == "del" and not WORD.match(r))
+                    + punct_subs)
+    punct_false = (sum(1 for op, _, h in ops if op == "ins" and not WORD.match(h))
+                   + punct_subs)
     punct_recall = punct_matched / max(punct_matched + punct_missed, 1)
     punct_precision = punct_matched / max(punct_matched + punct_false, 1)
     punct_f1 = (2 * punct_precision * punct_recall

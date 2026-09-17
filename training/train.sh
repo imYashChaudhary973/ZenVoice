@@ -7,7 +7,7 @@
 #
 # Environment knobs:
 #   MODEL   base model (default: mlx-community/Qwen3-1.7B-4bit)
-#   ITERS   training iterations (default: 2000)
+#   ITERS   training iterations (default: 12000)
 
 set -euo pipefail
 cd "$(dirname "$0")"

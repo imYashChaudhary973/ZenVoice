@@ -149,22 +149,15 @@ public struct ZenPolishLanguageModel: LocalLanguageModel {
     }
 
     public var availability: LocalIntelligenceAvailability {
-        guard let directory,
-              FileManager.default.fileExists(
-                atPath: directory.appendingPathComponent("config.json").path
-              ),
-              FileManager.default.fileExists(
-                atPath: directory.appendingPathComponent(
-                    "model.safetensors"
-                ).path
-              ),
-              FileManager.default.fileExists(
-                atPath: directory.appendingPathComponent(
-                    "tokenizer.json"
-                ).path
-              )
-        else {
+        guard let directory else {
             return .modelNotReady
+        }
+        for file in Self.files {
+            guard FileManager.default.fileExists(
+                atPath: directory.appendingPathComponent(file.name).path
+            ) else {
+                return .modelNotReady
+            }
         }
         return .available
     }
@@ -213,6 +206,7 @@ actor ZenPolishRuntime {
         maximumTokens: Int
     ) async throws -> String {
         unloadTask?.cancel()
+        defer { scheduleUnload() }
         let container = try await preparedContainer(directory: directory)
         // A fresh session per call: dictation requests are independent and
         // must not see each other's transcripts.
@@ -226,7 +220,6 @@ actor ZenPolishRuntime {
             additionalContext: ["enable_thinking": false]
         )
         let output = try await session.respond(to: prompt)
-        scheduleUnload()
         return Self.stripReasoning(output)
     }
 

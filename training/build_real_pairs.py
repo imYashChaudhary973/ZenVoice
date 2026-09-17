@@ -79,6 +79,9 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     args = parser.parse_args()
 
+    if not 0.0 <= args.valid_frac < 1.0:
+        parser.error(f"--valid-frac must be in [0, 1), got {args.valid_frac}")
+
     rows = rows_from_manifest(args.manifest, random.Random(args.seed))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     split = int(len(rows) * (1 - args.valid_frac)) if args.valid_out else len(rows)

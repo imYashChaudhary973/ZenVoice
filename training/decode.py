@@ -24,6 +24,9 @@ def to_wav(src: Path, wav: Path, workdir: Path) -> Path | None:
     else:
         target = workdir / f"{src.stem}.wav"
         src = src
+    # ffmpeg -y would follow a pre-planted symlink at target; refuse instead.
+    if target.is_symlink():
+        return None
     result = subprocess.run(
         [FFMPEG, "-y", "-loglevel", "error", "-i", str(src),
          "-ar", "16000", "-ac", "1", str(target)],
@@ -33,9 +36,16 @@ def to_wav(src: Path, wav: Path, workdir: Path) -> Path | None:
 
 
 def transcribe(model: str, wav: Path, timeout: int = 300) -> str:
-    """Raw whisper.cpp transcript: no timestamps, no prints."""
-    result = subprocess.run(
-        [WHISPER_CLI, "-m", model, "-f", str(wav), "-nt", "-np"],
-        capture_output=True, text=True, timeout=timeout,
-    )
+    """Raw whisper.cpp transcript: no timestamps, no prints.
+
+    A clip that exceeds the timeout returns "" so callers count it as a
+    failed row instead of crashing.
+    """
+    try:
+        result = subprocess.run(
+            [WHISPER_CLI, "-m", model, "-f", str(wav), "-nt", "-np"],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return ""
     return " ".join(result.stdout.split()).strip()

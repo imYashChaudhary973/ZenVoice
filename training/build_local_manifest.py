@@ -75,16 +75,36 @@ def main() -> None:
 
     pairs = pairs[args.start:]
 
+    # Resume from the last ATTEMPTED source index, not the output line count:
+    # failed pairs write no row, so a line-count resume re-runs rows and
+    # duplicates examples. Falls back to the legacy line count when no
+    # checkpoint exists.
+    checkpoint_path = args.out.with_suffix(args.out.suffix + ".checkpoint")
     start = 0
-    if args.out.exists():
+    if checkpoint_path.exists():
+        try:
+            # One {"next_index": N} line per attempted pair; resume from the
+            # last line so a mid-write crash can't corrupt earlier entries.
+            lines = [line for line in
+                     checkpoint_path.read_text(encoding="utf-8").splitlines()
+                     if line.strip()]
+            start = json.loads(lines[-1])["next_index"] if lines else 0
+            print(f"resuming at source index {start}", file=sys.stderr)
+        except (ValueError, KeyError):
+            start = 0
+    elif args.out.exists():
         start = sum(1 for line in args.out.read_text(
             encoding="utf-8").splitlines() if line.strip())
-        print(f"resuming after {start} completed rows", file=sys.stderr)
+        print(f"resuming after {start} completed rows (line-count fallback)",
+              file=sys.stderr)
     pairs = pairs[start:]
 
     kept, failed = 0, 0
-    with args.out.open("a", encoding="utf-8", buffering=1) as out:
+    with args.out.open("a", encoding="utf-8", buffering=1) as out, \
+            checkpoint_path.open("w", encoding="utf-8") as checkpoint:
         for index, (audio, reference) in enumerate(pairs):
+            checkpoint.write(json.dumps({"next_index": start + index + 1}) + "\n")
+            checkpoint.flush()
             wav = to_wav(audio, audio, args.workdir)
             if wav is None:
                 failed += 1
