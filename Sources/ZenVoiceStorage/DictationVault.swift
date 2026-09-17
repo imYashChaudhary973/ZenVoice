@@ -660,6 +660,11 @@ public actor DictationVault {
         try deleteAllAudioArchives()
         try execute("DELETE FROM dictations;")
         try execute("DELETE FROM correction_rules;")
+        // Agentic task rows are encrypted under the vault key this call
+        // rotates. Leaving them in place makes every future
+        // loadActiveAgenticTasks() fail GCM authentication and permanently
+        // breaks goal recovery — so they go with everything else.
+        try execute("DELETE FROM agentic_tasks;")
         try execute("PRAGMA wal_checkpoint(TRUNCATE);")
         try keyProvider.deleteKey()
         cipher = try TranscriptCipher(keyProvider: keyProvider)
@@ -1825,26 +1830,49 @@ extension DictationVault: GoalRecordPersisting {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = AgenticTimestamp.decoding
         var records: [AgenticTaskRecord] = []
+        // Rows that fail GCM authentication or decoding can never be read
+        // again (the usual cause: the vault key was rotated around them by
+        // deleteAll()). Skip and heal them instead of poisoning every future
+        // load — and let the caller's recovery simply find nothing.
+        var poisonedIDs: [String] = []
+        var sawRows = false
         while sqlite3_step(statement) == SQLITE_ROW {
+            sawRows = true
             guard let rawID = text(at: 0, in: statement),
                   let id = UUID(uuidString: rawID),
                   let encrypted = data(at: 1, in: statement)
             else {
-                throw DictationVaultError.invalidRecord
+                continue
             }
-            let cleartext = try cipher.open(
-                encrypted,
-                context: agenticEncryptionContext(id: id)
-            )
-            guard let encoded = cleartext.data(using: .utf8) else {
-                throw DictationVaultError.invalidRecord
+            do {
+                let cleartext = try cipher.open(
+                    encrypted,
+                    context: agenticEncryptionContext(id: id)
+                )
+                guard let encoded = cleartext.data(using: .utf8) else {
+                    throw DictationVaultError.invalidRecord
+                }
+                records.append(
+                    try decoder.decode(AgenticTaskRecord.self, from: encoded)
+                )
+            } catch {
+                poisonedIDs.append(rawID)
             }
-            records.append(try decoder.decode(AgenticTaskRecord.self, from: encoded))
         }
         guard sqlite3_errcode(database) == SQLITE_OK
                 || sqlite3_errcode(database) == SQLITE_DONE
         else {
             throw DictationVaultError.database(databaseMessage)
+        }
+        if sawRows, !poisonedIDs.isEmpty {
+            for id in poisonedIDs {
+                let delete = try prepare(
+                    "DELETE FROM agentic_tasks WHERE id = ?;"
+                )
+                defer { sqlite3_finalize(delete) }
+                bind(id.lowercased(), at: 1, in: delete)
+                try stepDone(delete)
+            }
         }
         return records
     }

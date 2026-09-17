@@ -1687,6 +1687,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 await MainActor.run {
                     guard let self else { return }
+                    // A non-throwing empty result must not swap
+                    // already-inserted preview text for a bare space: keep
+                    // the preview in place and finish as inserted.
+                    if upgrade.result.finalTranscript.isEmpty {
+                        self.resetLivePreviewSession()
+                        self.state.liveTranscriptPreview = ""
+                        self.complete(
+                            processed: upgrade,
+                            recordedAudio: recordedAudio,
+                            historyID: historyID,
+                            insertionText: "",
+                            hasPriorInsertion: true,
+                            formattingMode: behavior.formattingMode
+                        )
+                        return
+                    }
                     let replaced = self.inserter.replaceTextBeforeCaret(
                         insertedText + " ",
                         with: upgrade.result.finalTranscript + " "
@@ -2604,12 +2620,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             state.mode = .dictation
         }
 
-        if textToInsert.isEmpty, hasPriorInsertion {
-            if let historyID, shouldPersist, historySaveError == nil {
+        if textToInsert.isEmpty {
+            // The decoder produced no text. Pasting an empty string would
+            // clobber the clipboard and claim success for nothing, so stop
+            // here. A session that already streamed preview text keeps its
+            // record; a textless one is discarded as junk.
+            if let historyID, shouldPersist, historySaveError == nil,
+               hasPriorInsertion {
                 try? await resolvedVault().markInsertion(
                     id: historyID,
                     outcome: .inserted
                 )
+            } else if let historyID {
+                try? await resolvedVault().discard(id: historyID)
             }
             state.phase = .success
             historyViewModel?.refresh()
