@@ -36,14 +36,23 @@ struct ModelsScreen: View {
             let downloadedEnhancement = downloaded.filter {
                 $0.id == ZenPolishLanguageModel.modelID
             }
-            if !downloadedEngines.isEmpty {
-                cardSection(title: "Downloaded speech-to-text", specs: downloadedEngines)
-            }
             if !downloadedEnhancement.isEmpty {
                 cardSection(
                     title: "Downloaded dictation enhancement",
                     specs: downloadedEnhancement
                 )
+            }
+            let availableEnhancement = available.filter {
+                $0.id == ZenPolishLanguageModel.modelID
+            }
+            if !availableEnhancement.isEmpty {
+                cardSection(
+                    title: "Available dictation enhancement",
+                    specs: availableEnhancement
+                )
+            }
+            if !downloadedEngines.isEmpty {
+                cardSection(title: "Downloaded speech-to-text", specs: downloadedEngines)
             }
             Text(
                 "All models run entirely on this Mac. NVIDIA Parakeet stays loaded for instant dictation."
@@ -56,15 +65,6 @@ struct ModelsScreen: View {
                     specs: available.filter {
                         $0.id != ZenPolishLanguageModel.modelID
                     }
-                )
-            }
-            let availableEnhancement = available.filter {
-                $0.id == ZenPolishLanguageModel.modelID
-            }
-            if !availableEnhancement.isEmpty {
-                cardSection(
-                    title: "Available dictation enhancement",
-                    specs: availableEnhancement
                 )
             }
             if let error = viewModel.errorMessage,
