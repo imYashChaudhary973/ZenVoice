@@ -243,15 +243,26 @@ if [[ -n "$signing_identity" ]]; then
     # Sparkle ships nested helper binaries (Updater.app, Autoupdate,
     # XPCServices/*.xpc). Notarization rejects the framework if any nested
     # executable lacks Developer ID + timestamp, so sign every one of them
-    # before the framework itself.
+    # before the framework itself. Sort by path depth (deepest first), with
+    # plain executables ahead of the .app/.xpc bundles that contain them, so
+    # the order never depends on directory-name sort luck.
+    sparkle_helpers=$(
+        { find "$frameworks_dir/Sparkle.framework" -type f -perm -111 ! -name "*.h" ! -name "*.modulemap" 2>/dev/null
+          find "$frameworks_dir/Sparkle.framework" \( -name "*.app" -o -name "*.xpc" \) 2>/dev/null; } |
+        awk '{ bundle = ($0 ~ /\.(app|xpc)$/) ? 1 : 0
+               depth = gsub(/\//, "/")
+               printf "%04d %d %s\n", 9999 - depth, bundle, $0 }' |
+        LC_ALL=C sort |
+        awk '{ $1 = ""; $2 = ""; sub(/^ +/, ""); print }')
     while IFS= read -r helper; do
+        [[ -n "$helper" ]] || continue
         codesign \
             --force \
             --options runtime \
             "$timestamp_flag" \
             --sign "$signing_identity" \
             "$helper"
-    done < <(find "$frameworks_dir/Sparkle.framework" -type f -perm -111 ! -name "*.h" ! -name "*.modulemap" 2>/dev/null | sort -u; find "$frameworks_dir/Sparkle.framework" \( -name "*.app" -o -name "*.xpc" \) 2>/dev/null | sort -u)
+    done <<< "$sparkle_helpers"
     codesign \
         --force \
         --options runtime \
@@ -303,13 +314,24 @@ else
             fi
         fi
     done
+    # Same nested-helper ordering as the Developer ID branch above: deepest
+    # first, plain executables before the .app/.xpc bundles that contain them.
+    sparkle_helpers=$(
+        { find "$frameworks_dir/Sparkle.framework" -type f -perm -111 ! -name "*.h" ! -name "*.modulemap" 2>/dev/null
+          find "$frameworks_dir/Sparkle.framework" \( -name "*.app" -o -name "*.xpc" \) 2>/dev/null; } |
+        awk '{ bundle = ($0 ~ /\.(app|xpc)$/) ? 1 : 0
+               depth = gsub(/\//, "/")
+               printf "%04d %d %s\n", 9999 - depth, bundle, $0 }' |
+        LC_ALL=C sort |
+        awk '{ $1 = ""; $2 = ""; sub(/^ +/, ""); print }')
     while IFS= read -r helper; do
+        [[ -n "$helper" ]] || continue
         codesign \
             --force \
             --options runtime \
             --sign - \
             "$helper"
-    done < <(find "$frameworks_dir/Sparkle.framework" -type f -perm -111 ! -name "*.h" ! -name "*.modulemap" 2>/dev/null | sort -u; find "$frameworks_dir/Sparkle.framework" \( -name "*.app" -o -name "*.xpc" \) 2>/dev/null | sort -u)
+    done <<< "$sparkle_helpers"
     codesign \
         --force \
         --options runtime \

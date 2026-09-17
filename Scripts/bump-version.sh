@@ -14,8 +14,8 @@ if [[ -z "$new_version" ]]; then
     exit 1
 fi
 
-if [[ "$new_version" != [0-9]*.[0-9]*.[0-9]* ]]; then
-    echo "Error: version must be in the form X.Y.Z" >&2
+if [[ ! "$new_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: version must be in the form X.Y.Z (e.g. 0.3.0)" >&2
     exit 1
 fi
 
@@ -37,6 +37,10 @@ new_build=$((current_build + 1))
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $new_build" \
     "$project_dir/Resources/Info.plist"
 
+# Escape sed special characters before interpolating into the replacement text.
+escaped_version=${new_version//\\/\\\\}
+escaped_version=${escaped_version//&/\\&}
+
 # CHANGELOG.md - add a new release section if the Unreleased block is empty.
 changelog="$project_dir/CHANGELOG.md"
 if grep -q "^## \[Unreleased\]$" "$changelog" 2>/dev/null; then
@@ -45,7 +49,7 @@ if grep -q "^## \[Unreleased\]$" "$changelog" 2>/dev/null; then
         # Insert the new version section right after the Unreleased header.
         sed -i '' "/^## \[Unreleased\]$/a\\
 \\
-## [$new_version] - $(date +%Y-%m-%d)\\
+## [$escaped_version] - $(date +%Y-%m-%d)\\
 " "$changelog"
     fi
 fi

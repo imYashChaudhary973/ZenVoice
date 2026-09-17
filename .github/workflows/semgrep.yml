@@ -39,5 +39,9 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/semgrep-venv"
           "$RUNNER_TEMP/semgrep-venv/bin/pip" install --quiet semgrep==1.164.0
 
+      # Rules come from the committed .semgrep/swift-security.yml, not
+      # `--config auto`, which fetches the latest registry rules at scan
+      # time and makes the scan nondeterministic. Edit the vendored file to
+      # change rules; the diff is reviewable in a PR.
       - name: Scan tracked source
-        run: '"$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --config auto --error .'
+        run: '"$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --config .semgrep/swift-security.yml --error .'

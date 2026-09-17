@@ -23,6 +23,7 @@
 
 require 'digest'
 require 'fileutils'
+require 'open3'
 require 'optparse'
 require 'rexml/document'
 
@@ -34,6 +35,11 @@ options = {
   private_key: nil,
   output: 'appcast.xml'
 }
+
+# The GitHub repo path every release artifact URL points at. It also appears
+# in Scripts/generate-homebrew-cask.rb and Resources/Info.plist (SUFeedURL);
+# update all three together.
+repo_owner = ENV.fetch('ZENVOICE_REPO_OWNER', 'imYashChaudhary973')
 
 OptionParser.new do |opts|
   opts.banner = "Usage: #{File.basename(__FILE__)} --version VERSION --dmg PATH --feed-url URL --private-key PATH [--build BUILD] [--output PATH]"
@@ -81,11 +87,12 @@ sparkle_bin_candidates = [
 ]
 sign_update = sparkle_bin_candidates.find { |c| File.executable?(c) } || 'sign_update'
 
-signature_output = nil
-IO.popen([sign_update, '--ed-key-file', key_path, '-p', dmg_path], err: [:child, :out]) do |io|
-  signature_output = io.read.strip
-end
-raise "sign_update failed or produced no output" if signature_output.nil? || signature_output.empty?
+signature_output, _stderr, sign_status = Open3.capture3(
+  sign_update, '--ed-key-file', key_path, '-p', dmg_path
+)
+raise "sign_update failed (exit #{sign_status.exitstatus})" unless sign_status.success?
+signature_output = signature_output.strip
+raise "sign_update produced no output" if signature_output.empty?
 # sign_update -p prints only the base64 EdDSA signature.
 signature = signature_output.lines.last&.strip || signature_output
 raise "sign_update output does not look like a base64 EdDSA signature: #{signature_output.inspect}" unless signature.match?(/\A[A-Za-z0-9+\/=]+\z/)
@@ -150,7 +157,7 @@ item << description
 
 enclosure = REXML::Element.new('enclosure')
 enclosure.add_attributes({
-  'url' => "https://github.com/imYashChaudhary973/ZenVoice/releases/download/v#{options[:version]}/ZenVoice.dmg",
+  'url' => "https://github.com/#{repo_owner}/ZenVoice/releases/download/v#{options[:version]}/ZenVoice.dmg",
   'length' => length.to_s,
   'type' => 'application/octet-stream',
   'sparkle:version' => build,

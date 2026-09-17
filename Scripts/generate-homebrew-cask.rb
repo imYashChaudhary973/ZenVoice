@@ -28,7 +28,11 @@ raise "DMG not found: #{dmg_path}" unless File.exist?(dmg_path)
 
 sha256 = Digest::SHA256.file(dmg_path).hexdigest
 
-repo_owner = ENV.fetch('ZENVOICE_HOMEBREW_TAP_OWNER', 'imYashChaudhary973')
+# The GitHub repo path the cask URL and homepage point at. It also appears in
+# Scripts/generate-appcast.rb and Resources/Info.plist (SUFeedURL); update all
+# three together.
+repo_owner = ENV['ZENVOICE_REPO_OWNER'] ||
+             ENV.fetch('ZENVOICE_HOMEBREW_TAP_OWNER', 'imYashChaudhary973')
 
 cask = <<~CASK
   cask "zenvoice" do
