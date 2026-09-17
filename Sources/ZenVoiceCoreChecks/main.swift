@@ -1900,17 +1900,80 @@ _ = FileManager.default.createFile(
     atPath: apexFixtureURL.path(percentEncoded: false),
     contents: Data()
 )
-let apexOverrideConfiguration = try? ZenVoiceConfiguration.discover(
-    languageProfile: .hinglish,
-    environment: ["ZENVOICE_MODEL_PATH": apexFixtureURL.path],
-    homeDirectory: configurationFixtureDirectory
-)
-guard apexOverrideConfiguration?.modelLanguageCapability == .hinglish,
-      apexOverrideConfiguration?.language == "en" else {
+// ZENVOICE_MODEL_PATH is a trust boundary: discover hands the file straight
+// to the decoder, so it must hash-match a catalogue entry. An empty fixture
+// matches nothing and must be rejected, not silently selected.
+do {
+    _ = try ZenVoiceConfiguration.discover(
+        languageProfile: .hinglish,
+        environment: ["ZENVOICE_MODEL_PATH": apexFixtureURL.path],
+        homeDirectory: configurationFixtureDirectory
+    )
     FileHandle.standardError.write(
-        Data("FAIL: Apex path override lost its Hinglish capability\n".utf8)
+        Data(
+            "FAIL: unverified ZENVOICE_MODEL_PATH override was selected\n"
+                .utf8
+        )
     )
     exit(1)
+} catch let error as ZenVoiceConfiguration.ConfigurationError {
+    guard case .modelVerificationFailed = error else {
+        FileHandle.standardError.write(
+            Data(
+                ("FAIL: override rejection threw \(error), not a "
+                    + "verification failure\n").utf8
+            )
+        )
+        exit(1)
+    }
+}
+// The legacy ggml-base.en.bin fallback is held to the same bar: present on
+// disk but failing verification must throw, never load. Skipped when this
+// machine has its own verified selection, because a verified selection
+// outranks the legacy path and would make the fixture unreachable.
+let hostSelectionVerified: Bool = {
+    guard let selected = ModelSelectionPreferences.load(),
+          let url = try? VerifiedModelCatalog.installedURL(for: selected)
+    else { return false }
+    return (try? VerifiedModelCatalog.verify(url, for: selected)) == true
+}()
+if !hostSelectionVerified {
+    let legacyFixtureURL = configurationFixtureDirectory
+        .appendingPathComponent(
+            "Library/Application Support/ZenVoice/Models/ggml-base.en.bin"
+        )
+    try FileManager.default.createDirectory(
+        at: legacyFixtureURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+    )
+    _ = FileManager.default.createFile(
+        atPath: legacyFixtureURL.path(percentEncoded: false),
+        contents: Data("not a whisper model".utf8)
+    )
+    do {
+        _ = try ZenVoiceConfiguration.discover(
+            languageProfile: .english,
+            environment: [:],
+            homeDirectory: configurationFixtureDirectory
+        )
+        FileHandle.standardError.write(
+            Data(
+                "FAIL: unverified legacy ggml-base.en.bin was selected\n"
+                    .utf8
+            )
+        )
+        exit(1)
+    } catch let error as ZenVoiceConfiguration.ConfigurationError {
+        guard case .modelVerificationFailed = error else {
+            FileHandle.standardError.write(
+                Data(
+                    ("FAIL: legacy rejection threw \(error), not a "
+                        + "verification failure\n").utf8
+                )
+            )
+            exit(1)
+        }
+    }
 }
 
 let romanized = LocalTransliterator.latinScript(

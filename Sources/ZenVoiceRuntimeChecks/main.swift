@@ -193,6 +193,29 @@ do {
     exit(1)
 }
 
+// Cohere decode length: the decoder must be allowed to fill its configured
+// context window instead of stopping at a fixed 256-token cap that silently
+// truncated dictations past roughly two minutes of speech. Runs without a
+// model — this pins the decode configuration rather than exercising ONNX.
+do {
+    // The prompt template `<|startofcontext|>` … `<|nodiarize|>` is nine
+    // tokens, so the ceiling is the 1024-position KV cache minus those 9.
+    let ceiling = CohereTranscribeEngine.maxNewTokens(promptTokenCount: 9)
+    guard ceiling == 1015 else {
+        throw NSError(
+            domain: "ZenVoiceRuntimeChecks",
+            code: 24,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "Cohere decode ceiling is \(ceiling) tokens; expected "
+                        + "the 1024-token context window minus the 9-token "
+                        + "prompt (1015)."
+            ]
+        )
+    }
+    print("  cohere decode ceiling: \(ceiling) tokens (full context window)")
+}
+
 /// This process's physical footprint, which is what macOS charges the app.
 ///
 /// `ps`-style RSS counts shared and file-backed pages and reads far higher
