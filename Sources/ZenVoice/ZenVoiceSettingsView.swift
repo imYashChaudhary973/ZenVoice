@@ -38,6 +38,20 @@ struct ZenVoiceSettingsView: View {
         var id: String { rawValue }
         var toolbarTitle: String { rawValue }
 
+        /// One gradient squircle per section; no two adjacent sections share
+        /// a similar hue.
+        var tileGradient: LinearGradient {
+            switch self {
+            case .home: return ZenDesign.Gradient.violet
+            case .dictation: return ZenDesign.Gradient.rose
+            case .models: return ZenDesign.Gradient.pink
+            case .personalisation: return ZenDesign.Gradient.orchid
+            case .history: return ZenDesign.Gradient.gold
+            case .updates: return ZenDesign.Gradient.amber
+            case .settings: return ZenDesign.Gradient.indigo
+            }
+        }
+
         var icon: String {
             switch self {
             case .home:
@@ -87,7 +101,6 @@ struct ZenVoiceSettingsView: View {
                     settingsViewModel: viewModel,
                     modelManagerViewModel: modelManagerViewModel
                 )
-                .background(ZenDesign.Semantic.canvas)
             } else {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebar
@@ -96,7 +109,6 @@ struct ZenVoiceSettingsView: View {
                         .id(selection)
                 }
                 .navigationSplitViewStyle(.balanced)
-                .toolbarBackground(.visible, for: .windowToolbar)
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
                         Text(selection.toolbarTitle)
@@ -137,11 +149,16 @@ struct ZenVoiceSettingsView: View {
                 )
             }
         }
-        // One violet tint drives native selection, focus, switches, links and
-        // primary actions. Graphite remains the structural layer.
+        // The translucent dark glass shell. One layer behind everything:
+        // sidebar and detail panes both ride it; only their tints differ.
+        .background(ZenWindowGlass())
+        // One pink tint drives native selection, focus, switches, links and
+        // primary actions. Charcoal remains the structural layer.
         .tint(ZenDesign.Semantic.accentFill)
         .frame(minWidth: 900, minHeight: 640)
-        .preferredColorScheme(ZenAppearance.colorScheme)
+        // The dark glass system is appearance-independent: fixed dark values,
+        // wallpaper bleeding through the shell.
+        .preferredColorScheme(.dark)
     }
 
     /// Everything ⌘K can reach: every settings screen, one entry per
@@ -235,6 +252,7 @@ struct ZenVoiceSettingsView: View {
         .frame(minWidth: 104, minHeight: 32)
         .zenGlassSurface(
             cornerRadius: ZenDesign.Radius.pill,
+            tint: ZenDesign.Component.shortcutBackground,
             interactive: false
         )
         .accessibilityElement(children: .ignore)
@@ -304,7 +322,7 @@ struct ZenVoiceSettingsView: View {
                     }
                     .listRowBackground(
                         RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.small,
+                            cornerRadius: ZenDesign.Radius.bar,
                             style: .continuous
                         )
                         .fill(
@@ -327,14 +345,11 @@ struct ZenVoiceSettingsView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
         }
-        .background {
-            ZenMaterialSurface(
-                material: .sidebar,
-                tint: ZenDesign.Semantic.sidebar.opacity(0.88),
-                fallback: ZenDesign.Semantic.sidebar
-            )
-                .ignoresSafeArea()
-        }
+        // The sidebar rides on the shared window glass with a slightly
+        // lighter tint than the content pane — a second material would blur
+        // the glass instead of the wallpaper.
+        .background(ZenDesign.Semantic.sidebar.opacity(0.35))
+        .ignoresSafeArea()
         .navigationSplitViewColumnWidth(
             min: 220,
             ideal: ZenDesign.Layout.sidebarWidth,
@@ -344,15 +359,11 @@ struct ZenVoiceSettingsView: View {
 
     private func sidebarLabel(_ section: Section) -> some View {
         HStack(spacing: ZenDesign.Spacing.sm) {
-            Image(systemName: section.icon)
-                .font(ZenDesign.Typography.navIcon)
-                .foregroundStyle(
-                    selection == section
-                        ? ZenDesign.Component.selectedNavigationIcon
-                        : ZenDesign.Semantic.textTertiary
-                )
-                .frame(width: 18)
-                .accessibilityHidden(true)
+            ZenGradientTile(
+                systemImage: section.icon,
+                gradient: section.tileGradient,
+                size: ZenDesign.Layout.rowIcon
+            )
             Text(section.rawValue)
                 .font(
                     selection == section

@@ -68,10 +68,7 @@ struct ZenBarView: View {
                 .transition(.opacity)
         }
         .frame(width: barWidth, height: Self.barHeight)
-        .zenGlassSurface(
-            cornerRadius: Self.barHeight / 2,
-            interactive: true
-        )
+        .zenHudSurface(cornerRadius: Self.barHeight / 2)
         .clipShape(barShape)
         .overlay {
             barShape.strokeBorder(

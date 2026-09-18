@@ -275,7 +275,7 @@ struct OverviewScreen: View {
     }
 
     private var previewDesktop: some View {
-        ZenDesign.Semantic.canvas
+        ZenDesign.Gradient.hudPreview
     }
 
     private var hudListeningChrome: some View {

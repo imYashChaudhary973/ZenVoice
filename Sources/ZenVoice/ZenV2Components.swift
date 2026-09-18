@@ -96,8 +96,9 @@ struct ZenScreen<Content: View, Tabs: View>: View {
             .clipped()
             .scrollIndicators(.automatic)
         }
-        .background(ZenDesign.Semantic.canvas)
-        .toolbarBackground(.visible, for: .windowToolbar)
+        // The detail pane rides the shared window glass; only the cards on
+        // top are solid.
+        .background(Color.clear)
     }
 }
 
@@ -377,6 +378,24 @@ struct ZenPanel<Content: View>: View {
                 lineWidth: contrast == .increased ? 1.5 : 1
             )
         }
+        // The soft-dark neumorphic tell: 1px top inner highlight keeps
+        // dark-on-dark slabs readable. Gradient is pinned to the top edge.
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [ZenDesign.Glass.topHighlight, .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 14)
+            .allowsHitTesting(false)
+        }
+        // Large, soft, ambient-only shadow. No hard drop shadows.
+        .shadow(
+            color: Color.black.opacity(0.40),
+            radius: 16,
+            x: 0,
+            y: 8
+        )
     }
 }
 

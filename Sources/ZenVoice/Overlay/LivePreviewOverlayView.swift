@@ -60,10 +60,7 @@ struct LivePreviewOverlayView: View {
                 content
                     .padding(.horizontal, 8)
                     .padding(.vertical, 8)
-                    .zenGlassSurface(
-                        cornerRadius: ZenDesign.Radius.pill,
-                        interactive: true
-                    )
+                    .zenHudSurface(cornerRadius: ZenDesign.Radius.pill)
             }
         }
         .preferredColorScheme(OverlayPreferences.colorScheme())
