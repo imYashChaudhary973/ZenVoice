@@ -24,6 +24,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let updatesViewModel: UpdatesViewModel
     private let insightsViewModel: InsightsViewModel
     private let voiceProfileViewModel: VoiceProfileViewModel
+    private let snippetsViewModel: SnippetsViewModel
     private let modelManagerViewModel: ModelManagerViewModel
     private let onboardingViewModel: OnboardingViewModel
     private var hasCenteredWindow = false
@@ -35,6 +36,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         updatesViewModel: UpdatesViewModel,
         insightsViewModel: InsightsViewModel,
         voiceProfileViewModel: VoiceProfileViewModel,
+        snippetsViewModel: SnippetsViewModel,
         modelManagerViewModel: ModelManagerViewModel,
         onboardingViewModel: OnboardingViewModel,
         appState: AppState
@@ -45,6 +47,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.updatesViewModel = updatesViewModel
         self.insightsViewModel = insightsViewModel
         self.voiceProfileViewModel = voiceProfileViewModel
+        self.snippetsViewModel = snippetsViewModel
         self.modelManagerViewModel = modelManagerViewModel
         self.onboardingViewModel = onboardingViewModel
         window = NSWindow(
@@ -89,6 +92,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 updatesViewModel: updatesViewModel,
                 insightsViewModel: insightsViewModel,
                 voiceProfileViewModel: voiceProfileViewModel,
+                snippetsViewModel: snippetsViewModel,
                 modelManagerViewModel: modelManagerViewModel,
                 onboardingViewModel: onboardingViewModel,
                 appState: appState

@@ -31,6 +31,7 @@ struct ZenVoiceSettingsView: View {
         case dictation = "Dictation"
         case models = "Models"
         case personalisation = "Personalisation"
+        case snippets = "Snippets"
         case history = "History"
         case updates = "Updates"
         case settings = "Settings"
@@ -45,6 +46,7 @@ struct ZenVoiceSettingsView: View {
             case .dictation: return ZenDesign.Gradient.rose
             case .models: return ZenDesign.Gradient.pink
             case .personalisation: return ZenDesign.Gradient.orchid
+            case .snippets: return ZenDesign.Gradient.coral
             case .history: return ZenDesign.Gradient.gold
             case .updates: return ZenDesign.Gradient.amber
             case .settings: return ZenDesign.Gradient.indigo
@@ -61,6 +63,8 @@ struct ZenVoiceSettingsView: View {
                 return "cpu"
             case .personalisation:
                 return "text.badge.star"
+            case .snippets:
+                return "text.append"
             case .history:
                 return "clock.arrow.circlepath"
             case .updates:
@@ -77,6 +81,7 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var updatesViewModel: UpdatesViewModel
     @ObservedObject var insightsViewModel: InsightsViewModel
     @ObservedObject var voiceProfileViewModel: VoiceProfileViewModel
+    @ObservedObject var snippetsViewModel: SnippetsViewModel
     @ObservedObject var modelManagerViewModel: ModelManagerViewModel
     @ObservedObject var onboardingViewModel:
         OnboardingViewModel
@@ -299,6 +304,8 @@ struct ZenVoiceSettingsView: View {
                 viewModel: viewModel,
                 voiceProfileViewModel: voiceProfileViewModel
             )
+        case .snippets:
+            SnippetsScreen(viewModel: snippetsViewModel)
         case .history:
             HistoryContainerScreen(
                 historyViewModel: historyViewModel,

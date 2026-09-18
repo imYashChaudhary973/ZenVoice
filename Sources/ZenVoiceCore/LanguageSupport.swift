@@ -103,6 +103,13 @@ public struct LanguageProfile:
         "\(inputLanguageCode)-\(outputMode.rawValue)"
     }
 
+    /// The script this profile is expected to produce. Used by the language
+    /// guard to reject transcripts that come out in another language
+    /// (multilingual models occasionally drift on ambiguous audio).
+    public var expectedScript: TranscriptLanguageGuard.Script? {
+        TranscriptLanguageGuard.Script.matching(inputLanguageCode)
+    }
+
     public var whisperLanguageArgument: String {
         inputLanguageCode
     }
@@ -395,5 +402,117 @@ public enum LocalTransliterator {
         }
         appendTransliteratedRun()
         return result
+    }
+}
+
+/// Rejects transcripts whose script does not match the dictation profile's
+/// language. Multilingual models occasionally drift — a short or quiet
+/// utterance decoded by a 25-language model can come out in Russian or
+/// French. Pasting that into the user's document is worse than failing the
+/// dictation with a clear message.
+public enum TranscriptLanguageGuard {
+    public enum Script: String, Sendable {
+        case latin
+        case cyrillic
+        case arabic
+        case han
+        case kana
+        case hangul
+        case devanagari
+
+        /// Script expected for a language code. Languages without a mapping
+        /// return nil and skip the guard.
+        public static func matching(
+            _ code: String
+        ) -> Script? {
+            let base = code.split(separator: "-").first.map(String.init)
+                ?? code
+            switch base {
+            case "en", "es", "fr", "de", "it", "pt", "nl", "pl", "da", "sv",
+                "no", "nb", "fi", "cs", "sk", "ro", "hu", "et", "lv", "lt",
+                "sl", "hr", "ca", "gl", "eu", "tr", "vi", "id", "ms", "sw",
+                "tl", "af", "sq", "az", "uz":
+                return .latin
+            case "ru", "uk", "bg", "sr", "mk", "be", "kk", "mn":
+                return .cyrillic
+            case "ar", "fa", "ur":
+                return .arabic
+            case "zh":
+                return .han
+            case "ja":
+                return .kana
+            case "ko":
+                return .hangul
+            case "hi":
+                return .devanagari
+            default:
+                return nil
+            }
+        }
+    }
+
+    /// True when `text` plausibly matches the profile's expected script.
+    /// Unmapped languages pass; empty transcripts pass.
+    public static func scriptMatches(
+        _ text: String,
+        expected: Script?
+    ) -> Bool {
+        guard let expected else { return true }
+        guard !text.isEmpty else { return true }
+
+        var latin = 0
+        var cyrillic = 0
+        var arabic = 0
+        var han = 0
+        var kana = 0
+        var hangul = 0
+        var devanagari = 0
+        var total = 0
+        for scalar in text.unicodeScalars {
+            guard scalar.properties.isAlphabetic else { continue }
+            total += 1
+            switch scalar.value {
+            case 0x0041...0x024F, 0x1E00...0x1EFF:
+                latin += 1
+            case 0x0400...0x04FF:
+                cyrillic += 1
+            case 0x0600...0x06FF:
+                arabic += 1
+            case 0x4E00...0x9FFF, 0x3400...0x4DBF:
+                han += 1
+            case 0x3040...0x30FF:
+                kana += 1
+            case 0xAC00...0xD7AF:
+                hangul += 1
+            case 0x0900...0x097F:
+                devanagari += 1
+            default:
+                latin += 1
+            }
+        }
+        guard total >= 3 else { return true }
+        let expectedCount: Int
+        switch expected {
+        case .latin: expectedCount = latin
+        case .cyrillic: expectedCount = cyrillic
+        case .arabic: expectedCount = arabic
+        case .han: expectedCount = han
+        case .kana: expectedCount = kana
+        case .hangul: expectedCount = hangul
+        case .devanagari: expectedCount = devanagari
+        }
+        return Double(expectedCount) / Double(total) >= 0.7
+    }
+
+    public static func validate(
+        languageCode: String,
+        text: String
+    ) throws {
+        let expected = Script.matching(languageCode)
+        guard scriptMatches(text, expected: expected) else {
+            throw EngineError.transcriptionLanguageMismatch(
+                expected.map { $0.rawValue.uppercased() } ?? languageCode
+            )
+        }
     }
 }

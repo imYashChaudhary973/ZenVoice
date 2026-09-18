@@ -241,6 +241,10 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
                             for: languageProfile
                         )
                     )
+                    try TranscriptLanguageGuard.validate(
+                        languageCode: languageProfile.inputLanguageCode,
+                        text: transcript
+                    )
                     let result = TranscriptionResult(
                         rawTranscript: transcript,
                         finalTranscript: transcript,
@@ -276,6 +280,10 @@ public final class ParakeetTDTEngine: @unchecked Sendable, SpeechEngine {
                         languageCode: Self.targetLanguageCode(
                             for: languageProfile
                         )
+                    )
+                    try TranscriptLanguageGuard.validate(
+                        languageCode: languageProfile.inputLanguageCode,
+                        text: transcript
                     )
                     continuation.resume(
                         returning: TranscriptionResult(

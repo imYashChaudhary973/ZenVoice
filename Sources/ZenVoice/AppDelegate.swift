@@ -117,6 +117,7 @@ private struct ActiveDictationBehavior: Sendable {
     let formattingMode: TranscriptFormattingMode
     let voiceCommandsEnabled: Bool
     let context: String
+    let snippets: [VoiceSnippet]
     let modelID: String
 
     static var global: ActiveDictationBehavior {
@@ -127,6 +128,7 @@ private struct ActiveDictationBehavior: Sendable {
             formattingMode: TranscriptFormattingPreferences.load(),
             voiceCommandsEnabled: false,
             context: "",
+            snippets: [],
             modelID: "unknown"
         )
     }
@@ -180,6 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var updatesViewModel: UpdatesViewModel!
     private var insightsViewModel: InsightsViewModel!
     private var voiceProfileViewModel: VoiceProfileViewModel!
+    private let snippetsViewModel = SnippetsViewModel()
     private var modelManagerViewModel: ModelManagerViewModel!
     private let onboardingViewModel = OnboardingViewModel(
         showAtLaunch: OnboardingPreferences.shouldPresent()
@@ -1172,6 +1175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updatesViewModel: updatesViewModel,
             insightsViewModel: insightsViewModel,
             voiceProfileViewModel: voiceProfileViewModel,
+            snippetsViewModel: snippetsViewModel,
             modelManagerViewModel: modelManagerViewModel,
             onboardingViewModel: onboardingViewModel,
             appState: state
@@ -1607,6 +1611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         settingsViewModel.sanitizedNextDictationContext,
                     preferredVocabulary: preferredVocabulary
                 ),
+            snippets: SnippetPreferences.load(),
             modelID:
                 (resolvedEngine as? WhisperSpeechEngine)?.modelID
                 ?? resolvedEngine.descriptor.id
@@ -1853,7 +1858,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             behavior.languageProfile
                                 .inputLanguageCode,
                         voiceCommandsEnabled:
-                            behavior.voiceCommandsEnabled
+                            behavior.voiceCommandsEnabled,
+                        snippets: behavior.snippets
                     )
                 let processed = ProcessedTranscription(
                     result: result,
@@ -1927,7 +1933,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             mode: behavior.formattingMode.instantRefineMode,
             languageCode: behavior.languageProfile.inputLanguageCode,
 
-            voiceCommandsEnabled: behavior.voiceCommandsEnabled
+            voiceCommandsEnabled: behavior.voiceCommandsEnabled,
+                        snippets: behavior.snippets
         )
         return ProcessedTranscription(
             result: result,
@@ -1979,7 +1986,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     mode: behavior.formattingMode.instantRefineMode,
                     languageCode: behavior.languageProfile.inputLanguageCode,
 
-                    voiceCommandsEnabled: behavior.voiceCommandsEnabled
+                    voiceCommandsEnabled: behavior.voiceCommandsEnabled,
+                        snippets: behavior.snippets
                 )
                 processed = ProcessedTranscription(
                     result: result,
@@ -2245,7 +2253,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     result.finalTranscript,
                     mode: behavior.formattingMode.instantRefineMode,
                     languageCode: behavior.languageProfile.inputLanguageCode,
-                    voiceCommandsEnabled: behavior.voiceCommandsEnabled
+                    voiceCommandsEnabled: behavior.voiceCommandsEnabled,
+                        snippets: behavior.snippets
                 )
                 let correctionApplication = appliesCorrectionRules
                     ? try? await correctionVault?.applyCorrections(
@@ -2944,7 +2953,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let mode = formattingMode.zenIntelligenceMode
             guard mode != .off else {
                 text = transcript
-                return await translatedIfNeeded(text)
+                return await applySnippets(
+                    await translatedIfNeeded(text)
+                )
             }
             text = ZenIntelligenceEngine().enhance(
                 transcript,
@@ -2953,7 +2964,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 context: settingsViewModel?.sanitizedNextDictationContext
             ).text
         }
-        return await translatedIfNeeded(text)
+        // Snippets run last — after formatting, guards, and translation.
+        // They are user-authored expansions, so nothing upstream may
+        // reword or reject them.
+        return await applySnippets(await translatedIfNeeded(text))
+    }
+
+    /// The single snippet application point: user-authored expansions that
+    /// run after formatting, guards, and translation — nothing upstream may
+    /// reword or reject them.
+    private func applySnippets(_ text: String) async -> String {
+        let snippetResult = SnippetEngine().apply(
+            to: text,
+            snippets: activeDictationBehavior.snippets,
+            isEnabled: !activeDictationBehavior.snippets.isEmpty
+        )
+        return snippetResult.text
     }
 
     private func translatedIfNeeded(_ transcript: String) async -> String {
@@ -3353,6 +3379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let formattingMode = TranscriptFormattingPreferences.load()
         let voiceCommandsEnabled =
             LocalVoiceCommandPreferences.isEnabled()
+        let activeSnippets = SnippetPreferences.load()
         Task { [weak self] in
             defer { try? FileManager.default.removeItem(at: retryDirectory) }
             do {
@@ -3368,7 +3395,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         mode: formattingMode.instantRefineMode,
                         languageCode:
                             recordedLanguageProfile.inputLanguageCode,
-                        voiceCommandsEnabled: voiceCommandsEnabled
+                        voiceCommandsEnabled: voiceCommandsEnabled,
+                        snippets: activeSnippets
                     )
                 let processed = ProcessedTranscription(
                     result: result,

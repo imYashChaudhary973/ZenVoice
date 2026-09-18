@@ -216,6 +216,7 @@ public enum EngineError: LocalizedError {
     case engineUnavailable(String)
     case preparationFailed(String, Error)
     case transcriptionFailed(String, Error)
+    case transcriptionLanguageMismatch(String)
 
     public var errorDescription: String? {
         switch self {
@@ -227,6 +228,10 @@ public enum EngineError: LocalizedError {
             return "\(id) could not start: \(error.localizedDescription)"
         case .transcriptionFailed(let id, let error):
             return "\(id) failed: \(error.localizedDescription)"
+        case .transcriptionLanguageMismatch(let code):
+            return "The transcription came out in the wrong language "
+                + "(expected \(code)). Try again, or check the input "
+                + "language in Settings."
         }
     }
 }

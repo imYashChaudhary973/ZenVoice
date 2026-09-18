@@ -158,6 +158,12 @@ public struct LocalVoiceCommandEngine: Sendable {
         let phrases: [String]
         let replacement: String
         let category: LocalVoiceCommandCategory
+        /// Consumes the space that follows the phrase — "gmail dot com"
+        /// becomes "gmail.com" instead of "gmail. com".
+        var joinsRight = false
+        /// Consumes the spaces that precede the phrase — "quote hello
+        /// unquote" becomes "\u201Chello\u201D" with the quote hugging the word.
+        var joinsLeft = false
     }
 
     public init() {}
@@ -176,17 +182,53 @@ public struct LocalVoiceCommandEngine: Sendable {
 
         var candidate = Self.protectEscapedPhrases(transcript)
         var correctionCount = 0
-        for command in commands(languageCode: languageCode) {
-            for phrase in command.phrases.sorted(by: {
-                $0.count > $1.count
-            }) {
-                correctionCount += replace(
-                    phrase: phrase,
-                    with: command.replacement,
-                    in: &candidate
-                )
+        // Join markers: a command may declare that its output hugs the word
+        // on its left (quote → “hello”) or right (dot → gmail.com). The
+        // markers are unambiguous sentinels the join pass below collapses;
+        // they are stripped once joins are done.
+        let leftMarker = "\u{E000}"
+        let rightMarker = "\u{E001}"
+        // Longest phrase first, ACROSS commands: "em dash" must win over the
+        // "dash" inside it, and "dash dash force" over plain "dash". The
+        // per-command order above is decorative; ordering here is what keeps
+        // overlapping phrases from eating each other.
+        let commands = commands(languageCode: languageCode)
+            .flatMap { command -> [(phrase: String, command: Command)] in
+                command.phrases.map {
+                    (phrase: $0, command: command)
+                }
             }
+            .sorted { $0.phrase.count > $1.phrase.count }
+
+        for entry in commands {
+            var replacement = entry.command.replacement
+            if entry.command.joinsLeft {
+                replacement = leftMarker + replacement
+            }
+            if entry.command.joinsRight {
+                replacement += rightMarker
+            }
+            correctionCount += replace(
+                phrase: entry.phrase,
+                with: replacement,
+                in: &candidate
+            )
         }
+
+        // The join pass: a space on the hugging side of a marker collapses.
+        candidate = candidate.replacingOccurrences(
+            of: "[ \\t]+\u{E000}",
+            with: "\u{E000}",
+            options: .regularExpression
+        )
+        candidate = candidate.replacingOccurrences(
+            of: "\u{E001}[ \\t]+",
+            with: "\u{E001}",
+            options: .regularExpression
+        )
+        candidate = candidate
+            .replacingOccurrences(of: leftMarker, with: "")
+            .replacingOccurrences(of: rightMarker, with: "")
 
         let spanCorrections = Self.applySpans(&candidate)
         correctionCount += spanCorrections
@@ -194,7 +236,7 @@ public struct LocalVoiceCommandEngine: Sendable {
 
         candidate = candidate
             .replacingOccurrences(
-                of: #"[ \t]+([,.!?。，？！،؟])"#,
+                of: #"[ \t]+([,.!?@/\\$€£%&*#+=|<>^~。，？！،؟])"#,
                 with: "$1",
                 options: .regularExpression
             )
@@ -406,7 +448,9 @@ public struct LocalVoiceCommandEngine: Sendable {
             Command(
                 phrases: ["tab key"],
                 replacement: "\t",
-                category: .structure
+                category: .structure,
+                joinsRight: true,
+                joinsLeft: true
             )
         ]
 
@@ -450,12 +494,15 @@ public struct LocalVoiceCommandEngine: Sendable {
             Command(
                 phrases: ["dash"],
                 replacement: "-",
-                category: .punctuation
+                category: .punctuation,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["dash dash force"],
                 replacement: "---",
-                category: .punctuation
+                category: .punctuation,
+                joinsRight: true
             ),
             Command(
                 phrases: ["em dash"],
@@ -465,12 +512,14 @@ public struct LocalVoiceCommandEngine: Sendable {
             Command(
                 phrases: ["hyphen"],
                 replacement: "-",
-                category: .punctuation
+                category: .punctuation,
+                joinsRight: true
             ),
             Command(
                 phrases: ["underscore"],
                 replacement: "_",
-                category: .punctuation
+                category: .punctuation,
+                joinsRight: true
             )
         ]
 
@@ -479,92 +528,128 @@ public struct LocalVoiceCommandEngine: Sendable {
             Command(
                 phrases: ["dot"],
                 replacement: ".",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["at sign"],
                 replacement: "@",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["slash"],
                 replacement: "/",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["backslash"],
                 replacement: "\\",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["dollar sign"],
                 replacement: "$",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["euro sign"],
                 replacement: "€",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["pound sign"],
                 replacement: "£",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["percent"],
                 replacement: "%",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["ampersand"],
                 replacement: "&",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["asterisk"],
                 replacement: "*",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["hash"],
                 replacement: "#",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["plus sign"],
                 replacement: "+",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["equals sign"],
                 replacement: "=",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["pipe"],
                 replacement: "|",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["greater than"],
                 replacement: ">",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["less than"],
                 replacement: "<",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["caret"],
                 replacement: "^",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["tilde"],
                 replacement: "~",
-                category: .symbols
+                category: .symbols,
+                joinsRight: true,
+                joinsLeft: true
             )
         ]
 
@@ -603,22 +688,26 @@ public struct LocalVoiceCommandEngine: Sendable {
             Command(
                 phrases: ["quote"],
                 replacement: "\u{201C}",
-                category: .pairs
+                category: .pairs,
+                joinsRight: true
             ),
             Command(
                 phrases: ["unquote"],
                 replacement: "\u{201D}",
-                category: .pairs
+                category: .pairs,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["open single quote"],
                 replacement: "\u{2018}",
-                category: .pairs
+                category: .pairs,
+                joinsRight: true
             ),
             Command(
                 phrases: ["close single quote"],
                 replacement: "\u{2019}",
-                category: .pairs
+                category: .pairs,
+                joinsLeft: true
             )
         ]
 
