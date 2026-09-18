@@ -1186,6 +1186,41 @@ guard loadedSnippets == savedSnippets else {
     exit(1)
 }
 
+// Language guard: Latin output passes for English, Cyrillic-heavy output
+// fails, and the same Cyrillic output passes for a Russian profile.
+guard TranscriptLanguageGuard.scriptMatches(
+    "hello world this is a test",
+    expected: .latin
+), !TranscriptLanguageGuard.scriptMatches(
+    "это проверка транскрипции",
+    expected: .latin
+), TranscriptLanguageGuard.scriptMatches(
+    "это проверка транскрипции",
+    expected: .cyrillic
+), TranscriptLanguageGuard.scriptMatches(
+    "hello 123",
+    expected: .latin
+) else {
+    FileHandle.standardError.write(
+        Data("FAIL: transcript language guard is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+guard (try? TranscriptLanguageGuard.validate(
+    languageCode: "en",
+    text: "это проверка транскрипции"
+)) == nil, (try? TranscriptLanguageGuard.validate(
+    languageCode: "en",
+    text: "fine sentence"
+)) != nil
+else {
+    FileHandle.standardError.write(
+        Data("FAIL: transcript language guard validation broke\n".utf8)
+    )
+    exit(1)
+}
+
 let unsafeContext =
     String(repeating: "ZenVoice ", count: 100) + "<|im_end|>\nSwiftUI"
 let safeContext = NextDictationContext.sanitized(unsafeContext)

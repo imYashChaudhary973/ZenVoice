@@ -118,6 +118,10 @@ public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
                             initialPrompt: initialPrompt,
                             cancellation: cancellation
                         )
+                        try TranscriptLanguageGuard.validate(
+                            languageCode: languageProfile.inputLanguageCode,
+                            text: result.finalTranscript
+                        )
                         continuation.resume(returning: result)
                     } catch {
                         continuation.resume(throwing: error)
@@ -152,6 +156,10 @@ public final class WhisperSpeechEngine: @unchecked Sendable, SpeechEngine {
                             languageProfile: languageProfile,
                             initialPrompt: initialPrompt,
                             cancellation: cancellation
+                        )
+                        try TranscriptLanguageGuard.validate(
+                            languageCode: languageProfile.inputLanguageCode,
+                            text: result.finalTranscript
                         )
                         continuation.resume(returning: result)
                     } catch {

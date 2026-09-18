@@ -188,23 +188,31 @@ public struct LocalVoiceCommandEngine: Sendable {
         // they are stripped once joins are done.
         let leftMarker = "\u{E000}"
         let rightMarker = "\u{E001}"
-        for command in commands(languageCode: languageCode) {
-            var replacement = command.replacement
-            if command.joinsLeft {
+        // Longest phrase first, ACROSS commands: "em dash" must win over the
+        // "dash" inside it, and "dash dash force" over plain "dash". The
+        // per-command order above is decorative; ordering here is what keeps
+        // overlapping phrases from eating each other.
+        let commands = commands(languageCode: languageCode)
+            .flatMap { command -> [(phrase: String, command: Command)] in
+                command.phrases.map {
+                    (phrase: $0, command: command)
+                }
+            }
+            .sorted { $0.phrase.count > $1.phrase.count }
+
+        for entry in commands {
+            var replacement = entry.command.replacement
+            if entry.command.joinsLeft {
                 replacement = leftMarker + replacement
             }
-            if command.joinsRight {
+            if entry.command.joinsRight {
                 replacement += rightMarker
             }
-            for phrase in command.phrases.sorted(by: {
-                $0.count > $1.count
-            }) {
-                correctionCount += replace(
-                    phrase: phrase,
-                    with: replacement,
-                    in: &candidate
-                )
-            }
+            correctionCount += replace(
+                phrase: entry.phrase,
+                with: replacement,
+                in: &candidate
+            )
         }
 
         // The join pass: a space on the hugging side of a marker collapses.
@@ -487,7 +495,8 @@ public struct LocalVoiceCommandEngine: Sendable {
                 phrases: ["dash"],
                 replacement: "-",
                 category: .punctuation,
-                joinsRight: true
+                joinsRight: true,
+                joinsLeft: true
             ),
             Command(
                 phrases: ["dash dash force"],
