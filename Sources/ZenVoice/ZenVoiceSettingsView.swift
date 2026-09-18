@@ -260,6 +260,7 @@ struct ZenVoiceSettingsView: View {
                     )
             }
         }
+        .padding(.horizontal, ZenDesign.Spacing.xs)
         .frame(minHeight: 36)
         .accessibilityLabel(section.rawValue)
     }
