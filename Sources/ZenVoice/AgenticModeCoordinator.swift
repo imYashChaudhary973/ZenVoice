@@ -17,6 +17,25 @@ import UserNotifications
 import ZenVoiceCore
 import ZenVoiceStorage
 
+/// A cancelled response still needs a digest bound to the exact plan the user
+/// saw. Encoding cannot fail for a value-type plan; if it ever does, crashing
+/// is safer than sending a digest of empty data.
+private func cancelledDecision(
+    _ plan: GoalPlan,
+    version: Int
+) -> ApprovalDecision {
+    do {
+        return ApprovalDecision(
+            planID: plan.id,
+            planSHA256: try GoalPlanDigest.sha256(plan),
+            planVersion: version,
+            action: .cancelled
+        )
+    } catch {
+        preconditionFailure("GoalPlanDigest failed to encode plan: \(error)")
+    }
+}
+
 @MainActor
 final class AgenticModeCoordinator {
     private let state: AppState
@@ -42,14 +61,7 @@ final class AgenticModeCoordinator {
             executors: executors,
             approvalHandler: { [weak self] plan, version, stepNumber in
                 guard let self else {
-                    return .decision(
-                        ApprovalDecision(
-                            planID: plan.id,
-                            planSHA256: GoalPlanDigest.sha256(plan),
-                            planVersion: version,
-                            action: .cancelled
-                        )
-                    )
+                    return .decision(cancelledDecision(plan, version: version))
                 }
                 return await self.requestApproval(
                     plan: plan,
@@ -156,12 +168,7 @@ final class AgenticModeCoordinator {
                     self?.resolveApproval(
                         token: token,
                         response: .decision(
-                            ApprovalDecision(
-                                planID: plan.id,
-                                planSHA256: GoalPlanDigest.sha256(plan),
-                                planVersion: version,
-                                action: .cancelled
-                            )
+                            cancelledDecision(plan, version: version)
                         )
                     )
                 }

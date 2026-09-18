@@ -103,6 +103,21 @@ public enum RuntimeIdentity {
         resolvedBundleID(policy: policy)
     }
 
+    /// Returns the Application Support folder name model files live under for
+    /// the resolved identity. Production keeps the legacy `ZenVoice` folder so
+    /// existing installs stay byte-identical on disk; QA identities get a
+    /// folder derived from their suite name so they cannot collide with it.
+    public static func modelsFolderName(
+        policy: BundleIdentifierPolicy
+    ) -> String {
+        switch policy.kind {
+        case .production:
+            return "ZenVoice"
+        case .qa(let identifier):
+            return "ZenVoice.QA.\(identifier)"
+        }
+    }
+
     /// Returns the Keychain service name for the vault key.
     public static func keychainServiceName(
         policy: BundleIdentifierPolicy
@@ -142,7 +157,12 @@ public enum RuntimeIdentity {
         case .production:
             return .standard
         case .qa(let identifier):
-            return UserDefaults(suiteName: identifier) ?? .standard
+            guard let suite = UserDefaults(suiteName: identifier) else {
+                preconditionFailure(
+                    "RuntimeIdentity: could not create UserDefaults suite '\(identifier)'; QA preferences must not silently use the production domain."
+                )
+            }
+            return suite
         }
     }
 

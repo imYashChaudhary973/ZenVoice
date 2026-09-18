@@ -32,6 +32,16 @@ let checks: [(name: String, actual: String, expected: String)] = [
         ""
     ),
     (
+        "strips empty bracket pairs",
+        cleaner.clean("hello [] world [ ] again"),
+        "Hello world again"
+    ),
+    (
+        "keeps a bracketed note",
+        cleaner.clean("buy milk [note to self] tomorrow"),
+        "Buy milk [note to self] tomorrow"
+    ),
+    (
         "removes only a leading filler",
         cleaner.clean("um, this is, um, still meaningful."),
         "This is, um, still meaningful."
@@ -1507,6 +1517,33 @@ guard try !VerifiedModelCatalog.verify(verifierURL, for: verifierModel) else {
     )
     exit(1)
 }
+// modelsDirectory routes through RuntimeIdentity, but production must keep
+// its legacy on-disk location byte-identical so existing installs resolve.
+do {
+    let support = try FileManager.default.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: false
+    )
+    let directory = try VerifiedModelCatalog.modelsDirectory()
+    guard directory == support
+            .appendingPathComponent("ZenVoice", isDirectory: true)
+            .appendingPathComponent("Models", isDirectory: true) else {
+        FileHandle.standardError.write(
+            Data("FAIL: production models directory path changed\n".utf8)
+        )
+        exit(1)
+    }
+} catch {
+    FileHandle.standardError.write(
+        Data(
+            "FAIL: could not verify the production models directory: \(error)\n"
+                .utf8
+        )
+    )
+    exit(1)
+}
 
 print("ZenVoiceCoreChecks: bundle manifest verification skipped — no multi-file bundles")
 
@@ -2063,6 +2100,17 @@ StableTranscriptComposer.appending(
 ) == "Please build the page" else {
     FileHandle.standardError.write(
         Data("FAIL: live dictation defaults are invalid\n".utf8)
+    )
+    exit(1)
+}
+// Reading the preview preference must stay side-effect free: the default is
+// expressed by the reader, never by writing the key on first read.
+_ = LiveDictationPreferences.isPreviewEnabled(defaults: liveDefaults)
+guard liveDefaults.object(
+        forKey: LiveDictationPreferences.previewKey
+    ) == nil else {
+    FileHandle.standardError.write(
+        Data("FAIL: isPreviewEnabled wrote defaults on read\n".utf8)
     )
     exit(1)
 }
@@ -2895,6 +2943,38 @@ guard VerifiedEngineCatalog.engine(
         id: EngineIdentifiers.parakeetTDTv3
       )?.wrappedModelID == "nvidia/parakeet-tdt-0.6b-v3" else {
     failEngineCheck("TDT v3 does not wrap nvidia/parakeet-tdt-0.6b-v3")
+}
+guard let cohereEngine = VerifiedEngineCatalog.engine(
+        id: EngineIdentifiers.cohereTranscribe
+),
+      cohereEngine.sha256 == VerifiedEngineCatalog.cohereEncoderSHA256,
+      cohereEngine.downloadFilename
+        == VerifiedEngineCatalog.cohereEncoderFilename,
+      cohereEngine.fileSizeBytes == VerifiedEngineCatalog.cohereBundleSizeBytes
+else {
+    failEngineCheck(
+        "Cohere engine entry no longer pins the primary file of its bundle"
+    )
+}
+guard let qwen3Engine = VerifiedEngineCatalog.engine(
+        id: EngineIdentifiers.qwen3ASR
+),
+      qwen3Engine.sha256 == VerifiedEngineCatalog.qwen3WeightsSHA256,
+      qwen3Engine.downloadFilename == VerifiedEngineCatalog.qwen3WeightsFilename,
+      qwen3Engine.fileSizeBytes == VerifiedEngineCatalog.qwen3BundleSizeBytes
+else {
+    failEngineCheck(
+        "Qwen3 engine entry no longer pins the weights file of its bundle"
+    )
+}
+guard VerifiedEngine(
+        descriptor: VerifiedEngineCatalog.engine(
+            id: EngineIdentifiers.parakeetTDTv3
+        )!.descriptor,
+        runtimeIdentifier: "x",
+        sourceRepository: "https://mirror.huggingface.co.evil/nvidia/model"
+      ).wrappedModelID == nil else {
+    failEngineCheck("wrappedModelID accepted a spoofed huggingface host")
 }
 guard VerifiedEngineCatalog.engine(id: EngineIdentifiers.appleSpeech) != nil,
       EngineIdentifiers.isKnown(EngineIdentifiers.appleSpeech) else {

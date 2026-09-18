@@ -343,14 +343,20 @@ private struct AgenticApprovalView: View {
         mode: ApprovalMode? = nil,
         covered: [Int] = []
     ) -> ApprovalDecision {
-        ApprovalDecision(
-            planID: plan.id,
-            planSHA256: GoalPlanDigest.sha256(plan),
-            planVersion: planVersion,
-            action: action,
-            mode: mode,
-            coveredStepNumbers: covered
-        )
+        do {
+            return ApprovalDecision(
+                planID: plan.id,
+                planSHA256: try GoalPlanDigest.sha256(plan),
+                planVersion: planVersion,
+                action: action,
+                mode: mode,
+                coveredStepNumbers: covered
+            )
+        } catch {
+            // An approval that cannot bind to a serialized plan must not be
+            // sent with a degraded digest.
+            preconditionFailure("GoalPlanDigest failed to encode plan: \(error)")
+        }
     }
 
     private func riskBadge(_ risk: RiskLevel) -> some View {

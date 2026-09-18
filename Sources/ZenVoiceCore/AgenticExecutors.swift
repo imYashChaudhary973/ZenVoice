@@ -88,6 +88,15 @@ public actor ProcessGoalExecutor: GoalExecutor {
                         try Task.checkCancellation()
                         try process.run()
                         #if os(macOS)
+                        // Foundation's Process offers no pre-exec hook, so
+                        // setpgid can only follow run(): there is a window
+                        // where the child may spawn a grandchild that escapes
+                        // the process group and survives kill(-pid) during
+                        // cancellation. Accepted because the window is
+                        // microseconds wide, the child agents (codex, claude,
+                        // zsh) do not fork that early, and an escaped
+                        // grandchild still dies when its parent group is
+                        // reaped or it finishes its own work.
                         _ = setpgid(
                             process.processIdentifier,
                             process.processIdentifier
@@ -184,18 +193,75 @@ public actor ProcessGoalExecutor: GoalExecutor {
         channel: ExecutorOutput.Channel,
         output: @escaping @Sendable (ExecutorOutput) async -> Void
     ) {
+        // A UTF-8 sequence can split across pipe chunks; decoding each chunk
+        // in isolation corrupts it into U+FFFD. Hold the trailing partial
+        // sequence back and only emit complete characters. readabilityHandler
+        // is invoked serially by FileHandle, so the local buffer is safe.
+        nonisolated(unsafe) var pending = Data()
         handle.readabilityHandler = { readable in
             let data = readable.availableData
-            guard !data.isEmpty,
-                  let text = String(data: data, encoding: .utf8),
-                  !text.isEmpty
-            else {
+            if data.isEmpty {
+                // End of stream: flush whatever is left, lossily.
+                guard !pending.isEmpty else { return }
+                let text = String(decoding: pending, as: UTF8.self)
+                pending = Data()
+                Task {
+                    await output(ExecutorOutput(channel: channel, text: text))
+                }
+                return
+            }
+            pending.append(data)
+            let (complete, remainder) = Self.splitAtCharacterBoundary(pending)
+            pending = remainder
+            guard !complete.isEmpty else {
+                return
+            }
+            // Lossy by design: complete ends at a character boundary, so
+            // valid sequences survive and malformed bytes surface as U+FFFD
+            // instead of silently dropping the chunk.
+            let text = String(decoding: complete, as: UTF8.self)
+            guard !text.isEmpty else {
                 return
             }
             Task {
                 await output(ExecutorOutput(channel: channel, text: text))
             }
         }
+    }
+
+    /// Splits `data` at the last character boundary so a trailing, incomplete
+    /// UTF-8 sequence is held for the next chunk instead of decoding to
+    /// U+FFFD. Malformed bytes that cannot be a sequence prefix at all pass
+    /// through unchanged (the lossy decode will surface them).
+    private static func splitAtCharacterBoundary(
+        _ data: Data
+    ) -> (complete: Data, pending: Data) {
+        var lead = data.count - 1
+        while lead >= 0, lead >= data.count - 4,
+              data[data.startIndex + lead] & 0xC0 == 0x80 {
+            lead -= 1
+        }
+        guard lead >= 0, data[data.startIndex + lead] & 0x80 != 0 else {
+            return (data, Data())
+        }
+        let byte = data[data.startIndex + lead]
+        let expectedLength: Int
+        if byte & 0xE0 == 0xC0 {
+            expectedLength = 2
+        } else if byte & 0xF0 == 0xE0 {
+            expectedLength = 3
+        } else if byte & 0xF8 == 0xF0 {
+            expectedLength = 4
+        } else {
+            // Not a valid sequence lead; nothing to hold back.
+            return (data, Data())
+        }
+        guard data.count - lead < expectedLength else {
+            return (data, Data())
+        }
+        // Small copies are fine: pipe chunks are small, and Data slicing is
+        // index-ambiguous enough to cost more than the copy in review time.
+        return (Data(data.prefix(lead)), Data(data.dropFirst(lead)))
     }
 
     private struct Invocation {
@@ -256,9 +322,20 @@ public actor ProcessGoalExecutor: GoalExecutor {
 
     private static func minimalEnvironment() -> [String: String] {
         let environment = ProcessInfo.processInfo.environment
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        var path = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        // Tools the user installs outside a package manager (pipx --user,
+        // plain `make install`) live here; skip them if the directories do
+        // not exist rather than polluting PATH with dead entries.
+        for directory in [
+            home.appendingPathComponent(".local/bin"),
+            home.appendingPathComponent("bin"),
+        ] where FileManager.default.fileExists(atPath: directory.path) {
+            path += ":" + directory.path
+        }
         return [
-            "HOME": FileManager.default.homeDirectoryForCurrentUser.path,
-            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+            "HOME": home.path,
+            "PATH": path,
             "TMPDIR": environment["TMPDIR"] ?? NSTemporaryDirectory(),
             "LANG": environment["LANG"] ?? "en_US.UTF-8",
         ]

@@ -71,7 +71,6 @@ public enum BuiltInSlangLexicon {
         ("pak ka", "pakka"),
         ("tension mut lo", "tension mat lo"),
         ("tension matlo", "tension mat lo"),
-        ("dekh lo na", "dekh lo na"),
         ("samaj gaya", "samajh gaya"),
         ("samjh gaya", "samajh gaya"),
         ("kya bat hai", "kya baat hai"),

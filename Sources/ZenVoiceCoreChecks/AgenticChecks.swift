@@ -98,7 +98,7 @@ func agenticDecision(
     return .decision(
         ApprovalDecision(
             planID: plan.id,
-            planSHA256: GoalPlanDigest.sha256(plan),
+            planSHA256: try! GoalPlanDigest.sha256(plan),
             planVersion: version,
             action: .approved,
             mode: mode,
@@ -122,12 +122,16 @@ func waitForAgenticRecord(
 }
 
 func runAgenticPreferenceChecks() {
-    let defaults = UserDefaults(
-        suiteName: "com.zenvoice.app.agentic-checks"
-    )!
-    defaults.removePersistentDomain(
-        forName: "com.zenvoice.app.agentic-checks"
-    )
+    let agenticPrefsSuite = "ZenVoiceCoreChecks.Agentic.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: agenticPrefsSuite) else {
+        FileHandle.standardError.write(
+            Data("FAIL: could not create agentic preference fixture\n".utf8)
+        )
+        exit(1)
+    }
+    defer {
+        defaults.removePersistentDomain(forName: agenticPrefsSuite)
+    }
 
     guard !AgenticModePreferences.isEnabled(defaults: defaults),
           !AgenticModePreferences.isEffectivelyEnabled(defaults: defaults)
@@ -201,9 +205,6 @@ func runAgenticPreferenceChecks() {
         failEngineCheck("a high-risk step was remembered")
     }
 
-    defaults.removePersistentDomain(
-        forName: "com.zenvoice.app.agentic-checks"
-    )
     print("ZenVoiceCoreChecks: agentic preferences passed")
 }
 

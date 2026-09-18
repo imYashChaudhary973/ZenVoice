@@ -22,6 +22,10 @@ import Foundation
 public enum SelectedEnginePreferences {
     public static let preferenceKey = "ZenVoice.selectedEngineIDs"
 
+    /// Read-modify-write of the per-profile dictionary must not interleave
+    /// across threads, or a concurrent save for another profile is lost.
+    private static let lock = NSLock()
+
     public static func load(
         for profile: LanguageProfile,
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
@@ -38,6 +42,8 @@ public enum SelectedEnginePreferences {
         for profile: LanguageProfile,
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
+        lock.lock()
+        defer { lock.unlock() }
         var dictionary =
             (defaults.dictionary(forKey: preferenceKey) as? [String: String])
             ?? [:]
@@ -49,6 +55,8 @@ public enum SelectedEnginePreferences {
         for profile: LanguageProfile,
         defaults: UserDefaults = RuntimeIdentity.userDefaults()
     ) {
+        lock.lock()
+        defer { lock.unlock() }
         guard var dictionary = defaults.dictionary(forKey: preferenceKey)
                 as? [String: String] else {
             return
