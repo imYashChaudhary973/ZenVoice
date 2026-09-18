@@ -208,22 +208,6 @@ struct PrivacyScreen: View {
                 )
                 ZenPanelDivider()
                 PermissionRow(
-                    icon: "rectangle.dashed.badge.record",
-                    title: "Screen Recording",
-                    detail:
-                        "Captures the other side of a call (Them). Without it, a meeting records only your microphone.",
-                    status: viewModel.screenRecordingStatus,
-                    action: {
-                        if let url = URL(
-                            string:
-                                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-                        ) {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                )
-                ZenPanelDivider()
-                PermissionRow(
                     icon: "accessibility",
                     title: "Accessibility",
                     detail:
