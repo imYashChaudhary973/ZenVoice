@@ -19,13 +19,22 @@ if [[ ! -f "$changelog" ]]; then
     exit 1
 fi
 
-# Print the section for this version if it exists, otherwise Unreleased.
-awk -v ver="$version" '
+# Print the section for this version, failing loudly when CHANGELOG.md has
+# no section for it: a silently empty stub would publish a bare release.
+section=$(awk -v ver="$version" '
     index($0, "## [" ver "]") == 1 { start=1; next }
     start && /^## \[/ { exit }
     start { print }
     /^## \[/ { start=0 }
-' "$changelog"
+' "$changelog")
+
+if [[ -z "$section" ]]; then
+    echo "Error: CHANGELOG.md has no '## [$version]' section." >&2
+    echo "Add release notes for $version before generating release notes." >&2
+    exit 1
+fi
+
+print -r -- "$section"
 
 echo ""
 echo "## Artifacts"

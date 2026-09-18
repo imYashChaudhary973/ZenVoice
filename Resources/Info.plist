@@ -34,6 +34,8 @@
 	<string>ZenVoice uses Apple Speech to turn your recordings into text when you select the Apple Speech engine.</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
+	<!-- SUFeedURL repo path: keep in sync with Scripts/generate-appcast.rb and
+	     Scripts/generate-homebrew-cask.rb -->
 	<key>SUFeedURL</key>
 	<string>https://github.com/imYashChaudhary973/ZenVoice/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>

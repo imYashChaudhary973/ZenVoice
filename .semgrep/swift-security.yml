@@ -1,0 +1,81 @@
+# Vendored, committed ruleset for the semgrep workflow (.github/workflows/semgrep.yml).
+#
+# The workflow used to scan with `--config auto`, which pulls the latest rules
+# from the semgrep registry at scan time — every scan could behave differently
+# with no repo change at all. These rules are a small, self-contained Swift
+# subset (hardcoded credentials, weak crypto, insecure randomness, TLS
+# validation bypasses, dynamic query format injection) so every scan is
+# reproducible and offline. To change rules, edit this file in a PR — the diff
+# is reviewable, unlike an upstream registry update.
+rules:
+  - id: swift-hardcoded-credential
+    languages: [swift]
+    message: >-
+      Credential-looking identifier is hardcoded as a string literal. Load it
+      from the keychain or secure environment instead.
+    severity: ERROR
+    metadata:
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      owasp: "A07: Identification and Authentication Failures"
+    patterns:
+      - pattern-either:
+          - pattern: let $VAR = "..."
+          - pattern: var $VAR = "..."
+          - pattern: static let $VAR = "..."
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: (?i).*(password|passwd|secret|token|api_?key|credentials?)s?_?(_|$|Key)
+
+  - id: swift-weak-hash
+    languages: [swift]
+    message: >-
+      MD5/SHA-1 via CommonCrypto is broken for integrity or authentication.
+      Use SHA-256+ or the CryptoKit equivalents.
+    severity: ERROR
+    metadata:
+      cwe: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    pattern-regex: CC_(MD5|SHA1)\s*\(
+    # SHA-256 via CC_SHA256 is allowed; this only matches the broken variants.
+
+  - id: swift-insecure-randomness
+    languages: [swift]
+    message: >-
+      rand()/random()/srand() are not cryptographically secure. Use
+      SystemRandomNumberGenerator (Int.random(in:)) or SecRandomCopyBytes for
+      secrets.
+    severity: ERROR
+    metadata:
+      cwe: "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"
+    pattern-regex: \b(rand|srand|random)\s*\(\s*\)
+
+  - id: swift-https-validation-bypass
+    languages: [swift]
+    message: >-
+      allowsAnyHTTPSCertificateForHost disables TLS server certificate
+      validation and enables MITM attacks.
+    severity: ERROR
+    metadata:
+      cwe: "CWE-295: Improper Certificate Validation"
+    pattern-regex: allowsAnyHTTPSCertificateForHost
+
+  - id: swift-keychain-world-readable
+    languages: [swift]
+    message: >-
+      kSecAttrAccessibleAlways makes keychain items readable while the device
+      is locked. Use kSecAttrAccessibleWhenUnlockedThisDeviceOnly or tighter.
+    severity: WARNING
+    metadata:
+      cwe: "CWE-922: Insecure Storage of Sensitive Information"
+    pattern-regex: kSecAttrAccessibleAlways\b(?!ThisDeviceOnly)
+
+  - id: swift-predicate-format-injection
+    languages: [swift]
+    message: >-
+      NSPredicate built from a runtime format string can be injected. If the
+      format is user-influenced, reject or escape it first.
+    severity: WARNING
+    metadata:
+      cwe: "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+    patterns:
+      - pattern: "NSPredicate(format: $FMT)"
+      - pattern-not: 'NSPredicate(format: "...")'

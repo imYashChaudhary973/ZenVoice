@@ -60,6 +60,11 @@ jobs:
       # small.en (not tiny.en) because the check's memory-reclaim floor of
       # 200 MB needs a model whose resident footprint clears it. Real-speech
       # decoding stays in speech-gate.yml by design; PR CI stays deterministic.
+      # Key is deliberately static: the model is pinned to one whisper.cpp
+      # revision and verified by SHA-256 in the next step, so the cache key
+      # never needs to track Package.swift changes. Bump the "c6138d6d"
+      # suffix together with the URL revision and the SHA-256 below when the
+      # pinned model itself changes.
       - name: Cache pinned runtime-check model
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:

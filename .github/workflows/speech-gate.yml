@@ -48,6 +48,14 @@ jobs:
           path: ${{ runner.temp }}/zenvoice-accuracy
           key: zenvoice-accuracy-base-en-minilibrispeech-v1
 
+      # A restored cache is untrusted until verified: fail loudly if the
+      # corpus on disk does not match the committed checksums rather than
+      # decoding against silently corrupted audio. Rebuild if this fails.
+      - name: Verify cached accuracy corpus integrity
+        run: |
+          corpus="${{ runner.temp }}/zenvoice-accuracy/corpus"
+          (cd "$corpus" && shasum -a 256 -c "$GITHUB_WORKSPACE/Scripts/librispeech-dev-clean-2-corpus.sha256")
+
       - name: Prepare pinned real-speech accuracy assets
         shell: /bin/zsh {0}
         run: |
