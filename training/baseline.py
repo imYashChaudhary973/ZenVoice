@@ -13,12 +13,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
 
-from common import SYSTEM_PROMPT
+from common import SYSTEM_PROMPT, load_jsonl
 from evaluate import noisy_from_row
 
 
@@ -42,8 +41,7 @@ def main() -> None:
     model, tokenizer = load(args.model)
     sampler = make_sampler(temp=0.0)
 
-    rows = [json.loads(line) for line in
-            args.eval.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = load_jsonl(args.eval)
     rows = rows[:args.limit]
 
     with args.out.open("w", encoding="utf-8") as out:

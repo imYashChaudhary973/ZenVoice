@@ -25,7 +25,7 @@ import re
 import sys
 from pathlib import Path
 
-from common import APPS, chat_row
+from common import APPS, chat_row, load_jsonl
 from evaluate import score
 
 MAX_WORDS = 80
@@ -44,10 +44,7 @@ def _digit_count(text: str) -> int:
 
 def rows_from_manifest(path: Path, rng: random.Random) -> list[dict]:
     kept, skipped = [], 0
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        item = json.loads(line)
+    for item in load_jsonl(path):
         raw, reference = (item.get("raw") or "").strip(), (item.get("reference") or "").strip()
         if not raw or not reference or len(reference.split()) > MAX_WORDS:
             skipped += 1

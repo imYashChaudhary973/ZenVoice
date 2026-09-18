@@ -7,6 +7,10 @@ this exact string at inference.
 
 from __future__ import annotations
 
+import json
+import sys
+from pathlib import Path
+
 SYSTEM_PROMPT = (
     "You clean up raw speech-to-text dictation. Fix punctuation and "
     "capitalization, remove filler words and false restarts, and restore the "
@@ -22,6 +26,24 @@ APPS = [
     "Slack", "Notes", "Messages", "Mail", "Xcode", "Terminal", "Chrome",
     "Notion", "Bear", "Word", "Reminders", "Things",
 ]
+
+
+def load_jsonl(path: Path) -> list[dict]:
+    """Read a JSONL file, skipping malformed lines with a loud note.
+
+    One bad line should never kill a long decode/training-data run; the
+    file:line + excerpt pinpoints it without stopping the rest.
+    """
+    rows: list[dict] = []
+    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except ValueError as exc:
+            print(f"{path}:{n}: bad JSON skipped ({exc}): {line[:80]!r}",
+                  file=sys.stderr)
+    return rows
 
 
 def chat_row(noisy: str, clean: str, app: str | None) -> dict:

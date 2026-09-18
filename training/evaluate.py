@@ -24,6 +24,8 @@ import re
 import sys
 from pathlib import Path
 
+from common import APPS
+
 TOKEN = re.compile(r"[\w']+|[^\w\s]")
 WORD = re.compile(r"^[\w']+$")
 
@@ -97,14 +99,22 @@ def score(reference: str, hypothesis: str) -> dict:
     punct_f1 = (2 * punct_precision * punct_recall
                 / max(punct_precision + punct_recall, 1e-9))
 
-    ref_so_far_word = 0
     starts = starts_ok = 0
+    at_sentence_start = True
     for op, r, h in ops:
+        if r is not None and not WORD.match(r):
+            # A terminal punctuation mark ends the current sentence; the
+            # next reference word starts a new one. Abbreviations like
+            # "U.S." add spurious boundaries — accepted noise for a cheap
+            # per-sentence metric.
+            if r in {".", "!", "?"}:
+                at_sentence_start = True
+            continue
         if op in ("match", "sub", "del") and r is not None and WORD.match(r):
-            if ref_so_far_word == 0:
+            if at_sentence_start:
                 starts += 1
                 starts_ok += 1 if (op == "match" and r == h) else 0
-            ref_so_far_word += 1
+                at_sentence_start = False
 
     return {
         "wer": (subs + dels + inss) / ref_word_count,
@@ -115,6 +125,8 @@ def score(reference: str, hypothesis: str) -> dict:
         "capitalization_accuracy": same_case / max(len(matched_words), 1),
         "sentence_start_accuracy": starts_ok / max(starts, 1),
         "new_content_rate": inss / ref_word_count,
+        # not a metric: per-row reference word count, used by --weighted
+        "ref_words": float(len(ref_words)),
     }
 
 
@@ -130,7 +142,14 @@ def aggregate(rows: list[dict]) -> dict:
 
 def noisy_from_row(row: dict) -> str:
     user = next(m["content"] for m in row["messages"] if m["role"] == "user")
-    return user.split("\n", 1)[-1] if user.startswith("app: ") else user
+    # chat_row prefixes "app: <name>\n" only when an app context was set.
+    # A genuine dictation can also start with "app: ", so only strip when
+    # the prefix names one of the known context apps (APPS is the sole
+    # source chat_row ever used).
+    first, _, rest = user.partition("\n")
+    if first.startswith("app: ") and first[5:] in APPS:
+        return rest
+    return user
 
 
 def reference_from_row(row: dict) -> str:
@@ -156,6 +175,16 @@ def _self_check() -> None:
     agg = aggregate([score("Hello, world.", "Hello, world."),
                      score("a b c", "a b")])
     assert 0 < agg["wer"] < 1, agg
+
+    # --weighted: word-weighted WER must sit below the macro average when a
+    # short bad row would otherwise dominate
+    long_row = score("one two three four five six",
+                     "one two three four five six seven")  # wer 1/6
+    short_row = score("a b", "x y")  # wer 1.0
+    weighted = ((long_row["wer"] * long_row["ref_words"]
+                 + short_row["wer"] * short_row["ref_words"])
+                / (long_row["ref_words"] + short_row["ref_words"]))
+    assert weighted < aggregate([long_row, short_row])["wer"]
     print("evaluate self-check OK")
 
 
@@ -163,6 +192,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--eval", type=Path, default=None)
     parser.add_argument("--pred", type=Path, default=None)
+    parser.add_argument("--weighted", action="store_true",
+                        help="word-weight WER (long rows count proportionally) "
+                             "instead of the default macro-average")
     parser.add_argument("--floor", action="store_true",
                         help="score the raw noisy input itself (no-model baseline)")
     parser.add_argument("--json-out", type=Path, default=None)
@@ -196,6 +228,13 @@ def main() -> None:
     per_row = [score(reference_from_row(row), hyp)
                for row, hyp in zip(rows, hypotheses)]
     summary = aggregate(per_row)
+    if args.weighted:
+        # word-weighted: each row contributes proportionally to its length,
+        # so a 3-word row can't dominate a 60-word one
+        total_words = sum(r["ref_words"] for r in per_row)
+        summary["wer"] = (sum(r["wer"] * r["ref_words"] for r in per_row)
+                          / total_words)
+    summary.pop("ref_words")  # row-size bookkeeping, not a metric
 
     print(f"{'metric':28s} value")
     for key, value in summary.items():
