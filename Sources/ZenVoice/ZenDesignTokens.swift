@@ -241,6 +241,13 @@ enum ZenDesign {
         /// `Typography.navIcon`; the slot keeps every label on one baseline
         /// regardless of how wide its symbol is.
         static let navIcon: CGFloat = 24
+
+        /// Painted height of a settings row. The airy reference rhythm:
+        /// rows are ~45% taller than the hit-target floor.
+        static let row: CGFloat = 64
+
+        /// Vertical gap between cards in a screen's content stack.
+        static let contentGap: CGFloat = 16
     }
 
     /// Type is one family in several weights — the system face, plus the

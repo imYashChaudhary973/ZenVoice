@@ -71,25 +71,39 @@ struct ZenScreen<Content: View, Tabs: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Page identity lives in the content, per the reference: a large
+            // left-aligned title with room below it, not a toolbar label.
+            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxs) {
+                Text(title)
+                    .font(ZenDesign.Typography.pageTitle)
+                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(subtitle)
+                    .font(ZenDesign.Typography.body)
+                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, ZenDesign.Spacing.xl)
+            // The unified toolbar floats over the transparent titlebar and
+            // contributes no safe-area inset of its own; the measured offset
+            // between intended and rendered title position is ~60pt, so the
+            // padding carries the full titlebar clearance explicitly.
+            .padding(.top, ZenDesign.Layout.titleBar + 60)
+            .padding(.bottom, ZenDesign.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             if Tabs.self != EmptyView.self {
                 tabs
                     .padding(.horizontal, ZenDesign.Spacing.xl)
-                    .padding(.top, ZenDesign.Spacing.lg)
                     .padding(.bottom, ZenDesign.Spacing.sm)
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
                     content
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, ZenDesign.Spacing.xl)
-                .padding(
-                    .top,
-                    Tabs.self == EmptyView.self
-                        ? ZenDesign.Spacing.xl
-                        : ZenDesign.Spacing.md
-                )
                 .padding(.bottom, 40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -505,7 +519,7 @@ struct ZenRow<Trailing: View>: View {
                 )
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(ZenDesign.Typography.bodyStrong)
                     .foregroundStyle(ZenDesign.Semantic.textPrimary)
@@ -524,11 +538,11 @@ struct ZenRow<Trailing: View>: View {
                 .layoutPriority(1)
         }
         .padding(.horizontal, ZenDesign.Spacing.md)
-        .padding(.vertical, compact ? 4 : ZenDesign.Spacing.xs)
+        .padding(.vertical, compact ? 4 : ZenDesign.Spacing.sm)
         .frame(
             minHeight: compact
                 ? nil
-                : ZenDesign.Layout.rowIcon + ZenDesign.Spacing.md
+                : ZenDesign.Layout.row
         )
     }
 }

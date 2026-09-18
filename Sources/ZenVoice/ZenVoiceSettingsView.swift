@@ -36,7 +36,6 @@ struct ZenVoiceSettingsView: View {
         case settings = "Settings"
 
         var id: String { rawValue }
-        var toolbarTitle: String { rawValue }
 
         /// One gradient squircle per section; no two adjacent sections share
         /// a similar hue.
@@ -110,12 +109,14 @@ struct ZenVoiceSettingsView: View {
                 }
                 .navigationSplitViewStyle(.balanced)
                 .toolbar {
+                    // Invisible anchor: a navigation item keeps the unified
+                    // titlebar at full height, which pins the safe-area top
+                    // the sidebar brand row and in-content page title are
+                    // measured against. Without it the toolbar collapses,
+                    // content rides under the traffic lights, and every
+                    // hand-measured padding lands ~46pt high.
                     ToolbarItem(placement: .navigation) {
-                        Text(selection.toolbarTitle)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
+                        Color.clear.frame(width: 0, height: 0)
                     }
                     ToolbarItemGroup(placement: .automatic) {
                         ZenGlassContainer(spacing: 8) {
@@ -302,8 +303,10 @@ struct ZenVoiceSettingsView: View {
             .padding(.vertical, ZenDesign.Spacing.sm)
             // Clear the traffic lights, which the window draws over the
             // transparent titlebar at the sidebar's top-left. The nav list
-            // follows this block down.
-            .padding(.top, ZenDesign.Layout.titleBar)
+            // follows this block down. Measured against the collapsed
+            // pills-only toolbar: the safe area contributes ~0 here, so the
+            // padding alone must clear the ~36pt light cluster.
+            .padding(.top, 76)
 
             List {
                 ForEach(Section.allCases) { section in
@@ -351,9 +354,13 @@ struct ZenVoiceSettingsView: View {
         }
         // The sidebar rides on the shared window glass with a slightly
         // lighter tint than the content pane — a second material would blur
-        // the glass instead of the wallpaper.
-        .background(ZenDesign.Semantic.sidebar.opacity(0.35))
-        .ignoresSafeArea()
+        // the glass instead of the wallpaper. Only the background may ignore
+        // the safe area: the content itself must lay out below the titlebar,
+        // or the brand row slides under the traffic lights.
+        .background {
+            ZenDesign.Semantic.sidebar.opacity(0.35)
+                .ignoresSafeArea()
+        }
         .navigationSplitViewColumnWidth(
             min: 220,
             ideal: ZenDesign.Layout.sidebarWidth,
