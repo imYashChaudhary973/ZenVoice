@@ -84,9 +84,10 @@ struct ZenScreen<Content: View, Tabs: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, ZenDesign.Spacing.xl)
-            // Topmost element of the detail pane: a comfortable gap from the
-            // window edge, matching the reference's title placement.
-            .padding(.top, ZenDesign.Spacing.xl)
+            // Topmost element of the detail pane; the column already extends
+            // through the empty titlebar zone, so this is the real gap from
+            // the window edge.
+            .padding(.top, ZenDesign.Spacing.lg)
             .padding(.bottom, ZenDesign.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -106,7 +107,9 @@ struct ZenScreen<Content: View, Tabs: View>: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
-            .scrollIndicators(.automatic)
+            // No scrollbar gutter: content spans the full column width on
+            // systems with always-visible scrollbars too.
+            .scrollIndicators(.hidden)
         }
         // The detail pane rides the shared window glass; only the cards on
         // top are solid.

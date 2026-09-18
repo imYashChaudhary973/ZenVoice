@@ -113,6 +113,11 @@ struct ZenVoiceSettingsView: View {
                             .id(selection)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    // The titlebar zone over the detail pane is empty glass
+                    // (the traffic lights sit over the sidebar) — extend the
+                    // column through it so the page title doesn't float 50pt
+                    // below the window edge.
+                    .ignoresSafeArea(edges: .top)
                 }
             }
         }
@@ -200,6 +205,7 @@ struct ZenVoiceSettingsView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .ignoresSafeArea(edges: .top)
         // The sidebar rides on the shared window glass with a slightly
         // lighter tint than the content pane — a second material would blur
         // the glass instead of the wallpaper. Only the background may ignore
