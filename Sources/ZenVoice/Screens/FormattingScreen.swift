@@ -70,26 +70,16 @@ struct FormattingScreen: View {
     }
 
     private var textFormatting: some View {
-        ZenSection(title: "Text Formatting") {
-            ZenPanel {
-                ZenRow(
-                    icon: "wand.and.stars",
-                    title: "Formatting level",
-                    subtitle: mode.detail
-                ) {
-                    ZenTabStrip(
-                        items: TranscriptFormattingMode.allCases.map {
-                            .init(tab: $0, title: $0.displayName)
-                        },
-                        selection: Binding(
-                            get: { mode },
-                            set: { modeRawValue = $0.rawValue }
-                        )
-                    )
-                }
+        VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
+            FormattingLevelPicker(
+                mode: Binding(
+                    get: { mode },
+                    set: { modeRawValue = $0.rawValue }
+                )
+            )
 
-                ZenPanelDivider()
-
+            ZenSection(title: "Text Formatting") {
+                ZenPanel {
                 ZenRow(
                     icon: "brain",
                     title: "Formatting model",
@@ -184,6 +174,7 @@ struct FormattingScreen: View {
                         ),
                         label: "Apply text replacements"
                     )
+                }
                 }
             }
         }
@@ -309,6 +300,158 @@ struct FormattingScreen: View {
             heardPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || replacementPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         )
+    }
+}
+
+/// The formatting level as three preview cards (reference design): each card
+/// shows the HUD with a sample line for that rung, plus a caption strip.
+/// Selection drives the same `AppStorage`-backed mode the tab strip used.
+private struct FormattingLevelPicker: View {
+    @Binding var mode: TranscriptFormattingMode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+            Text("FORMATTING")
+                .font(ZenDesign.Typography.eyebrow)
+                .tracking(1.1)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+
+            HStack(spacing: ZenDesign.Layout.contentGap) {
+                ForEach(TranscriptFormattingMode.allCases) { candidate in
+                    FormattingLevelCard(
+                        mode: candidate,
+                        isSelected: candidate == mode
+                    ) {
+                        mode = candidate
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct FormattingLevelCard: View {
+    let mode: TranscriptFormattingMode
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack {
+                    ZenDesign.Gradient.hudPreview
+                    Text(sampleLine)
+                        .font(sampleFont)
+                        .foregroundStyle(sampleColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background {
+                            RoundedRectangle(
+                                cornerRadius: 10,
+                                style: .continuous
+                            )
+                            .fill(ZenDesign.Glass.hudTint)
+                        }
+                        .padding(.horizontal, 12)
+                }
+                .frame(height: 96)
+                .frame(maxWidth: .infinity)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.medium,
+                        style: .continuous
+                    )
+                )
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: ZenDesign.Spacing.xs) {
+                        Image(systemName: glyph)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(
+                                isSelected
+                                    ? ZenDesign.Semantic.accent
+                                    : ZenDesign.Semantic.textSecondary
+                            )
+                        Text(mode.displayName)
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    }
+                    Text(blurb)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(ZenDesign.Spacing.md)
+            }
+            .background(ZenDesign.Semantic.surface)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.large,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.large,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    isSelected
+                        ? ZenDesign.Semantic.accentFill
+                        : ZenDesign.Semantic.border.opacity(0.72),
+                    lineWidth: isSelected ? 2 : 1
+                )
+            }
+            // Soft pink glow on the selected card, matching the reference.
+            .shadow(
+                color: isSelected ? ZenDesign.Glass.glow : .clear,
+                radius: 12
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel("\(mode.displayName): \(blurb)")
+    }
+
+    private var sampleLine: String {
+        switch mode {
+        case .off: return "um, meet at 930 on, on friday"
+        case .clean: return "Meet at 9:30 on Friday"
+        case .smart: return "Can we meet at 9:30 on Friday?"
+        }
+    }
+
+    private var sampleFont: Font {
+        switch mode {
+        case .off: return .system(size: 11)
+        case .clean: return .system(size: 13, weight: .semibold)
+        case .smart: return .system(size: 13)
+        }
+    }
+
+    private var sampleColor: Color {
+        switch mode {
+        case .off: return ZenDesign.Semantic.textSecondary
+        case .clean, .smart: return .white
+        }
+    }
+
+    private var glyph: String {
+        switch mode {
+        case .off: return "textformat.alt"
+        case .clean: return "sparkles"
+        case .smart: return "wand.and.stars"
+        }
+    }
+
+    private var blurb: String {
+        switch mode {
+        case .off: return "Your exact words, untouched"
+        case .clean: return "Fillers out, times and numbers fixed"
+        case .smart: return "Reads like you wrote it"
+        }
     }
 }
 
