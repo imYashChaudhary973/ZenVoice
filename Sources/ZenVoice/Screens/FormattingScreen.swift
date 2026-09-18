@@ -392,6 +392,9 @@ private struct FormattingLevelCard: View {
                     style: .continuous
                 )
             )
+            // Equal heights: every card stretches to the row's tallest
+            // sibling, so single-line captions don't shrink their card.
+            .frame(maxHeight: .infinity, alignment: .top)
             .overlay {
                 RoundedRectangle(
                     cornerRadius: ZenDesign.Radius.large,
