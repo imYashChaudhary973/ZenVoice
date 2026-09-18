@@ -456,7 +456,7 @@ private struct FormattingLevelCard: View {
         switch mode {
         case .off: return "Your exact words, untouched"
         case .clean: return "Fillers out, times and numbers fixed"
-        case .smart: return "Reads like you wrote it"
+        case .smart: return "Reads like you wrote it, every time"
         }
     }
 }
