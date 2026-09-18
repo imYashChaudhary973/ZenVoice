@@ -356,8 +356,11 @@ private struct FormattingLevelCard: View {
                         }
                         .padding(.horizontal, 12)
                 }
-                .frame(height: 96)
                 .frame(maxWidth: .infinity)
+                // The thumbnail absorbs any height difference between cards
+                // (one-line vs two-line captions), so the caption strip stays
+                // flush with the card bottom and no dead space collects.
+                .frame(minHeight: 96, maxHeight: .infinity)
                 .clipShape(
                     RoundedRectangle(
                         cornerRadius: ZenDesign.Radius.medium,
