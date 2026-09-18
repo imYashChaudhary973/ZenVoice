@@ -88,7 +88,7 @@ struct ZenScreen<Content: View, Tabs: View>: View {
             // through the empty titlebar zone, so this is the real gap from
             // the window edge.
             .padding(.top, ZenDesign.Spacing.lg)
-            .padding(.bottom, ZenDesign.Spacing.lg)
+            .padding(.bottom, ZenDesign.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if Tabs.self != EmptyView.self {

@@ -150,10 +150,9 @@ struct ZenVoiceSettingsView: View {
                 }
                 .padding(.horizontal, ZenDesign.Spacing.sm)
                 .padding(.vertical, ZenDesign.Spacing.sm)
-                // The traffic lights live in the transparent titlebar over
-                // the sidebar's top-left; this clears them deterministically
-                // — no titlebar furniture whose height could shift.
-                .padding(.top, 44)
+                // Clears the traffic lights with a snug gap — the lights end
+                // ~24pt into the transparent titlebar over the sidebar.
+                .padding(.top, 24)
 
                 VStack(spacing: 2) {
                     ForEach(Section.allCases) { section in
