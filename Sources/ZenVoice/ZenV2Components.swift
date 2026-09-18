@@ -354,24 +354,19 @@ struct ZenPanel<Content: View>: View {
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
+        let shape = RoundedRectangle(
+            cornerRadius: ZenDesign.Radius.large,
+            style: .continuous
+        )
         VStack(alignment: .leading, spacing: 0) {
             content
         }
         .padding(padding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ZenDesign.Semantic.surface)
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.large,
-                style: .continuous
-            )
-        )
+        .clipShape(shape)
         .overlay {
-            RoundedRectangle(
-                cornerRadius: ZenDesign.Radius.large,
-                style: .continuous
-            )
-            .strokeBorder(
+            shape.strokeBorder(
                 contrast == .increased
                     ? ZenDesign.Semantic.borderStrong
                     : ZenDesign.Semantic.border.opacity(0.72),
@@ -379,14 +374,17 @@ struct ZenPanel<Content: View>: View {
             )
         }
         // The soft-dark neumorphic tell: 1px top inner highlight keeps
-        // dark-on-dark slabs readable. Gradient is pinned to the top edge.
-        .overlay(alignment: .top) {
-            LinearGradient(
-                colors: [ZenDesign.Glass.topHighlight, .clear],
-                startPoint: .top,
-                endPoint: .bottom
+        // dark-on-dark slabs readable. Filled through the same rounded path
+        // as the card — an unclipped rectangle would leave square gradient
+        // artifacts at the top corners.
+        .overlay {
+            shape.fill(
+                LinearGradient(
+                    colors: [ZenDesign.Glass.topHighlight, .clear],
+                    startPoint: .top,
+                    endPoint: .init(x: 0.5, y: 0.12)
+                )
             )
-            .frame(height: 14)
             .allowsHitTesting(false)
         }
         // Large, soft, ambient-only shadow. No hard drop shadows.

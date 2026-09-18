@@ -300,6 +300,10 @@ struct ZenVoiceSettingsView: View {
             }
             .padding(.horizontal, ZenDesign.Spacing.sm)
             .padding(.vertical, ZenDesign.Spacing.sm)
+            // Clear the traffic lights, which the window draws over the
+            // transparent titlebar at the sidebar's top-left. The nav list
+            // follows this block down.
+            .padding(.top, ZenDesign.Layout.titleBar)
 
             List {
                 ForEach(Section.allCases) { section in
