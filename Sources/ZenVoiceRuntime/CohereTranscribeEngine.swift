@@ -76,11 +76,20 @@ public final class CohereTranscribeEngine: @unchecked Sendable, SpeechEngine {
     }
 
     public var isAvailable: Bool {
-        FileManager.default.fileExists(atPath: encoderURL.path)
-            && FileManager.default.fileExists(atPath: encoderDataURL.path)
-            && FileManager.default.fileExists(atPath: decoderURL.path)
-            && FileManager.default.fileExists(atPath: decoderDataURL.path)
-            && FileManager.default.fileExists(atPath: tokenizerURL.path)
+        // Download time verified hashes; this cheap size re-check catches
+        // truncated or corrupted files without re-hashing gigabytes on
+        // every poll.
+        let files: [(URL, Int64)] = [
+            (encoderURL, VerifiedEngineCatalog.cohereEncoderSizeBytes),
+            (encoderDataURL, VerifiedEngineCatalog.cohereEncoderDataSizeBytes),
+            (decoderURL, VerifiedEngineCatalog.cohereDecoderSizeBytes),
+            (decoderDataURL, VerifiedEngineCatalog.cohereDecoderDataSizeBytes),
+            (tokenizerURL, VerifiedEngineCatalog.cohereTokenizerSizeBytes),
+        ]
+        return files.allSatisfy { url, expectedBytes in
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+            return Int64(values?.fileSize ?? -1) == expectedBytes
+        }
     }
 
     public var languageCapability: ModelLanguageCapability {
