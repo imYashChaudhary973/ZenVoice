@@ -202,9 +202,10 @@ enum ZenDesign {
     /// exactly the same width for the brand block. Two hand-copied constants
     /// drifted apart; one named value cannot.
     enum Layout {
-        /// The wider reference rail gives 15pt labels and 18pt glyphs enough
-        /// room to keep their generous spacing without truncation.
-        static let sidebarWidth: CGFloat = 280
+        /// The sidebar carries icon tiles plus the longest label
+        /// ("Personalisation") with room to breathe; wider just banks dead
+        /// space between the rows and the divider.
+        static let sidebarWidth: CGFloat = 232
 
         /// Measure for running prose — a page subtitle, a paragraph of
         /// explanation. Cards themselves are not capped: they fill the window,
