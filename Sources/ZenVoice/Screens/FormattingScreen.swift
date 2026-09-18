@@ -59,6 +59,7 @@ struct FormattingScreen: View {
     @ViewBuilder
     private var formattingContent: some View {
         textFormatting
+        SpokenCommandsSheet()
         textReplacement
 
         ZenBanner(
@@ -457,6 +458,103 @@ private struct FormattingLevelCard: View {
         case .off: return "Your exact words, untouched"
         case .clean: return "Fillers out, times and numbers fixed"
         case .smart: return "Reads like you wrote it, every time"
+        }
+    }
+}
+
+/// The browsable Spoken Commands reference: search field plus grouped
+/// phrase → output rows derived from the live command catalog in Core.
+private struct SpokenCommandsSheet: View {
+    @State private var query = ""
+    private let groups: [LocalVoiceCommandReferenceGroup]
+
+    init() {
+        groups = LocalVoiceCommandEngine().referenceGroups()
+    }
+
+    private func matches(_ row: LocalVoiceCommandReferenceRow) -> Bool {
+        let query = query.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return true }
+        let haystack = (row.phrases.joined(separator: " ")
+            + " " + row.output
+            + " " + (row.note ?? ""))
+            .lowercased()
+        return haystack.contains(query.lowercased())
+    }
+
+    var body: some View {
+        ZenSection(title: "Spoken Commands") {
+            ZenPanel {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+                    ZenSearchField(
+                        placeholder: "Search commands",
+                        text: $query
+                    )
+
+                    let visible = groups.map { group in
+                        LocalVoiceCommandReferenceGroup(
+                            category: group.category,
+                            rows: group.rows.filter(matches)
+                        )
+                    }
+                    .filter { !$0.rows.isEmpty }
+
+                    ForEach(visible) { group in
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxs) {
+                            Text(group.category.displayName)
+                                .font(ZenDesign.Typography.eyebrow)
+                                .tracking(1.1)
+                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                                .padding(.top, ZenDesign.Spacing.xxs)
+
+                            ForEach(group.rows) { row in
+                                HStack(
+                                    alignment: .firstTextBaseline,
+                                    spacing: ZenDesign.Spacing.md
+                                ) {
+                                    Text(
+                                        "\u{201C}"
+                                            + row.phrases.joined(separator: " / ")
+                                            + "\u{201D}"
+                                    )
+                                    .font(ZenDesign.Typography.caption)
+                                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                                    .textSelection(.enabled)
+
+                                    Spacer(minLength: ZenDesign.Spacing.lg)
+
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(row.output)
+                                            .font(ZenDesign.Typography.body)
+                                            .foregroundStyle(
+                                                row.category == .emoji
+                                                    ? ZenDesign.Semantic.textPrimary
+                                                    : ZenDesign.Semantic.textPrimary
+                                            )
+                                            .multilineTextAlignment(.trailing)
+                                        if let note = row.note {
+                                            Text(note)
+                                                .font(ZenDesign.Typography.caption)
+                                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                                                .multilineTextAlignment(.trailing)
+                                        }
+                                    }
+                                    .layoutPriority(1)
+                                }
+                                .padding(.vertical, ZenDesign.Spacing.xxs)
+                                .textSelection(.enabled)
+                            }
+                        }
+                    }
+
+                    if visible.isEmpty {
+                        Text("No commands match \u{201C}\(query)\u{201D}.")
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            .padding(.top, ZenDesign.Spacing.xxs)
+                    }
+                }
+            }
         }
     }
 }

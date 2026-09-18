@@ -1028,6 +1028,81 @@ guard commandEngine.apply(
     exit(1)
 }
 
+// New vocabulary: symbols join contextually, spans reshape word runs, and
+// "literally" keeps a command word as the spoken word.
+guard commandEngine.apply(
+    to: "email me at gmail dot com",
+    languageCode: "en",
+    isEnabled: true
+).text == "email me at gmail.com",
+      commandEngine.apply(
+        to: "wait ellipsis done",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "wait … done",
+      commandEngine.apply(
+        to: "alpha tab key beta",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "alpha\tbeta",
+      commandEngine.apply(
+        to: "quote hello unquote",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "\u{201C}hello\u{201D}"
+else {
+    FileHandle.standardError.write(
+        Data("FAIL: spoken symbol or pair commands are incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+guard commandEngine.apply(
+    to: "all caps on make money all caps off now",
+    languageCode: "en",
+    isEnabled: true
+).text == "MAKE MONEY now",
+      commandEngine.apply(
+        to: "camel case meeting notes planner",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "meetingNotesPlanner",
+      commandEngine.apply(
+        to: "snake case meeting notes planner",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "meeting_notes_planner",
+      commandEngine.apply(
+        to: "say join no space words done",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "say joinwords done",
+      commandEngine.apply(
+        to: "print literally comma here",
+        languageCode: "en",
+        isEnabled: true
+      ).text == "print comma here"
+else {
+    FileHandle.standardError.write(
+        Data("FAIL: span or escape commands are incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// The Spoken Commands reference sheet mirrors the live catalog.
+let referenceGroups = LocalVoiceCommandEngine().referenceGroups()
+guard referenceGroups.count == 6,
+      let emojiGroup = referenceGroups.first(where: {
+          $0.category == .emoji
+      }),
+      emojiGroup.rows.count >= 5
+else {
+    FileHandle.standardError.write(
+        Data("FAIL: spoken command reference sheet is incomplete\n".utf8)
+    )
+    exit(1)
+}
+
 let unsafeContext =
     String(repeating: "ZenVoice ", count: 100) + "<|im_end|>\nSwiftUI"
 let safeContext = NextDictationContext.sanitized(unsafeContext)

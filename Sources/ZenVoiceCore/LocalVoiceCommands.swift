@@ -92,10 +92,72 @@ public enum NextDictationContext {
     }
 }
 
+public enum LocalVoiceCommandCategory: String, CaseIterable, Sendable, Identifiable {
+    case punctuation
+    case symbols
+    case pairs
+    case structure
+    case emoji
+    case escape
+
+    public var id: String { rawValue }
+
+    /// Small-caps style header shown above the category's rows.
+    public var displayName: String {
+        switch self {
+        case .punctuation: return "PUNCTUATION"
+        case .symbols: return "SYMBOLS"
+        case .pairs: return "PAIRS"
+        case .structure: return "STRUCTURE"
+        case .emoji: return "EMOJI"
+        case .escape: return "ESCAPE"
+        }
+    }
+}
+
+/// One curated documentation row of the Spoken Commands reference sheet.
+/// The right-hand `output` is what dictation produces; `note` carries the
+/// small secondary explanation some rows show.
+public struct LocalVoiceCommandReferenceRow: Identifiable, Sendable {
+    public let id: String
+    public let phrases: [String]
+    public let output: String
+    public let note: String?
+    public let category: LocalVoiceCommandCategory
+
+    public init(
+        phrases: [String],
+        output: String,
+        note: String? = nil,
+        category: LocalVoiceCommandCategory
+    ) {
+        self.phrases = phrases
+        self.output = output
+        self.note = note
+        self.category = category
+        self.id = category.rawValue + phrases.joined(separator: "|")
+    }
+}
+
+public struct LocalVoiceCommandReferenceGroup: Identifiable, Sendable {
+    public let category: LocalVoiceCommandCategory
+    public let rows: [LocalVoiceCommandReferenceRow]
+    public var id: String { category.rawValue }
+
+    public init(
+        category: LocalVoiceCommandCategory,
+        rows: [LocalVoiceCommandReferenceRow]
+    ) {
+        self.category = category
+        self.rows = rows
+    }
+}
+
 public struct LocalVoiceCommandEngine: Sendable {
-    private struct Command {
+    fileprivate struct Command {
         let phrases: [String]
         let replacement: String
+        let category: LocalVoiceCommandCategory
     }
 
     public init() {}
@@ -112,7 +174,7 @@ public struct LocalVoiceCommandEngine: Sendable {
             )
         }
 
-        var candidate = transcript
+        var candidate = Self.protectEscapedPhrases(transcript)
         var correctionCount = 0
         for command in commands(languageCode: languageCode) {
             for phrase in command.phrases.sorted(by: {
@@ -125,6 +187,10 @@ public struct LocalVoiceCommandEngine: Sendable {
                 )
             }
         }
+
+        let spanCorrections = Self.applySpans(&candidate)
+        correctionCount += spanCorrections
+        candidate = Self.unprotect(candidate)
 
         candidate = candidate
             .replacingOccurrences(
@@ -148,6 +214,140 @@ public struct LocalVoiceCommandEngine: Sendable {
             text: candidate,
             correctionCount: correctionCount
         )
+    }
+
+    /// Zero-width-space protector: "literally comma" becomes a form of the
+    /// word that no command phrase can match, then the spacer is stripped
+    /// after all commands have run.
+    static let escapeSpacer = "\u{200B}"
+
+    static func protectEscapedPhrases(_ text: String) -> String {
+        var result = text
+        let phrases = LocalVoiceCommandEngine()
+            .commands(languageCode: "en")
+            .flatMap { $0.phrases }
+            .sorted { $0.count > $1.count }
+        for phrase in phrases {
+            let pattern =
+                "(?i)(?<![\\p{L}\\p{N}])literally[ \\t]+("
+                + NSRegularExpression.escapedPattern(for: phrase)
+                + ")"
+            guard let expression = try? NSRegularExpression(
+                pattern: pattern
+            ) else { continue }
+            let range = NSRange(result.startIndex..., in: result)
+            guard expression.numberOfMatches(in: result, range: range) > 0
+            else { continue }
+            var rebuilt = ""
+            var cursor = result.startIndex
+            for match in expression.matches(
+                in: result,
+                range: range
+            ) {
+                guard let matchRange = Range(match.range, in: result),
+                      let phraseRange = Range(match.range(at: 1), in: result)
+                else { continue }
+                rebuilt += result[cursor..<matchRange.lowerBound]
+                rebuilt += Self.protect(String(result[phraseRange]))
+                cursor = matchRange.upperBound
+            }
+            rebuilt += result[cursor...]
+            result = rebuilt
+        }
+        return result
+    }
+
+    static func protect(_ word: String) -> String {
+        guard let first = word.first else { return word }
+        return String(first) + escapeSpacer + word.dropFirst()
+    }
+
+    static func unprotect(_ text: String) -> String {
+        text.replacingOccurrences(of: escapeSpacer, with: "")
+    }
+
+    /// Span commands that pair with surrounding words rather than replacing a
+    /// single phrase: no space, ALL CAPS spans, camel and snake case.
+    static func applySpans(_ text: inout String) -> Int {
+        var corrections = 0
+
+        // "no space" joins the words on either side of it.
+        if let join = try? NSRegularExpression(
+            pattern: "(?i)(?<=\\S)[ \\t]+no space[ \\t]+(?=\\S)"
+        ) {
+            let before = text
+            text = join.stringByReplacingMatches(
+                in: text,
+                range: NSRange(text.startIndex..., in: text),
+                withTemplate: ""
+            )
+            if text != before { corrections += 1 }
+        }
+
+        // "all caps on … all caps off" uppercases the span.
+        if let caps = try? NSRegularExpression(
+            pattern: "(?is)\\ball caps on\\b\\s*(.*?)\\s*\\ball caps off\\b"
+        ) {
+            let range = NSRange(text.startIndex..., in: text)
+            let matches = caps.matches(in: text, range: range)
+            if !matches.isEmpty {
+                var rebuilt = ""
+                var cursor = text.startIndex
+                for match in matches {
+                    guard let full = Range(match.range, in: text),
+                          let inner = Range(match.range(at: 1), in: text)
+                    else { continue }
+                    rebuilt += text[cursor..<full.lowerBound]
+                    rebuilt += text[inner].uppercased()
+                    cursor = full.upperBound
+                }
+                rebuilt += text[cursor...]
+                text = rebuilt
+                corrections += matches.count
+            }
+        }
+
+        // "camel case …" / "snake case …" reshape the rest of their line.
+        if let reshape = try? NSRegularExpression(
+            pattern: "(?i)\\b(camel case|snake case)\\b[ \\t]+([^\\n]+)"
+        ) {
+            let range = NSRange(text.startIndex..., in: text)
+            let matches = reshape.matches(in: text, range: range)
+            if !matches.isEmpty {
+                var rebuilt = ""
+                var cursor = text.startIndex
+                for match in matches {
+                    guard let full = Range(match.range, in: text),
+                          let kind = Range(match.range(at: 1), in: text),
+                          let words = Range(match.range(at: 2), in: text)
+                    else { continue }
+                    let wordsList = text[words]
+                        .split(whereSeparator: \.isWhitespace)
+                        .map(String.init)
+                    guard !wordsList.isEmpty else { continue }
+                    let reshaped: String
+                    if text[kind].lowercased().hasPrefix("camel") {
+                        guard let head = wordsList.first else { continue }
+                        reshaped = head.lowercased()
+                            + wordsList.dropFirst()
+                                .map { $0.capitalized }
+                                .joined()
+                    } else {
+                        reshaped = wordsList
+                            .map { $0.lowercased() }
+                            .joined(separator: "_")
+                    }
+                    rebuilt += text[cursor..<full.lowerBound]
+                    rebuilt += reshaped
+                    cursor = full.upperBound
+                    corrections += 1
+                }
+                rebuilt += text[cursor...]
+                text = rebuilt
+            }
+        }
+
+        return corrections
     }
 
     private func replace(
@@ -189,84 +389,449 @@ public struct LocalVoiceCommandEngine: Sendable {
     private func commands(languageCode: String) -> [Command] {
         let localized = localizedPhrases[languageCode] ?? [:]
         let punctuation = punctuation(for: languageCode)
-        return [
+        var commands: [Command] = []
+
+        // STRUCTURE — line, paragraph, and span commands.
+        commands += [
             Command(
-                phrases: ["new paragraph"]
-                    + (localized["newParagraph"] ?? []),
-                replacement: "\n\n"
+                phrases: ["new paragraph"] + (localized["newParagraph"] ?? []),
+                replacement: "\n\n",
+                category: .structure
             ),
             Command(
                 phrases: ["new line"] + (localized["newLine"] ?? []),
-                replacement: "\n"
+                replacement: "\n",
+                category: .structure
             ),
             Command(
-                phrases: ["question mark"]
-                    + (localized["questionMark"] ?? []),
-                replacement: punctuation.questionMark
-            ),
+                phrases: ["tab key"],
+                replacement: "\t",
+                category: .structure
+            )
+        ]
+
+        // PUNCTUATION
+        commands += [
             Command(
-                phrases: ["exclamation mark"]
-                    + (localized["exclamationMark"] ?? []),
-                replacement: punctuation.exclamationMark
-            ),
-            Command(
-                phrases: ["full stop", "period"]
-                    + (localized["period"] ?? []),
-                replacement: punctuation.period
+                phrases: ["full stop", "period"] + (localized["period"] ?? []),
+                replacement: punctuation.period,
+                category: .punctuation
             ),
             Command(
                 phrases: ["comma"] + (localized["comma"] ?? []),
-                replacement: punctuation.comma
+                replacement: punctuation.comma,
+                category: .punctuation
             ),
             Command(
-                phrases: [
-                    "open parenthesis", "open paren", "left parenthesis"
-                ],
-                replacement: "("
+                phrases: ["question mark"] + (localized["questionMark"] ?? []),
+                replacement: punctuation.questionMark,
+                category: .punctuation
             ),
             Command(
-                phrases: [
-                    "close parenthesis", "close paren", "right parenthesis"
-                ],
-                replacement: ")"
-            ),
-            Command(
-                phrases: ["open bracket", "left bracket"],
-                replacement: "["
-            ),
-            Command(
-                phrases: ["close bracket", "right bracket"],
-                replacement: "]"
+                phrases: ["exclamation mark"] + (localized["exclamationMark"] ?? []),
+                replacement: punctuation.exclamationMark,
+                category: .punctuation
             ),
             Command(
                 phrases: ["colon"],
-                replacement: ":"
+                replacement: ":",
+                category: .punctuation
             ),
             Command(
                 phrases: ["semicolon"],
-                replacement: ";"
+                replacement: ";",
+                category: .punctuation
             ),
             Command(
+                phrases: ["ellipsis"],
+                replacement: "…",
+                category: .punctuation
+            ),
+            Command(
+                phrases: ["dash"],
+                replacement: "-",
+                category: .punctuation
+            ),
+            Command(
+                phrases: ["dash dash force"],
+                replacement: "---",
+                category: .punctuation
+            ),
+            Command(
+                phrases: ["em dash"],
+                replacement: "—",
+                category: .punctuation
+            ),
+            Command(
+                phrases: ["hyphen"],
+                replacement: "-",
+                category: .punctuation
+            ),
+            Command(
+                phrases: ["underscore"],
+                replacement: "_",
+                category: .punctuation
+            )
+        ]
+
+        // SYMBOLS
+        commands += [
+            Command(
+                phrases: ["dot"],
+                replacement: ".",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["at sign"],
+                replacement: "@",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["slash"],
+                replacement: "/",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["backslash"],
+                replacement: "\\",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["dollar sign"],
+                replacement: "$",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["euro sign"],
+                replacement: "€",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["pound sign"],
+                replacement: "£",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["percent"],
+                replacement: "%",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["ampersand"],
+                replacement: "&",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["asterisk"],
+                replacement: "*",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["hash"],
+                replacement: "#",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["plus sign"],
+                replacement: "+",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["equals sign"],
+                replacement: "=",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["pipe"],
+                replacement: "|",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["greater than"],
+                replacement: ">",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["less than"],
+                replacement: "<",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["caret"],
+                replacement: "^",
+                category: .symbols
+            ),
+            Command(
+                phrases: ["tilde"],
+                replacement: "~",
+                category: .symbols
+            )
+        ]
+
+        // PAIRS — open and close are separate spoken commands.
+        commands += [
+            Command(
+                phrases: ["open parenthesis", "open paren", "left parenthesis"],
+                replacement: "(",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["close parenthesis", "close paren", "right parenthesis"],
+                replacement: ")",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["open bracket", "left bracket"],
+                replacement: "[",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["close bracket", "right bracket"],
+                replacement: "]",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["open brace", "left brace"],
+                replacement: "{",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["close brace", "right brace"],
+                replacement: "}",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["quote"],
+                replacement: "\u{201C}",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["unquote"],
+                replacement: "\u{201D}",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["open single quote"],
+                replacement: "\u{2018}",
+                category: .pairs
+            ),
+            Command(
+                phrases: ["close single quote"],
+                replacement: "\u{2019}",
+                category: .pairs
+            )
+        ]
+
+        // EMOJI
+        commands += [
+            Command(
                 phrases: ["thinking emoji"],
-                replacement: "🤔"
+                replacement: "🤔",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["raised hands emoji"],
+                replacement: "🙌",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["flex emoji", "muscle emoji"],
+                replacement: "💪",
+                category: .emoji
             ),
             Command(
                 phrases: ["thumbs up", "thumbs up emoji"],
-                replacement: "👍"
+                replacement: "👍",
+                category: .emoji
             ),
             Command(
                 phrases: ["heart emoji"],
-                replacement: "❤️"
+                replacement: "❤️",
+                category: .emoji
             ),
             Command(
                 phrases: ["fire emoji"],
-                replacement: "🔥"
+                replacement: "🔥",
+                category: .emoji
             ),
             Command(
                 phrases: ["rocket emoji"],
-                replacement: "🚀"
+                replacement: "🚀",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["party emoji"],
+                replacement: "🎉",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["check emoji", "checkmark emoji"],
+                replacement: "✅",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["eyes emoji"],
+                replacement: "👀",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["laughing emoji", "cry laughing emoji"],
+                replacement: "😂",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["smile emoji"],
+                replacement: "😊",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["wink emoji"],
+                replacement: "😉",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["crying emoji"],
+                replacement: "😢",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["wave emoji"],
+                replacement: "👋",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["ok emoji", "okay emoji"],
+                replacement: "👌",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["pray emoji", "hands together emoji"],
+                replacement: "🙏",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["clap emoji"],
+                replacement: "👏",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["star emoji"],
+                replacement: "⭐",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["zap emoji", "lightning emoji"],
+                replacement: "⚡",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["sun emoji"],
+                replacement: "☀️",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["moon emoji"],
+                replacement: "🌙",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["coffee emoji"],
+                replacement: "☕",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["pizza emoji"],
+                replacement: "🍕",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["burger emoji"],
+                replacement: "🍔",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["cake emoji"],
+                replacement: "🎂",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["beer emoji"],
+                replacement: "🍺",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["dog emoji"],
+                replacement: "🐶",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["cat emoji"],
+                replacement: "🐱",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["bulb emoji", "light bulb emoji"],
+                replacement: "💡",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["money emoji", "money bag emoji"],
+                replacement: "💰",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["warning emoji"],
+                replacement: "⚠️",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["hundred emoji"],
+                replacement: "💯",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["ghost emoji"],
+                replacement: "👻",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["crown emoji"],
+                replacement: "👑",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["gift emoji"],
+                replacement: "🎁",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["flower emoji"],
+                replacement: "🌸",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["rainbow emoji"],
+                replacement: "🌈",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["computer emoji", "laptop emoji"],
+                replacement: "💻",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["phone emoji"],
+                replacement: "📱",
+                category: .emoji
+            ),
+            Command(
+                phrases: ["poop emoji"],
+                replacement: "💩",
+                category: .emoji
             )
         ]
+
+        return commands
     }
 
     private func punctuation(
@@ -329,6 +894,122 @@ public struct LocalVoiceCommandEngine: Sendable {
                 "period": ["نقطة"],
                 "comma": ["فاصلة"]
             ]
+        ]
+    }
+}
+
+public extension LocalVoiceCommandEngine {
+    /// Curated rows for the Spoken Commands reference sheet. Mirrors the live
+    /// vocabulary in `commands(languageCode:)` — both evolve together, and the
+    /// emoji aggregate row derives its count from the live table.
+    func referenceGroups() -> [LocalVoiceCommandReferenceGroup] {
+        let emojiCount = commands(languageCode: "en")
+            .filter { $0.category == .emoji }
+            .count
+
+        func group(
+            _ category: LocalVoiceCommandCategory,
+            _ rows: [LocalVoiceCommandReferenceRow]
+        ) -> LocalVoiceCommandReferenceGroup {
+            LocalVoiceCommandReferenceGroup(category: category, rows: rows)
+        }
+
+        func row(
+            _ phrases: [String],
+            _ output: String,
+            note: String? = nil,
+            _ category: LocalVoiceCommandCategory
+        ) -> LocalVoiceCommandReferenceRow {
+            LocalVoiceCommandReferenceRow(
+                phrases: phrases,
+                output: output,
+                note: note,
+                category: category
+            )
+        }
+
+        return [
+            group(.punctuation, [
+                row(["period / full stop"], ".", .punctuation),
+                row(["comma"], ",", .punctuation),
+                row(["question mark"], "?", .punctuation),
+                row(["exclamation mark"], "!", .punctuation),
+                row(["colon / semicolon"], ": ;", .punctuation),
+                row(["ellipsis"], "…", .punctuation),
+                row(
+                    ["dash"],
+                    "-",
+                    note: "joins right: \u{201C}dash dash force\u{201D} → ---",
+                    .punctuation
+                ),
+                row(["em dash / hyphen / underscore"], "— – _", .punctuation)
+            ]),
+            group(.symbols, [
+                row(
+                    ["dot"],
+                    ".",
+                    note: "joins: gmail dot com → gmail.com",
+                    .symbols
+                ),
+                row(["at sign"], "@", .symbols),
+                row(["slash / backslash"], "/ \\", .symbols),
+                row(
+                    ["dollar sign / euro sign / pound sign"],
+                    "$ € £",
+                    .symbols
+                ),
+                row(["percent"], "%", .symbols),
+                row(["ampersand / asterisk / hash"], "& * #", .symbols),
+                row(["plus sign / equals sign / pipe"], "+ = |", .symbols),
+                row(
+                    ["greater than / less than / caret / tilde"],
+                    "> < ^ ~",
+                    .symbols
+                )
+            ]),
+            group(.pairs, [
+                row(["open / close paren"], "( )", .pairs),
+                row(["open / close bracket"], "[ ]", .pairs),
+                row(["open / close brace"], "{ }", .pairs),
+                row(["quote … unquote"], "\u{201C} … \u{201D}", .pairs),
+                row(["open / close single quote"], "\u{2018} … \u{2019}", .pairs)
+            ]),
+            group(.structure, [
+                row(
+                    ["new line / new paragraph"],
+                    "line · paragraph break",
+                    .structure
+                ),
+                row(["tab key"], "tab character", .structure),
+                row(["no space"], "joins the surrounding words", .structure),
+                row(["all caps on … all caps off"], "UPPERCASE SPAN", .structure),
+                row(["camel case …"], "joinsTheRestLikeThis", .structure),
+                row(["snake case …"], "joins_the_rest_like_this", .structure)
+            ]),
+            group(.emoji, [
+                row(["thinking emoji"], "🤔", .emoji),
+                row(["raised hands emoji"], "🙌", .emoji),
+                row(["flex emoji"], "💪", .emoji),
+                row(["thumbs up emoji"], "👍", .emoji),
+                row(["fire emoji"], "🔥", .emoji),
+                row(
+                    ["heart · party · check · eyes … emoji"],
+                    "❤️ 🎉 ✅ 👀 + \(max(emojiCount - 4, 0)) names",
+                    .emoji
+                )
+            ]),
+            group(.escape, [
+                row(
+                    ["literally comma"],
+                    "the word instead of the symbol",
+                    .escape
+                ),
+                row(
+                    ["literally fire emoji"],
+                    "the words, not 🔥",
+                    .escape
+                )
+            ])
         ]
     }
 }
