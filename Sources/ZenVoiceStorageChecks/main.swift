@@ -563,6 +563,14 @@ private func checkScopedHistoryDeletion() async throws {
         message: "Interrupted",
         retainAudio: true
     )
+    // Sealed recovery audio is written 0600 at creation time; the plaintext
+    // capture-time WAV is tightened by the app the moment it is created.
+    try await require(
+        (FileManager.default.attributesOfItem(
+            atPath: recoveryAudioURL.path
+        )[.posixPermissions] as? NSNumber)?.intValue == 0o600,
+        "sealed recovery audio is not 0600"
+    )
 
     try await require(
         try await fixture.vault.deleteRecords(ids: [savedID]) == 1,
@@ -1550,6 +1558,12 @@ private func checkAudioArchiveLifecycle() async throws {
         FileManager.default.fileExists(atPath: record.audioURL.path),
         "archived audio file is missing"
     )
+    try await require(
+        (FileManager.default.attributesOfItem(
+            atPath: record.audioURL.path
+        )[.posixPermissions] as? NSNumber)?.intValue == 0o600,
+        "archived audio file is not 0600"
+    )
 
     // The archive copies the audio; the recovery file stays put until the
     // caller deletes it.
@@ -1655,7 +1669,7 @@ private func checkAudioArchiveExport() async throws {
     for record in records {
         wavs[record.id] = try await fixture.vault.archiveAudioData(id: record.id)
     }
-    try AudioArchiveExporter.export(
+    try await AudioArchiveExporter.export(
         records: records,
         to: destination,
         transcriptProvider: { _ in "secret transcript" },
@@ -1684,7 +1698,7 @@ private func checkAudioArchiveExport() async throws {
 
     let withTranscripts = fixture.directoryURL
         .appendingPathComponent("export-transcripts.zip")
-    try AudioArchiveExporter.export(
+    try await AudioArchiveExporter.export(
         records: records,
         options: AudioArchiveExportOptions(includeTranscripts: true),
         to: withTranscripts,
@@ -1699,7 +1713,7 @@ private func checkAudioArchiveExport() async throws {
 
     // An empty selection is refused rather than producing an empty archive.
     do {
-        try AudioArchiveExporter.export(
+        try await AudioArchiveExporter.export(
             records: [],
             to: fixture.directoryURL.appendingPathComponent("empty.zip")
         )
@@ -2231,6 +2245,51 @@ private func checkRecoveryAudioOrphanSweep() async throws {
     )
 }
 
+/// Removing a dictation must checkpoint the WAL, so pages for the deleted
+/// row do not linger in `test.sqlite-wal` after the call returns.
+private func checkDiscardCheckpointsWAL() async throws {
+    let fixture = try await VaultFixture()
+    defer { fixture.cleanup() }
+
+    let id = UUID()
+    let audioURL = await fixture.vault.recoveryAudioURL(for: id)
+    try Data("audio".utf8).write(to: audioURL)
+    try await fixture.vault.begin(
+        DictationDraft(
+            id: id,
+            language: "en",
+            modelID: "whisper-base.en",
+            targetBundleID: nil,
+            targetAppName: "Notes",
+            recoveryAudioURL: audioURL
+        )
+    )
+    try await fixture.vault.storeTranscript(
+        id: id,
+        rawTranscript: "checkpoint me",
+        finalTranscript: "Checkpoint me."
+    )
+    try await require(
+        try await fixture.vault.record(id: id) != nil,
+        "fixture row was not stored"
+    )
+
+    try await fixture.vault.discard(id: id)
+
+    var walSize = 0
+    let walPath = fixture.databaseURL.path + "-wal"
+    if FileManager.default.fileExists(atPath: walPath) {
+        let attributes = try FileManager.default.attributesOfItem(
+            atPath: walPath
+        )
+        walSize = (attributes[.size] as? NSNumber)?.intValue ?? -1
+    }
+    try await require(
+        walSize == 0,
+        "discard left deleted-row pages in the WAL (\(walSize) bytes)"
+    )
+}
+
 do {
     try await checkEncryptedStorage()
     try await checkRecoveryExpiry()
@@ -2263,7 +2322,8 @@ do {
     try await checkHistorySkipsCorruptRows()
     try await checkVaultFilesExcludedFromBackup()
     try await checkRecoveryAudioOrphanSweep()
-    print("ZenVoiceStorageChecks: 30 checks passed")
+    try await checkDiscardCheckpointsWAL()
+    print("ZenVoiceStorageChecks: 31 checks passed")
 } catch {
     FileHandle.standardError.write(
         Data("FAIL: \(error.localizedDescription)\n".utf8)

@@ -433,7 +433,7 @@ struct AudioHistoryScreen: View {
     }
 
     private var exportButton: some View {
-        Button(exportButtonTitle) { viewModel.export() }
+        Button(exportButtonTitle) { Task { await viewModel.export() } }
             .buttonStyle(ZenPrimaryButtonStyle())
     }
 

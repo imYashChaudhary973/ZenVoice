@@ -189,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let audioHistoryPreferences = AudioHistoryPreferences()
     private let learningPreferences = LocalLearningPreferences()
     private var dictationVault: DictationVault?
+    private var vaultResolutionTask: Task<DictationVault, Error>?
     private var agenticModeCoordinator: AgenticModeCoordinator?
     private var activeHistoryID: UUID?
     private var transcribingHistoryID: UUID?
@@ -303,13 +304,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let historyID {
             if nonPersistentHistoryIDs.contains(historyID)
                 || !historyPreferences.isHistoryEnabled {
-                try? await dictationVault?.discard(id: historyID)
+                await bestEffortHistoryWrite { try await dictationVault?.discard(id: historyID) }
             } else {
-                try? await dictationVault?.markFailed(
-                    id: historyID,
-                    message: "ZenVoice closed before this dictation completed.",
-                    retainAudio: historyPreferences.retainsFailedAudio
-                )
+                await bestEffortHistoryWrite {
+                    try await dictationVault?.markFailed(
+                        id: historyID,
+                        message:
+                            "ZenVoice closed before this dictation completed.",
+                        retainAudio: historyPreferences.retainsFailedAudio
+                    )
+                }
             }
         } else if let recordedAudio {
             try? FileManager.default.removeItem(at: recordedAudio.url)
@@ -317,7 +321,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let processingHistoryID,
            nonPersistentHistoryIDs.contains(processingHistoryID)
             || !historyPreferences.isHistoryEnabled {
-            try? await dictationVault?.discard(id: processingHistoryID)
+            await bestEffortHistoryWrite {
+                try await dictationVault?.discard(id: processingHistoryID)
+            }
         }
         if let monitor = anticipatoryEventMonitor {
             NSEvent.removeMonitor(monitor)
@@ -1507,7 +1513,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Either Esc landed during the async gap above, or the hold key
             // was released before the mic opened — bail either way.
             if let historyID = historyDraft?.id {
-                try? await dictationVault?.discard(id: historyID)
+                await bestEffortHistoryWrite { try await dictationVault?.discard(id: historyID) }
                 activeHistoryID = nil
             }
             dictationTargetProcessIdentifier = nil
@@ -1523,6 +1529,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self?.state.appendAudioSpectrum(bands)
                 }
             }
+            // The recovery WAV is plaintext until the vault seals it, so it
+            // must never be world-readable while it exists. AVAudioFile
+            // created it just above with default permissions.
+            if let recoveryURL = historyDraft?.recoveryAudioURL,
+               FileManager.default.fileExists(atPath: recoveryURL.path) {
+                try FileManager.default.setAttributes(
+                    [.posixPermissions: 0o600],
+                    ofItemAtPath: recoveryURL.path
+                )
+            }
             liveSamplesEnabledForRecording = capturesLiveSamples
             recordingDeviceName = MicrophoneCatalog.devices().first(
                 where: { $0.id == recorder.activeDeviceUID }
@@ -1537,7 +1553,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             liveSamplesEnabledForRecording = false
             dictationTargetProcessIdentifier = nil
             if let historyID = historyDraft?.id {
-                try? await dictationVault?.discard(id: historyID)
+                await bestEffortHistoryWrite { try await dictationVault?.discard(id: historyID) }
                 activeHistoryID = nil
             }
             showError(error.localizedDescription)
@@ -2080,7 +2096,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         liveSamplesEnabledForRecording = false
         resetLivePreviewSession()
         if let historyID {
-            Task { try? await dictationVault?.discard(id: historyID) }
+            Task { await bestEffortHistoryWrite { try await dictationVault?.discard(id: historyID) } }
         }
         state.resetAudioSamples()
         state.phase = .idle
@@ -2113,11 +2129,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "The selected microphone disconnected. Reconnect it or choose another microphone in Audio."
         if let historyID {
             Task {
-                try? await dictationVault?.markFailed(
-                    id: historyID,
-                    message: message,
-                    retainAudio: historyPreferences.retainsFailedAudio
-                )
+                await bestEffortHistoryWrite {
+                    try await dictationVault?.markFailed(
+                        id: historyID,
+                        message: message,
+                        retainAudio: historyPreferences.retainsFailedAudio
+                    )
+                }
             }
             // Retaining audio without arming the expiry timer means the 24-hour
             // promise only takes effect at the next launch.
@@ -2576,14 +2594,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if let historyID {
                 if nonPersistentHistoryIDs.remove(historyID) == nil,
                    historyPreferences.isHistoryEnabled {
-                    try? await resolvedVault().markFailed(
-                        id: historyID,
-                        message: "No audible speech captured.",
-                        retainAudio: historyPreferences.retainsFailedAudio
-                    )
+                    await bestEffortHistoryWrite {
+                        try await resolvedVault().markFailed(
+                            id: historyID,
+                            message: "No audible speech captured.",
+                            retainAudio: historyPreferences.retainsFailedAudio
+                        )
+                    }
                     scheduleRecoveryExpiry()
                 } else {
-                    try? await resolvedVault().discard(id: historyID)
+                    await bestEffortHistoryWrite { try await resolvedVault().discard(id: historyID) }
                     try? FileManager.default.removeItem(at: recordedAudio.url)
                 }
             } else {
@@ -2631,16 +2651,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 )
             } catch {
                 historySaveError = error
-                try? await resolvedVault().markFailed(
-                    id: historyID,
-                    message: error.localizedDescription,
-                    retainAudio: historyPreferences.retainsFailedAudio
-                )
+                await bestEffortHistoryWrite {
+                    try await resolvedVault().markFailed(
+                        id: historyID,
+                        message: error.localizedDescription,
+                        retainAudio: historyPreferences.retainsFailedAudio
+                    )
+                }
                 scheduleRecoveryExpiry()
             }
         } else {
             if let historyID {
-                try? await resolvedVault().discard(id: historyID)
+                await bestEffortHistoryWrite { try await resolvedVault().discard(id: historyID) }
             }
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
@@ -2680,7 +2702,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     outcome: .inserted
                 )
             } else if let historyID {
-                try? await resolvedVault().discard(id: historyID)
+                await bestEffortHistoryWrite { try await resolvedVault().discard(id: historyID) }
             }
             state.phase = .success
             historyViewModel?.refresh()
@@ -2825,7 +2847,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } else {
             if let historyID {
-                try? await resolvedVault().discard(id: historyID)
+                await bestEffortHistoryWrite { try await resolvedVault().discard(id: historyID) }
             }
             try? FileManager.default.removeItem(at: recordedAudio.url)
         }
@@ -2846,10 +2868,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let dictationVault {
             return dictationVault
         }
-        let policy = try RuntimeIdentity.policy()
-        let vault = try await DictationVault.live(policy: policy)
-        dictationVault = vault
-        return vault
+        // `DictationVault.live` suspends while it opens the database; a
+        // second caller racing in would otherwise build a second vault.
+        // One task owns the resolution and everyone awaits its result.
+        let task: Task<DictationVault, Error>
+        if let running = vaultResolutionTask {
+            task = running
+        } else {
+            let policy = try RuntimeIdentity.policy()
+            task = Task { try await DictationVault.live(policy: policy) }
+            vaultResolutionTask = task
+        }
+        do {
+            let vault = try await task.value
+            dictationVault = vault
+            vaultResolutionTask = nil
+            return vault
+        } catch {
+            // Let the next caller start over instead of awaiting a failed
+            // resolution forever.
+            vaultResolutionTask = nil
+            throw error
+        }
+    }
+
+    /// History writes on teardown and cleanup paths are best-effort: they
+    /// must not block quitting or abort dictation, but a bare `try?` lets
+    /// audio outlive user intent silently, so log one line on failure
+    /// (no transcript content).
+    private func bestEffortHistoryWrite(
+        _ operation: () async throws -> Void
+    ) async {
+        do {
+            try await operation()
+        } catch {
+            NSLog(
+                "ZenVoice: history write failed: %@",
+                error.localizedDescription
+            )
+        }
     }
 
     private func resetActiveDictationBehavior() {
@@ -3225,6 +3282,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
             let wav = try await resolvedVault().recoveryAudioData(id: record.id)
             try wav.write(to: plaintextURL, options: .atomic)
+            // `.atomic` writes with default permissions; tighten the file
+            // itself to 0600 immediately after it lands.
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: plaintextURL.path
+            )
         } catch {
             try? FileManager.default.removeItem(at: retryDirectory)
             return .failure(error)
@@ -3354,7 +3417,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         modelManagerViewModel?.refreshBenchmarks()
         guard nonPersistentHistoryIDs.remove(historyID) == nil,
               historyPreferences.isHistoryEnabled else {
-            try? await resolvedVault().discard(id: historyID)
+            await bestEffortHistoryWrite { try await resolvedVault().discard(id: historyID) }
             try? FileManager.default.removeItem(at: recordedAudio.url)
             showError("History is paused; this retry was not saved.")
             return
