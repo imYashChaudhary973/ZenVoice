@@ -34,6 +34,7 @@ struct ZenVoiceSettingsView: View {
         case snippets = "Snippets"
         case history = "History"
         case updates = "Updates"
+        case permissions = "Permissions"
         case settings = "Settings"
 
         var id: String { rawValue }
@@ -49,6 +50,7 @@ struct ZenVoiceSettingsView: View {
             case .snippets: return ZenDesign.Gradient.coral
             case .history: return ZenDesign.Gradient.gold
             case .updates: return ZenDesign.Gradient.amber
+            case .permissions: return ZenDesign.Gradient.orange
             case .settings: return ZenDesign.Gradient.indigo
             }
         }
@@ -69,6 +71,8 @@ struct ZenVoiceSettingsView: View {
                 return "clock.arrow.circlepath"
             case .updates:
                 return "arrow.triangle.2.circlepath"
+            case .permissions:
+                return "lock.shield"
             case .settings:
                 return "gearshape"
             }
@@ -320,6 +324,8 @@ struct ZenVoiceSettingsView: View {
             ) {
                 UpdatesScreen(viewModel: updatesViewModel)
             }
+        case .permissions:
+            PermissionsScreen(viewModel: viewModel)
         case .settings:
             HelpAndAboutScreen(
                 viewModel: viewModel,
