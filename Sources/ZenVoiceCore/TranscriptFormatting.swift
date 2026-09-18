@@ -250,7 +250,8 @@ public struct TranscriptFormattingEngine: Sendable {
         mode: TranscriptFormattingMode,
         languageCode: String = "en",
         voiceCommandsEnabled: Bool = false,
-        context: String? = nil
+        context: String? = nil,
+        snippets: [VoiceSnippet] = []
     ) async -> TranscriptFormattingResult {
         if mode == .off {
             let commands = LocalVoiceCommandEngine().apply(
@@ -258,10 +259,15 @@ public struct TranscriptFormattingEngine: Sendable {
                 languageCode: languageCode,
                 isEnabled: voiceCommandsEnabled
             )
+            let snippetResult = SnippetEngine().apply(
+                to: commands.text,
+                snippets: snippets,
+                isEnabled: !snippets.isEmpty
+            )
             return TranscriptFormattingResult(
-                text: commands.text,
+                text: snippetResult.text,
                 mode: .off,
-                changed: commands.text != transcript
+                changed: snippetResult.text != transcript
             )
         }
 
@@ -305,10 +311,19 @@ public struct TranscriptFormattingEngine: Sendable {
             }
         }
 
+        // Snippets run last, after every guarded stage: they are
+        // user-authored content, so the semantic guards — which exist to
+        // contain model output — must never see or reject them.
+        let snippetResult = SnippetEngine().apply(
+            to: finalText,
+            snippets: snippets,
+            isEnabled: !snippets.isEmpty
+        )
+
         return TranscriptFormattingResult(
-            text: finalText,
+            text: snippetResult.text,
             mode: mode,
-            changed: finalText != transcript,
+            changed: snippetResult.text != transcript,
             localModelUsed: localModelUsed,
             smartFallback: smartFallback
         )

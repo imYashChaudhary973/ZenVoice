@@ -1103,6 +1103,89 @@ else {
     exit(1)
 }
 
+// Voice snippets: whole-word fuzzy matching, disabled no-ops, and
+// multi-line expansions survive as authored.
+let snippetEngine = SnippetEngine()
+let snippetSet = [
+    VoiceSnippet(
+        name: "Scheduling link",
+        trigger: "insert my scheduling link",
+        content: "https://cal.com/your-link"
+    ),
+    VoiceSnippet(
+        name: "Formal sign-off",
+        trigger: "insert my formal sign-off",
+        content: "Best regards,\nYour Name",
+        enabled: false
+    ),
+    VoiceSnippet(
+        name: "Mailing address",
+        trigger: "insert my mailing address",
+        content: "123 Your Street\nYour City, 00000"
+    )
+]
+guard snippetEngine.match(
+    "just send insert my scheduling link okay",
+    snippets: snippetSet
+)?.expansion == "https://cal.com/your-link",
+      // One-character transcription slip still fires.
+      snippetEngine.match(
+        "insert my sheduling link",
+        snippets: snippetSet
+      ) != nil,
+      // Disabled snippets never fire.
+      snippetEngine.match(
+        "insert my formal sign-off",
+        snippets: snippetSet
+      ) == nil,
+      snippetEngine.match(
+        "nothing here matches",
+        snippets: snippetSet
+      ) == nil
+else {
+    FileHandle.standardError.write(
+        Data("FAIL: snippet matching is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+let snippetApplied = snippetEngine.apply(
+    to: "book it insert my mailing address now",
+    snippets: snippetSet,
+    isEnabled: true
+)
+guard snippetApplied.text == "book it 123 Your Street\nYour City, 00000 now",
+      snippetApplied.correctionCount == 1,
+      // Disabled snippets never rewrite.
+      snippetEngine.apply(
+        to: "insert my formal sign-off",
+        snippets: snippetSet,
+        isEnabled: true
+      ).text == "insert my formal sign-off",
+      // Feature off: transcript passes through untouched.
+      snippetEngine.apply(
+        to: "insert my mailing address",
+        snippets: snippetSet,
+        isEnabled: false
+      ).text == "insert my mailing address"
+else {
+    FileHandle.standardError.write(
+        Data("FAIL: snippet application is incorrect\n".utf8)
+    )
+    exit(1)
+}
+
+// Snippet persistence round-trips.
+let savedSnippets = snippetSet
+SnippetPreferences.save(savedSnippets)
+let loadedSnippets = SnippetPreferences.load()
+guard loadedSnippets == savedSnippets else {
+    FileHandle.standardError.write(
+        Data("FAIL: snippet persistence round-trip broke\n".utf8)
+    )
+    exit(1)
+}
+
 let unsafeContext =
     String(repeating: "ZenVoice ", count: 100) + "<|im_end|>\nSwiftUI"
 let safeContext = NextDictationContext.sanitized(unsafeContext)
