@@ -53,7 +53,6 @@ struct PrivacyScreen: View {
         VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
             dictationPrivacy
             inventory
-            permissions
             ZenBanner(
                 kind: .success,
                 icon: "network.slash",
@@ -194,31 +193,6 @@ struct PrivacyScreen: View {
         }
     }
 
-    // MARK: permissions
-
-    private var permissions: some View {
-        ZenSection(title: "macOS permissions") {
-            ZenPanel {
-                PermissionRow(
-                    icon: "mic.fill",
-                    title: "Microphone",
-                    detail: "Used while dictating or recording a meeting.",
-                    status: viewModel.microphoneStatus,
-                    action: viewModel.requestMicrophoneAccess
-                )
-                ZenPanelDivider()
-                PermissionRow(
-                    icon: "accessibility",
-                    title: "Accessibility",
-                    detail:
-                        "Types the finished text into the active app. Without it, transcripts are copied to the clipboard instead.",
-                    status: viewModel.accessibilityStatus,
-                    action: viewModel.requestAccessibilityAccess
-                )
-            }
-        }
-    }
-
     private var appVersion: String {
         Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
@@ -226,67 +200,3 @@ struct PrivacyScreen: View {
     }
 }
 
-private struct PermissionRow: View {
-    let icon: String
-    let title: String
-    let detail: String
-    let status: SettingsViewModel.PermissionStatus
-    let action: () -> Void
-
-    var body: some View {
-        HStack(alignment: .center, spacing: ZenDesign.Spacing.md) {
-            ZenIconChip(
-                systemImage: icon,
-                size: ZenDesign.Layout.rowIcon,
-                tint: ZenDesign.Semantic.textSecondary
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(ZenDesign.Typography.bodyStrong)
-                    .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                Text(detail)
-                    .font(ZenDesign.Typography.body)
-                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let remedy = status.remedy {
-                    Text(remedy)
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            Spacer(minLength: ZenDesign.Spacing.sm)
-
-            ZenBadge(
-                text: status.title,
-                kind: badgeKind,
-                showsDot: true
-            )
-
-            if let actionTitle = status.actionTitle {
-                Button(actionTitle) {
-                    action()
-                }
-                .buttonStyle(ZenSecondaryButtonStyle())
-            }
-        }
-        .padding(.vertical, ZenDesign.Spacing.sm)
-        .padding(.horizontal, ZenDesign.Spacing.md)
-        .frame(minHeight: 64)
-    }
-
-    /// "Not asked yet" is a neutral starting state, not a failure — only an
-    /// actual denial or a policy restriction is worth colouring red.
-    private var badgeKind: ZenBadge.Kind {
-        switch status {
-        case .allowed:
-            return .success
-        case .notRequested:
-            return .neutral
-        case .denied, .restricted:
-            return .danger
-        }
-    }
-}
