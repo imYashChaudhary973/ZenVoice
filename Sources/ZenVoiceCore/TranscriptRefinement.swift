@@ -29,7 +29,8 @@ public enum TranscriptRefinement {
         _ transcript: String,
         mode: InstantRefineMode,
         languageCode: String = "en",
-        voiceCommandsEnabled: Bool = false
+        voiceCommandsEnabled: Bool = false,
+        snippets: [VoiceSnippet] = []
     ) -> InstantRefineResult {
         // Voice commands are deterministic and run first, so "new paragraph"
         // becomes a break before any rule inspects the words around it.
@@ -52,10 +53,20 @@ public enum TranscriptRefinement {
                 wasRejected: true
             )
         }
+        // Snippets run last in the deterministic stage: user-authored
+        // expansions bypass the guarded stages (the guards contain model
+        // output, not content the user wrote themselves).
+        let snippetResult = SnippetEngine().apply(
+            to: refined.text,
+            snippets: snippets,
+            isEnabled: !snippets.isEmpty
+        )
         return InstantRefineResult(
-            text: refined.text,
+            text: snippetResult.text,
             correctionCount:
-                commands.correctionCount + refined.correctionCount,
+                commands.correctionCount
+                    + refined.correctionCount
+                    + snippetResult.correctionCount,
             wasRejected: refined.wasRejected
         )
     }

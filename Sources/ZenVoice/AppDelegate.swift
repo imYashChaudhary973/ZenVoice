@@ -1858,7 +1858,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             behavior.languageProfile
                                 .inputLanguageCode,
                         voiceCommandsEnabled:
-                            behavior.voiceCommandsEnabled
+                            behavior.voiceCommandsEnabled,
+                        snippets: behavior.snippets
                     )
                 let processed = ProcessedTranscription(
                     result: result,
@@ -1932,7 +1933,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             mode: behavior.formattingMode.instantRefineMode,
             languageCode: behavior.languageProfile.inputLanguageCode,
 
-            voiceCommandsEnabled: behavior.voiceCommandsEnabled
+            voiceCommandsEnabled: behavior.voiceCommandsEnabled,
+                        snippets: behavior.snippets
         )
         return ProcessedTranscription(
             result: result,
@@ -1984,7 +1986,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     mode: behavior.formattingMode.instantRefineMode,
                     languageCode: behavior.languageProfile.inputLanguageCode,
 
-                    voiceCommandsEnabled: behavior.voiceCommandsEnabled
+                    voiceCommandsEnabled: behavior.voiceCommandsEnabled,
+                        snippets: behavior.snippets
                 )
                 processed = ProcessedTranscription(
                     result: result,
@@ -2250,7 +2253,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     result.finalTranscript,
                     mode: behavior.formattingMode.instantRefineMode,
                     languageCode: behavior.languageProfile.inputLanguageCode,
-                    voiceCommandsEnabled: behavior.voiceCommandsEnabled
+                    voiceCommandsEnabled: behavior.voiceCommandsEnabled,
+                        snippets: behavior.snippets
                 )
                 let correctionApplication = appliesCorrectionRules
                     ? try? await correctionVault?.applyCorrections(
@@ -3375,6 +3379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let formattingMode = TranscriptFormattingPreferences.load()
         let voiceCommandsEnabled =
             LocalVoiceCommandPreferences.isEnabled()
+        let activeSnippets = SnippetPreferences.load()
         Task { [weak self] in
             defer { try? FileManager.default.removeItem(at: retryDirectory) }
             do {
@@ -3390,7 +3395,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         mode: formattingMode.instantRefineMode,
                         languageCode:
                             recordedLanguageProfile.inputLanguageCode,
-                        voiceCommandsEnabled: voiceCommandsEnabled
+                        voiceCommandsEnabled: voiceCommandsEnabled,
+                        snippets: activeSnippets
                     )
                 let processed = ProcessedTranscription(
                     result: result,
