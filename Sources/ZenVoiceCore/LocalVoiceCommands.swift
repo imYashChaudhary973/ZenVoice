@@ -118,7 +118,7 @@ public enum LocalVoiceCommandCategory: String, CaseIterable, Sendable, Identifia
 /// One curated documentation row of the Spoken Commands reference sheet.
 /// The right-hand `output` is what dictation produces; `note` carries the
 /// small secondary explanation some rows show.
-public struct LocalVoiceCommandReferenceRow: Identifiable, Sendable {
+public struct LocalVoiceCommandReferenceRow: Identifiable, Hashable, Sendable {
     public let id: String
     public let phrases: [String]
     public let output: String
@@ -139,7 +139,7 @@ public struct LocalVoiceCommandReferenceRow: Identifiable, Sendable {
     }
 }
 
-public struct LocalVoiceCommandReferenceGroup: Identifiable, Sendable {
+public struct LocalVoiceCommandReferenceGroup: Identifiable, Hashable, Sendable {
     public let category: LocalVoiceCommandCategory
     public let rows: [LocalVoiceCommandReferenceRow]
     public var id: String { category.rawValue }

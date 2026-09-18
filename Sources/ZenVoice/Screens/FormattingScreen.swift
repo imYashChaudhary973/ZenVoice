@@ -484,8 +484,8 @@ private struct SpokenCommandsSheet: View {
 
     var body: some View {
         ZenSection(title: "Spoken Commands") {
-            ZenPanel {
-                VStack(alignment: .leading, spacing: ZenDesign.Spacing.md) {
+            ZenPanel(padding: ZenDesign.Spacing.md) {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
                     ZenSearchField(
                         placeholder: "Search commands",
                         text: $query
@@ -499,13 +499,14 @@ private struct SpokenCommandsSheet: View {
                     }
                     .filter { !$0.rows.isEmpty }
 
-                    ForEach(visible) { group in
-                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxs) {
+                    ForEach(Array(visible.enumerated()), id: \.element) { index, group in
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
                             Text(group.category.displayName)
                                 .font(ZenDesign.Typography.eyebrow)
                                 .tracking(1.1)
                                 .foregroundStyle(ZenDesign.Semantic.textTertiary)
-                                .padding(.top, ZenDesign.Spacing.xxs)
+                                .padding(.bottom, ZenDesign.Spacing.xxs)
+                                .padding(.top, index > 0 ? ZenDesign.Spacing.xxs : 0)
 
                             ForEach(group.rows) { row in
                                 HStack(
@@ -526,11 +527,7 @@ private struct SpokenCommandsSheet: View {
                                     VStack(alignment: .trailing, spacing: 2) {
                                         Text(row.output)
                                             .font(ZenDesign.Typography.body)
-                                            .foregroundStyle(
-                                                row.category == .emoji
-                                                    ? ZenDesign.Semantic.textPrimary
-                                                    : ZenDesign.Semantic.textPrimary
-                                            )
+                                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
                                             .multilineTextAlignment(.trailing)
                                         if let note = row.note {
                                             Text(note)
