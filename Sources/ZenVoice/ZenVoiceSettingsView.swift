@@ -157,10 +157,11 @@ struct ZenVoiceSettingsView: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, ZenDesign.Spacing.sm)
+                .padding(.horizontal, ZenDesign.Spacing.md)
                 .padding(.vertical, ZenDesign.Spacing.sm)
                 // Clears the traffic lights with a snug gap — the lights end
                 // ~24pt into the transparent titlebar over the sidebar.
+                .padding(.top, 24)
                 .padding(.top, 24)
 
                 VStack(spacing: 6) {
@@ -208,7 +209,7 @@ struct ZenVoiceSettingsView: View {
                         )
                     }
                 }
-                .padding(.horizontal, ZenDesign.Spacing.sm)
+                .padding(.horizontal, ZenDesign.Spacing.md)
                 .padding(.bottom, ZenDesign.Spacing.lg)
             }
         }
