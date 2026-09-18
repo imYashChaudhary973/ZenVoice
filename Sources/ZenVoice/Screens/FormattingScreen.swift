@@ -59,6 +59,7 @@ struct FormattingScreen: View {
     @ViewBuilder
     private var formattingContent: some View {
         textFormatting
+        SpokenCommandsSheet()
         textReplacement
 
         ZenBanner(
@@ -70,26 +71,16 @@ struct FormattingScreen: View {
     }
 
     private var textFormatting: some View {
-        ZenSection(title: "Text Formatting") {
-            ZenPanel {
-                ZenRow(
-                    icon: "wand.and.stars",
-                    title: "Formatting level",
-                    subtitle: mode.detail
-                ) {
-                    ZenTabStrip(
-                        items: TranscriptFormattingMode.allCases.map {
-                            .init(tab: $0, title: $0.displayName)
-                        },
-                        selection: Binding(
-                            get: { mode },
-                            set: { modeRawValue = $0.rawValue }
-                        )
-                    )
-                }
+        VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
+            FormattingLevelPicker(
+                mode: Binding(
+                    get: { mode },
+                    set: { modeRawValue = $0.rawValue }
+                )
+            )
 
-                ZenPanelDivider()
-
+            ZenSection(title: "Text Formatting") {
+                ZenPanel {
                 ZenRow(
                     icon: "brain",
                     title: "Formatting model",
@@ -184,6 +175,7 @@ struct FormattingScreen: View {
                         ),
                         label: "Apply text replacements"
                     )
+                }
                 }
             }
         }
@@ -309,6 +301,258 @@ struct FormattingScreen: View {
             heardPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || replacementPhrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         )
+    }
+}
+
+/// The formatting level as three preview cards (reference design): each card
+/// shows the HUD with a sample line for that rung, plus a caption strip.
+/// Selection drives the same `AppStorage`-backed mode the tab strip used.
+private struct FormattingLevelPicker: View {
+    @Binding var mode: TranscriptFormattingMode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ZenDesign.Spacing.sm) {
+            Text("FORMATTING")
+                .font(ZenDesign.Typography.eyebrow)
+                .tracking(1.1)
+                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+
+            HStack(spacing: ZenDesign.Layout.contentGap) {
+                ForEach(TranscriptFormattingMode.allCases) { candidate in
+                    FormattingLevelCard(
+                        mode: candidate,
+                        isSelected: candidate == mode
+                    ) {
+                        mode = candidate
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct FormattingLevelCard: View {
+    let mode: TranscriptFormattingMode
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack {
+                    ZenDesign.Gradient.hudPreview
+                    Text(sampleLine)
+                        .font(sampleFont)
+                        .foregroundStyle(sampleColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background {
+                            RoundedRectangle(
+                                cornerRadius: 10,
+                                style: .continuous
+                            )
+                            .fill(ZenDesign.Glass.hudTint)
+                        }
+                        .padding(.horizontal, 12)
+                }
+                .frame(maxWidth: .infinity)
+                // The thumbnail absorbs any height difference between cards
+                // (one-line vs two-line captions), so the caption strip stays
+                // flush with the card bottom and no dead space collects.
+                .frame(minHeight: 96, maxHeight: .infinity)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: ZenDesign.Radius.medium,
+                        style: .continuous
+                    )
+                )
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: ZenDesign.Spacing.xs) {
+                        Image(systemName: glyph)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(
+                                isSelected
+                                    ? ZenDesign.Semantic.accent
+                                    : ZenDesign.Semantic.textSecondary
+                            )
+                        Text(mode.displayName)
+                            .font(ZenDesign.Typography.bodyStrong)
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                    }
+                    Text(blurb)
+                        .font(ZenDesign.Typography.caption)
+                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(ZenDesign.Spacing.md)
+            }
+            .background(ZenDesign.Semantic.surface)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.large,
+                    style: .continuous
+                )
+            )
+            // Equal heights: every card stretches to the row's tallest
+            // sibling, so single-line captions don't shrink their card.
+            .frame(maxHeight: .infinity, alignment: .top)
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: ZenDesign.Radius.large,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    isSelected
+                        ? ZenDesign.Semantic.accentFill
+                        : ZenDesign.Semantic.border.opacity(0.72),
+                    lineWidth: isSelected ? 2 : 1
+                )
+            }
+            // Soft pink glow on the selected card, matching the reference.
+            .shadow(
+                color: isSelected ? ZenDesign.Glass.glow : .clear,
+                radius: 12
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel("\(mode.displayName): \(blurb)")
+    }
+
+    private var sampleLine: String {
+        switch mode {
+        case .off: return "um, meet at 930 on, on friday"
+        case .clean: return "Meet at 9:30 on Friday"
+        case .smart: return "Can we meet at 9:30 on Friday?"
+        }
+    }
+
+    private var sampleFont: Font {
+        switch mode {
+        case .off: return .system(size: 11)
+        case .clean: return .system(size: 13, weight: .semibold)
+        case .smart: return .system(size: 13)
+        }
+    }
+
+    private var sampleColor: Color {
+        switch mode {
+        case .off: return ZenDesign.Semantic.textSecondary
+        case .clean, .smart: return .white
+        }
+    }
+
+    private var glyph: String {
+        switch mode {
+        case .off: return "textformat.alt"
+        case .clean: return "sparkles"
+        case .smart: return "wand.and.stars"
+        }
+    }
+
+    private var blurb: String {
+        switch mode {
+        case .off: return "Your exact words, untouched"
+        case .clean: return "Fillers out, times and numbers fixed"
+        case .smart: return "Reads like you wrote it, every time"
+        }
+    }
+}
+
+/// The browsable Spoken Commands reference: search field plus grouped
+/// phrase → output rows derived from the live command catalog in Core.
+private struct SpokenCommandsSheet: View {
+    @State private var query = ""
+    private let groups: [LocalVoiceCommandReferenceGroup]
+
+    init() {
+        groups = LocalVoiceCommandEngine().referenceGroups()
+    }
+
+    private func matches(_ row: LocalVoiceCommandReferenceRow) -> Bool {
+        let query = query.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return true }
+        let haystack = (row.phrases.joined(separator: " ")
+            + " " + row.output
+            + " " + (row.note ?? ""))
+            .lowercased()
+        return haystack.contains(query.lowercased())
+    }
+
+    var body: some View {
+        ZenSection(title: "Spoken Commands") {
+            ZenPanel(padding: ZenDesign.Spacing.md) {
+                VStack(alignment: .leading, spacing: ZenDesign.Spacing.lg) {
+                    ZenSearchField(
+                        placeholder: "Search commands",
+                        text: $query
+                    )
+
+                    let visible = groups.map { group in
+                        LocalVoiceCommandReferenceGroup(
+                            category: group.category,
+                            rows: group.rows.filter(matches)
+                        )
+                    }
+                    .filter { !$0.rows.isEmpty }
+
+                    ForEach(Array(visible.enumerated()), id: \.element) { index, group in
+                        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xs) {
+                            Text(group.category.displayName)
+                                .font(ZenDesign.Typography.eyebrow)
+                                .tracking(1.1)
+                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                                .padding(.bottom, ZenDesign.Spacing.xxs)
+                                .padding(.top, index > 0 ? ZenDesign.Spacing.xxs : 0)
+
+                            ForEach(group.rows) { row in
+                                HStack(
+                                    alignment: .firstTextBaseline,
+                                    spacing: ZenDesign.Spacing.md
+                                ) {
+                                    Text(
+                                        "\u{201C}"
+                                            + row.phrases.joined(separator: " / ")
+                                            + "\u{201D}"
+                                    )
+                                    .font(ZenDesign.Typography.caption)
+                                    .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                                    .textSelection(.enabled)
+
+                                    Spacer(minLength: ZenDesign.Spacing.lg)
+
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(row.output)
+                                            .font(ZenDesign.Typography.body)
+                                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                                            .multilineTextAlignment(.trailing)
+                                        if let note = row.note {
+                                            Text(note)
+                                                .font(ZenDesign.Typography.caption)
+                                                .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                                                .multilineTextAlignment(.trailing)
+                                        }
+                                    }
+                                    .layoutPriority(1)
+                                }
+                                .padding(.vertical, ZenDesign.Spacing.xxs)
+                                .textSelection(.enabled)
+                            }
+                        }
+                    }
+
+                    if visible.isEmpty {
+                        Text("No commands match \u{201C}\(query)\u{201D}.")
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textTertiary)
+                            .padding(.top, ZenDesign.Spacing.xxs)
+                    }
+                }
+            }
+        }
     }
 }
 
