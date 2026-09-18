@@ -84,11 +84,8 @@ struct ZenScreen<Content: View, Tabs: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, ZenDesign.Spacing.xl)
-            // The unified toolbar floats over the transparent titlebar and
-            // contributes no safe-area inset of its own; the measured offset
-            // between intended and rendered title position is ~60pt, so the
-            // padding carries the full titlebar clearance explicitly.
-            .padding(.top, ZenDesign.Layout.titleBar + 60)
+            // Small breathing gap below the reserved titlebar zone.
+            .padding(.top, ZenDesign.Spacing.md)
             .padding(.bottom, ZenDesign.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
 
