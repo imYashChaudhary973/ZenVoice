@@ -36,7 +36,6 @@ struct ZenVoiceSettingsView: View {
         case settings = "Settings"
 
         var id: String { rawValue }
-        var toolbarTitle: String { rawValue }
 
         /// One gradient squircle per section; no two adjacent sections share
         /// a similar hue.
@@ -82,11 +81,7 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var onboardingViewModel:
         OnboardingViewModel
     @ObservedObject var appState: AppState
-    let toggleRecording: () -> Void
     @State private var selection: Section = .home
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var showsCommandPalette = false
-    @State private var commandQuery = ""
     @State private var modelMismatch: ModelMismatchAlert?
     @State private var hoveredSection: Section?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -102,51 +97,28 @@ struct ZenVoiceSettingsView: View {
                     modelManagerViewModel: modelManagerViewModel
                 )
             } else {
-                NavigationSplitView(columnVisibility: $columnVisibility) {
+                // Plain HStack columns. NavigationSplitView's bridged layout
+                // mispositions content ~44pt above the window in this
+                // translucent configuration; every visual here is custom
+                // already, so the native split chrome buys nothing.
+                HStack(alignment: .top, spacing: 0) {
                     sidebar
-                } detail: {
-                    content
-                        .id(selection)
-                }
-                .navigationSplitViewStyle(.balanced)
-                .toolbar {
-                    ToolbarItem(placement: .navigation) {
-                        Text(selection.toolbarTitle)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
+                        .frame(width: ZenDesign.Layout.sidebarWidth)
+                    Rectangle()
+                        .fill(ZenDesign.Semantic.border)
+                        .frame(width: 1)
+                        .ignoresSafeArea()
+                    VStack(spacing: 0) {
+                        content
+                            .id(selection)
                     }
-                    ToolbarItemGroup(placement: .automatic) {
-                        ZenGlassContainer(spacing: 8) {
-                            HStack(spacing: 8) {
-                                toolbarStatus
-                                dictateToolbarButton
-                            }
-                        }
-                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    // The titlebar zone over the detail pane is empty glass
+                    // (the traffic lights sit over the sidebar) — extend the
+                    // column through it so the page title doesn't float 50pt
+                    // below the window edge.
+                    .ignoresSafeArea(edges: .top)
                 }
-                .background {
-                    ZenTitlebarTrailing {
-                        toolbarSearchField
-                            .padding(.trailing, 8)
-                    }
-                }
-                .overlay {
-                    if showsCommandPalette {
-                        ZenCommandPalette(
-                            commands: paletteCommands,
-                            query: $commandQuery
-                        ) {
-                            showsCommandPalette = false
-                            commandQuery = ""
-                        }
-                    }
-                }
-                .animation(
-                    ZenDesign.Motion.fast(reduceMotion),
-                    value: showsCommandPalette
-                )
             }
         }
         // The translucent dark glass shell. One layer behind everything:
@@ -161,204 +133,86 @@ struct ZenVoiceSettingsView: View {
         .preferredColorScheme(.dark)
     }
 
-    /// Everything ⌘K can reach: every settings screen, one entry per
-    /// speech model, and the handful of global actions.
-    private var paletteCommands: [ZenCommand] {
-        let sections = Section.allCases.map { section in
-            ZenCommand(
-                id: "section-\(section.id)",
-                title: section.rawValue,
-                subtitle: "Go to",
-                icon: section.icon,
-                keywords: sectionKeywords(section)
-            ) {
-                selection = section
-            }
-        }
-        let models = modelManagerViewModel.models.map { model in
-            ZenCommand(
-                id: "model-\(model.id)",
-                title: model.displayName,
-                subtitle: modelManagerViewModel.isInstalled(model)
-                    ? "Model · installed"
-                    : "Model · available",
-                icon: "cpu",
-                keywords: "model speech download \(model.id)"
-            ) {
-                selection = .models
-            }
-        }
-        let actions = [
-            ZenCommand(
-                id: "action-dictate",
-                title: "Start dictating",
-                subtitle: "Action",
-                icon: "mic",
-                keywords: "record speak voice start",
-                action: toggleRecording
-            )
-        ]
-        return sections + models + actions
-    }
-
-
-    private func sectionKeywords(_ section: Section) -> String {
-        switch section {
-        case .home:
-            return "overview status ready start today usage"
-        case .dictation:
-            return "hotkey microphone audio overlay waveform doctor shortcut"
-        case .models:
-            return "model engine whisper parakeet nemotron language speech"
-        case .personalisation:
-            return "formatting vocabulary corrections cloud"
-        case .history:
-            return "transcripts meetings recordings insights audio search export"
-        case .updates:
-            return "update check version release feed"
-        case .settings:
-            return "privacy permissions data support about"
-        }
-    }
-
-    private var toolbarSearchField: some View {
-        ZenSearchField(
-            placeholder: "Search…",
-            text: $commandQuery,
-            compact: true,
-            onSubmit: { showsCommandPalette = true }
-        )
-        .frame(width: 200)
-        .onChange(of: commandQuery) { _, value in
-            if !value.isEmpty {
-                showsCommandPalette = true
-            }
-        }
-        .keyboardShortcut("k", modifiers: .command)
-        .accessibilityLabel("Search commands")
-        .help("Search commands (⌘K)")
-    }
-
-    private var toolbarStatus: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(appState.phase.statusTint)
-                .frame(width: 6, height: 6)
-            Text(appState.phase.label)
-                .font(ZenDesign.Typography.captionStrong)
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-        }
-        .padding(.horizontal, 12)
-        .frame(minWidth: 104, minHeight: 32)
-        .zenGlassSurface(
-            cornerRadius: ZenDesign.Radius.pill,
-            tint: ZenDesign.Component.shortcutBackground,
-            interactive: false
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Status: \(appState.phase.label)")
-    }
-
-    private var dictateToolbarButton: some View {
-        let isListening = appState.phase == .listening
-        return Button(action: toggleRecording) {
-            HStack(spacing: 6) {
-                Image(systemName: isListening ? "stop.fill" : "mic.fill")
-                Text(isListening ? "Stop" : "Dictate")
-                    .font(ZenDesign.Typography.captionStrong)
-            }
-            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-            .padding(.horizontal, 12)
-            .frame(minWidth: 104, minHeight: 32)
-            .zenGlassSurface(
-                cornerRadius: ZenDesign.Radius.pill,
-                interactive: true
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(
-            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.pill)
-        )
-        .accessibilityLabel(
-            isListening ? "Stop dictating" : "Start dictating"
-        )
-    }
-
     private var sidebar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                ZenBrandMark(size: 30)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("ZenVoice")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(ZenDesign.Semantic.textPrimary)
-                    Text("On-device dictation")
-                        .font(ZenDesign.Typography.caption)
-                        .foregroundStyle(ZenDesign.Semantic.textSecondary)
+        ScrollView {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    ZenBrandMark(size: 30)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("ZenVoice")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(ZenDesign.Semantic.textPrimary)
+                        Text("On-device dictation")
+                            .font(ZenDesign.Typography.caption)
+                            .foregroundStyle(ZenDesign.Semantic.textSecondary)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, ZenDesign.Spacing.sm)
-            .padding(.vertical, ZenDesign.Spacing.sm)
-            // Clear the traffic lights, which the window draws over the
-            // transparent titlebar at the sidebar's top-left. The nav list
-            // follows this block down.
-            .padding(.top, ZenDesign.Layout.titleBar)
+                .padding(.horizontal, ZenDesign.Spacing.sm)
+                .padding(.vertical, ZenDesign.Spacing.sm)
+                // Clears the traffic lights with a snug gap — the lights end
+                // ~24pt into the transparent titlebar over the sidebar.
+                .padding(.top, 24)
 
-            List {
-                ForEach(Section.allCases) { section in
-                    Button {
-                        selection = section
-                    } label: {
-                        sidebarLabel(section)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(ZenPressButtonStyle())
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        if hovering {
-                            hoveredSection = section
-                        } else if hoveredSection == section {
-                            hoveredSection = nil
+                VStack(spacing: 2) {
+                    ForEach(Section.allCases) { section in
+                        Button {
+                            selection = section
+                        } label: {
+                            sidebarLabel(section)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(ZenPressButtonStyle())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onHover { hovering in
+                            if hovering {
+                                hoveredSection = section
+                            } else if hoveredSection == section {
+                                hoveredSection = nil
+                            }
+                        }
+                        .background(
+                            RoundedRectangle(
+                                cornerRadius: ZenDesign.Radius.bar,
+                                style: .continuous
+                            )
+                            .fill(
+                                selection == section
+                                    ? ZenDesign.Component.selectedNavigation
+                                    : hoveredSection == section
+                                        ? ZenDesign.Semantic.surfaceRaised.opacity(0.5)
+                                        : Color.clear
+                            )
+                            .animation(
+                                ZenDesign.Motion.fast(reduceMotion),
+                                value: hoveredSection
+                            )
+                            .animation(
+                                ZenDesign.Motion.fast(reduceMotion),
+                                value: selection
+                            )
+                        )
+                        .accessibilityAddTraits(
+                            selection == section ? .isSelected : []
+                        )
                     }
-                    .listRowBackground(
-                        RoundedRectangle(
-                            cornerRadius: ZenDesign.Radius.bar,
-                            style: .continuous
-                        )
-                        .fill(
-                            selection == section
-                                ? ZenDesign.Component.selectedNavigation
-                                : hoveredSection == section
-                                    ? ZenDesign.Semantic.surfaceRaised.opacity(0.5)
-                                    : Color.clear
-                        )
-                        .animation(
-                            ZenDesign.Motion.fast(reduceMotion),
-                            value: hoveredSection
-                        )
-                    )
-                    .accessibilityAddTraits(
-                        selection == section ? .isSelected : []
-                    )
                 }
+                .padding(.horizontal, ZenDesign.Spacing.sm)
+                .padding(.bottom, ZenDesign.Spacing.lg)
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
         }
+        .scrollIndicators(.hidden)
+        .ignoresSafeArea(edges: .top)
         // The sidebar rides on the shared window glass with a slightly
         // lighter tint than the content pane — a second material would blur
-        // the glass instead of the wallpaper.
-        .background(ZenDesign.Semantic.sidebar.opacity(0.35))
-        .ignoresSafeArea()
-        .navigationSplitViewColumnWidth(
-            min: 220,
-            ideal: ZenDesign.Layout.sidebarWidth,
-            max: 300
-        )
+        // the glass instead of the wallpaper. Only the background may ignore
+        // the safe area; the content lays out inside it.
+        .background {
+            ZenDesign.Semantic.sidebar.opacity(0.35)
+                .ignoresSafeArea()
+        }
     }
 
     private func sidebarLabel(_ section: Section) -> some View {
@@ -471,40 +325,6 @@ struct ZenVoiceSettingsView: View {
         }
     }
 
-}
-
-private extension AppState.Phase {
-    var statusIcon: String {
-        switch self {
-        case .idle:
-            return "circle.fill"
-        case .listening:
-            return "waveform"
-        case .transcribing:
-            return "cpu"
-        case .inserting:
-            return "arrow.down.doc"
-        case .success:
-            return "checkmark.circle.fill"
-        case .error:
-            return "exclamationmark.triangle.fill"
-        }
-    }
-
-    var statusTint: Color {
-        switch self {
-        case .idle:
-            return ZenDesign.Semantic.success
-        case .listening:
-            return ZenDesign.Semantic.accent
-        case .transcribing, .inserting:
-            return ZenDesign.Semantic.warn
-        case .success:
-            return ZenDesign.Semantic.success
-        case .error:
-            return ZenDesign.Semantic.danger
-        }
-    }
 }
 
 struct ErrorBanner: View {

@@ -190,10 +190,10 @@ struct OverviewScreen: View {
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 preview()
-                    .frame(height: 92)
+                    .frame(height: 132)
                     .frame(maxWidth: .infinity)
                     .clipped()
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(style.displayName)
                         .font(ZenDesign.Typography.bodyStrong)
                         .foregroundStyle(ZenDesign.Semantic.textPrimary)
@@ -205,7 +205,8 @@ struct OverviewScreen: View {
                                 : ZenDesign.Semantic.textSecondary
                         )
                 }
-                .padding(ZenDesign.Spacing.sm)
+                .padding(.horizontal, ZenDesign.Spacing.md)
+                .padding(.vertical, ZenDesign.Spacing.sm + 2)
             }
             .background(ZenDesign.Semantic.surfaceRaised)
             .clipShape(

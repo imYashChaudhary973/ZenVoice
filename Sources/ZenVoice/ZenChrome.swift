@@ -198,25 +198,6 @@ extension View {
     }
 }
 
-struct ZenGlassContainer<Content: View>: View {
-    let spacing: CGFloat
-    @ViewBuilder let content: Content
-
-    var body: some View {
-#if compiler(>=6.2)
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) {
-                content
-            }
-        } else {
-            content
-        }
-#else
-        content
-#endif
-    }
-}
-
 /// Nav gradient squircle: white glyph on a vertical two-stop gradient,
 /// radius 8. The one saturated surface in the chrome besides the accent.
 struct ZenGradientTile: View {
@@ -327,50 +308,3 @@ extension ZenCardHeader where Trailing == EmptyView {
     }
 }
 
-/// Pins a SwiftUI control to the window titlebar's trailing edge.
-///
-/// Unified toolbars pack items after the title, so a search field never
-/// reaches the right corner. AppKit's titlebar accessory does.
-struct ZenTitlebarTrailing<Content: View>: NSViewRepresentable {
-    @ViewBuilder var content: () -> Content
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    final class Coordinator {
-        var accessory: NSTitlebarAccessoryViewController?
-        var hosting: NSHostingView<AnyView>?
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let probe = NSView(frame: .zero)
-        probe.isHidden = true
-        return probe
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        let root = AnyView(content())
-        DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
-            if let hosting = context.coordinator.hosting {
-                hosting.rootView = root
-                return
-            }
-            let hosting = NSHostingView(rootView: root)
-            hosting.frame = NSRect(x: 0, y: 0, width: 216, height: 36)
-            let accessory = NSTitlebarAccessoryViewController()
-            accessory.layoutAttribute = .right
-            accessory.view = hosting
-            window.addTitlebarAccessoryViewController(accessory)
-            context.coordinator.hosting = hosting
-            context.coordinator.accessory = accessory
-        }
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.accessory?.removeFromParent()
-        coordinator.accessory = nil
-        coordinator.hosting = nil
-    }
-}
