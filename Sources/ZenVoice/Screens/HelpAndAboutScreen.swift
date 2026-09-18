@@ -29,7 +29,7 @@ struct HelpAndAboutScreen: View {
             title: "Settings",
             subtitle: "Privacy, permissions, and support."
         ) {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+            VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
                 PrivacyScreen(
                     viewModel: viewModel,
                     historyViewModel: historyViewModel,
