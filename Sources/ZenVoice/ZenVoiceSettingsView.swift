@@ -164,7 +164,7 @@ struct ZenVoiceSettingsView: View {
                 .padding(.top, 24)
                 .padding(.top, 24)
 
-                VStack(spacing: 6) {
+                VStack(spacing: 10) {
                     ForEach(Section.allCases) { section in
                         Button {
                             selection = section
