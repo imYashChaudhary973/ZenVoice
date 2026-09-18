@@ -15,129 +15,174 @@
 import AppKit
 import SwiftUI
 
-/// ZenVoice design tokens translated from the supplied graphite/violet system.
+/// ZenVoice design tokens — "dark glass settings panel".
+///
+/// The window shell is the only translucent surface: real background blur
+/// under a fixed dark tint so wallpaper bleeds through faintly. Every card,
+/// chip, and control on top is solid. Color is confined to nav icon tiles,
+/// the single pink accent, and HUD previews; everything else is layered
+/// charcoal gray.
 enum ZenDesign {
+    /// Solid surfaces layered on the glass.
     enum Primitive {
-        static let base = Color(nsColor: NSColor(red: 0.094, green: 0.094, blue: 0.106, alpha: 1))
-        static let base900 = Color(nsColor: NSColor(red: 0.071, green: 0.071, blue: 0.078, alpha: 1))
-        static let base800 = Color(nsColor: NSColor(red: 0.141, green: 0.141, blue: 0.157, alpha: 1))
+        static let base = Color(red: 0x15 / 255.0, green: 0x19 / 255.0, blue: 0x20 / 255.0) // #151920
+        static let base900 = Color(red: 0x0A / 255.0, green: 0x0A / 255.0, blue: 0x0C / 255.0) // #0A0A0C HUD-only black
+        static let base800 = Color(red: 0x1E / 255.0, green: 0x21 / 255.0, blue: 0x28 / 255.0) // #1E2128
 
-        static let surface = Color(nsColor: NSColor(red: 0.118, green: 0.118, blue: 0.133, alpha: 1))
-        static let surfaceRaised = Color(nsColor: NSColor(red: 0.141, green: 0.141, blue: 0.157, alpha: 1))
-        static let surfaceSunken = Color(nsColor: NSColor(red: 0.071, green: 0.071, blue: 0.078, alpha: 1))
+        static let surface = Color(red: 0x27 / 255.0, green: 0x2A / 255.0, blue: 0x31 / 255.0) // #272A31 card
+        static let surfaceRaised = Color(red: 0x37 / 255.0, green: 0x3C / 255.0, blue: 0x43 / 255.0) // #373C43 selected row
+        static let surfaceSunken = Color(red: 0x1E / 255.0, green: 0x21 / 255.0, blue: 0x28 / 255.0) // #1E2128
 
-        static let accent = Color(nsColor: NSColor(red: 0.671, green: 0.545, blue: 0.945, alpha: 1))
-        static let accentFill = Color(nsColor: NSColor(red: 0.486, green: 0.310, blue: 0.878, alpha: 1))
-        static let accentMuted = Color(nsColor: NSColor(red: 0.486, green: 0.310, blue: 0.878, alpha: 0.18))
+        static let accent = Color(red: 0xD4 / 255.0, green: 0x52 / 255.0, blue: 0x8C / 255.0) // #D4528C core pink
+        static let accentFill = Color(red: 0xD4 / 255.0, green: 0x52 / 255.0, blue: 0x8C / 255.0) // #D4528C
+        static let accentMuted = Color(red: 0xD4 / 255.0, green: 0x52 / 255.0, blue: 0x8C / 255.0).opacity(0.15)
 
-        static let text = Color(nsColor: NSColor(white: 1, alpha: 0.92))
-        static let muted = Color(nsColor: NSColor(white: 1, alpha: 0.62))
-        static let subtle = Color(nsColor: NSColor(white: 1, alpha: 0.56))
+        static let text = Color.white
+        static let muted = Color(red: 0xB4 / 255.0, green: 0xB4 / 255.0, blue: 0xBC / 255.0) // #B4B4BC
+        static let subtle = Color(red: 0x94 / 255.0, green: 0x94 / 255.0, blue: 0x9C / 255.0) // #94949C
 
-        static let success = Color(nsColor: NSColor(red: 0.204, green: 0.780, blue: 0.471, alpha: 1))
-        static let warn = Color(nsColor: NSColor(red: 0.878, green: 0.647, blue: 0.173, alpha: 1))
-        static let danger = Color(nsColor: NSColor(red: 0.937, green: 0.294, blue: 0.294, alpha: 1))
+        static let success = Color(red: 0.204, green: 0.780, blue: 0.471)
+        static let warn = Color(red: 0.878, green: 0.647, blue: 0.173)
+        static let danger = Color(red: 0.937, green: 0.294, blue: 0.294)
 
         static let white = Color.white
         static let black = Color.black
     }
 
     enum Semantic {
-        static let canvas = Color(nsColor: .windowBackgroundColor)
-        static let sidebar = Color(nsColor: .controlBackgroundColor)
-        static let surface = Color(nsColor: .controlBackgroundColor)
-        static let surfaceRaised = Color(nsColor: .underPageBackgroundColor)
-        static let surfaceSunken = Color(nsColor: .textBackgroundColor)
-        static let border = Color(nsColor: .separatorColor)
-        static let borderStrong = Color(nsColor: .gridColor)
-        static let textPrimary = Color(nsColor: .labelColor)
-        static let textSecondary = Color(nsColor: .secondaryLabelColor)
+        /// Opaque page base for windows that cannot be glass (approval
+        /// dialog, exported share card). The settings window does not use it:
+        /// its shell is `ZenWindowGlass`.
+        static let canvas = Primitive.base800
+        /// Sidebar tint over the glass — slightly lighter than the content
+        /// pane per the reference.
+        static let sidebar = Color(red: 0x32 / 255.0, green: 0x36 / 255.0, blue: 0x3E / 255.0) // #32363E
+        static let surface = Primitive.surface
+        static let surfaceRaised = Primitive.surfaceRaised
+        static let surfaceSunken = Primitive.surfaceSunken
+        static let border = Color.white.opacity(0.05)
+        static let borderStrong = Color.white.opacity(0.12)
+        static let textPrimary = Color.white
+        static let textSecondary = Color(red: 0xB4 / 255.0, green: 0xB4 / 255.0, blue: 0xBC / 255.0) // #B4B4BC
 
         /// The quietest text that still has to be read: placeholders, units,
-        /// and row metadata. AppKit adjusts it for appearance and contrast.
-        static let textTertiary = Color(nsColor: .tertiaryLabelColor)
+        /// sidebar section headers.
+        static let textTertiary = Color(red: 0x94 / 255.0, green: 0x94 / 255.0, blue: 0x9C / 255.0) // #94949C
 
-        /// Foreground weight of the accent: accent text, icons, meters.
-        ///
-        /// The lighter weight clears 4.5:1 on the raised graphite surface.
-        static let accent = adaptive(
-            light: NSColor(red: 0.325, green: 0.180, blue: 0.710, alpha: 1),
-            dark: NSColor(red: 0.671, green: 0.545, blue: 0.945, alpha: 1)
-        )
+        /// Foreground weight of the accent: icons, links, thin glow elements.
+        static let accent = Color(red: 0xE4 / 255.0, green: 0x71 / 255.0, blue: 0xA0 / 255.0) // #E471A0
 
         /// Background weight of the accent for prominent controls.
-        static let accentFill = adaptive(
-            light: NSColor(red: 0.420, green: 0.245, blue: 0.820, alpha: 1),
-            dark: NSColor(red: 0.540, green: 0.370, blue: 0.930, alpha: 1)
-        )
+        static let accentFill = Color(red: 0xD4 / 255.0, green: 0x52 / 255.0, blue: 0x8C / 255.0) // #D4528C
 
-        static let accentStrong = adaptive(
-            light: NSColor(red: 0.315, green: 0.165, blue: 0.660, alpha: 1),
-            dark: NSColor(red: 0.430, green: 0.280, blue: 0.800, alpha: 1)
-        )
-        static let accentMuted = adaptive(
-            light: NSColor(red: 0.420, green: 0.245, blue: 0.820, alpha: 0.12),
-            dark: NSColor(red: 0.540, green: 0.370, blue: 0.930, alpha: 0.18)
-        )
-        static let success = adaptive(
-            light: NSColor(red: 0.204, green: 0.780, blue: 0.471, alpha: 1),
-            dark: NSColor(red: 0.204, green: 0.780, blue: 0.471, alpha: 1)
-        )
-        static let successMuted = adaptive(
-            light: NSColor(red: 0.055, green: 0.420, blue: 0.255, alpha: 0.10),
-            dark: NSColor(red: 0.247, green: 0.796, blue: 0.533, alpha: 0.14)
-        )
-        static let danger = adaptive(
-            light: NSColor(red: 0.937, green: 0.294, blue: 0.294, alpha: 1),
-            dark: NSColor(red: 0.937, green: 0.294, blue: 0.294, alpha: 1)
-        )
-        static let dangerMuted = adaptive(
-            light: NSColor(red: 0.753, green: 0.204, blue: 0.180, alpha: 0.10),
-            dark: NSColor(red: 0.937, green: 0.420, blue: 0.420, alpha: 0.14)
-        )
-        static let warn = adaptive(
-            light: NSColor(red: 0.878, green: 0.647, blue: 0.173, alpha: 1),
-            dark: NSColor(red: 0.878, green: 0.647, blue: 0.173, alpha: 1)
-        )
-        static let warnMuted = adaptive(
-            light: NSColor(red: 0.541, green: 0.353, blue: 0.067, alpha: 0.10),
-            dark: NSColor(red: 0.890, green: 0.702, blue: 0.255, alpha: 0.14)
-        )
+        /// Pressed / dim weight of the accent.
+        static let accentStrong = Color(red: 0xA8 / 255.0, green: 0x3A / 255.0, blue: 0x6A / 255.0) // #A83A6A
+        static let accentMuted = Color(red: 0xD4 / 255.0, green: 0x52 / 255.0, blue: 0x8C / 255.0).opacity(0.15)
+        static let success = Primitive.success
+        static let successMuted = Color(red: 0.247, green: 0.796, blue: 0.533).opacity(0.14)
+        static let danger = Primitive.danger
+        static let dangerMuted = Color(red: 0.937, green: 0.420, blue: 0.420).opacity(0.14)
+        static let warn = Primitive.warn
+        static let warnMuted = Color(red: 0.890, green: 0.702, blue: 0.255).opacity(0.14)
 
         /// Text drawn on top of `accentFill`.
-        ///
-        /// White in both appearances, which is only true because `accentFill`
-        /// is the deep weight of the accent in both. It clears 4.5:1 on each.
-        static let textOnAccent = adaptive(
-            light: NSColor(white: 1.0, alpha: 1),
-            dark: NSColor(white: 1.0, alpha: 1)
-        )
+        static let textOnAccent = Color.white
 
         /// Text drawn on top of a `danger`-filled control.
-        static let textOnDanger = adaptive(
-            light: NSColor(white: 1.0, alpha: 1),
-            dark: NSColor(white: 1.0, alpha: 1)
-        )
-
-        private static func adaptive(light: NSColor, dark: NSColor) -> Color {
-            Color(
-                nsColor: NSColor(name: nil) { appearance in
-                    let match = appearance.bestMatch(from: [.aqua, .darkAqua])
-                    return match == .darkAqua ? dark : light
-                }
-            )
-        }
+        static let textOnDanger = Color.white
     }
 
     enum Component {
-        static let cardBackground = Semantic.surface
+        static let cardBackground = Primitive.surface
         static let cardBorder = Semantic.border
 
-        static let selectedNavigation = Semantic.accentMuted
-        static let selectedNavigationLabel = Semantic.textPrimary
+        /// Selected sidebar row: solid fill, not a tinted wash.
+        static let selectedNavigation = Primitive.surfaceRaised
+        static let selectedNavigationLabel = Color.white
         static let selectedNavigationIcon = Semantic.accent
-        static let shortcutBackground = Semantic.surfaceRaised
-        static let focusRing = Semantic.accent.opacity(0.55)
+        /// Chip / small-button fill.
+        static let shortcutBackground = Color(red: 0x3A / 255.0, green: 0x3E / 255.0, blue: 0x44 / 255.0) // #3A3E44
+        /// Selection ring weight of the accent.
+        static let focusRing = Color(red: 0xD2 / 255.0, green: 0x57 / 255.0, blue: 0x9E / 255.0) // #D2579E
+    }
+
+    /// The translucent shell. Blur is `NSVisualEffectView` under the window;
+    /// these are the fixed tints composited over it.
+    enum Glass {
+        /// Dark tint over the behind-window blur: composites ≈#151920 over a
+        /// dark wallpaper, ≈#25303F over light-blue.
+        static let windowTint = Color(red: 12 / 255.0, green: 14 / 255.0, blue: 20 / 255.0).opacity(0.55)
+        /// Near-black glass for the floating HUD pill — the one pure-black
+        /// surface in the system.
+        static let hudTint = Color(red: 4 / 255.0, green: 4 / 255.0, blue: 6 / 255.0).opacity(0.85)
+        /// Mandatory 1px top inner highlight on every elevated surface.
+        static let topHighlight = Color.white.opacity(0.10)
+        /// Chip-weight top inner highlight.
+        static let chipTopHighlight = Color.white.opacity(0.08)
+        static let hairline = Color.white.opacity(0.06)
+        /// Large ambient-only card shadow: 0 8px 32px rgba(0,0,0,0.40).
+        static func cardShadow() -> some ShapeStyle { Color.black.opacity(0.40) }
+        static let glow = Color(red: 0xD4 / 255.0, green: 0x52 / 255.0, blue: 0x8C / 255.0).opacity(0.35)
+    }
+
+    /// Colorismorphism: the canvas is desaturated; the only saturated
+    /// surfaces are these nav tiles, the pink accent, and HUD previews.
+    /// Vertical two-stop gradients, light top → deep bottom.
+    enum Gradient {
+        static let violet = LinearGradient(
+            colors: [Color(red: 0x98 / 255.0, green: 0x84 / 255.0, blue: 0xEF / 255.0),
+                     Color(red: 0x84 / 255.0, green: 0x68 / 255.0, blue: 0xE6 / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        static let indigo = LinearGradient(
+            colors: [Color(red: 0x90 / 255.0, green: 0x8D / 255.0, blue: 0xD7 / 255.0),
+                     Color(red: 0x77 / 255.0, green: 0x6E / 255.0, blue: 0xCC / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        static let pink = LinearGradient(
+            colors: [Color(red: 0xD6 / 255.0, green: 0x71 / 255.0, blue: 0xA3 / 255.0),
+                     Color(red: 0xCF / 255.0, green: 0x4B / 255.0, blue: 0x83 / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        static let orchid = LinearGradient(
+            colors: [Color(red: 0xC8 / 255.0, green: 0x6D / 255.0, blue: 0xE0 / 255.0),
+                     Color(red: 0xB4 / 255.0, green: 0x42 / 255.0, blue: 0xD3 / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        static let rose = LinearGradient(
+            colors: [Color(red: 0xE2 / 255.0, green: 0x6A / 255.0, blue: 0x77 / 255.0),
+                     Color(red: 0xD1 / 255.0, green: 0x44 / 255.0, blue: 0x52 / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        static let coral = LinearGradient(
+            colors: [Color(red: 0xE9 / 255.0, green: 0x7F / 255.0, blue: 0x5E / 255.0),
+                     Color(red: 0xD9 / 255.0, green: 0x5C / 255.0, blue: 0x34 / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        static let orange = LinearGradient(
+            colors: [Color(red: 0xE7 / 255.0, green: 0x88 / 255.0, blue: 0x48 / 255.0),
+                     Color(red: 0xE4 / 255.0, green: 0x6A / 255.0, blue: 0x2C / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        static let amber = LinearGradient(
+            colors: [Color(red: 0xEA / 255.0, green: 0xA9 / 255.0, blue: 0x4D / 255.0),
+                     Color(red: 0xD8 / 255.0, green: 0x86 / 255.0, blue: 0x32 / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        static let gold = LinearGradient(
+            colors: [Color(red: 0xE6 / 255.0, green: 0xC0 / 255.0, blue: 0x49 / 255.0),
+                     Color(red: 0xC9 / 255.0, green: 0x9A / 255.0, blue: 0x33 / 255.0)],
+            startPoint: .top, endPoint: .bottom
+        )
+
+        /// HUD / live preview thumbnails: dark teal → deep indigo → dark
+        /// magenta, drawn diagonally.
+        static let hudPreview = LinearGradient(
+            colors: [Color(red: 0x1A / 255.0, green: 0x2E / 255.0, blue: 0x2E / 255.0),
+                     Color(red: 0x1E / 255.0, green: 0x19 / 255.0, blue: 0x3B / 255.0),
+                     Color(red: 0x32 / 255.0, green: 0x1A / 255.0, blue: 0x32 / 255.0)],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
     }
 
     enum Spacing {
@@ -159,7 +204,7 @@ enum ZenDesign {
     enum Layout {
         /// The wider reference rail gives 15pt labels and 18pt glyphs enough
         /// room to keep their generous spacing without truncation.
-        static let sidebarWidth: CGFloat = 236
+        static let sidebarWidth: CGFloat = 280
 
         /// Measure for running prose — a page subtitle, a paragraph of
         /// explanation. Cards themselves are not capped: they fill the window,
@@ -167,15 +212,13 @@ enum ZenDesign {
         static let proseColumn: CGFloat = 680
 
         /// Height of the transparent title bar. Tall enough to clear the
-        /// traffic lights, which the window draws over the sidebar material.
+        /// traffic lights, which the window draws over the glass.
         static let titleBar: CGFloat = 48
 
         /// Minimum hit target for anything clickable.
         static let hitTarget: CGFloat = 44
 
-        /// Painted size of a row icon chip. Matches Home microphone,
-        /// accessibility, and activity glyphs. Heading chips stay
-        /// `headingIcon`.
+        /// Painted size of a nav gradient tile and row icon chips.
         static let rowIcon: CGFloat = 30
 
         /// Painted size of a card or page heading chip. Tall enough to sit
@@ -200,10 +243,9 @@ enum ZenDesign {
         static let navIcon: CGFloat = 24
     }
 
-    /// Type is one family in several weights — the system face, plus the system
-    /// monospace for anything the user could retype: shortcuts, model
-    /// identifiers, error rates, licence keys. Pairing two sans faces on a
-    /// contrast axis this small only makes the window look uncertain.
+    /// Type is one family in several weights — the system face, plus the
+    /// system monospace for anything the user could retype: shortcuts, model
+    /// identifiers, error rates, licence keys.
     enum Typography {
         static let display = Font.system(size: 30, weight: .semibold)
         static let pageTitle = Font.system(size: 21, weight: .semibold)
@@ -232,9 +274,7 @@ enum ZenDesign {
 
         /// Uppercase label above a group of settings. Pair with
         /// `tracking(1.1)`. Sits at the 11pt floor — uppercase text tracked out
-        /// below that is the least legible type an app can ship. Used for
-        /// sidebar groups and nothing else; an eyebrow over every card is
-        /// scaffolding, not hierarchy.
+        /// below that is the least legible type an app can ship.
         static let eyebrow = Font.system(size: 11, weight: .semibold)
 
         /// Text inside a badge or pill.
@@ -252,7 +292,7 @@ enum ZenDesign {
 
         /// Sidebar row glyph. Slightly larger than its label so the column of
         /// icons remains the primary scanning aid.
-        static let navIcon = Font.system(size: 16, weight: .regular)
+        static let navIcon = Font.system(size: 15, weight: .medium)
     }
 
     /// Motion vocabulary follows Apple's behavior-over-animation approach.
@@ -281,16 +321,15 @@ enum ZenDesign {
         }
     }
 
-    /// Corner radii. Tighter than the previous set across the board: large soft
-    /// corners read as consumer-friendly, and this is a tool that sits beside a
-    /// terminal. Controls stay a step tighter than the card holding them, so
-    /// nesting reads as depth rather than as one blurry shape.
+    /// Corner radii. Window 12, cards/preview thumbs 14/12, chips & icon
+    /// tiles 8, pills fully rounded.
     enum Radius {
-        static let small: CGFloat = 6
+        static let small: CGFloat = 8
         static let medium: CGFloat = 8
-        static let large: CGFloat = 12
+        static let large: CGFloat = 14
         static let bar: CGFloat = 10
-        static let barControl: CGFloat = 6
+        static let window: CGFloat = 12
+        static let barControl: CGFloat = 8
 
         /// Fully rounded — the toolbar cluster and status pills.
         static let pill: CGFloat = 999

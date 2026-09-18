@@ -40,6 +40,31 @@ struct ZenVisualEffect: NSViewRepresentable {
     }
 }
 
+/// The window shell's translucent dark glass: real background blur behind a
+/// fixed dark tint, so wallpaper shapes bleed through faintly. The ONLY
+/// glassmorphic surface — everything layered on top is solid.
+struct ZenWindowGlass: View {
+    @Environment(\.accessibilityReduceTransparency)
+    private var reduceTransparency
+    @Environment(\.colorSchemeContrast)
+    private var contrast
+
+    var body: some View {
+        ZStack {
+            if reduceTransparency || contrast == .increased {
+                ZenDesign.Primitive.base
+            } else {
+                ZenVisualEffect(
+                    material: .underWindowBackground,
+                    blending: .behindWindow
+                )
+                ZenDesign.Glass.windowTint
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
 /// A functional material layer with a solid accessibility fallback.
 ///
 /// Materials communicate hierarchy in the sidebar and floating chrome. They
@@ -154,6 +179,23 @@ extension View {
             )
         )
     }
+
+    /// The floating HUD pill: near-black glass, fully rounded, blurred
+    /// desktop behind. The one pure-black surface in the system.
+    func zenHudSurface(cornerRadius: CGFloat) -> some View {
+        self.background {
+            ZStack {
+                ZenVisualEffect(
+                    material: .hudWindow,
+                    blending: .behindWindow
+                )
+                ZenDesign.Glass.hudTint
+            }
+        }
+        .clipShape(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        )
+    }
 }
 
 struct ZenGlassContainer<Content: View>: View {
@@ -172,6 +214,30 @@ struct ZenGlassContainer<Content: View>: View {
 #else
         content
 #endif
+    }
+}
+
+/// Nav gradient squircle: white glyph on a vertical two-stop gradient,
+/// radius 8. The one saturated surface in the chrome besides the accent.
+struct ZenGradientTile: View {
+    let systemImage: String
+    let gradient: LinearGradient
+    var size: CGFloat = ZenDesign.Layout.rowIcon
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.5, weight: .medium))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(gradient)
+            .clipShape(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(ZenDesign.Glass.chipTopHighlight, lineWidth: 1)
+            }
+            .accessibilityHidden(true)
     }
 }
 

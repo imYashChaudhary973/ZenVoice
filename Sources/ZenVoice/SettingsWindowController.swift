@@ -70,10 +70,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified
         window.titlebarSeparatorStyle = .none
-        // Fill the split-view divider with the semantic window surface. A
-        // clear window exposed a black one-pixel strip below the toolbar where
-        // the sidebar and detail panes meet.
-        window.backgroundColor = .windowBackgroundColor
+        // The whole shell is translucent dark glass: real background blur
+        // behind a fixed tint, composited by `ZenWindowGlass`. The window
+        // itself must be transparent or the desktop never shows through.
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.isMovableByWindowBackground = true
         window.minSize = NSSize(width: 900, height: 640)
         // Menu-bar apps don't get full screen for free: the green zoom
