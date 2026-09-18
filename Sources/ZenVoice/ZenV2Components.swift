@@ -84,8 +84,9 @@ struct ZenScreen<Content: View, Tabs: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, ZenDesign.Spacing.xl)
-            // Small breathing gap below the reserved titlebar zone.
-            .padding(.top, ZenDesign.Spacing.md)
+            // Topmost element of the detail pane: a comfortable gap from the
+            // window edge, matching the reference's title placement.
+            .padding(.top, ZenDesign.Spacing.xl)
             .padding(.bottom, ZenDesign.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
 

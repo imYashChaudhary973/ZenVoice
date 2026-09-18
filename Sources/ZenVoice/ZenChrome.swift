@@ -198,25 +198,6 @@ extension View {
     }
 }
 
-struct ZenGlassContainer<Content: View>: View {
-    let spacing: CGFloat
-    @ViewBuilder let content: Content
-
-    var body: some View {
-#if compiler(>=6.2)
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) {
-                content
-            }
-        } else {
-            content
-        }
-#else
-        content
-#endif
-    }
-}
-
 /// Nav gradient squircle: white glyph on a vertical two-stop gradient,
 /// radius 8. The one saturated surface in the chrome besides the accent.
 struct ZenGradientTile: View {

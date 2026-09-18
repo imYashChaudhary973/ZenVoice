@@ -81,10 +81,7 @@ struct ZenVoiceSettingsView: View {
     @ObservedObject var onboardingViewModel:
         OnboardingViewModel
     @ObservedObject var appState: AppState
-    let toggleRecording: () -> Void
     @State private var selection: Section = .home
-    @State private var showsCommandPalette = false
-    @State private var commandQuery = ""
     @State private var modelMismatch: ModelMismatchAlert?
     @State private var hoveredSection: Section?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -112,39 +109,11 @@ struct ZenVoiceSettingsView: View {
                         .frame(width: 1)
                         .ignoresSafeArea()
                     VStack(spacing: 0) {
-                        // Status, dictate, and search live in the content
-                        // layer now — pinned above the page, part of the
-                        // layout, so scrolled content can never slide
-                        // behind them.
-                        HStack(spacing: 8) {
-                            Spacer(minLength: 0)
-                            toolbarStatus
-                            dictateToolbarButton
-                            toolbarSearchField
-                        }
-                        .padding(.horizontal, ZenDesign.Spacing.xl)
-                        .padding(.top, ZenDesign.Spacing.sm)
-                        .padding(.bottom, ZenDesign.Spacing.xs)
                         content
                             .id(selection)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
-                .overlay {
-                    if showsCommandPalette {
-                        ZenCommandPalette(
-                            commands: paletteCommands,
-                            query: $commandQuery
-                        ) {
-                            showsCommandPalette = false
-                            commandQuery = ""
-                        }
-                    }
-                }
-                .animation(
-                    ZenDesign.Motion.fast(reduceMotion),
-                    value: showsCommandPalette
-                )
             }
         }
         // The translucent dark glass shell. One layer behind everything:
@@ -157,129 +126,6 @@ struct ZenVoiceSettingsView: View {
         // The dark glass system is appearance-independent: fixed dark values,
         // wallpaper bleeding through the shell.
         .preferredColorScheme(.dark)
-    }
-
-    /// Everything ⌘K can reach: every settings screen, one entry per
-    /// speech model, and the handful of global actions.
-    private var paletteCommands: [ZenCommand] {
-        let sections = Section.allCases.map { section in
-            ZenCommand(
-                id: "section-\(section.id)",
-                title: section.rawValue,
-                subtitle: "Go to",
-                icon: section.icon,
-                keywords: sectionKeywords(section)
-            ) {
-                selection = section
-            }
-        }
-        let models = modelManagerViewModel.models.map { model in
-            ZenCommand(
-                id: "model-\(model.id)",
-                title: model.displayName,
-                subtitle: modelManagerViewModel.isInstalled(model)
-                    ? "Model · installed"
-                    : "Model · available",
-                icon: "cpu",
-                keywords: "model speech download \(model.id)"
-            ) {
-                selection = .models
-            }
-        }
-        let actions = [
-            ZenCommand(
-                id: "action-dictate",
-                title: "Start dictating",
-                subtitle: "Action",
-                icon: "mic",
-                keywords: "record speak voice start",
-                action: toggleRecording
-            )
-        ]
-        return sections + models + actions
-    }
-
-
-    private func sectionKeywords(_ section: Section) -> String {
-        switch section {
-        case .home:
-            return "overview status ready start today usage"
-        case .dictation:
-            return "hotkey microphone audio overlay waveform doctor shortcut"
-        case .models:
-            return "model engine whisper parakeet nemotron language speech"
-        case .personalisation:
-            return "formatting vocabulary corrections cloud"
-        case .history:
-            return "transcripts meetings recordings insights audio search export"
-        case .updates:
-            return "update check version release feed"
-        case .settings:
-            return "privacy permissions data support about"
-        }
-    }
-
-    private var toolbarSearchField: some View {
-        ZenSearchField(
-            placeholder: "Search…",
-            text: $commandQuery,
-            compact: true,
-            onSubmit: { showsCommandPalette = true }
-        )
-        .frame(width: 200)
-        .onChange(of: commandQuery) { _, value in
-            if !value.isEmpty {
-                showsCommandPalette = true
-            }
-        }
-        .keyboardShortcut("k", modifiers: .command)
-        .accessibilityLabel("Search commands")
-        .help("Search commands (⌘K)")
-    }
-
-    private var toolbarStatus: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(appState.phase.statusTint)
-                .frame(width: 6, height: 6)
-            Text(appState.phase.label)
-                .font(ZenDesign.Typography.captionStrong)
-                .foregroundStyle(ZenDesign.Semantic.textSecondary)
-        }
-        .padding(.horizontal, 12)
-        .frame(minWidth: 104, minHeight: 32)
-        .zenGlassSurface(
-            cornerRadius: ZenDesign.Radius.pill,
-            tint: ZenDesign.Component.shortcutBackground,
-            interactive: false
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Status: \(appState.phase.label)")
-    }
-
-    private var dictateToolbarButton: some View {
-        let isListening = appState.phase == .listening
-        return Button(action: toggleRecording) {
-            HStack(spacing: 6) {
-                Image(systemName: isListening ? "stop.fill" : "mic.fill")
-                Text(isListening ? "Stop" : "Dictate")
-                    .font(ZenDesign.Typography.captionStrong)
-            }
-            .foregroundStyle(ZenDesign.Semantic.textPrimary)
-            .padding(.horizontal, 12)
-            .frame(minWidth: 104, minHeight: 32)
-            .zenGlassSurface(
-                cornerRadius: ZenDesign.Radius.pill,
-                interactive: true
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(
-            ZenPressButtonStyle(cornerRadius: ZenDesign.Radius.pill)
-        )
-        .accessibilityLabel(
-            isListening ? "Stop dictating" : "Start dictating"
-        )
     }
 
     private var sidebar: some View {
@@ -474,40 +320,6 @@ struct ZenVoiceSettingsView: View {
         }
     }
 
-}
-
-private extension AppState.Phase {
-    var statusIcon: String {
-        switch self {
-        case .idle:
-            return "circle.fill"
-        case .listening:
-            return "waveform"
-        case .transcribing:
-            return "cpu"
-        case .inserting:
-            return "arrow.down.doc"
-        case .success:
-            return "checkmark.circle.fill"
-        case .error:
-            return "exclamationmark.triangle.fill"
-        }
-    }
-
-    var statusTint: Color {
-        switch self {
-        case .idle:
-            return ZenDesign.Semantic.success
-        case .listening:
-            return ZenDesign.Semantic.accent
-        case .transcribing, .inserting:
-            return ZenDesign.Semantic.warn
-        case .success:
-            return ZenDesign.Semantic.success
-        case .error:
-            return ZenDesign.Semantic.danger
-        }
-    }
 }
 
 struct ErrorBanner: View {

@@ -1174,10 +1174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             voiceProfileViewModel: voiceProfileViewModel,
             modelManagerViewModel: modelManagerViewModel,
             onboardingViewModel: onboardingViewModel,
-            appState: state,
-            toggleRecording: { [weak self] in
-                self?.toggleRecording()
-            }
+            appState: state
         )
     }
 
