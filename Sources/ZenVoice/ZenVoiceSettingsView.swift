@@ -163,7 +163,7 @@ struct ZenVoiceSettingsView: View {
                 // ~24pt into the transparent titlebar over the sidebar.
                 .padding(.top, 24)
 
-                VStack(spacing: 2) {
+                VStack(spacing: 6) {
                     ForEach(Section.allCases) { section in
                         Button {
                             selection = section
@@ -259,7 +259,7 @@ struct ZenVoiceSettingsView: View {
                     )
             }
         }
-        .frame(minHeight: 28)
+        .frame(minHeight: 36)
         .accessibilityLabel(section.rawValue)
     }
 
