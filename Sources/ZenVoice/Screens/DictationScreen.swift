@@ -26,7 +26,7 @@ struct DictationScreen: View {
             subtitle:
                 "The shortcut you press and the microphone it listens to."
         ) {
-            VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+            VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
                 ShortcutsScreen(viewModel: viewModel)
                 AudioScreen(viewModel: viewModel)
             }

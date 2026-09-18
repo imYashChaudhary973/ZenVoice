@@ -50,7 +50,7 @@ struct PrivacyScreen: View {
     }
 
     private var privacyContent: some View {
-        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+        VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
             dictationPrivacy
             inventory
             permissions

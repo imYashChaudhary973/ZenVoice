@@ -20,7 +20,7 @@ struct ShortcutsScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+        VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
             dictationSection
             ZenBanner(
                 kind: .info,

@@ -20,7 +20,7 @@ struct AudioScreen: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZenDesign.Spacing.xxl) {
+        VStack(alignment: .leading, spacing: ZenDesign.Layout.contentGap) {
             if let device = viewModel.lastQuietDevice {
                 ZenBanner(
                     kind: .warn,
