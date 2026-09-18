@@ -30,7 +30,7 @@ public enum ModelProfileTransition {
     public static func prepareAndCommit<Prepared>(
         model: VerifiedModel,
         profile: LanguageProfile,
-        defaults: UserDefaults = .standard,
+        defaults: UserDefaults = RuntimeIdentity.userDefaults(),
         prepare: () throws -> Prepared
     ) rethrows -> Prepared {
         let prepared = try prepare()

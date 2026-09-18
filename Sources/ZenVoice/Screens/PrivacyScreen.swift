@@ -212,7 +212,7 @@ struct PrivacyScreen: View {
                     title: "Screen Recording",
                     detail:
                         "Captures the other side of a call (Them). Without it, a meeting records only your microphone.",
-                    status: viewModel.microphoneStatus,
+                    status: viewModel.screenRecordingStatus,
                     action: {
                         if let url = URL(
                             string:
